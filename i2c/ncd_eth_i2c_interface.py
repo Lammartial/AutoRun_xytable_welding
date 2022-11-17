@@ -30,8 +30,18 @@ DEBUG = 0
 
 
 class I2CPort:
-    """Implements basic I2C functions of the NCD serial-to-I2C adapter"""
-    def __init__(self, host: str, port: int, timeout_s: float = NCD_DEFAULT_TIMEOUT_S):
+    """A class to control the NCD Ethernet to I2C converter"""
+    def __init__(self, host: str, port: int = 2101, timeout_s: float = NCD_DEFAULT_TIMEOUT_S):
+        """Initialize the object, establish the network connection and perform the selftest of the converter.
+
+        Args:
+            host (str): hostname IP address of the converter
+            port (int): port used for the communication. Default setting is 2101
+            timeout_s (float): Timeout for network communication in seconds
+
+        Raises:
+            SelfTestFailedError: Raised if the selftest of the converter fails.
+        """
         self.socket = None
         self.host_port = (host, port)
         self.timeout_s = timeout_s
@@ -39,8 +49,7 @@ class I2CPort:
 
         if self.__connect_socket():
             self.__data_exchange = self.__ethernet_exchange_wrapper
-            if not self.self_test():
-                print("Ethernet selftest failed.")
+            self.self_test()
 
         self.last_i2c_address = -1  # Used to remember which i2c_address_7bit was last spoken to if an error occurs.
 
@@ -55,10 +64,13 @@ class I2CPort:
             return True
 
     def self_test(self):
+        """Perform the self test of the converter.
+
+        Raises:
+            SelfTestFailedError: Raised if the selftest of the converter fails.
+        """
         # Test command has the payload 0xFE 0x21. Response should be 0x55
-        if self.__data_exchange(bytes([0xFE, 0x21])) == bytes([0x55]):
-            return True
-        else:
+        if self.__data_exchange(bytes([0xFE, 0x21])) != bytes([0x55]):
             raise SelfTestFailedError(self.ncd_interface_address)
 
     def close(self):
@@ -69,11 +81,24 @@ class I2CPort:
             pass
 
     def writeto(self, i2c_address_7bit: int, data: bytearray) -> int:
-        """Writes a list of integers to the device on the specified I2C
-        i2c_address_7bit.
+        """Send a bytearray (up to 100 bytes) to the specified I2C address and return the number of sent bytes.
+
+        Args:
+            i2c_address_7bit (int): 7-bit I2C address of the target device
+            data (bytearray): array of bytes that should be sent. Up to 100 bytes.
+
+        Returns:
+            int: Number of sent bytes.
+
+        Raises:
+            InvalidI2CAddressError: If the I2C address is invalid.
+            InvalidParametersError: If the length of data is invalid. (> 100)
         """
         if not self.is_valid_7bit_address(i2c_address_7bit):
             raise InvalidI2CAddressError(i2c_address_7bit, self.ncd_interface_address)
+
+        if len(data) > 100:
+            raise InvalidParametersError(i2c_address_7bit, self.ncd_interface_address)
 
         self.last_i2c_address = i2c_address_7bit
 
@@ -87,8 +112,18 @@ class I2CPort:
             return 0
 
     def readfrom(self, i2c_address_7bit: int, size: int) -> bytearray:
-        """Reads the specified amount (up to 25) of bytes from the device and
-        checks the response for errors.
+        """Read the specified amount of bytes (up to 100) from the device.
+
+        Args:
+            i2c_address_7bit (int): 7-bit I2C address of the target device
+            size (int): number of bytes to read. Up to 100
+
+        Returns:
+            bytearray: bytes read from the device
+
+        Raises:
+            InvalidI2CAddressError: If the I2C address is invalid.
+            InvalidParametersError: If size is invalid. (<= 0 or > 100)
         """
         if not self.is_valid_7bit_address(i2c_address_7bit):
             raise InvalidI2CAddressError(i2c_address_7bit, self.ncd_interface_address)
@@ -102,8 +137,20 @@ class I2CPort:
         return bytearray(rx_payload)
 
     def readfrom_mem(self, i2c_address_7bit: int, data: bytearray, size: int, delay_ms: int = 0) -> bytearray:
-        """Writes a list of integers (data) to the device and then reads up to
-        16 bytes from the device. The response is also checked for errors.
+        """Send data to the device, perform a repeated start condition and read a specified amount of bytes.
+
+        Args:
+            i2c_address_7bit (int): 7-bit I2C address of the target device
+            data (bytearray): array of bytes that should be sent. Up to 16 bytes.
+            size (int): number of bytes to read. Up to 16.
+            delay_ms (int): Delay in ms between writing and reading data.
+
+        Returns:
+            bytearray: bytes read from the device
+
+        Raises:
+            InvalidI2CAddressError: If the I2C address is invalid.
+            InvalidParametersError: If size is invalid. (<= 0 or > 100)
         """
         if not self.is_valid_7bit_address(i2c_address_7bit):
             raise InvalidI2CAddressError(i2c_address_7bit, self.ncd_interface_address)
@@ -119,13 +166,13 @@ class I2CPort:
         return bytearray(rx_payload)
 
     def i2c_bus_scan(self):
-        """Scans the bus for devices and returns a list of their addresses."""
+        """Scan the bus for devices and return a list of their addresses."""
         tx_payload = bytes(NCD_I2C_BUS_SCAN)
         rx_payload = self.__data_exchange(tx_payload)
         return list(rx_payload)
 
     def __check_for_errors(self, payload):
-        """Checks if the response contains an error message"""
+        """Check if the response contains an error message"""
         if len(payload) == 4:  # Error messages are always 4 bytes long
             if payload[0] == NCD_ERROR_CODE_HEADER and payload[3] == NCD_ERROR_CODE_FOOTER:
                 self.__handle_error_message(payload[1])
@@ -274,5 +321,5 @@ class I2CPort:
 
 if __name__ == "__main__":
     i2c_port = I2CPort(I2C_BRIDGE_IP, I2C_BRIDGE_PORT)
-    i2c_port.writeto(0x77, bytes([0x01]))
+    i2c_port.writeto(0x77, bytearray([0x01]))
     print(i2c_port.i2c_bus_scan())
