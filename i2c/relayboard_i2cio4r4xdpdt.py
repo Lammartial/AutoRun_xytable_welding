@@ -26,8 +26,8 @@ class RelayBoard4Relay4GPIO:
             i2c_port: The I2CPort instance this board is connected to
             i2c_address_7bit: The board's 7-bit I2C address
         """
-        self.i2c_address_7bit = i2c_address_7bit
-        self.gpio = MCP23008(i2c_port, i2c_address_7bit)
+        self.i2c_address_7bit = int(i2c_address_7bit)
+        self.gpio = MCP23008(i2c_port, self.i2c_address_7bit)
 
         # Setup relay outputs
         for relay_pin in RelayBoard4Relay4GPIO.relay_dict.values():
@@ -42,6 +42,7 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If relay_n is invalid (< 1 or > 4)
         """
+        relay_n = int(relay_n)
         self.__validate_relay_pin(relay_n)
         self.gpio.set_pin(RelayBoard4Relay4GPIO.relay_dict[relay_n])
 
@@ -54,6 +55,7 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If relay_n is invalid (< 1 or > 4)
         """
+        relay_n = int(relay_n)
         self.__validate_relay_pin(relay_n)
         self.gpio.reset_pin(RelayBoard4Relay4GPIO.relay_dict[relay_n])
         
@@ -66,6 +68,7 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If gpio_n is invalid (< 4 or > 7)
         """
+        gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.set_pin_as_output(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
         
@@ -78,6 +81,7 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If gpio_n is invalid (< 4 or > 7)
         """
+        gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.set_pin_as_input(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
         
@@ -90,6 +94,7 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If gpio_n is invalid (< 4 or > 7)
         """
+        gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.enable_pullup(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
         
@@ -102,6 +107,7 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If gpio_n is invalid (< 4 or > 7)
         """
+        gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.disable_pullup(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
         
@@ -114,6 +120,7 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If gpio_n is invalid (< 4 or > 7)
         """
+        gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.set_pin(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
         
@@ -126,6 +133,7 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If gpio_n is invalid (< 4 or > 7)
         """
+        gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.reset_pin(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
         
@@ -141,6 +149,7 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If gpio_n is invalid (< 4 or > 7)
         """
+        gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         return self.gpio.get_pin(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
 

@@ -23,7 +23,7 @@ class DAC53608:
             i2c_address_7bit: The board's 7-bit I2C address
         """
         self.i2c_port = i2c_port
-        self.i2c_address_7bit = i2c_address_7bit
+        self.i2c_address_7bit = int(i2c_address_7bit)
         self.v_ref_V = 5.0
 
     def set_v_ref(self, new_v_ref_V: float):
@@ -61,6 +61,7 @@ class DAC53608:
         Raises:
             ValueError: If the channel index is invalid. (< 1 or > 8)
         """
+        channel = int(channel)
         self.__validate_channel_number(channel)
 
         steps = DAC53608.number_of_steps
@@ -93,6 +94,7 @@ class DAC53608:
         Raises:
             ValueError: If the channel index is invalid. (< 1 or > 8)
         """
+        channel = int(channel)
         self.__validate_channel_number(channel)
 
         config_register = self.__get_device_config_register()
@@ -112,6 +114,7 @@ class DAC53608:
         Raises:
             ValueError: If the channel index is invalid. (< 1 or > 8)
         """
+        channel = int(channel)
         self.__validate_channel_number(channel)
 
         config_register = self.__get_device_config_register()
