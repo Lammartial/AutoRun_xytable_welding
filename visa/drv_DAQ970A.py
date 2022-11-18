@@ -9,8 +9,6 @@ VERSION = "0.0.1"
 
 __version__ = VERSION
 
-#rm = ResourceManager()          # auto decision for backend
-
 #--------------------------------------------------------------------------------------------------
 class DAQ970A(object):
     #
