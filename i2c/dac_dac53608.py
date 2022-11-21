@@ -1,19 +1,19 @@
 
 
-DAC53608_DEVICE_CONFIG_REGISTER_ADDR = 0x01
-DAC53608_STATUS_TRIGGER_REGISTER_ADDR = 0x02
-DAC53608_BROADCAST_REGISTER_ADDR = 0x03
-DAC53608_DAC0_DATA_REGISTER_ADDR = 0x08
+
 
 
 class DAC53608:
     """A class to control the 8-channel 10-bit DAC DAC53608 by TI via I2C.
+    The channels are numbered from 1 to 8.
 
     https://www.ti.com/product/DAC53608
     """
     number_of_channels = 8
     resolution_in_bits = 10
     number_of_steps = 2 ** resolution_in_bits
+    device_config_register_addr = 0x01  # R/W
+    dac0_data_register_addr = 0x08      # W
 
     def __init__(self, i2c_port, i2c_address_7bit):
         """Initialize the object with an I2CPort object and the 7-bit I2C address.
@@ -69,7 +69,8 @@ class DAC53608:
             d = int(round(voltage_V * steps / self.v_ref_V, 0))
         except ZeroDivisionError:
             raise  # We can't do anything about it here. Let it propagate.
-        d = min((steps-1), max(0, d))  # constrain d between 0 to number_of_steps
+
+        d = min((steps-1), max(0, d))  # limit d between 0 and number_of_steps
         actual_voltage = self.v_ref_V * d / steps  # Calculate actual voltage
         self.__set_dac_data_n_register(channel, d)
         return actual_voltage
@@ -124,16 +125,16 @@ class DAC53608:
             self.__set_device_config_register(config_register)
 
     def __get_device_config_register(self) -> int:
-        register = self.i2c_port.readfrom_mem(self.i2c_address_7bit, bytearray([DAC53608_DEVICE_CONFIG_REGISTER_ADDR]), 2)
+        register = self.i2c_port.readfrom_mem(self.i2c_address_7bit, bytearray([DAC53608.device_config_register_addr]), 2)
         return int.from_bytes(register, "big", signed=False)
 
     def __set_device_config_register(self, value: int):
         msb = (value & 0xFF00) >> 8
         lsb = value & 0xFF
-        self.i2c_port.writeto(self.i2c_address_7bit, bytearray([DAC53608_DEVICE_CONFIG_REGISTER_ADDR, msb, lsb]))
+        self.i2c_port.writeto(self.i2c_address_7bit, bytearray([DAC53608.device_config_register_addr, msb, lsb]))
 
     def __set_dac_data_n_register(self, channel: int, value: int):
-        register_address = DAC53608_DAC0_DATA_REGISTER_ADDR + channel - 1
+        register_address = DAC53608.dac0_data_register_addr + channel - 1  # -1 because numbering starts at 1
         value = value << 2  # Offset in the data register
         msb = (value & 0xFF00) >> 8
         lsb = value & 0xFF

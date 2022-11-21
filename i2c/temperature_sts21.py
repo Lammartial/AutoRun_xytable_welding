@@ -21,7 +21,7 @@ class STS21:
             i2c_address_7bit: The sensor's 7-bit I2C address
         """
         self.i2c_port = i2c_port
-        self.i2c_address_7bit = i2c_address_7bit
+        self.i2c_address_7bit = int(i2c_address_7bit)
 
     def start_measurement_hold(self, retries: int = 3) -> float:
         """Start a temperature measurement in "hold master mode" and return the temperature in °C as a float.
@@ -42,6 +42,7 @@ class STS21:
         Raises:
             ValueError: if the CRC is still wrong after all retries are used up.
         """
+        retries = int(retries)
         while retries > 0:
             result = self.i2c_port.readfrom_mem(self.i2c_address_7bit, bytearray([STS21.cmd_trigger_meas_hold]), 3)
             if self.check_crc(result):
@@ -64,6 +65,7 @@ class STS21:
         Raises:
             ValueError: if the CRC is still wrong after all retries are used up.
         """
+        retries = int(retries)
         while retries > 0:
             self.i2c_port.writeto(self.i2c_address_7bit, bytearray([STS21.cmd_trigger_meas_no_hold]))
             sleep(0.085)  # This is the worst case waiting time for the measurement to be finished
@@ -87,7 +89,11 @@ class STS21:
 
         Args:
             resolution_bits (int): The desired resolution. Can be either 11, 12, 13 or 14
+
+        Raises:
+            ValueError: If the resolution is not 11, 12, 13 or 14
         """
+        resolution_bits = int(resolution_bits)
         if resolution_bits not in STS21.measurement_resolution.keys():
             raise ValueError(f"Wrong measurement resolution for STS21. Must be one of "
                              f"{list(STS21.measurement_resolution.keys())}. You selected {resolution_bits}")

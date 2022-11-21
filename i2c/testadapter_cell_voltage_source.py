@@ -28,8 +28,8 @@ class CellVoltageSource:
             i2c_port: The I2CPort instance this board is connected to
             i2c_address_7bit: The board's 7-bit I2C address
         """
-        self.i2c_address_7bit = i2c_address_7bit
-        self.dac = DAC53608(i2c_port, i2c_address_7bit)
+        self.i2c_address_7bit = int(i2c_address_7bit)
+        self.dac = DAC53608(i2c_port, self.i2c_address_7bit)
         self.aux_dac_channel_gain = 2.0
 
     def initialize(self):
@@ -42,7 +42,7 @@ class CellVoltageSource:
             self.dac.set_channel_n_voltage(i, 0.0)
         self.dac.enable_all_channels()
 
-    def set_aux_voltage(self, aux_pin_voltage_V) -> float:
+    def set_aux_voltage(self, aux_pin_voltage_V: float) -> float:
         """Set the voltage on the auxillary pin.
 
         Args:
@@ -62,7 +62,7 @@ class CellVoltageSource:
         """Disable the DAC-channel for the aux pin."""
         self.dac.disable_channel_n(CellVoltageSource.aux_dac_channel)
 
-    def set_all_cell_voltages(self, cell_voltage_V) -> float:
+    def set_all_cell_voltages(self, cell_voltage_V: float) -> float:
         """Set the voltage of all cells to the same voltage.
 
         Args:
@@ -86,7 +86,7 @@ class CellVoltageSource:
         for cell in CellVoltageSource.cell_dict:
             self.dac.disable_channel_n(cell)
 
-    def set_cell_n_voltage(self, cell_n, cell_voltage_V) -> float:
+    def set_cell_n_voltage(self, cell_n: int, cell_voltage_V: float) -> float:
         """Set the voltage of the specified cell.
 
         Args:
@@ -99,6 +99,7 @@ class CellVoltageSource:
         Raises:
             ValueError: If the cell index is invalid. (< 1 or > 7)
         """
+        cell_n = int(cell_n)
         self.__validate_cell_number(cell_n)
         return self.dac.set_channel_n_voltage(cell_n, cell_voltage_V)
 
@@ -108,6 +109,7 @@ class CellVoltageSource:
         Raises:
             ValueError: If the cell index is invalid. (< 1 or > 7)
         """
+        cell_n = int(cell_n)
         self.__validate_cell_number(cell_n)
         self.dac.enable_channel_n(CellVoltageSource.cell_dict[cell_n])
 
@@ -117,6 +119,7 @@ class CellVoltageSource:
         Raises:
             ValueError: If the cell index is invalid. (< 1 or > 7)
         """
+        cell_n = int(cell_n)
         self.__validate_cell_number(cell_n)
         self.dac.disable_channel_n(CellVoltageSource.cell_dict[cell_n])
 
@@ -135,10 +138,10 @@ if __name__ == '__main__':
     from ncd_eth_i2c_interface import I2CPort
     I2C_BRIDGE_IP = "192.168.1.60"
     I2C_BRIDGE_PORT = 2101
-    i2c_port = I2CPort(I2C_BRIDGE_IP, I2C_BRIDGE_PORT)
+    my_i2c_port = I2CPort(I2C_BRIDGE_IP, I2C_BRIDGE_PORT)
     # print(i2c_port.i2c_bus_scan())
-    i2c_port.writeto(0x77, bytearray([0x01]))
-    cvs = CellVoltageSource(i2c_port, 0x48)
+    my_i2c_port.writeto(0x77, bytearray([0x01]))
+    cvs = CellVoltageSource(my_i2c_port, 0x48)
     cvs.initialize()
     cvs.set_aux_voltage(3.141)
     # cvs.set_cell_n_voltage(1, 3.7)

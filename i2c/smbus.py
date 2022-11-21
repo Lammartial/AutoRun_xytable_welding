@@ -1,11 +1,11 @@
-""" SMBus Master for RRC battery tools
-"""
+""" SMBus Master for RRC battery tools"""
 __author__ = "Markus Ruth"
 __version__ = "1.0.0"
 
 import errno
 from struct import pack, unpack
 from time import sleep
+from typing import List
 import pec
 from ncd_eth_i2c_interface import I2CPort
 from ncd_errors import *
@@ -145,7 +145,11 @@ class BusMaster:
     def _retry_read_helper(self, slvAddress, cmd, count):
         for n in range(0, self._retry_limit):
             try:
-                buf = self.i2c.readfrom_mem(slvAddress, cmd, count)
+                if count <= 16:
+                    buf = self.i2c.readfrom_mem(slvAddress, cmd, count)
+                else:
+                    self.i2c.writeto(slvAddress, bytearray([cmd]))
+                    buf = self.i2c.readfrom(slvAddress, count)
                 # print("SMBUS_readbytes", hexlify(buf).decode()) # DEBUG
                 return buf
             except OSError:
@@ -192,7 +196,7 @@ class BusMaster:
             ok = (rlen == count)
             return buf, ok
 
-    def readBytesVarLen(self, slvAddress, cmd, use_pec=False):
+    def readBytesVarLen(self, slvAddress, cmd, use_pec=False, byte_count=-1):
         """Read bytes from slave address with variable length in first byte received.
 
         As the i2c module does not provide this in dedicate function, we use two read
@@ -210,13 +214,16 @@ class BusMaster:
         # 1. get count value
         # count = self.i2c.readfrom_mem(slvAddress,cmd,1,stop=False)
         # count = self.i2c.readfrom_mem(slvAddress,cmd,1)
-        count = self._retry_read_helper(slvAddress, cmd, 1)
-        # 2. read the correct number of bytes
-        if (len(count) > 0) and (count[0] > 0):
-            buf, ok = self.readBytes(slvAddress, cmd, count[0] + 1, use_pec=use_pec)
+        if byte_count == -1:
+            count = self._retry_read_helper(slvAddress, cmd, 1)
+            # 2. read the correct number of bytes
+            if (len(count) > 0) and (count[0] > 0):
+                buf, ok = self.readBytes(slvAddress, cmd, count[0] + 1, use_pec=use_pec)
+            else:
+                buf = bytearray()  # empty bytearray
+                ok = False
         else:
-            buf = bytearray()  # empty bytearray
-            ok = False
+            buf, ok = self.readBytes(slvAddress, cmd, byte_count, use_pec=use_pec)
         return buf, ok
 
     # ----------------------------------------------------------------------------------------------
@@ -319,12 +326,12 @@ class BusMaster:
         else:
             return '', False
 
-    def readBlock(self, slvAddress, cmd, use_pec=False):
+    def readBlock(self, slvAddress, cmd, use_pec=False, byte_count=-1):
         # Note: there is no writeBlock() function implementation here on purpose.
         #       User should use the writeBytes() function with length byte in first of buffer to send.
         #       This also enables an easy read-after-write as the length of the buffer is already correct (+1) 
         #       for using a readBytes() to check the complete buffer including the length byte.
-        buf, ok = self.readBytesVarLen(slvAddress, cmd, use_pec=use_pec)
+        buf, ok = self.readBytesVarLen(slvAddress, cmd, use_pec=use_pec, byte_count=byte_count)
         if ok:
             # just return the bytes without length
             return bytearray(buf[1:]), ok
@@ -394,7 +401,7 @@ class BusMux:
             address (Byte, optional): Device slave address on the bus. Defaults to 0x70.
         """
         self.i2c: I2CPort = i2c
-        self.address = address
+        self.address = int(address)
         self.current_channel = -1
         self.current_ic_address = 0x70
         self.current_ch_selector = 0x00
@@ -408,7 +415,7 @@ class BusMux:
         # return self.i2c.is_ready(self.address)
         isready = False
         try:
-            _ = self.i2c.readfrom(self.address, 0, stop=True)
+            _ = self.i2c.readfrom(self.address, 0)
             isready = True
         except OSError as ex:
             if (ex.args[0] == errno.ENODEV) or (ex.args[0] == errno.ETIMEDOUT):
@@ -454,10 +461,17 @@ class BusMux:
 
 
 class BusMux_PCA9548A(BusMux):
+    """Controls the PCA9548A 8-channel I2C switch.
+    It can select any combination of the 8 channels.
+    The channels are numbered 1 to 8
+    Use .setChannel and .resetChannel to enable or disable a single channel.
+    Use .getChannels to get a list of all enabled channels
+    """
     def __init__(self, i2c, address=0x70):
-        super().__init__(i2c, address=address)
+        super().__init__(i2c, address=int(address))
 
     def setChannelMask(self, mask: int):
+        mask = int(mask)
         if mask < 0 or mask > 0xFF:
             return False
 
@@ -468,7 +482,7 @@ class BusMux_PCA9548A(BusMux):
         response = self.i2c.readfrom(self.address, 1)
         return int(response[0])
 
-    def getChannel(self):
+    def getChannels(self) -> List[int]:
         mask = self.getChannelMask()
         channels = []
         for i in range(8):
@@ -476,24 +490,26 @@ class BusMux_PCA9548A(BusMux):
                 channels.append(i+1)
         return channels
 
-    def setChannel(self, number: int):
+    def resetChannel(self, number: int):
+        number = int(number)
         if number < 1 or number > 8:
             return False
 
         mask = self.getChannelMask()
-        new_mask = mask | (1 << (number - 1))
+        new_mask = mask & ~(1 << (number - 1))
 
         if mask != new_mask:
             return self.setChannelMask(new_mask)
         else:
             return True
 
-    def resetChannel(self, number: int):
+    def setChannel(self, number: int):
+        number = int(number)
         if number < 1 or number > 8:
             return False
 
         mask = self.getChannelMask()
-        new_mask = mask & ~(1 << (number - 1))
+        new_mask = mask | (1 << (number - 1))
 
         if mask != new_mask:
             return self.setChannelMask(new_mask)
@@ -507,7 +523,7 @@ if __name__ == "__main__":
     #print(bus.isReady(0x77))
     mux = BusMux_PCA9548A(ncd, address=0x77)
     mux.setChannel(1)
-    print(mux.getChannel())
+    print(mux.getChannels())
     print(bus.readWord(0x0b,0x09))
 
 # END OF FILE

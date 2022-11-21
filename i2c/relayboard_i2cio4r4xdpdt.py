@@ -111,7 +111,7 @@ class RelayBoard4Relay4GPIO:
         self.__validate_gpio_pin(gpio_n)
         self.gpio.disable_pullup(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
         
-    def set_gpio_n(self, gpio_n: int):
+    def set_gpio_n_high(self, gpio_n: int):
         """Set the specified GPIO to a logic high level (5 V).
 
         Args:
@@ -124,7 +124,7 @@ class RelayBoard4Relay4GPIO:
         self.__validate_gpio_pin(gpio_n)
         self.gpio.set_pin(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
         
-    def reset_gpio_n(self, gpio_n: int):
+    def set_gpio_n_low(self, gpio_n: int):
         """Set the specified GPIO to a logic low level (GND).
 
         Args:

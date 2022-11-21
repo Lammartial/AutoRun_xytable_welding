@@ -207,9 +207,7 @@ class I2CPort:
             raise UnknownNCDError(self.ncd_interface_address, error_code)
 
     def __wrap_payload_in_packet(self, payload: bytes) -> bytes:
-        """Wraps the payload in a packet, converts it to a bytearray sends it
-        over the serial port.
-        """
+        """Wraps the payload in an NCD packet."""
         byte_count = len(payload)
         packet = bytes([NCD_HEADER, byte_count]) + payload
 
