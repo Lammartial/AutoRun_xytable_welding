@@ -43,9 +43,9 @@ class I2CPort:
             SelfTestFailedError: Raised if the selftest of the converter fails.
         """
         self.socket = None
-        self.host_port = (host, port)
+        self.host_port = (host, int(port))
         self.timeout_s = timeout_s
-        self.ncd_interface_address = f"{host}:{port}"  # This the ip address ("192.168.1.61:2101"). Used in error messages.
+        self.ncd_interface_address = f"{host}:{int(port)}"  # This the ip address ("192.168.1.61:2101"). Used in error messages.
 
         if self.__connect_socket():
             self.__data_exchange = self.__ethernet_exchange_wrapper
@@ -94,6 +94,7 @@ class I2CPort:
             InvalidI2CAddressError: If the I2C address is invalid.
             InvalidParametersError: If the length of data is invalid. (> 100)
         """
+        i2c_address_7bit = int(i2c_address_7bit)
         if not self.is_valid_7bit_address(i2c_address_7bit):
             raise InvalidI2CAddressError(i2c_address_7bit, self.ncd_interface_address)
 
@@ -107,7 +108,7 @@ class I2CPort:
         rx_payload = self.__data_exchange(tx_payload)
         self.__check_for_errors(rx_payload)
         if rx_payload[0] == NCD_COMMAND_SUCCESSFULL:  # Command successful
-            return len(data) + 1
+            return len(data)
         else:
             return 0
 
@@ -125,6 +126,7 @@ class I2CPort:
             InvalidI2CAddressError: If the I2C address is invalid.
             InvalidParametersError: If size is invalid. (<= 0 or > 100)
         """
+        i2c_address_7bit = int(i2c_address_7bit)
         if not self.is_valid_7bit_address(i2c_address_7bit):
             raise InvalidI2CAddressError(i2c_address_7bit, self.ncd_interface_address)
         if size <= 0 or size > 100:
@@ -152,8 +154,12 @@ class I2CPort:
             InvalidI2CAddressError: If the I2C address is invalid.
             InvalidParametersError: If size is invalid. (<= 0 or > 100)
         """
+        i2c_address_7bit = int(i2c_address_7bit)
         if not self.is_valid_7bit_address(i2c_address_7bit):
             raise InvalidI2CAddressError(i2c_address_7bit, self.ncd_interface_address)
+
+        if isinstance(data, int):
+            data = bytearray([data])
 
         if size < 0 or size > 16 or len(data) > 16:
             raise InvalidParametersError(i2c_address_7bit, self.ncd_interface_address)
@@ -201,9 +207,7 @@ class I2CPort:
             raise UnknownNCDError(self.ncd_interface_address, error_code)
 
     def __wrap_payload_in_packet(self, payload: bytes) -> bytes:
-        """Wraps the payload in a packet, converts it to a bytearray sends it
-        over the serial port.
-        """
+        """Wraps the payload in an NCD packet."""
         byte_count = len(payload)
         packet = bytes([NCD_HEADER, byte_count]) + payload
 

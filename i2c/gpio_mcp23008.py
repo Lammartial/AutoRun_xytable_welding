@@ -24,7 +24,7 @@ class MCP23008:
             i2c_address_7bit: The IC's 7-bit I2C address
         """
         self.i2c_port = i2c_port
-        self.i2c_address_7bit = i2c_address_7bit
+        self.i2c_address_7bit = int(i2c_address_7bit)
 
     def set_pin(self, pin_n: int):
         """Set the specified pin to a logic high level.
@@ -35,6 +35,7 @@ class MCP23008:
         Raises:
             ValueError: If the pin_n is invalid (< 0 or > 7).
         """
+        pin_n = int(pin_n)
         self.__validate_pin_number(pin_n)
         value = self.get_gpio_register()
         value |= (1 << pin_n)
@@ -49,6 +50,7 @@ class MCP23008:
         Raises:
             ValueError: If the pin_n is invalid (< 0 or > 7).
         """
+        pin_n = int(pin_n)
         self.__validate_pin_number(pin_n)
         value = self.get_gpio_register()
         value &= ~(1 << pin_n)
@@ -66,6 +68,7 @@ class MCP23008:
         Raises:
             ValueError: If the pin_n is invalid (< 0 or > 7).
         """
+        pin_n = int(pin_n)
         self.__validate_pin_number(pin_n)
         value = self.get_gpio_register()
         return bool(value & (1 << pin_n))
@@ -79,6 +82,7 @@ class MCP23008:
         Raises:
             ValueError: If the pin_n is invalid (< 0 or > 7).
         """
+        pin_n = int(pin_n)
         self.__validate_pin_number(pin_n)
         value = self.get_gppu_register()
         value |= (1 << pin_n)
@@ -93,6 +97,7 @@ class MCP23008:
         Raises:
             ValueError: If the pin_n is invalid (< 0 or > 7).
         """
+        pin_n = int(pin_n)
         self.__validate_pin_number(pin_n)
         value = self.get_gppu_register()
         value &= ~(1 << pin_n)
@@ -107,6 +112,7 @@ class MCP23008:
         Raises:
             ValueError: If the pin_n is invalid (< 0 or > 7).
         """
+        pin_n = int(pin_n)
         self.__validate_pin_number(pin_n)
         value = self.get_iodir_register()
         value &= ~(1 << pin_n)
@@ -121,24 +127,28 @@ class MCP23008:
         Raises:
             ValueError: If the pin_n is invalid (< 0 or > 7).
         """
+        pin_n = int(pin_n)
         self.__validate_pin_number(pin_n)
         value = self.get_iodir_register()
         value |= (1 << pin_n)
         self.set_iodir_register(value)
 
     def set_iodir_register(self, value: int):
+        value = int(value)
         self.__write_register(MCP23008.IODIR, value)
 
     def get_iodir_register(self) -> int:
         return self.__read_register(MCP23008.IODIR)
 
     def set_gpio_register(self, value: int):
+        value = int(value)
         self.__write_register(MCP23008.GPIO, value)
 
     def get_gpio_register(self) -> int:
         return self.__read_register(MCP23008.GPIO)
 
     def set_gppu_register(self, value: int):
+        value = int(value)
         self.__write_register(MCP23008.GPPU, value)
 
     def get_gppu_register(self) -> int:
