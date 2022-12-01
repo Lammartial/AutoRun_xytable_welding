@@ -149,7 +149,7 @@ class ITECH_DEV(object):
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
-                cmd = "MEAS:CURR?"
+                cmd = "FETC:CURR?"
                 self.session.timeout = 2000
                 result = self.session.query(cmd)
                 return float(result)
@@ -163,7 +163,7 @@ class ITECH_DEV(object):
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
-                cmd = "MEAS:VOLT?"
+                cmd = "FETC:VOLT?"
                 self.session.timeout = 2000
                 result = self.session.query(cmd)
                 return float(result)
@@ -177,7 +177,7 @@ class ITECH_DEV(object):
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
-                cmd = "MEAS:UUT:TEMP?"
+                cmd = "FETC:UUT:TEMP?"
                 self.session.timeout = 2000
                 result = self.session.query(cmd)
                 return float(result)
@@ -192,12 +192,15 @@ class ITECH_DEV(object):
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
-                cmd = "MEAS?"
+                cmd = "FETC?"
                 self.session.timeout = 2000
                 result = self.session.query(cmd)
                 # 5 results - string "###, ###, ###, ###, ###"
-                lst = str(result).split(',')        
-                return lst
+                lst = str(result).split(',')
+                volt = float(lst[0])        
+                curr = float(lst[1])        
+                pwr = float(lst[2])        
+                return volt, curr, pwr
             except pyvisa.Error as ex:
                 return ex
             except NameError as ex:
@@ -235,12 +238,11 @@ class ITECH_DEV(object):
                 cmd = "OUTP?"
                 self.session.timeout = 2000
                 result = self.session.query(cmd)    
-                return result
+                return int(result)
             except pyvisa.Error as ex:
                 return ex
             except NameError as ex:
                 return ex 
-
 
     def set_sense_state(self, state):
         """ This command enables or disables the sense function. 
@@ -274,7 +276,7 @@ class ITECH_DEV(object):
                 cmd = "SENS?"
                 self.session.timeout = 2000
                 result = self.session.query(cmd)    
-                return result
+                return int(result)
             except pyvisa.Error as ex:
                 return ex
             except NameError as ex:
@@ -288,7 +290,7 @@ class ITECH_DEV(object):
                 cmd = "OUTP:REV?"
                 self.session.timeout = 2000
                 result = self.session.query(cmd)    
-                return result
+                return int(result)
             except pyvisa.Error as ex:
                 return ex
             except NameError as ex:
@@ -301,11 +303,13 @@ class ITECH_DEV(object):
 
             Parameters
             ----------
-            curr: string 'MIN', 'MAX' or 'X.XXX' Amp """
+            curr: float, 'XX.XXX' Amp """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
-                cmd = f'CURR {curr}'
+                param_str =  f"{curr:06.3f}"
+                #cmd = f'CURR {curr}'
+                cmd = 'CURR ' + param_str
                 self.session.write(cmd)    
             except pyvisa.Error as ex:
                 return ex
@@ -320,12 +324,32 @@ class ITECH_DEV(object):
             try:
                 cmd = "CURR?"
                 self.session.timeout = 2000
-                result = self.session.query(cmd)    
-                return result
+                result = self.session.query(cmd)
+                return float(result)
             except pyvisa.Error as ex:
                 return ex
             except NameError as ex:
                 return ex
+
+    def get_current_ip(self, str_ip):
+        """ This command gets the current value of the power supply. """
+        try:
+            session = self.rm.open_resource(str_ip)
+            # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
+            if session.resource_name.startswith('ASRL') or session.resource_name.endswith('SOCKET'):
+                session.read_termination = '\n'
+                
+            cmd = "CURR?"
+            session.timeout = 2000
+            result = session.query(cmd)
+            session.close()    
+            return float(result)
+        except pyvisa.Error as ex:
+            session.close()    
+            return ex
+        except NameError as ex:
+            session.close()    
+            return ex
 
     #[SOURce:]CURRent[:LEVel]:LIMit:POSitive <NRf+>
     def set_current_limit_positive(self, curr):
@@ -333,16 +357,19 @@ class ITECH_DEV(object):
 
             Parameters
             ----------
-            curr: string 'MIN', 'MAX' or 'XX.XX' Amps """
+            curr: string 'MIN', 'MAX' or 'XX.XXX' Amps """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
-                cmd = f'CURR:LIM:POS {curr}'
+                param_str =  f"{curr:06.3f}"
+                #cmd = f'CURR:LIM:POS {curr}'
+                cmd = 'CURR:LIM:POS ' + param_str
                 self.session.write(cmd)    
             except pyvisa.Error as ex:
                 return ex
             except NameError as ex:
                 return ex
+
     #[SOURce:]CURRent[:LEVel]:LIMit:POSitive <NRf+>
     def get_current_limit_positive(self):
         """ This command gets the positive current limit value of the power supply. """
@@ -352,7 +379,7 @@ class ITECH_DEV(object):
                 cmd = "CURR:LIM:POS?"
                 self.session.timeout = 2000
                 result = self.session.query(cmd)    
-                return result
+                return float(result)
             except pyvisa.Error as ex:
                 return ex
             except NameError as ex:
@@ -364,11 +391,13 @@ class ITECH_DEV(object):
 
             Parameters
             ----------
-            curr: string 'MIN', 'MAX' or '-XX.XX' Amps """
+            curr: string 'MIN', 'MAX' or '-XX.XXX' Amps """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
-                cmd = f'CURR:LIM:NEG {curr}'
+                param_str =  f"{curr:07.3f}"
+                #cmd = f'CURR:LIM:NEG {curr}'
+                cmd = 'CURR:LIM:NEG ' + param_str
                 self.session.write(cmd)    
             except pyvisa.Error as ex:
                 return ex
@@ -384,7 +413,7 @@ class ITECH_DEV(object):
                 cmd = "CURR:LIM:NEG?"
                 self.session.timeout = 2000
                 result = self.session.query(cmd)    
-                return result
+                return float(result)
             except pyvisa.Error as ex:
                 return ex
             except NameError as ex:
@@ -400,7 +429,9 @@ class ITECH_DEV(object):
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
-                cmd = f'CURR:PROT {curr}'
+                param_str =  f"{curr:06.3f}"
+                #cmd = f'CURR:PROT {curr}'
+                cmd = 'CURR:PROT ' + param_str
                 self.session.write(cmd)    
             except pyvisa.Error as ex:
                 return ex
@@ -416,7 +447,7 @@ class ITECH_DEV(object):
                 cmd = "CURR:PROT?"
                 self.session.timeout = 2000
                 result = self.session.query(cmd)    
-                return result
+                return float(result)
             except pyvisa.Error as ex:
                 return ex
             except NameError as ex:
@@ -432,7 +463,9 @@ class ITECH_DEV(object):
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
-                cmd = f'CURR:UND:PROT {curr}'
+                param_str =  f"{curr:06.3f}"
+                #cmd = f'CURR:UND:PROT {curr}'
+                cmd = 'CURR:UND:PROT ' + param_str
                 self.session.write(cmd)    
             except pyvisa.Error as ex:
                 return ex
@@ -450,7 +483,9 @@ class ITECH_DEV(object):
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
-                cmd = f'VOLT {volt}'
+                param_str =  f"{volt:05.2f}"
+                #cmd = f'VOLT {volt}'
+                cmd = 'VOLT ' + param_str
                 self.session.write(cmd)    
             except pyvisa.Error as ex:
                 return ex
@@ -467,7 +502,9 @@ class ITECH_DEV(object):
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
-                cmd = f'VOLT:LIM {volt}'
+                param_str =  f"{volt:05.2f}"
+                #cmd = f'VOLT:LIM {volt}'
+                cmd = 'VOLT:LIM ' + param_str 
                 self.session.write(cmd)    
             except pyvisa.Error as ex:
                 return ex
@@ -484,7 +521,9 @@ class ITECH_DEV(object):
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
-                cmd = f'VOLT:LIM:LOW {volt}'
+                param_str =  f"{volt:05.2f}"
+                #cmd = f'VOLT:LIM:LOW {volt}'
+                cmd = 'VOLT:LIM:LOW ' + param_str
                 self.session.write(cmd)    
             except pyvisa.Error as ex:
                 return ex
@@ -501,7 +540,9 @@ class ITECH_DEV(object):
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
-                cmd = f'VOLT:PROT {volt}'
+                param_str =  f"{volt:05.2f}"
+                #cmd = f'VOLT:PROT {volt}'
+                cmd = 'VOLT:PROT ' + param_str 
                 self.session.write(cmd)    
             except pyvisa.Error as ex:
                 return ex
@@ -518,7 +559,9 @@ class ITECH_DEV(object):
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
-                cmd = f'VOLT:UND:PROT {volt}'
+                param_str =  f"{volt:05.2f}"
+                #cmd = f'VOLT:UND:PROT {volt}'
+                cmd = 'VOLT:UND:PROT ' + param_str
                 self.session.write(cmd)    
             except pyvisa.Error as ex:
                 return ex
