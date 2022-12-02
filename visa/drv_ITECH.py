@@ -53,16 +53,6 @@ class ITECH_DEV(object):
         self.rm = ResourceManager()          # auto decision for backend
         pass    
 
-    #def find(self, searchString):
-    #    print('Find with search string \'%s\':' % searchString)
-    #    devices = self.rm.list_resources(searchString)
-    #    if len(devices) > 0:
-    #        for device in devices:
-    #            print('\t%s' % device)
-    #    else:
-    #        print('... didn\'t find anything!')
-    #    self.rm.close()
-
     def connect_by_name(self, NAME_STR):
         """ Creates a connection (session) with the device by Name """
         try:
@@ -90,7 +80,8 @@ class ITECH_DEV(object):
             return ex
 
     def set_remote_control(self):
-        """ This command clears the system status register. """
+        """ This command clears the system status register. 
+            IT M3400 and M3900 devices """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
@@ -145,7 +136,8 @@ class ITECH_DEV(object):
                 return ex
 
     def get_ADC(self):
-        """ This command queries the present current measurement. """
+        """ This command queries the present current measurement. 
+            IT M3400 and M3900 devices """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
@@ -159,7 +151,8 @@ class ITECH_DEV(object):
                 return ex
 
     def get_VDC(self):
-        """ This command queries the present measured voltage. """
+        """ This command queries the present measured voltage. 
+            IT M3400 and M3900 devices """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
@@ -173,7 +166,8 @@ class ITECH_DEV(object):
                 return ex
 
     def get_temp(self):
-        """ This command queries the measured UUT temperature. """
+        """ This command queries the measured UUT temperature. 
+            IT M3400 devices """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
@@ -188,7 +182,8 @@ class ITECH_DEV(object):
 
     def get_all_meas(self):
         """ This command queries the present voltage measurement, current
-            measurement and power measurement """
+            measurement and power measurement. 
+            IT M3400 and M3900 devices """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
@@ -208,6 +203,7 @@ class ITECH_DEV(object):
 
     def set_output_state(self, state):
         """ This command sets the output state of the power supply.
+            IT M3400 and M3900 devices. 
 
             Parameters
             ----------
@@ -231,7 +227,8 @@ class ITECH_DEV(object):
                 return ex 
 
     def get_output_state(self):
-        """ This command sets the output state of the power supply """
+        """ This command sets the output state of the power supply.
+            IT M3400 and M3900 devices.  """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
@@ -246,6 +243,7 @@ class ITECH_DEV(object):
 
     def set_sense_state(self, state):
         """ This command enables or disables the sense function. 
+            IT M3400 devices. 
 
             Parameters
             ----------
@@ -269,7 +267,8 @@ class ITECH_DEV(object):
                 return ex 
 
     def get_sense_state(self):
-        """ This command sets the output state of the power supply """
+        """ This command sets the output state of the power supply 
+            IT M3400 devices. """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
@@ -283,7 +282,8 @@ class ITECH_DEV(object):
                 return ex 
    
     def get_output_reverse_state(self):
-        """ This command is used to query the connection of output terminals. """
+        """ This command is used to query the connection of output terminals. 
+            IT M3400 devices """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
@@ -300,6 +300,7 @@ class ITECH_DEV(object):
     def set_current(self, curr):
         """ This command sets the current value of the power supply. 
             The query form of this command gets the set current value of the power supply.
+            IT M3400 and M3900 devices.
 
             Parameters
             ----------
@@ -318,7 +319,8 @@ class ITECH_DEV(object):
 
     #[SOURce:]CURRent[:LEVel][:IMMediate][:AMPLitude] <NRf+>
     def get_current(self):
-        """ This command gets the current value of the power supply. """
+        """ This command gets the current value of the power supply. 
+            IT M3400 and M3900 devices. """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
@@ -331,29 +333,10 @@ class ITECH_DEV(object):
             except NameError as ex:
                 return ex
 
-    def get_current_ip(self, str_ip):
-        """ This command gets the current value of the power supply. """
-        try:
-            session = self.rm.open_resource(str_ip)
-            # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
-            if session.resource_name.startswith('ASRL') or session.resource_name.endswith('SOCKET'):
-                session.read_termination = '\n'
-                
-            cmd = "CURR?"
-            session.timeout = 2000
-            result = session.query(cmd)
-            session.close()    
-            return float(result)
-        except pyvisa.Error as ex:
-            session.close()    
-            return ex
-        except NameError as ex:
-            session.close()    
-            return ex
-
     #[SOURce:]CURRent[:LEVel]:LIMit:POSitive <NRf+>
     def set_current_limit_positive(self, curr):
         """ This command sets the positive current limit value of the power supply. 
+            IT M3400 and M3900 devices.
 
             Parameters
             ----------
@@ -372,7 +355,8 @@ class ITECH_DEV(object):
 
     #[SOURce:]CURRent[:LEVel]:LIMit:POSitive <NRf+>
     def get_current_limit_positive(self):
-        """ This command gets the positive current limit value of the power supply. """
+        """ This command gets the positive current limit value of the power supply. 
+            IT M3400 and M3900 devices."""
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
@@ -388,6 +372,7 @@ class ITECH_DEV(object):
     #[SOURce:]CURRent[:LEVel]:LIMit:NEGative <NRf+>
     def set_current_limit_negative(self, curr):
         """ This command sets the negative current limit value of the power supply.
+            IT M3400 and M3900 devices.
 
             Parameters
             ----------
@@ -406,7 +391,8 @@ class ITECH_DEV(object):
 
     #[SOURce:]CURRent[:LEVel]:LIMit:NEGative <NRf+>
     def get_current_limit_negative(self):
-        """ This command gets the negative current limit value of the power supply. """
+        """ This command gets the negative current limit value of the power supply. 
+            IT M3400 and M3900 devices. """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
@@ -422,6 +408,7 @@ class ITECH_DEV(object):
     #[SOURce:]CURRent[:OVER]:PROTection[:LEVel] <NRf+>
     def set_current_protection(self, curr):
         """ This command sets the over current limit of the power supply. 
+            IT M3400 and M3900 devices.
 
             Parameters
             ----------
@@ -440,7 +427,8 @@ class ITECH_DEV(object):
 
     #[SOURce:]CURRent[:OVER]:PROTection[:LEVel] <NRf+>   
     def get_current_protection(self):
-        """ This command gets the over current limit of the power supply. """
+        """ This command gets the over current limit of the power supply. 
+            IT M3400 and M3900 devices. """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
@@ -456,6 +444,7 @@ class ITECH_DEV(object):
     #[SOURce:]CURRent:UNDer:PROTection[:LEVel] <NRf+>
     def set_current_under_protection(self, curr):
         """ This command sets the under current limit of the power supply.
+            IT M3400 and M3900 devices.
 
             Parameters
             ----------
@@ -476,6 +465,7 @@ class ITECH_DEV(object):
     def set_voltage(self, volt):
         """ This command sets the voltage value of the power supply. The query form of
             this command gets the set voltage value of the power supply. 
+            IT M3400 and M3900 devices.
 
             Parameters
             ----------
@@ -495,6 +485,7 @@ class ITECH_DEV(object):
     #[SOURce:]VOLTage[:LEVel]:LIMit[:HIGH] <NRf+>
     def set_voltage_limit(self, volt):
         """ This command sets voltage upper limit under CC priority mode. 
+            IT M3400 and M3900 devices. 
 
             Parameters
             ----------
@@ -514,6 +505,7 @@ class ITECH_DEV(object):
     #[SOURce:]VOLTage[:LEVel]:LIMit:LOW <NRf+>
     def set_voltage_limit_low(self, volt):
         """ This command sets voltage lower limit under CC priority mode. 
+            IT M3400 devices.
 
             Parameters
             ----------
@@ -533,6 +525,7 @@ class ITECH_DEV(object):
     #[SOURce:]VOLTage[:OVER]:PROTection[:LEVel] <NRf+>   
     def set_voltage_protection(self, volt):
         """ This command sets the over voltage limit of the power supply. 
+            IT M3400 and M3900 devices.
 
             Parameters
             ----------
@@ -552,7 +545,8 @@ class ITECH_DEV(object):
     #[SOURce:]VOLTage:UNDer:PROTection[:LEVel] <NRf+>   
     def set_voltage_under_protection(self, volt):
         """ This command sets the under voltage limit of the power supply. 
-
+            IT M3400 and M3900 devices.
+            
             Parameters
             ----------
             volt: string 'MIN', 'MAX' or 'XX.XX' Volts """
