@@ -463,8 +463,7 @@ class ITECH_DEV(object):
 
     #[SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+>   
     def set_voltage(self, volt):
-        """ This command sets the voltage value of the power supply. The query form of
-            this command gets the set voltage value of the power supply. 
+        """ This command sets the voltage value of the power supply.  
             IT M3400 and M3900 devices.
 
             Parameters
@@ -477,6 +476,22 @@ class ITECH_DEV(object):
                 #cmd = f'VOLT {volt}'
                 cmd = 'VOLT ' + param_str
                 self.session.write(cmd)    
+            except pyvisa.Error as ex:
+                return ex
+            except NameError as ex:
+                return ex
+
+    #[SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+>   
+    def get_voltage(self):
+        """ The query form of this command gets the set voltage value of the power supply. 
+            IT M3400 and M3900 devices. """
+        # Last operation completed successfully -> Connection is OK
+        if (self.rm.last_status == 0):
+            try:
+                cmd = 'VOLT?'
+                self.session.timeout = 2000
+                result = self.session.query(cmd)    
+                return float(result)    
             except pyvisa.Error as ex:
                 return ex
             except NameError as ex:

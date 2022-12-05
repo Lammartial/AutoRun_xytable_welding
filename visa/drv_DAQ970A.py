@@ -26,16 +26,6 @@ class DAQ970A(object):
         self.rm = ResourceManager()          # auto decision for backend
         pass    
 
-    #def find(self, searchString):
-    #    print('Find with search string \'%s\':' % searchString)
-    #    devices = self.rm.list_resources(searchString)
-    #    if len(devices) > 0:
-    #        for device in devices:
-    #            print('\t%s' % device)
-    #    else:
-    #        print('... didn\'t find anything!')
-    #    self.rm.close()
-
     def connect_by_name(self, DAQ970A_NAME_STR):
         """ Creates a connection (session) with the device by Name """
         try:

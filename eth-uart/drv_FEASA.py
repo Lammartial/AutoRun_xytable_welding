@@ -15,6 +15,7 @@ __version__ = VERSION
     # Check FEASA LED ANALYSER RS232 settings. Default: baudrate 57600, Data bits 8, Stop bit 1
     
 #--------------------------------------------------------------------------------------------------
+RESPONSE_OK = b"OK\r\n"
 class FEASA_DEV(object):
 
     def __init__(self, HOST, PORT):
@@ -24,15 +25,22 @@ class FEASA_DEV(object):
             ----------
             HOST: string, CH9121 IP address   
             PORT: int, CH9121 port number """
-        self.HOST = HOST
-        self.PORT = PORT   
+        self.HOST = str(HOST)
+        self.PORT = int(PORT)
 
 # Capture Fuctions --------------------------------------------------------------------------------
+
+    def test_int(self):
+        return int(1)
+
+    def test_float(self):
+        return float(1)
 
     # CAPTURE 
     def capture(self):
         """ This Auto Range Capture instructs the LED Analyser to capture and store the data of all the
-             LED's positioned under the fibers. """
+             LED's positioned under the fibers. 
+             Returns: 0 - failed, 1 - success """
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(10)
@@ -42,7 +50,10 @@ class FEASA_DEV(object):
                 s.sendall(MESSAGE)
                 data = s.recv(1024)
                 s.close()
-                return data.decode('ascii')
+            if (data == RESPONSE_OK):
+                return int(1)
+            else:
+                return int(0)
         except TypeError as ex:
             return ex       
         except TimeoutError as ex:
@@ -55,17 +66,22 @@ class FEASA_DEV(object):
             
             Parameters
             ----------
-            range: int, 1 = Low, 2 = Medium, 3 = High, 4 = Super, 5 = Ultra """
+            range: int, 1 = Low, 2 = Medium, 3 = High, 4 = Super, 5 = Ultra 
+            
+            Returns: 0 - failed, 1 - success """
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(10)
                 s.connect((self.HOST, self.PORT))
-                range_str = str(range)
+                range_str = str(int(range))
                 MESSAGE = "capture" + range_str + "\r\n"
                 s.sendall(bytes(MESSAGE,'utf-8'))
                 data = s.recv(1024)
                 s.close()
-                return data.decode('ascii')
+                if (data == RESPONSE_OK):
+                    return int(1)
+                else:
+                    return int(0)
         except TypeError as ex:
             return ex       
         except TimeoutError as ex:
@@ -75,17 +91,21 @@ class FEASA_DEV(object):
     def capture_pwm(self):
         """ Pulse-Width-Modulated(PWM) LED's are switched on and off rapidly to save power and to
             control Intensity. The Analyser automatically determines the correct settings required to
-            execute the test. """
+            execute the test. 
+
+            Returns: 0 - failed, 1 - success """
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(10)
                 s.connect((self.HOST, self.PORT))
-                range_str = str(range)
                 MESSAGE = b"capturepwm\r\n"
                 s.sendall(MESSAGE)
                 data = s.recv(1024)
                 s.close()
-                return data.decode('ascii')
+                if (data == RESPONSE_OK):
+                    return int(1)
+                else:
+                    return int(0)
         except TypeError as ex:
             return ex       
         except TimeoutError as ex:
@@ -99,18 +119,23 @@ class FEASA_DEV(object):
             Parameters 
             ----------
             range: int, represents the exposure Range 1 – 5
-            factor: int, represents an averaging factor in the range 1 - 15 """
+            factor: int, represents an averaging factor in the range 1 - 15 
+            
+            Returns: 0 - failed, 1 - success """
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(10)
                 s.connect((self.HOST, self.PORT))
-                range_str = str(range)
-                factor_str  = f"{factor:02d}" 
+                range_str = str(int(range))
+                factor_str  = f"{(int(factor)):02d}" 
                 MESSAGE = "capture" + range_str + "PWM" + factor_str + "\r\n"
                 s.sendall(bytes(MESSAGE,'utf-8'))
                 data = s.recv(1024)
                 s.close()
-                return data.decode('ascii')
+                if (data == RESPONSE_OK):
+                    return int(1)
+                else:
+                    return int(0)
         except TypeError as ex:
             return ex       
         except TimeoutError as ex:
@@ -131,12 +156,18 @@ class FEASA_DEV(object):
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(10)
                 s.connect((self.HOST, self.PORT))
-                num_str  = f"{num:02d}" 
+                num_str  = f"{(int(num)):02d}" 
                 MESSAGE = "getrgbi" + num_str + "\r\n"
                 s.sendall(bytes(MESSAGE,'utf-8'))
                 data = s.recv(1024)
                 s.close()
-                return data.decode('ascii')
+                lst = data.decode('ascii').split(' ')
+                result = []
+                result.append(int(lst[0]))
+                result.append(int(lst[1]))
+                result.append(int(lst[2]))
+                result.append(int(lst[3]))
+                return result
         except TypeError as ex:
             return ex       
         except TimeoutError as ex:
@@ -155,12 +186,12 @@ class FEASA_DEV(object):
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(10)
                 s.connect((self.HOST, self.PORT))
-                num_str  = f"{num:02d}" 
+                num_str  = f"{(int(num)):02d}" 
                 MESSAGE = "getintensity" + num_str + "\r\n"
                 s.sendall(bytes(MESSAGE,'utf-8'))
                 data = s.recv(1024)
                 s.close()
-                return data.decode('ascii')
+                return int(data.decode('ascii'))
         except TypeError as ex:
             return ex       
         except TimeoutError as ex:
@@ -175,18 +206,23 @@ class FEASA_DEV(object):
             Parameters 
             ----------
             num: int, represents the Fiber Number and is a number in the range 01 – 20 
-            factor: int, represents a 3 digit gain factor, default 100 """
+            factor: int, represents a 3 digit gain factor, default 100 
+            
+            Returns: 0 - failed, 1 - success. """
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(10)
                 s.connect((self.HOST, self.PORT))
-                num_str  = f"{num:02d}"
-                factor_str = f"{factor:03d}" 
+                num_str  = f"{(int(num)):02d}"
+                factor_str = f"{(int(factor)):03d}" 
                 MESSAGE = "setintgain" + num_str + factor_str + "\r\n"
                 s.sendall(bytes(MESSAGE,'utf-8'))
                 data = s.recv(1024)
                 s.close()
-                return data.decode('ascii')
+                if (data == RESPONSE_OK):
+                    return int(1)
+                else:
+                    return int(0)
         except TypeError as ex:
             return ex       
         except TimeoutError as ex:
@@ -198,17 +234,22 @@ class FEASA_DEV(object):
             
             Parameters 
             ----------
-            factor: int, represents the Factor Number and is in the range 01 – 15 (default 01). """
+            factor: int, represents the Factor Number and is in the range 01 – 15 (default 01). 
+            
+            Returns: 0 - failed, 1 - success """
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(10)
                 s.connect((self.HOST, self.PORT))
-                factor_str = f"{factor:02d}" 
+                factor_str = f"{(int(factor)):02d}" 
                 MESSAGE = "setfactor" + factor_str + "\r\n"
                 s.sendall(bytes(MESSAGE,'utf-8'))
                 data = s.recv(1024)
                 s.close()
-                return data.decode('ascii')
+                if (data == RESPONSE_OK):
+                    return int(1)
+                else:
+                    return int(0)
         except TypeError as ex:
             return ex       
         except TimeoutError as ex:
