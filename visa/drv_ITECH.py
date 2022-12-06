@@ -192,10 +192,13 @@ class ITECH_DEV(object):
                 result = self.session.query(cmd)
                 # 5 results - string "###, ###, ###, ###, ###"
                 lst = str(result).split(',')
-                volt = float(lst[0])        
-                curr = float(lst[1])        
-                pwr = float(lst[2])        
-                return volt, curr, pwr
+                result = []
+                result.append(float(lst[0]))    # voltage
+                result.append(float(lst[1]))    # current
+                result.append(float(lst[2]))    # power
+                result.append(float(lst[3]))    # amp-hour
+                result.append(float(lst[4]))    # watt-hour
+                return result
             except pyvisa.Error as ex:
                 return ex
             except NameError as ex:
