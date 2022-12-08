@@ -18,10 +18,10 @@ if __name__ == "__main__":
     # 2. Connect to the device
 
     # "CAPTURE" command
-    #print(feasa.capture())
+    print(feasa.capture())
 
     # "CAPTURE#" command
-    #print(feasa.capture_range(1))
+    print(feasa.capture_range(1))
 
     # "CAPTUREPWM" command
     #print(feasa.capture_pwm())

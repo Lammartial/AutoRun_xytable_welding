@@ -805,10 +805,10 @@ class HIOKI_DEV(object):
                 bt_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 bt_sock.settimeout(10)
                 bt_sock.connect((self.BT_HOST, self.BT_PORT))
-                #[BT3562A] :READ? Execute single measurement using BT3561A.
+                #[BT3561A] :READ? Execute single measurement using BT3561A.
                 MESSAGE = b':READ?\r\n'
                 bt_sock.sendall(MESSAGE)
-                #[BT3562A] 1.0258E-3 Receive measured values.
+                #[BT3561A] 1.0258E-3 Receive measured values.
                 resp = bt_sock.recv(1024)
                 bt_sock.close()
 
@@ -821,7 +821,7 @@ class HIOKI_DEV(object):
                     result.append(float(lst[0]))
                     result.append(float(lst[1]))                                    
                 else:
-                    result = resp.decode('ascii').rstrip()          
+                    result = float(resp.decode('ascii'))
                 return result
             else:
                 raise ValueError('Error, measure_channnel: invalid channel number')
