@@ -561,7 +561,7 @@ class HIOKI_DEV(object):
             if ((slot >= 1) and (slot <= 3)) and ((mode == 2) or (mode == 4)):
                 MESSAGE = (f':SYST:MOD:WIRE:MODE {slot},WIRE{mode}\r\n')
                 sw_sock.sendall(bytes(MESSAGE,'utf-8'))
-                MESSAGE = b'*OPC?\r\n'
+                MESSAGE = '*OPC?\r\n'
                 sw_sock.sendall(bytes(MESSAGE,'utf-8'))
                 res = sw_sock.recv(1024)
                 sw_sock.close()
@@ -620,7 +620,7 @@ class HIOKI_DEV(object):
             if ((slot >= 1) and (slot <= 3)) and (mode in arr_mode):
                 MESSAGE = (f':SYST:MOD:SHI {slot},{mode}\r\n')
                 sw_sock.sendall(bytes(MESSAGE,'utf-8'))
-                MESSAGE = b'*OPC?\r\n'
+                MESSAGE = '*OPC?\r\n'
                 sw_sock.sendall(bytes(MESSAGE,'utf-8'))
                 res = sw_sock.recv(1024)
                 sw_sock.close()
@@ -707,7 +707,7 @@ class HIOKI_DEV(object):
             if ((slot >= 1) and (slot <= 3)) and ((channel >= 1) and (channel <= 22)):
                 MESSAGE = (f':CLOS {slot}{channel:02d}\r\n')
                 sw_sock.sendall(bytes(MESSAGE,'utf-8'))
-                MESSAGE = b'*OPC?\r\n'
+                MESSAGE = '*OPC?\r\n'
                 sw_sock.sendall(bytes(MESSAGE,'utf-8'))
                 res = sw_sock.recv(1024)
                 sw_sock.close()
@@ -793,14 +793,15 @@ class HIOKI_DEV(object):
                 # SW1001 operations ==================
                 if (channel <= 11):
                     #SLOT 1
+                    self.SW_set_shield_mode(1, 'GND')
                     self.SW_set_wire_mode(1, 4)
                     self.SW_close(1, channel)
                 else:
                     #SLOT 2
                     channel = channel - 11
+                    self.SW_set_shield_mode(2, 'GND')
                     self.SW_set_wire_mode(2, 4)
-                    self.SW_close(2, channel)
-
+                    self.SW_close(2, channel)  
                 # BT3561A operations =================
                 bt_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 bt_sock.settimeout(10)
@@ -835,12 +836,46 @@ class HIOKI_DEV(object):
     def measure_all_channels(self):
         """ Measures the impedance of each of 22 channels. 
 
-            Returns: array[0..21]: float, channel resistance, Ω mode """
+            Returns: array[0..43]: float, Ch1.Impedance, Ch1.Voltage, Ch2.Impedance, Ch2.Voltage, ... """
         try:
             result = []
+            # bt_sock should be closed before invoking BT_get_function!
+            bt_function_type = self.BT_get_function()
             for i in range(22):
-                ch_result = self.measure_channnel(i+1)
-                result.append(ch_result[0])
+                # Channel 1/Slot1 or Channel 1/Slot 2. Needs to switch shield mode and wire mode
+                if (i == 0):
+                    self.SW_set_shield_mode(1, 'GND')
+                    self.SW_set_shield_mode(1, 'GND')
+                    self.SW_set_wire_mode(1, 4)
+                    self.SW_set_wire_mode(1, 4)
+                if (i == 11):
+                    self.SW_set_shield_mode(2, 'GND')
+                    self.SW_set_shield_mode(2, 'GND')
+                    self.SW_set_wire_mode(2, 4)
+                    self.SW_set_wire_mode(2, 4)
+                if (i < 11):
+                    #SLOT 1
+                    self.SW_close(1, i+1)
+                else:
+                    #SLOT 2
+                    self.SW_close(2, (i-11)+1)  
+                bt_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                bt_sock.settimeout(10)
+                bt_sock.connect((self.BT_HOST, self.BT_PORT))
+                #[BT3561A] :READ? Execute single measurement using BT3561A.
+                MESSAGE = b':READ?\r\n'
+                bt_sock.sendall(MESSAGE)
+                #[BT3561A] 1.0258E-3 Receive measured values.
+                resp = bt_sock.recv(1024)
+                bt_sock.close()
+
+                if (bt_function_type == 'RV'):
+                    lst = resp.decode('ascii').split(',')
+                    result.append(float(lst[0]))
+                    result.append(float(lst[1]))                                    
+                else:
+                    result.append(float(resp.decode('ascii')))
+                    result.append(float(0))
             return result
         except TypeError as ex:
             return ex       

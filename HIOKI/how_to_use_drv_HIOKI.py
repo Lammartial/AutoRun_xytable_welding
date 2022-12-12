@@ -124,7 +124,6 @@ if __name__ == "__main__":
     # OPEN
     #hioki.SW_open()
 
-    
     # 4. ==== Cells tester (BT3561A + SW1001) functions ================================================
 
     # IMPORTANT! Set continuous measurement OFF.
@@ -132,8 +131,8 @@ if __name__ == "__main__":
 
     sleep(0.1)
 
-    # measure single channel
-    print(hioki.measure_channnel(1))
+    # measure single channel (1 ... 22)
+    #print(hioki.measure_channnel(15))
     
     # measure all 22 4-wire channels (Could be useful for Zero-adjustment procedure)
     print(hioki.measure_all_channels())
