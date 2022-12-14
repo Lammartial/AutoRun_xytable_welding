@@ -9,13 +9,14 @@ class AT24HC02C:
     A single write operation must stay within one page. I.e. At most 8 bytes can
     be written per write operation.
     Reading can be performed without page limitations.
+    The default 7-bit i2c address is 0x50.
     """
     max_write_time_s = 0.005
     memory_size = 256
     number_of_pages = 32
     bytes_per_page = 8
 
-    def __init__(self, i2c_port, i2c_address_7_bit: int):
+    def __init__(self, i2c_port, i2c_address_7_bit: int = 0x50):
         self.i2c_port = i2c_port
         self.i2c_address_7bit = int(i2c_address_7_bit)
 
@@ -125,7 +126,7 @@ class AT24HC02C:
         All address where Bits 3 to 7 are the same lie on the same memory page. This is checked
         using the bit mask 0xF8 = 0b1111_1000.
         """
-        end_address = start_address + data_length
+        end_address = start_address + data_length - 1
         if (start_address & 0xF8) == (end_address & 0xF8) and data_length <= AT24HC02C.bytes_per_page:
             return True
         else:

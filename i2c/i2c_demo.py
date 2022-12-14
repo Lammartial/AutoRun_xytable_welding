@@ -9,8 +9,10 @@ from temperature_sts21 import STS21
 from flash_stream_flasher import FlashStreamFlasher
 from pathlib import Path
 from datetime import datetime as dt
+from eeprom_at24hc02c import AT24HC02C
+from shunt_calibration_storage import ShuntCalibrationStorage
 
-I2C_BRIDGE_IP = "192.168.1.60"
+I2C_BRIDGE_IP = "192.168.1.83"
 I2C_BRIDGE_PORT = 2101
 
 i2c_port = I2CPort(I2C_BRIDGE_IP, I2C_BRIDGE_PORT)
@@ -19,8 +21,16 @@ busmux = BusMux_PCA9548A(i2c_port, address=0x77)
 
 busmux.setChannel(1)
 busmux.setChannel(2)
+# print(i2c_port.i2c_bus_scan())
+# bat = Battery(busmaster)
 
-bat = Battery(busmaster)
+# eeprom1 = AT24HC02C(i2c_port, 80)
+# eeprom1.write_bytes(0, bytearray([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]))
+# print(eeprom1.read_bytes(0, 8))
+
+shunt1 = ShuntCalibrationStorage(i2c_port, 80)
+shunt1.store_shunt_resistance_ohm(-1.1)
+print(shunt1.load_shunt_resistance_ohm())
 
 # flasher = FlashStreamFlasher(bat)
 # log_file_path = Path("fsf-log-file-{}.log".format(dt.now().strftime("%Y-%m-%dT%H-%M-%S")))
@@ -35,7 +45,7 @@ bat = Battery(busmaster)
 #     programming_result = flasher.program_fw_file()
 #     print(f"Programming result: {programming_result}")
 
-print(bat.device_name()[0])
+# print(bat.device_name()[0])
 # print(bat.voltage())
 # print(f"S: {bat.is_sealed()}")
 # print(f"FA: {bat.is_full_access()}")

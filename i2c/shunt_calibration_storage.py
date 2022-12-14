@@ -13,18 +13,22 @@ class ShuntCalibrationStorageReadError(Exception):
 
 
 class ShuntCalibrationStorage:
-    """A class that can access EEPROM storage via I2C and store and load a resistance value in it."""
+    """A class that can access EEPROM storage via I2C (AT24HC02C) and store and load a resistance value in it.
+    The resistance is stored with double-precision which can hold ca. 16 significant digits.
+    The default 7-bit i2c address is 0x50.
+    """
     page_list = [0, 1, 2]  # The calibration value will be stored on multiple pages for validation
-    struct_format_string = ">Q"  # big-endian, unsigned long long with 8 bytes
-    storage_factor = 1000000  # Resistance is stored in µOhm.
+    struct_format_string = ">d"  # big-endian, double with 8 bytes
 
-    def __init__(self, i2c_port, i2c_address_7bit: int):
+    def __init__(self, i2c_port, i2c_address_7bit: int = 0x50):
         self.i2c_port = i2c_port
         self.i2c_address_7bit = int(i2c_address_7bit)
         self.eeprom = AT24HC02C(self.i2c_port, self.i2c_address_7bit)
 
-    def store_shunt_resistance(self, resistance_ohm: float) -> bool:
+    def store_shunt_resistance_ohm(self, resistance_ohm: float) -> bool:
         """Store the resistance value in EEPROM and return whether it was successful.
+
+        The value is stored with double-precision (ca. 16 significant digits).
 
         Args:
             resistance_ohm (float): The resistance to store in Ohm.
@@ -32,34 +36,35 @@ class ShuntCalibrationStorage:
         Returns:
             bool: True if the readback was correct. False else.
         """
-        resistance_uohm_int = int(round((resistance_ohm * ShuntCalibrationStorage.storage_factor), 0))
+        resistance_ohm = float(resistance_ohm)
+        return self.__store_calibration_value(resistance_ohm)
 
-        return self.__store_calibration_value(resistance_uohm_int)
-
-    def load_shunt_resistance_ohm(self, retries: int = 3) -> float:
-        """Read the resistance value from EEPROM and return as a float in Ohm.
+    def load_shunt_resistance_ohm(self, num_of_tries_left: int = 3) -> float:
+        """Read the resistance value from EEPROM and return it as a float in Ohm.
 
         Returns:
             float: Resistance in Ohm
         """
-        retries = int(retries)
-        while retries > 0:
+        num_of_tries_left = int(num_of_tries_left)
+        while num_of_tries_left > 0:
             result = self.__read_calibration_value()
             if result[0]:
-                return result[1] / ShuntCalibrationStorage.storage_factor  # Normal division will always return a float in Python 3
+                return result[1]
             else:
-                retries -= 1
+                num_of_tries_left -= 1
                 sleep(0.1)
         raise ShuntCalibrationStorageReadError(self.i2c_address_7bit)
 
-    def __store_calibration_value(self, value: int) -> bool:
-        value = int(value)
+    def __store_calibration_value(self, value: float) -> bool:
+        # Pack the value into a bytearray with the format specifier from the class variable
         value_bytearray = bytearray(struct.pack(ShuntCalibrationStorage.struct_format_string, value))
 
+        # Store the packed value on multiple pages for validation
         for page in ShuntCalibrationStorage.page_list:
             self.eeprom.write_page(page, value_bytearray)
             self.eeprom.wait_after_write()
 
+        # Perform a readback to verify the write operation
         read_back = self.__read_calibration_value()
         if read_back[0] and value == read_back[1]:
             return True
@@ -68,11 +73,15 @@ class ShuntCalibrationStorage:
 
     def __read_calibration_value(self) -> (bool, int):
         read_set = set()
+        # The value has been stored on multiple pages to validate it when read out.
+        # Read the content of each page, unpack it and store it in a set
         for page in ShuntCalibrationStorage.page_list:
             read_back = self.eeprom.read_page(page)
-            read_set.add(struct.unpack(ShuntCalibrationStorage.struct_format_string, read_back))
+            unpacked = struct.unpack(ShuntCalibrationStorage.struct_format_string, read_back)[0]
+            read_set.add(unpacked)
 
-        if len(read_set) == 1:  # Check if all items in read_set are the same. (Sets can't have duplicates)
+        # If we read the same value from each page, the set will have a length of 1 (Sets can't have duplicates)
+        if len(read_set) == 1:
             return True, read_set.pop()
         else:
             return False, 0
