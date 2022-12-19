@@ -91,6 +91,7 @@ class FlashStreamFlasher:
             raise CantUnsealBatteryError()
         self.logger.info(f"Battery name: {self.battery.device_name()[0]}")
 
+    #@profile
     def __process_file(self, is_file_validation: bool):
         validation_result = True
         with open(self.firmware_file, "r") as file:
@@ -121,6 +122,8 @@ class FlashStreamFlasher:
                             f"Error in line: {line_number}. Could not parse waiting time. Line is: \"{current_line}\"")
                         validation_result = False
                     if not is_file_validation:
+                        if time_ms < 25:
+                            continue
                         sleep(time_ms / 1000.0)
                     continue
 

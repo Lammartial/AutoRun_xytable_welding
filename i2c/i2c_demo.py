@@ -9,8 +9,10 @@ from temperature_sts21 import STS21
 from flash_stream_flasher import FlashStreamFlasher
 from pathlib import Path
 from datetime import datetime as dt
+from eeprom_at24hc02c import AT24HC02C
+from shunt_calibration_storage import ShuntCalibrationStorage
 
-I2C_BRIDGE_IP = "192.168.1.60"
+I2C_BRIDGE_IP = "192.168.1.83"
 I2C_BRIDGE_PORT = 2101
 
 i2c_port = I2CPort(I2C_BRIDGE_IP, I2C_BRIDGE_PORT)
@@ -19,21 +21,33 @@ busmux = BusMux_PCA9548A(i2c_port, address=0x77)
 
 busmux.setChannel(1)
 busmux.setChannel(2)
-
+# print(i2c_port.i2c_bus_scan())
 bat = Battery(busmaster)
 
-# flasher = FlashStreamFlasher(bat)
-# log_file_path = Path("fsf-log-file-{}.log".format(dt.now().strftime("%Y-%m-%dT%H-%M-%S")))
-# flasher.setup_logger(log_file_path)
+# eeprom1 = AT24HC02C(i2c_port, 80)
+# eeprom1.write_bytes(0, bytearray([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]))
+# print(eeprom1.read_bytes(0, 8))
+
+# shunt1 = ShuntCalibrationStorage(i2c_port, 80)
+# shunt1.store_shunt_resistance_ohm(-1.1)
+# print(shunt1.load_shunt_resistance_ohm())
+
+t1 = dt.now()
+flasher = FlashStreamFlasher(bat)
+log_file_path = Path("fsf-log-file-{}.log".format(dt.now().strftime("%Y-%m-%dT%H-%M-%S")))
+flasher.setup_logger(log_file_path)
 # fs_file = Path(r"C:\Users\mschmitt\Desktop\SCD_3412036-02_B_Tansanit_B_RRC2040B.bq.fs")
-# # fs_file = Path(r"C:\Users\mschmitt\Desktop\SCD_3410758-08_bq40z50-R4_A-draft1_Adamite_RRC2140_BMS_Files.bq.fs")
-# flasher.set_firmware_file(fs_file)
-# validation_result = flasher.validate_file()
-# print(f"Validation result: {validation_result}")
-# if validation_result:
-#     pass
-#     programming_result = flasher.program_fw_file()
-#     print(f"Programming result: {programming_result}")
+fs_file = Path(r"C:\Users\mschmitt\Desktop\SCD_3410758-08_bq40z50-R4_A-draft1_Adamite_RRC2140_BMS_Files.bq.fs")
+flasher.set_firmware_file(fs_file)
+validation_result = flasher.validate_file()
+print(f"Validation result: {validation_result}")
+if validation_result:
+    pass
+    programming_result = flasher.program_fw_file()
+    print(f"Programming result: {programming_result}")
+
+t2 = dt.now()
+print(f"Programmierzeit: {(t2-t1).seconds}")
 
 print(bat.device_name()[0])
 # print(bat.voltage())
