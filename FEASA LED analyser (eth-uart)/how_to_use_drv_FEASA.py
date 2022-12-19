@@ -15,11 +15,10 @@ if __name__ == "__main__":
     # Channel 2
     #CH9121_PORT_STR = 3000
 
-
     # 1. Create an instance of ITECH_DEV class
     feasa = FEASA_DEV(CH9121_IP_STR, CH9121_PORT_STR)
 
-    # 2. Connect to the device
+    # 2. Get some data
 
     # "CAPTURE" command
     print(feasa.capture())

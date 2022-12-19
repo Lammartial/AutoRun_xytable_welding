@@ -6,9 +6,9 @@ if __name__ == "__main__":
     res : float = 0
 
     # predefined resource ID
-    BT_IP_STR = "192.168.1.102"     # BT3561A IP addr
+    BT_IP_STR = "192.168.1.202"     # BT3561A IP addr
     BT_PORT = 23                    # BT3561A port
-    SW_IP_STR = "192.168.1.101"     # SW1001 IP addr
+    SW_IP_STR = "192.168.1.201"     # SW1001 IP addr
     SW_PORT = 23                    # SW1001 port
 
     # 1. Create an instance of DAQ970A class

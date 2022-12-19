@@ -9,7 +9,7 @@ VERSION = "0.0.1"
 __version__ = VERSION
 
     # Use LAN connection and "Net Module Configure" software to check CH9121 parameters:
-    # 1. LAN parameters of CH9121 (IP address, port number)
+    # 1. LAN parameters of CH9121: TCP SERVER mode, PORT1 (IP address, port number1), PORT2 (IP address, port number2)
     # 2. UART parameters of CH9121 (baudrate 57600, Data bits 8, Stop bit 1)
 
     # Check FEASA LED ANALYSER RS232 settings. Default: baudrate 57600, Data bits 8, Stop bit 1
