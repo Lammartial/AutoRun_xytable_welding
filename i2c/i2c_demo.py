@@ -20,13 +20,11 @@ busmaster = BusMaster(i2c_port)
 busmux = BusMux_PCA9548A(i2c_port, address=0x77)
 
 busmux.setChannel(1)
-<<<<<<< HEAD
 
 rb = RelayBoard4Relay4GPIO(i2c_port, 0x20)
 rb.enable_relay_n(1)
 
 #print(i2c_port.i2c_bus_scan())
-=======
 busmux.setChannel(2)
 # print(i2c_port.i2c_bus_scan())
 bat = Battery(busmaster)
@@ -72,7 +70,6 @@ print(bat.device_name()[0])
 
 
 # print(i2c_port.i2c_bus_scan())
->>>>>>> 4e836d6fc49d5b56ed4a3d34c5fdff156157cd50
 
 # temp = STS21(i2c_port, 0x4A)
 
