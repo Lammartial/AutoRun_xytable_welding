@@ -1,4 +1,4 @@
-from drv_ITECH import ITECH_DEV
+from drv_M3400 import M3400_DEV
 
 if __name__ == "__main__":
     from time import sleep
@@ -11,7 +11,7 @@ if __name__ == "__main__":
     #M3412_NAME_STR = "TCPIP0::K-DAQ970A-17481.local::inst0::INSTR"
 
     # 1. Create an instance of ITECH_DEV class
-    it_m3412 = ITECH_DEV()
+    it_m3412 = M3400_DEV()
 
     # 2. Connect to the device
     #it_m3412.connect_by_name(DAQ970A_NAME_STR)

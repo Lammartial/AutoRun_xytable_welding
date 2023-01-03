@@ -11,7 +11,7 @@ VERSION = "0.0.1"
 __version__ = VERSION
 
 #--------------------------------------------------------------------------------------------------
-class ITECH_DEV(object):
+class M3400_DEV(object):
     #
     # Currently there are two backends available: The one included in pyvisa,
     # which uses the IVI library (include NI-VISA, Keysight VISA, R&S VISA, tekVISA etc.),
