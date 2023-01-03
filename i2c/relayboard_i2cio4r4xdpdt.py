@@ -55,6 +55,7 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If relay_n is invalid (< 1 or > 4)
         """
+        relay_n = int(relay_n)
         self.__validate_relay_pin(relay_n)
         self.gpio.reset_pin(RelayBoard4Relay4GPIO.relay_dict[relay_n])
         
@@ -67,6 +68,7 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If gpio_n is invalid (< 4 or > 7)
         """
+        gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.set_pin_as_output(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
         
@@ -79,6 +81,7 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If gpio_n is invalid (< 4 or > 7)
         """
+        gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.set_pin_as_input(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
         
@@ -91,6 +94,7 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If gpio_n is invalid (< 4 or > 7)
         """
+        gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.enable_pullup(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
         
@@ -103,10 +107,11 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If gpio_n is invalid (< 4 or > 7)
         """
+        gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.disable_pullup(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
         
-    def set_gpio_n(self, gpio_n: int):
+    def set_gpio_n_high(self, gpio_n: int):
         """Set the specified GPIO to a logic high level (5 V).
 
         Args:
@@ -115,10 +120,11 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If gpio_n is invalid (< 4 or > 7)
         """
+        gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.set_pin(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
         
-    def reset_gpio_n(self, gpio_n: int):
+    def set_gpio_n_low(self, gpio_n: int):
         """Set the specified GPIO to a logic low level (GND).
 
         Args:
@@ -127,6 +133,7 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If gpio_n is invalid (< 4 or > 7)
         """
+        gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.reset_pin(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
         
@@ -142,6 +149,7 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If gpio_n is invalid (< 4 or > 7)
         """
+        gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         return self.gpio.get_pin(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
 
