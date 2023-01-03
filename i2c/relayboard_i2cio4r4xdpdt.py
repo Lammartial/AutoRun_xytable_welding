@@ -26,8 +26,8 @@ class RelayBoard4Relay4GPIO:
             i2c_port: The I2CPort instance this board is connected to
             i2c_address_7bit: The board's 7-bit I2C address
         """
-        self.i2c_address_7bit = i2c_address_7bit
-        self.gpio = MCP23008(i2c_port, i2c_address_7bit)
+        self.i2c_address_7bit = int(i2c_address_7bit)
+        self.gpio = MCP23008(i2c_port, self.i2c_address_7bit)
 
         # Setup relay outputs
         for relay_pin in RelayBoard4Relay4GPIO.relay_dict.values():
@@ -42,6 +42,7 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If relay_n is invalid (< 1 or > 4)
         """
+        relay_n = int(relay_n)
         self.__validate_relay_pin(relay_n)
         self.gpio.set_pin(RelayBoard4Relay4GPIO.relay_dict[relay_n])
 

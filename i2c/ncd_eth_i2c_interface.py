@@ -43,7 +43,7 @@ class I2CPort:
             SelfTestFailedError: Raised if the selftest of the converter fails.
         """
         self.socket = None
-        self.host_port = (host, port)
+        self.host_port = (host, int(port))
         self.timeout_s = timeout_s
         self.ncd_interface_address = f"{host}:{port}"  # This the ip address ("192.168.1.61:2101"). Used in error messages.
 

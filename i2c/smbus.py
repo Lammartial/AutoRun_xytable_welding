@@ -455,7 +455,7 @@ class BusMux:
 
 class BusMux_PCA9548A(BusMux):
     def __init__(self, i2c, address=0x70):
-        super().__init__(i2c, address=address)
+        super().__init__(i2c, address=int(address))
 
     def setChannelMask(self, mask: int):
         if mask < 0 or mask > 0xFF:
@@ -477,6 +477,7 @@ class BusMux_PCA9548A(BusMux):
         return channels
 
     def setChannel(self, number: int):
+        number = int(number)
         if number < 1 or number > 8:
             return False
 
