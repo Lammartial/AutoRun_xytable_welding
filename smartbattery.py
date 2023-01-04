@@ -11,7 +11,7 @@ import errno
 from time import sleep, monotonic_ns
 from binascii import hexlify
 from struct import pack
-from exceptions import BatteryError
+from .exceptions import BatteryError
 
 
 KELVIN = 273.15
@@ -914,10 +914,12 @@ class Battery:
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    from ncd_eth_i2c_interface import I2CPort
-    from smbus import BusMaster, BusMux_PCA9548A
+    from i2c.ncd_eth_i2c_interface import I2CPort
+    from i2c.smbus import BusMaster, BusMux_PCA9548A
 
     ncd = I2CPort("192.168.1.149", 2101)
+    #print(ncd.i2c_bus_scan())
+
     bus = BusMaster(ncd)
     mux = BusMux_PCA9548A(ncd, address=0x77)
     mux.setChannel(1)
@@ -926,5 +928,20 @@ if __name__ == "__main__":
 
     # print(bat.voltage())
     print(bat.readBlock(6))
+
+    print(bat.device_name()[0])
+    # print(bat.voltage())
+    # print(f"S: {bat.is_sealed()}")
+    # print(f"FA: {bat.is_full_access()}")
+    # bat.full_access_battery()
+    # print(f"S: {bat.is_sealed()}")
+    # print(f"FA: {bat.is_full_access()}")
+    # bat.seal_battery()
+    # print(f"S: {bat.is_sealed()}")
+    # print(f"FA: {bat.is_full_access()}")
+    # sleep(0.1)
+    #
+    # print(bat.is_sealed())
+
 
 # END OF FILE

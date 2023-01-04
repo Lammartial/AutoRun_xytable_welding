@@ -1,5 +1,5 @@
-from dac_dac53608 import DAC53608
-from ncd_eth_i2c_interface import I2CPort
+from .dac_dac53608 import DAC53608
+from .ncd_eth_i2c_interface import I2CPort
 
 
 class CellVoltageSource:

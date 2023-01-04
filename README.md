@@ -8,3 +8,17 @@ Library:
 Submodule (in a repository base path):
 `git submodule add http://sv-git.rrc/V-Prod/Python_Libs.git rrc`
 
+
+
+## Structure
+
+--
+  eth2serial
+
+  i2c
+
+  modbus
+
+
+
+

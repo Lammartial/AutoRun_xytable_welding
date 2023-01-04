@@ -1,4 +1,4 @@
-from gpio_mcp23008 import MCP23008
+from .gpio_mcp23008 import MCP23008
 
 
 class RelayBoard4Relay4GPIO:
@@ -58,7 +58,7 @@ class RelayBoard4Relay4GPIO:
         relay_n = int(relay_n)
         self.__validate_relay_pin(relay_n)
         self.gpio.reset_pin(RelayBoard4Relay4GPIO.relay_dict[relay_n])
-        
+
     def set_gpio_n_as_output(self, gpio_n: int):
         """Configure the specified GPIO as an output.
 
@@ -71,7 +71,7 @@ class RelayBoard4Relay4GPIO:
         gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.set_pin_as_output(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
-        
+
     def set_gpio_n_as_input(self, gpio_n: int):
         """Configure the specified GPIO as an input.
 
@@ -84,7 +84,7 @@ class RelayBoard4Relay4GPIO:
         gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.set_pin_as_input(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
-        
+
     def enable_pullup_for_gpio_n(self, gpio_n: int):
         """Enable a 100k pullup for specified GPIO if it is configured as an input.
 
@@ -97,7 +97,7 @@ class RelayBoard4Relay4GPIO:
         gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.enable_pullup(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
-        
+
     def disable_pullup_for_gpio_n(self, gpio_n: int):
         """Disable the pullup for specified GPIO.
 
@@ -110,7 +110,7 @@ class RelayBoard4Relay4GPIO:
         gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.disable_pullup(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
-        
+
     def set_gpio_n_high(self, gpio_n: int):
         """Set the specified GPIO to a logic high level (5 V).
 
@@ -123,7 +123,7 @@ class RelayBoard4Relay4GPIO:
         gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.set_pin(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
-        
+
     def set_gpio_n_low(self, gpio_n: int):
         """Set the specified GPIO to a logic low level (GND).
 
@@ -136,7 +136,7 @@ class RelayBoard4Relay4GPIO:
         gpio_n = int(gpio_n)
         self.__validate_gpio_pin(gpio_n)
         self.gpio.reset_pin(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
-        
+
     def read_gpio_n(self, gpio_n: int) -> bool:
         """Read the logic level of the specified GPIO.
 

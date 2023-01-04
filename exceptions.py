@@ -1,4 +1,4 @@
-""" Exceptions for battery related errors
+""" Exceptions for all library related errors
 """
 __author__="Markus Ruth"
 __version__="1.0.0"
@@ -6,6 +6,8 @@ __version__="1.0.0"
 # pylint: disable=line-too-long,C0103,C0321,C0413,W0703,W0107,R1702,R0904
 
 
+#--------------------------------------------------------------------------------------------------
+# BATTERY related exceptions
 class BatteryError(Exception):
     """Our battery base exception class so that all related Exceptions can easiy be catched.
 
@@ -31,6 +33,11 @@ class BatterySecurityError(BatteryError):
 class BatteryNotRespondError(OSError):
     """Raised if there is any issue on the bus."""
     pass
+
+#--------------------------------------------------------------------------------------------------
+
+
+# ... define others ...
 
 
 # END OF FILE

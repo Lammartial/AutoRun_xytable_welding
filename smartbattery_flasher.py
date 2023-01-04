@@ -1,10 +1,9 @@
 import logging
 import pathlib
 import sys
-
-from smartbattery import Battery
-from typing import List, Tuple
 from time import sleep
+from typing import Union, Tuple
+from .smartbattery import Battery
 
 
 class FlashStreamFlasher:
@@ -32,7 +31,7 @@ class FlashStreamFlasher:
         self.logger = logger
         self.firmware_file = None
 
-    def set_firmware_file(self, firmware_file: [str, pathlib.Path]):
+    def set_firmware_file(self, firmware_file: Union[str, pathlib.Path]):
         """Store the path of the flash-stream file internally if it exists.
 
         Args:
@@ -57,7 +56,7 @@ class FlashStreamFlasher:
         self.logger.info(f"Using file: \"{firmware_file}\"")
         self.firmware_file = firmware_file
 
-    def setup_logger(self, log_file_path: [str, pathlib.Path]):
+    def setup_logger(self, log_file_path: Union[str, pathlib.Path]):
         """Set up a logger that stores a log at log_file_path. If the path is None, the log will be console-only.
 
         Args:
@@ -377,16 +376,39 @@ class CantOpenFlashStreamFile(FlashStreamError):
         return "The flashtream file could not be found or opened. Check the log for more infos."
 
 
-# if __name__ == "__main__":
-#     flasher = FlashStreamFlasher(bat)
-#     log_file_path = Path("fsf-log-file-{}.log".format(dt.now().strftime("%Y-%m-%dT%H-%M-%S")))
-#     flasher.setup_logger(log_file_path)
-#     fs_file = Path(r"C:\Users\mschmitt\Desktop\SCD_3412036-02_B_Tansanit_B_RRC2040B.bq.fs")
-#     # fs_file = Path(r"C:\Users\mschmitt\Desktop\SCD_3410758-08_bq40z50-R4_A-draft1_Adamite_RRC2140_BMS_Files.bq.fs")
-#     flasher.set_firmware_file(fs_file)
-#     validation_result = flasher.validate_file()
-#     print(f"Validation result: {validation_result}")
-#     if validation_result:
-#         pass
-#         programming_result = flasher.program_fw_file()
-#         print(f"Programming result: {programming_result}")
+#--------------------------------------------------------------------------------------------------
+if __name__ == "__main__":
+    from datetime import datetime as dt
+    from pathlib import Path
+    from i2c.ncd_eth_i2c_interface import I2CPort
+    from i2c.smbus import BusMaster, BusMux_PCA9548A
+
+
+    i2c_port = I2CPort("192.168.1.83", 2101)
+    busmaster = BusMaster(i2c_port)
+    busmux = BusMux_PCA9548A(i2c_port, address=0x77)
+    busmux.setChannel(1)
+    bat = Battery(busmaster)
+    #print(i2c_port.i2c_bus_scan())
+    busmux.setChannel(2)
+    # print(i2c_port.i2c_bus_scan())
+
+    t1 = dt.now()
+    flasher = FlashStreamFlasher(bat)
+    log_file_path = Path("fsf-log-file-{}.log".format(dt.now().strftime("%Y-%m-%dT%H-%M-%S")))
+    flasher.setup_logger(log_file_path)
+    # fs_file = Path(r"C:\Users\mschmitt\Desktop\SCD_3412036-02_B_Tansanit_B_RRC2040B.bq.fs")
+    fs_file = Path(r"C:\Users\mschmitt\Desktop\SCD_3410758-08_bq40z50-R4_A-draft1_Adamite_RRC2140_BMS_Files.bq.fs")
+    flasher.set_firmware_file(fs_file)
+    validation_result = flasher.validate_file()
+    print(f"Validation result: {validation_result}")
+    if validation_result:
+        pass
+        programming_result = flasher.program_fw_file()
+        print(f"Programming result: {programming_result}")
+
+    t2 = dt.now()
+    print(f"Programmierzeit: {(t2-t1).seconds}")
+
+
+# END OF FILE

@@ -1,5 +1,5 @@
 import socket
-from ncd_errors import *
+from .ncd_errors import *
 
 
 NCD_DEFAULT_TIMEOUT_S = 5

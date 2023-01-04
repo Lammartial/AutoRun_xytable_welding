@@ -2,13 +2,13 @@
 __author__ = "Markus Ruth"
 __version__ = "1.0.0"
 
+from typing import List
 import errno
 from struct import pack, unpack
 from time import sleep
-from typing import List
-import pec
-from ncd_eth_i2c_interface import I2CPort
-from ncd_errors import *
+from .pec import calc as pec_calc
+from .ncd_eth_i2c_interface import I2CPort
+from .ncd_errors import *
 
 
 class BusmasterError(Exception):
@@ -122,8 +122,8 @@ class BusMaster:
         bufc = bytearray(bytes([cmd]) + bytes(buffer))
         if use_pec:
             # calculate the PEC and attach it
-            _cs = pec.calc([slvAddress << 1])
-            _cs = pec.calc(bufc, _cs)
+            _cs = pec_calc([slvAddress << 1])
+            _cs = pec_calc(bufc, _cs)
             bufc.append(_cs)
         # print("SMBUS_writebytes", hexlify(bufc).decode())  # DEBUG
         for n in range(0, self._retry_limit):
@@ -181,8 +181,8 @@ class BusMaster:
             count = count + 1
             buf = self._retry_read_helper(slvAddress, cmd, count)
             rlen = len(buf)
-            _cs = pec.calc([slvAddress << 1, cmd, slvAddress << 1 | 1])
-            _cs = pec.calc(buf[:-1], _cs)
+            _cs = pec_calc([slvAddress << 1, cmd, slvAddress << 1 | 1])
+            _cs = pec_calc(buf[:-1], _cs)
             # ok = (rlen > 0) and (_cs == buf[-1]) # last byte is checksum received
             ok = (rlen == count) and (_cs == buf[-1])  # last byte is checksum received
             return buf[:-1], ok  # remove the checksum from the data

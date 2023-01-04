@@ -1,3 +1,4 @@
+from typing import Tuple
 from eeprom_at24hc02c import AT24HC02C
 import struct
 from time import sleep
@@ -71,7 +72,7 @@ class ShuntCalibrationStorage:
         else:
             return False
 
-    def __read_calibration_value(self) -> (bool, int):
+    def __read_calibration_value(self) -> Tuple[bool, int]:
         read_set = set()
         # The value has been stored on multiple pages to validate it when read out.
         # Read the content of each page, unpack it and store it in a set
