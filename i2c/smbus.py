@@ -34,15 +34,15 @@ class BusMaster:
         """Class providing the SMBus master protocols.
 
         Next to the standard functions there are "verified" versions of these
-        starting with "v" letter. Each of the read functions does a repetition 
-        of readings and compares the result. The one with more than verified_count//2 
+        starting with "v" letter. Each of the read functions does a repetition
+        of readings and compares the result. The one with more than verified_count//2
         equal results wins and gets returned. Otherwise bytearray(),False is returned.
 
         Args:
             i2c (I2C instance): Created I2C bus object to share
             retry_limit (int, optional): Number of bus operation tries (do not confuse with verify_rounds!).  Applies to ALL write/read operations.
                                          Valid range is 1(no 2nd try) to 10(up to 9 retries after 1st fails). Defaults to 1.
-            verify_rounds (int, optional): Number of successful bus operation repetitions with result compare. Must be an odd number whereas 1 is effectively 
+            verify_rounds (int, optional): Number of successful bus operation repetitions with result compare. Must be an odd number whereas 1 is effectively
                                            disabling verification instead works as read once. Defaults to 3.
             pause_us (int, optional): Optional pause in Microseconds between retries and verify repeated operations, 0 disables the pause. Defaults to 50.
 
@@ -227,7 +227,7 @@ class BusMaster:
         return buf, ok
 
     # ----------------------------------------------------------------------------------------------
-    # "verified" functions, using multiple repetitions and compare x of y wheras y is an odd number 
+    # "verified" functions, using multiple repetitions and compare x of y wheras y is an odd number
     def vReadBytes(self, slvAddress, cmd, count, use_pec=False):
         d = {}  # we use a dictionary to group the results (bytes read)
         ex = None
@@ -245,7 +245,7 @@ class BusMaster:
                     # Check if the new value as key into our dict has already a count of
                     # number > self._verify_rounds//2 which wins then for verified result.
                     # Note: this can be earliest after self._verify_rounds//2 + 1 iterations
-                    #       and putting the comparision to this place, allows the correct use 
+                    #       and putting the comparision to this place, allows the correct use
                     #       of self._verify_rounds = 1 to effectively disable verification comparision
                     # print(k, d[k], vcnt//2, vcnt) # DEBUG
                     if d[k] > vcnt // 2:
@@ -295,7 +295,7 @@ class BusMaster:
             # raise BusmasterVerificationError("verification read has failed", d)
 
     def vWriteBytes(self, slvAddress, cmd, buffer, use_pec=False):
-        # "verified write" is special as we do NOT do multiple write tries but do READ after WRITE 
+        # "verified write" is special as we do NOT do multiple write tries but do READ after WRITE
         # and compare whereas "read" means using the "verified read" strategy described above
         ok = self.writeBytes(slvAddress, cmd, buffer, use_pec=use_pec)  # write once
         if ok:
@@ -329,7 +329,7 @@ class BusMaster:
     def readBlock(self, slvAddress, cmd, use_pec=False, byte_count=-1):
         # Note: there is no writeBlock() function implementation here on purpose.
         #       User should use the writeBytes() function with length byte in first of buffer to send.
-        #       This also enables an easy read-after-write as the length of the buffer is already correct (+1) 
+        #       This also enables an easy read-after-write as the length of the buffer is already correct (+1)
         #       for using a readBytes() to check the complete buffer including the length byte.
         buf, ok = self.readBytesVarLen(slvAddress, cmd, use_pec=use_pec, byte_count=byte_count)
         if ok:
@@ -446,7 +446,7 @@ class BusMux:
             icOffs = number >> 3  # = div 8
             muxAddr = self.address + icOffs  # select the correct IC
             bitSelector = (1 << (number & 0x07)) & 0xff  # select the channel in the IC
-        # try to set the new channel 
+        # try to set the new channel
         # (may throw OSError exception!)
         data = bytearray([bitSelector])
         ok = (1 == self.i2c.writeto(muxAddr, data))
@@ -516,8 +516,9 @@ class BusMux_PCA9548A(BusMux):
         else:
             return True
 
-
+#--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
+
     ncd = I2CPort("192.168.1.149", 2101)
     bus = BusMaster(ncd)
     #print(bus.isReady(0x77))

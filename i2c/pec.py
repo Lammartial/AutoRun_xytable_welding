@@ -43,7 +43,7 @@ def calc(databytes, seed_crc=None):
 
     Args:
         databytes (bytes or bytearray): buffer to calculate CRC over. Expects being a buffer of bytes, type check is ommitted for sake of performance.
-        seed_crc (byte, optional): Seeding value for crc. Using this value, multiple calls could chain the 
+        seed_crc (byte, optional): Seeding value for crc. Using this value, multiple calls could chain the
                                    calculation over separate buffer blocks. Defaults to None.
 
     Returns:
@@ -58,3 +58,5 @@ def calc(databytes, seed_crc=None):
         for b in databytes:
             _sum = _lutable[_sum ^ b]
     return _sum
+
+# END OF FILE

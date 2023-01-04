@@ -12,8 +12,7 @@ from time import sleep, monotonic_ns
 from binascii import hexlify
 from struct import pack
 from exceptions import BatteryError
-from ncd_eth_i2c_interface import I2CPort
-from smbus import BusMaster, BusMux_PCA9548A
+
 
 KELVIN = 273.15
 
@@ -66,7 +65,7 @@ class Cmd:
 
     OPERATION_STATUS = 0x54
 
-    # RRC special extension 
+    # RRC special extension
     SPEC_SOH = (0x4f00)
 
 
@@ -913,8 +912,11 @@ class Battery:
 
         return txt
 
-
+#--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
+    from ncd_eth_i2c_interface import I2CPort
+    from smbus import BusMaster, BusMux_PCA9548A
+
     ncd = I2CPort("192.168.1.149", 2101)
     bus = BusMaster(ncd)
     mux = BusMux_PCA9548A(ncd, address=0x77)
@@ -924,4 +926,5 @@ if __name__ == "__main__":
 
     # print(bat.voltage())
     print(bat.readBlock(6))
+
 # END OF FILE
