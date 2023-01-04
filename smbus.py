@@ -7,7 +7,7 @@ import errno
 from struct import pack, unpack
 from time import sleep
 from smbus_pec import calc as pec_calc
-from ncd_errors import *
+from ncd_errors import NCDError
 
 #--------------------------------------------------------------------------------------------------
 class BusmasterError(Exception):
