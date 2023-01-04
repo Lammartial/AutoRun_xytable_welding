@@ -1,7 +1,7 @@
 from typing import Tuple
-from eeprom_at24hc02c import AT24HC02C
 import struct
 from time import sleep
+from i2c.eeprom_at24hc02c import AT24HC02C
 
 
 class ShuntCalibrationStorageReadError(Exception):
@@ -86,3 +86,10 @@ class ShuntCalibrationStorage:
             return True, read_set.pop()
         else:
             return False, 0
+
+#--------------------------------------------------------------------------------------------------
+if __name__ == "__main__":
+    from i2c.ncd_eth_i2c_interface import I2CPort
+
+
+# END OF FILE

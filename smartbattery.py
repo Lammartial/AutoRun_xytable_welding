@@ -11,7 +11,7 @@ import errno
 from time import sleep, monotonic_ns
 from binascii import hexlify
 from struct import pack
-from exceptions import BatteryError
+from battery_errors import BatteryError
 
 
 KELVIN = 273.15

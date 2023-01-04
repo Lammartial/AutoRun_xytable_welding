@@ -1,4 +1,4 @@
-""" Exceptions for all library related errors
+""" Exceptions for all battery related errors
 """
 __author__="Markus Ruth"
 __version__="1.0.0"

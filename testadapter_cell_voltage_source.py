@@ -1,5 +1,5 @@
-from .dac_dac53608 import DAC53608
-from .ncd_eth_i2c_interface import I2CPort
+from i2c.dac_dac53608 import DAC53608
+from i2c.ncd_eth_i2c_interface import I2CPort
 
 
 class CellVoltageSource:
@@ -135,7 +135,7 @@ class CellVoltageSource:
 
 
 if __name__ == '__main__':
-    from ncd_eth_i2c_interface import I2CPort
+    from i2c.ncd_eth_i2c_interface import I2CPort
     I2C_BRIDGE_IP = "192.168.1.60"
     I2C_BRIDGE_PORT = 2101
     my_i2c_port = I2CPort(I2C_BRIDGE_IP, I2C_BRIDGE_PORT)

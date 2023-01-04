@@ -7,10 +7,8 @@ import errno
 from struct import pack, unpack
 from time import sleep
 from .pec import calc as pec_calc
-from .ncd_eth_i2c_interface import I2CPort
-from .ncd_errors import *
 
-
+#--------------------------------------------------------------------------------------------------
 class BusmasterError(Exception):
     """Our base exception class so that all Exceptions related to our SMBus library can easiy be catched."""
 
@@ -26,7 +24,7 @@ class BusmasterVerificationError(BusmasterError):
     """Raised if verified read fails."""
     pass
 
-
+#--------------------------------------------------------------------------------------------------
 class BusMaster:
     i2c = None
 
@@ -400,7 +398,7 @@ class BusMux:
             i2c (I2C instance): Any I2C bus (Soft or Hard)
             address (Byte, optional): Device slave address on the bus. Defaults to 0x70.
         """
-        self.i2c: I2CPort = i2c
+        self.i2c = i2c
         self.address = int(address)
         self.current_channel = -1
         self.current_ic_address = 0x70

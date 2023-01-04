@@ -1,4 +1,4 @@
-from .gpio_mcp23008 import MCP23008
+from i2c.gpio_mcp23008 import MCP23008
 
 
 class RelayBoard4Relay4GPIO:

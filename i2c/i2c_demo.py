@@ -7,8 +7,8 @@ from .ncd_eth_i2c_interface import I2CPort
 from .smbus import BusMaster, BusMux_PCA9548A
 from .testadapter_cell_voltage_source import CellVoltageSource
 from .gpio_mcp23008 import MCP23008
-from .relayboard_i2cio4r4xdpdt import RelayBoard4Relay4GPIO
-from .temperature_sts21 import STS21
+from ..relayboard_i2cio4r4xdpdt import RelayBoard4Relay4GPIO
+from ..temperature_sts21 import STS21
 from .eeprom_at24hc02c import AT24HC02C
 from .shunt_calibration_storage import ShuntCalibrationStorage
 
