@@ -59,4 +59,9 @@ def calc(databytes, seed_crc=None):
             _sum = _lutable[_sum ^ b]
     return _sum
 
+#--------------------------------------------------------------------------------------------------
+
+if __name__ == '__main__':
+    pass
+
 # END OF FILE

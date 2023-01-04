@@ -141,3 +141,11 @@ class AT24HC02C:
         if word_address < 0 or word_address > (AT24HC02C.memory_size - 1):
             raise ValueError(f"Word address for I2C EEPROM at address 0x{self.i2c_address_7bit:02X} is invalid. "
                              f"Must be between 0 and {AT24HC02C.memory_size - 1}. You selected {word_address}.")
+
+
+#--------------------------------------------------------------------------------------------------
+
+if __name__ == '__main__':
+    pass
+
+# END OF FILE
