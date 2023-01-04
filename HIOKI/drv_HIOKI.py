@@ -4,6 +4,585 @@ from time import sleep
 VERSION = "0.0.1"
 __version__ = VERSION
 
+class HiokiBaseDevice(object):
+    def __init__(self, HOST:str, PORT:int):
+        """Initializes the object with IP address and port number.
+
+        Parameters
+            ----------
+            BT_HOST: string, HIOKI IP address   
+            BT_PORT: int, HIOKI port number """
+
+        self._HOST = HOST
+        self._PORT = PORT
+
+    def _cmd(self, msg: str):
+        """Sends a command to the device.
+
+            Parameters
+            ----------
+            msg: string, command
+
+            Returns 
+            ----------
+            0 (No Errors) or Exception """
+        result = 0
+        try:
+            _sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            _sock.settimeout(10)
+            _sock.connect((self._HOST, self._PORT))
+            _sock.sendall(bytes(f"{msg}\r\n", "utf-8"))
+            _sock.close()
+        except TypeError as ex:
+            result = ex
+        except TimeoutError as ex:
+            result = ex
+        finally:
+            _sock.close()
+        return result        
+
+    def _cmd_opc(self, msg: str):
+        """Sends a command to the device and waits for the 
+            response (operation complete).
+
+            Parameters
+            ----------
+            msg: string, command
+
+            Returns 
+            ----------
+            0 (No Errors) or Exception """
+        result = 0
+        try:
+            _sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            _sock.settimeout(10)
+            _sock.connect((self._HOST, self._PORT))
+            _sock.sendall(bytes(f"{msg}\r\n", "utf-8"))
+            _sock.sendall(bytes("*OPC?\r\n", "utf-8"))
+            result = _sock.recv(1024)
+            _sock.close()
+            if (int(result.decode('ascii')) != 1):
+                raise ValueError('Error, Hioki OPC?: invalid result')        
+        except TypeError as ex:
+            result = ex
+        except TimeoutError as ex:
+            result = ex
+        except ValueError as ex:
+            result = ex
+        finally:
+            _sock.close()
+        return result 
+
+    def _request(self, msg: str) -> bytes:
+        """ Queries the Measurement Mode Setting
+
+            Parameters
+            ----------
+            msg: string, command 
+            
+            Returns
+            ----------
+            Array of bytes or Exception """
+        try:
+            _sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            _sock.settimeout(10)
+            _sock.connect((self._HOST, self._PORT))
+            _sock.sendall(bytes(f"{msg}\r\n", "utf-8"))
+            result = _sock.recv(1024)            
+        except TypeError as ex:
+            result = ex
+        except TimeoutError as ex:
+            result = ex
+        finally:
+            _sock.close()
+        return result
+
+#================ HIOKI BT3561A CLASS ===================================================================================
+class Hioki_BT3561A(HiokiBaseDevice):
+    def get_idn(self):
+        """ Queries the device ID
+            Returns: <Manufacturer's name>, 
+                     <Model name>,0,
+                     <Software version> """
+        return self._request('*IDN?')
+
+    def set_reset(self):
+        """ Initializes the device. """
+        return self._cmd('*RST') 
+
+    def self_test(self):
+        """ Initiates a self-test and queries the result.
+            Returns: int,   0 - No Errors
+                            1 - RAM Error
+                            2 - EEPROM Error
+                            3 - RAM and EEPROM Errors """
+        result = self._request('*TST?')
+        if (isinstance(result, TypeError) == True) or (isinstance(result, TimeoutError) == True):
+            return result
+        else:
+            return int(result.decode('ascii'))
+
+    def set_function(self, mode):
+        """ Select the Measurement Mode Setting.
+
+            Parameters
+            ----------
+            mode: string, 'RV', 'RES', 'VOLT' """
+        try:
+            if (mode == 'RV') or (mode == 'RES') or (mode == 'VOLT'):
+                return self._cmd(f':FUNC {mode}') 
+            else:
+                raise ValueError('Error, Hioki set_function: invalid parameters')
+        except ValueError as ex:
+            return ex
+
+    def get_function(self):
+        """ Query the Measurement Mode Setting.
+
+            Returns: string, 'RV', 'RES', 'VOLT' """
+        result = self._request(':FUNC?')
+        if (isinstance(result, TypeError) == True) or (isinstance(result, TimeoutError) == True):
+            return result
+        else:
+            return result.decode('ascii').rstrip()
+
+    def set_resistance_range(self, range):
+        """ Set the Resistance Measurement Range.
+
+            Parameters
+            ----------
+            range: float, resistance 0...3100 Ohm """
+        try:
+            if (range >= 0) and (range <= 3100):
+                return self._cmd(f':RES:RANG {range}')
+            else:
+                raise ValueError('Error, Hioki set_resistance_range: invalid parameters')
+        except ValueError as ex:
+            return ex
+
+    def get_resistance_range(self):
+        """ Query the Resistance Measurement Range.
+
+            Returns: float, 3.0000E-3/ 30.000E-3/ 300.00E-3/
+                     3.0000E+0/ 30.000E+0/ 300.00E+0/ 3.0000E+3 """
+        result = self._request(':RES:RANG?')
+        if (isinstance(result, TypeError) == True) or (isinstance(result, TimeoutError) == True):
+            return result
+        else:  
+            return float(result.decode('ascii'))
+
+    def set_voltage_range(self, range):
+        """ Set the Voltage Measurement Range.
+
+            Parameters
+            ----------
+            range: float, voltage -300...300 V """
+        try:
+            if (range >= -300) and (range <= 300):
+                return self._cmd(f':VOLT:RANG {range}')
+            else:
+                raise ValueError('Error, Hioki set_voltage_range: invalid parameters')
+        except ValueError as ex:
+            return ex
+
+    def get_voltage_range(self):
+        """ Query the Voltage Measurement Range.
+
+            Returns: float, 6.00000E+0/ 60.0000E+0/100.000E+0/
+                            300.000E+0 """
+        result = self._request(':VOLT:RANG?')
+        if (isinstance(result, TypeError) == True) or (isinstance(result, TimeoutError) == True):
+            return result
+        else:  
+            return float(result.decode('ascii'))  
+
+    def set_autorange(self, state):
+        """ Set the Auto-Ranging Setting.
+
+            Parameters
+            ----------
+            state: int 1|0 or string 'ON'|'OFF' """
+        try:
+            if (state == 0) or (state == 1) or (state == 'ON') or (state == 'OFF'):
+                return self._cmd(f':AUT {state}')
+            else:
+                raise ValueError('Error, Hioki set_autorange: invalid parameters')
+        except ValueError as ex:
+            return ex
+
+    def get_autorange(self):
+        """ Query the Auto-Ranging Setting.
+
+            Returns: string 'ON'|'OFF' """
+        result = self._request(':AUT?')
+        if (isinstance(result, TypeError) == True) or (isinstance(result, TimeoutError) == True):
+            return result
+        else:  
+            return result.decode('ascii').rstrip() 
+
+    def set_adjustment_clear(self):
+        """ Cancel Zero-Adjustment. """
+        return self._cmd(':ADJ:CLEA')
+
+    def set_adjustment(self):
+        """ Execute Zero Adjustment and Query the Result.
+
+            Returns: int, 0 - Zero adjustment succeeded
+                          1 - Zero adjustment failed """
+        result = self._request(':ADJ?')
+        if (isinstance(result, TypeError) == True) or (isinstance(result, TimeoutError) == True):
+            return result
+        else:
+            return int(result.decode('ascii'))
+
+
+    def set_syst_calibration(self):
+        """ Execute Self-Calibration. """
+        return self._cmd(':SYST:CAL')
+
+    def set_syst_calibration_auto(self, state):
+        """ Self-Calibration State and Setting.
+
+            Parameters
+            ----------
+            state: int 1|0 or string 'ON'|'OFF' """
+        try:
+            if (state == 0) or (state == 1) or (state == 'ON') or (state == 'OFF'):
+                return self._cmd(f':SYST:CAL:AUTO {state}')
+            else:
+                raise ValueError('Error, Hioki set_autorange: invalid parameters')
+        except ValueError as ex:
+            return ex
+
+    def get_syst_calibration_auto(self):
+        """ Query the Self-Calibration State.
+
+            Returns: string 'ON'|'OFF' """
+        result = self._request(':SYST:CAL:AUTO?')
+        if (isinstance(result, TypeError) == True) or (isinstance(result, TimeoutError) == True):
+            return result
+        else:  
+            return result.decode('ascii').rstrip()
+    
+    def set_syst_klock(self, state):
+        """ Set the Key-Lock State.
+
+            Parameters
+            ----------
+            state: int 1|0 or string 'ON'|'OFF' """
+        try:
+            if (state == 0) or (state == 1) or (state == 'ON') or (state == 'OFF'):
+                return self._cmd(f':SYST:KLOC {state}')
+            else:
+                raise ValueError('Error, Hioki set_syst_klock: invalid parameters')
+        except ValueError as ex:
+            return ex
+
+    def get_syst_klock(self):
+        """ Query the Key-Lock State. 
+
+            Returns: string 'ON'|'OFF' """
+        result = self._request(':SYST:KLOC?')
+        if (isinstance(result, TypeError) == True) or (isinstance(result, TimeoutError) == True):
+            return result
+        else:  
+            return result.decode('ascii').rstrip()
+
+    def set_local_control(self):
+        """ Set Local Control. """
+        return self._cmd(f':SYST:LOC')
+
+    def set_trigger_source(self, state):
+        """ Set the Trigger Source.
+
+            Parameters
+            ----------
+            state: string 'IMM'|'EXT' """
+        try:
+            if (state == 'IMM') or (state == 'EXT'):
+                return self._cmd(f':TRIG:SOUR {state}')
+            else:
+                raise ValueError('Error, Hioki set_trigger_source: invalid parameters')
+        except ValueError as ex:
+            return ex
+
+    def get_trigger_source(self):
+        """ Query the Trigger Source.
+
+            Returns: string 'IMMEDIATE'|'EXTERNAL' """
+        result = self._request(':TRIG:SOUR?')
+        if (isinstance(result, TypeError) == True) or (isinstance(result, TimeoutError) == True):
+            return result
+        else:  
+            return result.decode('ascii').rstrip()
+
+    def set_continous_measurement(self, state):
+        """ Sets continuous measurement ON|OFF. 
+        Parameter
+        ---------
+        state: int 1|0 or string 'ON'|'OFF' """
+        try:
+            if (state == 0) or (state == 1) or (state == 'ON') or (state == 'OFF'):
+                return self._cmd(f':INIT:CONT {state}')
+            else:
+                raise ValueError('Error, Hioki set_continous_measurement: invalid parameters')
+        except ValueError as ex:
+            return ex
+
+    def read(self):
+        """ Execute a Measurement and Read the Measured Values.
+
+            Returns: string 'IMMEDIATE'|'EXTERNAL' """
+        resp = self._request(':READ?')
+        if (isinstance(resp, TypeError) == True) or (isinstance(resp, TimeoutError) == True):
+            return resp
+        else:
+            if (self.get_function() == 'RV'):
+                lst = resp.decode('ascii').split(',')
+                result = []
+                result.append(float(lst[0]))
+                result.append(float(lst[1]))                                    
+            else:
+                result = resp.decode('ascii').rstrip()        
+            return result
+
+#================ HIOKI SW1001 CLASS ====================================================================================
+class Hioki_SW1001(HiokiBaseDevice):
+    def get_idn(self):
+        """ Queries the device ID (ID code).
+            Returns: <Manufacturername>,
+                     <Modelname>,
+                     <Serial No.>,
+                     <Software version> """
+        return self._request('*IDN?')
+
+    def set_reset(self):
+        """ Initializes the device. """
+        return self._cmd('*RST')
+
+    def self_test(self):
+        """ Initiates a self-test and queries the result.
+            Returns: string, 'PASS'|'FAIL' """
+        result = self._request('*TST?')
+        if (isinstance(result, TypeError) == True) or (isinstance(result, TimeoutError) == True):
+            return result
+        else:
+            result = result.decode('ascii').rstrip()
+
+    def set_wire_mode(self, slot, mode):
+        """ Sets the connection method for a given slot.
+
+        Parameters
+        ---------
+        slot: int, slot number 
+        mode: int, wire mode (2 or 4) """
+        try:
+            if ((slot >= 1) and (slot <= 3)) and ((mode == 2) or (mode == 4)):
+                return self._cmd_opc(f':SYST:MOD:WIRE:MODE {slot},WIRE{mode}')
+            else:
+                raise ValueError('Error, Hioki set_wire_mode: invalid parameters')
+        except ValueError as ex:
+            return ex
+
+    def get_wire_mode(self, slot):
+        """ Queries the connection method for a given slot.
+
+        Parameter
+        ---------
+        slot: int, slot number 
+        
+        Returns: string 'WIRE2' or 'WIRE4' """
+
+
+
+
+        try:
+            if (slot >= 1) and (slot <= 3):
+                MESSAGE = ()
+                result = self._request(f':SYST:MOD:WIRE:MODE? {slot}')
+                if (isinstance(result, TypeError) == True) or (isinstance(result, TimeoutError) == True):
+                    return result
+                else:  
+                    return result.decode('ascii').rstrip()
+            else:
+                raise ValueError('Error, Hioki get_wire_mode: invalid parameters')
+        except TypeError as ex:
+            return ex       
+        except TimeoutError as ex:
+            return ex
+        except ValueError as ex:
+            return ex
+
+    def set_shield_mode(self, slot, mode):
+        """ Sets the shield wire connection destination for a given slot.
+
+        Parameters
+        ---------
+        slot: int, slot number 
+        mode: string, OFF/GND/TERM1/TERM2/TERM3/T1T3/SNS2L """
+        try:
+            arr_mode = ['OFF','GND','TERM1','TERM2','TERM3','T1T3','SNS2L']
+            sw_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sw_sock.settimeout(10)
+            sw_sock.connect((self.SW_HOST, self.SW_PORT))
+            if ((slot >= 1) and (slot <= 3)) and (mode in arr_mode):
+                MESSAGE = (f':SYST:MOD:SHI {slot},{mode}\r\n')
+                sw_sock.sendall(bytes(MESSAGE,'utf-8'))
+                MESSAGE = '*OPC?\r\n'
+                sw_sock.sendall(bytes(MESSAGE,'utf-8'))
+                res = sw_sock.recv(1024)
+                sw_sock.close()
+                return
+            else:
+                sw_sock.close()
+                raise ValueError('Error, Hioki set_shield_mode: invalid parameters')
+        except TypeError as ex:
+            return ex       
+        except TimeoutError as ex:
+            return ex
+        except ValueError as ex:
+            return ex
+
+    def get_shield_mode(self, slot):
+        """ Queries the shield wire connection destination for a given slot.
+
+        Parameter
+        ---------
+        slot: int, slot number 
+        
+        Returns: string, OFF/GND/TERM1/TERM2/TERM3/T1T3/SNS2L """
+        try:
+            sw_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sw_sock.settimeout(10)
+            sw_sock.connect((self.SW_HOST, self.SW_PORT))
+            if (slot >= 1) and (slot <= 3):
+                MESSAGE = (f':SYST:MOD:SHI? {slot}\r\n')
+                sw_sock.sendall(bytes(MESSAGE,'utf-8'))
+                result = sw_sock.recv(1024)
+                sw_sock.close()
+                result = result.decode('ascii').rstrip()
+                return result
+            else:
+                sw_sock.close()
+                raise ValueError('Error, Hioki get_shield_mode: invalid parameters')
+        except TypeError as ex:
+            return ex       
+        except TimeoutError as ex:
+            return ex
+        except ValueError as ex:
+            return ex
+
+    def get_module_count(self, slot):
+        """ Returns to the specified relay opening/closing frequency.
+
+        Parameter
+        ---------
+        slot: int, slot number 
+        
+        Returns: int, <Opening/closing frequency> = 0 to 1000000000 """
+        try:
+            sw_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sw_sock.settimeout(10)
+            sw_sock.connect((self.SW_HOST, self.SW_PORT))
+            if (slot >= 1) and (slot <= 3):
+                MESSAGE = (f':SYST:MOD:COUN? {slot}\r\n')
+                sw_sock.sendall(bytes(MESSAGE,'utf-8'))
+                result = sw_sock.recv(1024)
+                sw_sock.close()
+                return int(result.decode('ascii'))
+            else:
+                sw_sock.close()
+                raise ValueError('Error, Hioki get_module_count: invalid parameters')
+        except TypeError as ex:
+            return ex       
+        except TimeoutError as ex:
+            return ex
+        except ValueError as ex:
+            return ex
+
+    def close(self, slot, channel):
+        """ Closes the specified slot and channel. 
+            The channel that was closed previously is automatically opened.
+
+        Parameter
+        ---------
+        slot: int, slot number 
+        channel; int, channel number """
+        try:
+            sw_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sw_sock.settimeout(10)
+            sw_sock.connect((self.SW_HOST, self.SW_PORT))
+            if ((slot >= 1) and (slot <= 3)) and ((channel >= 1) and (channel <= 22)):
+                MESSAGE = (f':CLOS {slot}{channel:02d}\r\n')
+                sw_sock.sendall(bytes(MESSAGE,'utf-8'))
+                MESSAGE = '*OPC?\r\n'
+                sw_sock.sendall(bytes(MESSAGE,'utf-8'))
+                res = sw_sock.recv(1024)
+                sw_sock.close()
+            else:
+                sw_sock.close()
+                raise ValueError('Error, Hioki close: invalid parameters')
+        except TypeError as ex:
+            return ex       
+        except TimeoutError as ex:
+            return ex
+        except ValueError as ex:
+            return ex
+
+    def open(self):
+        """ Opens all channels. """
+        try:
+            sw_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sw_sock.settimeout(10)
+            sw_sock.connect((self.SW_HOST, self.SW_PORT))
+            MESSAGE = (f':OPEN\r\n')
+            sw_sock.sendall(bytes(MESSAGE,'utf-8'))
+            sw_sock.close()
+        except TypeError as ex:
+            return ex       
+        except TimeoutError as ex:
+            return ex
+    
+    def set_raw_command(self, cmd):
+        """ Sets raw command and returns error.
+
+            Parameters
+            ----------
+            cmd : str, command """
+        try:
+            sw_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sw_sock.settimeout(10)
+            sw_sock.connect((self.SW_HOST, self.SW_PORT))
+            MESSAGE = cmd + '\r\n'
+            sw_sock.sendall(bytes(MESSAGE,'utf-8'))
+            sw_sock.close()
+        except TypeError as ex:
+            return ex       
+        except TimeoutError as ex:
+            return ex
+
+    def set_raw_query(self, cmd):
+        """ Sets raw command and returns error.
+
+            Parameters
+            ----------
+            cmd : str, command 
+            
+            Returns
+            result : string """
+        try:
+            sw_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sw_sock.settimeout(10)
+            sw_sock.connect((self.SW_HOST, self.SW_PORT))
+            MESSAGE = cmd + '\r\n'
+            sw_sock.sendall(bytes(MESSAGE,'utf-8'))
+            result = sw_sock.recv(1024)
+            sw_sock.close()
+            return result
+        except TypeError as ex:
+            return ex       
+        except TimeoutError as ex:
+            return ex
 
 class HIOKI_DEV(object):
 
