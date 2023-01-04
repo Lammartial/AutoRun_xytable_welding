@@ -84,7 +84,7 @@ class Eth2SerialDevice(object):
             _s.close()
         return result
 
-    def request(self, msg: str, timeout: float = 5.0, limit: int = 0) -> str:
+    def request(self, msg: str, timeout: float = 5.0, limit: int = 0, decode: str = "ascii") -> str:
         """_summary_
 
         Args:
@@ -112,7 +112,7 @@ class Eth2SerialDevice(object):
                 if limit and len(rcvdata > limit):
                     rcvdata = rcvdata[:limit]  # slice the received data
                     break
-            result = rcvdata.decode() if len(rcvdata)>0 else None
+            result = rcvdata.decode(decode) if len(rcvdata)>0 else None
             _log.debug(f"Received: {result!r}")
         except TimeoutError as ex:
             result = ex  # could not send
