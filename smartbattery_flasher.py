@@ -3,7 +3,7 @@ import pathlib
 import sys
 from time import sleep
 from typing import Union, Tuple
-from .smartbattery import Battery
+from smartbattery import Battery
 
 
 class FlashStreamFlasher:

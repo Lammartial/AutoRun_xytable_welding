@@ -37,6 +37,9 @@ class HiokiBaseDevice(Eth2SerialDevice):
         """
         return self.request("*IDN?")
 
+# ... add more ...
+
+
 class Hioki_BT3561A(HiokiBaseDevice):
 
     def set_resistance_range(self, range: float) -> bool:
@@ -84,8 +87,16 @@ class Hioki_SW1001(HiokiBaseDevice):
 
     def set_new_ip_address(self, new_ip: str, new_port: int = 23,
                            new_subnet_mask: str = "255.255.255.0", new_default_gateway: str = "0.0.0.0",
-                           pause_reboot: float = 2.0):
+                           pause_reboot: float = 5.0):
+        """_summary_
 
+        Args:
+            new_ip (str): _description_
+            new_port (int, optional): _description_. Defaults to 23.
+            new_subnet_mask (str, optional): _description_. Defaults to "255.255.255.0".
+            new_default_gateway (str, optional): _description_. Defaults to "0.0.0.0".
+            pause_reboot (float, optional): _description_. Defaults to 5.0.
+        """
         # remove the dots from the strings
         _ip_str = new_ip.replace('.' , ',')
         _subnet_mask = new_subnet_mask.replace('.' , ',')
@@ -109,6 +120,9 @@ class Hioki_SW1001(HiokiBaseDevice):
         self.host = new_ip
         self.port = new_port
         # ...and wait for reboot of the device.
+        #
+        # !!! USER has to toggle a switch also !!!
+        #
         sleep(pause_reboot)
         try:
             # check if the new address is available
