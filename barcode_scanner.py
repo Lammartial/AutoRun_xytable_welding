@@ -1,0 +1,92 @@
+
+"""
+Waveshare ETH-to-UART by socket connection instead of Virtual Comport.
+
+It is using asyncio to be compliant to the UI dialog implementation which awaits either a
+barcode scanned UDI or human typed UDI or for whatever reason it is being used elsewhere in the line.
+
+"""
+
+import asyncio
+from eth2serial.base import Eth2SerialDevice
+
+DEBUG = 0
+
+#
+# this is the ETH-to-UART bridge's IP address
+# set it static in production situation
+#
+UART_BRIDGE_IP = "192.168.1.90"
+UART_PORT = 2000 # UART1=2000, UART2=3000 # Industrial Scanner 23
+
+#--------------------------------------------------------------------------------------------------
+async def tcp_send_and_receive_from_server(message: str, timeout=1.0, limit: str | bytes | int = b'\n') -> str:
+    """
+    Connects to the ETH to UART bridge at the port 23 on the fixed IP UART_BRIDGE_IP.
+    It sends some message if given and afterwards it waits for incoming with limit timeout.
+
+    Args:
+        message (str): message
+        timeout (float, optional): Timeout for open, wait send and receive in seconds.
+            timeout/2 is for open, rest for send/receive. Defaults to 1.0.
+        limit (bytes, str or int, optional): Defines if the read function used:
+            if limit is of bytes, it uses stream.readuntil(separator=limit)) so that the line
+                termination can be set freely. Note that the terminator is stripped from data.
+            if limit is of string, it uses stream.readline(). Note that the line terminator
+                is NOT stripped from data.
+            if limit is of integer, is uses stream.read(limit) so that the user can set the
+                limit of bytes to be read. Note that at EOF the function returns even if less
+                bytes than limit have been read.
+            Defaults to b"\n".
+
+    Returns:
+        str: received data or None on timeout.
+    """
+
+    global UART_BRIDGE_IP, UART_PORT
+
+    async def xchange(reader, writer):
+        if message:
+            if DEBUG:
+                print(f'Send: {message!r}')
+            writer.write(message.encode())
+            await writer.drain()
+        if isinstance(limit, int):
+            rcvdata = await reader.read(limit)  # read until limit bytes or EOF
+        elif isinstance(limit, bytes):
+            rcvdata = await reader.readuntil(separator=limit)  # read until \n or \r\n
+        else:
+            rcvdata = await reader.readline()  # read until \n or \r\n
+        if DEBUG:
+            print(f'Received: {rcvdata.decode()!r}')
+        return rcvdata.decode()
+
+    data = None
+    # do NOT catch the exception for timeout here, propagate to the caller!
+    reader, writer = await asyncio.wait_for(asyncio.open_connection(UART_BRIDGE_IP, UART_PORT), timeout=timeout/2)
+
+    # Wait for at most 1 second (which is also the pause time for this loop)
+    try:
+        data = await asyncio.wait_for(xchange(reader, writer), timeout=timeout/2)
+    except asyncio.TimeoutError:
+        pass
+    finally:
+        # Close the connection
+        writer.close()
+        await writer.wait_closed()
+    return data
+
+#--------------------------------------------------------------------------------------------------
+def poll(timeout = 0.5):
+    dev = Eth2SerialDevice(UART_BRIDGE_IP, UART_PORT)
+    dev.send("Hallo Welt!", timeout=timeout)
+
+#--------------------------------------------------------------------------------------------------
+if __name__ == "__main__":
+    # test the client send and receive:
+    DEBUG = 1
+    #asyncio.run(tcp_send_and_receive_from_server(message="Hallo Welt!", timeout=2.0))
+    #asyncio.run(tcp_send_and_receive_from_server(None, limit=10, timeout=25.0))
+    poll()
+
+# END OF FILE
