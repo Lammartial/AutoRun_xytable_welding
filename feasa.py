@@ -44,6 +44,22 @@ class FEASA_CH9121(Eth2SerialDevice):
 
     def test_float(self):
         return float(1)
+    
+    def _check_exception(self, resp) -> bool:
+        """
+        Checks response for exceptions
+
+        Args:
+            resp (_type_): response
+
+        Returns:
+            bool: false - success, true - exception
+        """
+        if (isinstance(resp, BaseException) == True):
+            _log.error(resp)
+            return True
+        else:
+            return False
 
     # Capture Fuctions ----------------------------------------------------------------------------
 
@@ -58,7 +74,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         """
 
         response = self.request("capture")
-        if (isinstance(response, TypeError) == True) or (isinstance(response, TimeoutError) == True):
+        if (self._check_exception(response)):
             return response
         else:
             return True if self.RESPONSE_OK in response else False  # this way we ignore any line termination
@@ -77,7 +93,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         """
         cmd = "capture" + str(int(range))
         response = self.request(cmd)
-        if (isinstance(response, TypeError) == True) or (isinstance(response, TimeoutError) == True):
+        if (self._check_exception(response)):
             return response
         else:
             return True if self.RESPONSE_OK in response else False
@@ -93,7 +109,7 @@ class FEASA_CH9121(Eth2SerialDevice):
             bool: False - failed, True - success
         """
         response = self.request("capturepwm")
-        if (isinstance(response, TypeError) == True) or (isinstance(response, TimeoutError) == True):
+        if (self._check_exception(response)):
             return response
         else:
             return True if self.RESPONSE_OK in response else False
@@ -113,7 +129,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         """
         cmd = "capture" + str(int(range)) + "PWM" + f"{(int(factor)):02d}"
         response = self.request(cmd)
-        if (isinstance(response, TypeError) == True) or (isinstance(response, TimeoutError) == True):
+        if (self._check_exception(response)):
             return response
         else:
             return True if self.RESPONSE_OK in response else False
@@ -135,7 +151,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         """
         cmd = "getrgbi" + f"{(int(num)):02d}"
         response = self.request(cmd)
-        if (isinstance(response, TypeError) == True) or (isinstance(response, TimeoutError) == True):
+        if (self._check_exception(response)):
             return response
         else:
             lst = response.decode('ascii').split(' ')
@@ -161,7 +177,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         """
         cmd = "getintensity" + f"{(int(num)):02d}"
         response = self.request(cmd)
-        if (isinstance(response, TypeError) == True) or (isinstance(response, TimeoutError) == True):
+        if (self._check_exception(response)):
             return response
         else:
             return int(response.decode('ascii'))   
@@ -182,7 +198,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         """
         cmd = "setintgain" + f"{(int(num)):02d}" + f"{(int(factor)):03d}"
         response = self.request(cmd)
-        if (isinstance(response, TypeError) == True) or (isinstance(response, TimeoutError) == True):
+        if (self._check_exception(response)):
             return response
         else:
             return True if self.RESPONSE_OK in response else False
@@ -200,7 +216,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         """ 
         cmd = "setfactor" + f"{(int(factor)):02d}"
         response = self.request(cmd)
-        if (isinstance(response, TypeError) == True) or (isinstance(response, TimeoutError) == True):
+        if (self._check_exception(response)):
             return response
         else:
             return True if self.RESPONSE_OK in response else False   

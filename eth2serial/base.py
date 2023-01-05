@@ -78,7 +78,7 @@ class Eth2SerialDevice(object):
             _s.connect((self.host, self.port))
             _s.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
             result = True
-        except TimeoutError as ex:
+        except Exception as ex:
             result = ex  # could not send
         finally:
             _s.close()
@@ -114,18 +114,11 @@ class Eth2SerialDevice(object):
                     break
             result = rcvdata.decode(decode) if len(rcvdata)>0 else None
             _log.debug(f"Received: {result!r}")
-        except TimeoutError as ex:
-            result = ex  # could not send
-        except TypeError as ex:
-            result = ex
-        except ValueError as ex:
+        except Exception as ex:
             result = ex
         finally:
             _s.close()
         return result
-
-
-
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     from time import perf_counter
