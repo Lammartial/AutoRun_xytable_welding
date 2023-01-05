@@ -1,0 +1,9 @@
+# configure database which will be expected to be a MS-SQL type;
+sourceDatabase:
+    #servertype: "mssql+pyodbc"  # default
+    servertype: "mssql+pymssql" # better
+    serverhost: "appsrv.geodishub.hk.prod.rrcit.de"
+    database:   "SCALELAP_PROD"
+    login:      "pus"
+    password:   "pus-sys"
+    encoding:   "latin1"
