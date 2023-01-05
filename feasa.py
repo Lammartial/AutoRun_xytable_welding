@@ -73,11 +73,15 @@ class FEASA_CH9121(Eth2SerialDevice):
             bool: False - failed, True - success
         """
 
+
         response = self.request("capture")
         if (self._check_exception(response)):
             return response
         else:
-            return True if self.RESPONSE_OK in response else False  # this way we ignore any line termination
+            if (self.RESPONSE_OK in response):
+                return True 
+            else: 
+                return False  # this way we ignore any line termination
 
     # CAPTURE#
     def capture_range(self, range: int) -> bool:
@@ -154,7 +158,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         if (self._check_exception(response)):
             return response
         else:
-            lst = response.decode('ascii').split(' ')
+            lst = response.split(' ')
             result = []
             result.append(int(lst[0]))
             result.append(int(lst[1]))
@@ -180,7 +184,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         if (self._check_exception(response)):
             return response
         else:
-            return int(response.decode('ascii'))   
+            return int(response)   
     
     # Set Functions------------------------------------------------------------------------------------
  
@@ -226,8 +230,8 @@ class FEASA_CH9121(Eth2SerialDevice):
 if __name__ == "__main__":
     from time import sleep
 
-    HOST = "192.168.1.90"
-    PORT = 2000
+    HOST = "192.168.1.120"
+    PORT = 3000
 
     # 1. Create an instance of class as device controller
     feasa = FEASA_CH9121(HOST, PORT)

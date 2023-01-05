@@ -103,15 +103,17 @@ class Eth2SerialDevice(object):
             if len(msg)>0:
                 _s.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
             # now read data until termination or timeout
-            rcvdata = b""
-            while True:
-                _chunk = _s.recv(4096)
-                if not _chunk:
-                    break
-                rcvdata += _chunk
-                if limit and len(rcvdata > limit):
-                    rcvdata = rcvdata[:limit]  # slice the received data
-                    break
+            #rcvdata = b""
+            #while True:
+            #    _chunk = _s.recv(4096)
+            #    if not _chunk:
+            #        break
+            #    rcvdata += _chunk
+            #    if limit and len(rcvdata > limit):
+            #        rcvdata = rcvdata[:limit]  # slice the received data
+            #        break
+            #
+            rcvdata = _s.recv(4096)
             result = rcvdata.decode(decode) if len(rcvdata)>0 else None
             _log.debug(f"Received: {result!r}")
         except Exception as ex:
