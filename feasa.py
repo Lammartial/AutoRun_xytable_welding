@@ -49,26 +49,164 @@ class FEASA_CH9121(Eth2SerialDevice):
 
     # CAPTURE
     def capture(self) -> bool:
-        """
+        """ 
         This Auto Range Capture instructs the LED Analyser to capture and store the data of all the
         LED's positioned under the fibers.
 
         Returns:
             bool: False - failed, True - success
-
         """
+
         response = self.request("capture")
-        return True if self.RESPONSE_OK in response else False  # this way we ignore any line termination
+        if (isinstance(response, TypeError) == True) or (isinstance(response, TimeoutError) == True):
+            return response
+        else:
+            return True if self.RESPONSE_OK in response else False  # this way we ignore any line termination
 
+    # CAPTURE#
+    def capture_range(self, range: int) -> bool:
+        """
+        This command uses a pre-selected exposure time designated Range1, Range2 etc. For low
+        light or dim LED's use Range 1 and for brighter LED's use higher ranges.
 
+        Args:
+            range (int): 1 = Low, 2 = Medium, 3 = High, 4 = Super, 5 = Ultra
 
+        Returns:
+            bool: False - failed, True - success
+        """
+        cmd = "capture" + str(int(range))
+        response = self.request(cmd)
+        if (isinstance(response, TypeError) == True) or (isinstance(response, TimeoutError) == True):
+            return response
+        else:
+            return True if self.RESPONSE_OK in response else False
 
-# .... more
+    # CAPTUREPWM
+    def capture_pwm(self) -> bool:
+        """
+        Pulse-Width-Modulated(PWM) LED's are switched on and off rapidly to save power and to
+        control Intensity. The Analyser automatically determines the correct settings required to
+        execute the test.
 
+        Returns:
+            bool: False - failed, True - success
+        """
+        response = self.request("capturepwm")
+        if (isinstance(response, TypeError) == True) or (isinstance(response, TimeoutError) == True):
+            return response
+        else:
+            return True if self.RESPONSE_OK in response else False
 
+    # CAPTURE#PWM@@
+    def capture_pwm_range(self, range: int, factor: int) -> bool:
+        """
+        This command allows the User to specify the exposure range # and an averaging factor @@
+        when testing PWM LED's.
 
+        Args:
+            range (int): represents the exposure Range 1 – 5
+            factor (int): represents an averaging factor in the range 1 - 15
 
-#--------------------------------------------------------------------------------------------------
+        Returns:
+            bool: False - failed, True - success
+        """
+        cmd = "capture" + str(int(range)) + "PWM" + f"{(int(factor)):02d}"
+        response = self.request(cmd)
+        if (isinstance(response, TypeError) == True) or (isinstance(response, TimeoutError) == True):
+            return response
+        else:
+            return True if self.RESPONSE_OK in response else False
+ 
+    # Get Functions ----------------------------------------------------------------------------------
+     
+    # getRGBI##
+    def get_rgbi_num(self, num: int) -> list:
+        """
+        This command instructs the LED Analyser to return RGB and Intensity data for fiber ## (01-
+        20) in format rrr ggg bbb iiiii where rrr, ggg and bbb are the red, green and blue
+        components of the Colour. The iiiii value indicates the intensity value.
+
+        Args:
+            num (int): fiber ## (01 - 20)
+
+        Returns:
+            list (int): rrr, ggg, bbb, iiiii
+        """
+        cmd = "getrgbi" + f"{(int(num)):02d}"
+        response = self.request(cmd)
+        if (isinstance(response, TypeError) == True) or (isinstance(response, TimeoutError) == True):
+            return response
+        else:
+            lst = response.decode('ascii').split(' ')
+            result = []
+            result.append(int(lst[0]))
+            result.append(int(lst[1]))
+            result.append(int(lst[2]))
+            result.append(int(lst[3]))
+            return result 
+
+    # getINTENSITY##
+    def get_intensity_num(self, num: int) -> int:
+        """
+        This command is used to get the Intensity value for the LED under the Fiber number.
+        This command should be preceded by a capture command to ensure valid LED data is stored
+        in the memory of the LED Analyser.
+
+        Args:
+            num (int): represents the Fiber Number and is a number in the range 01 – 20
+
+        Returns:
+            int: intensity value
+        """
+        cmd = "getintensity" + f"{(int(num)):02d}"
+        response = self.request(cmd)
+        if (isinstance(response, TypeError) == True) or (isinstance(response, TimeoutError) == True):
+            return response
+        else:
+            return int(response.decode('ascii'))   
+    
+    # Set Functions------------------------------------------------------------------------------------
+ 
+    # SetIntGain##xxx
+    def set_intgain_num(self, num: int, factor: int) -> bool:
+        """
+        This command allows the user to adjust the Intensity Gain Factor for each Fiber.
+
+        Args:
+            num (int): represents the Fiber Number and is a number in the range 01 – 20
+            factor (int): represents a 3 digit gain factor, default 100
+
+        Returns:
+            bool: False - failed, True - success
+        """
+        cmd = "setintgain" + f"{(int(num)):02d}" + f"{(int(factor)):03d}"
+        response = self.request(cmd)
+        if (isinstance(response, TypeError) == True) or (isinstance(response, TimeoutError) == True):
+            return response
+        else:
+            return True if self.RESPONSE_OK in response else False
+
+    # SetFactor##
+    def set_factor(self, factor: int) -> bool:
+        """
+        This command allows the user to adjust the Exposure Factor for all Fibers.
+
+        Args:
+            factor (int): represents the Factor Number and is in the range 01 – 15 (default 01).
+
+        Returns:
+            bool: False - failed, True - success
+        """ 
+        cmd = "setfactor" + f"{(int(factor)):02d}"
+        response = self.request(cmd)
+        if (isinstance(response, TypeError) == True) or (isinstance(response, TimeoutError) == True):
+            return response
+        else:
+            return True if self.RESPONSE_OK in response else False   
+#-----------------------------------------------------------------------------------------------------
+
+#-----------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     from time import sleep
 
