@@ -39,6 +39,15 @@ class FEASA_CH9121(Eth2SerialDevice):
 
     RESPONSE_OK = "OK"
 
+    def __init__(self, host: str, port: int, termination: str = "\r\n"):
+        """Initialize the object with IP address and port number.
+
+        Args:
+            host (str): hostname or IPv4 address
+            port (int): port to use for communication
+        """
+        super().__init__(host, port, termination)
+
     def test_int(self):
         return int(1)
 
