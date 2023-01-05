@@ -1,4 +1,4 @@
-"""Collection of exceptions used in ncd_i2c_interface.py"""
+"""Collection of exceptions used in ncd_i2c_interface.py."""
 
 
 class NCDError(Exception):
@@ -124,3 +124,5 @@ class CantFindNCDInterface(NCDError):
 
     def __str__(self):
         return f"Can't connect to the NCD interface at: {self.ncd_interface_address}."
+
+# END OF FILE

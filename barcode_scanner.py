@@ -8,7 +8,7 @@ barcode scanned UDI or human typed UDI or for whatever reason it is being used e
 """
 
 import asyncio
-from eth2serial.base import Eth2SerialDevice
+from .eth2serial.base import Eth2SerialDevice
 
 DEBUG = 0
 

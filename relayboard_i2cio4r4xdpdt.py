@@ -1,4 +1,4 @@
-from i2c.gpio_mcp23008 import MCP23008
+from gpio_mcp23008 import MCP23008
 
 
 class RelayBoard4Relay4GPIO:
@@ -162,3 +162,10 @@ class RelayBoard4Relay4GPIO:
         if gpio_n not in RelayBoard4Relay4GPIO.gpio_dict.keys():
             raise ValueError(f"GPIO pin number for the relay board at 0x{self.i2c_address_7bit:02X} must be betwween"
                              f"1 and {max(RelayBoard4Relay4GPIO.gpio_dict.keys())}. You selected {gpio_n}")
+
+#--------------------------------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    pass
+
+# END OF FILE

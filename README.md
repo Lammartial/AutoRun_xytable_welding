@@ -14,10 +14,11 @@ Submodule (in a repository base path):
 
 --
   eth2serial
-
-  i2c
-
+    - basic socket handling for ETH to UART
   modbus
+    - basic modbus handling using either TCP or RTU
+
+  
 
 
 

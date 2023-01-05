@@ -88,8 +88,10 @@ class ShuntCalibrationStorage:
             return False, 0
 
 #--------------------------------------------------------------------------------------------------
-if __name__ == "__main__":
-    from i2c.ncd_eth_i2c_interface import I2CPort
 
+if __name__ == "__main__":
+    from ncd_eth_i2c_interface import I2CPort
+
+    pass
 
 # END OF FILE

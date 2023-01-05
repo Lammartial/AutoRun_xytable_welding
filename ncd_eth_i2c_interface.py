@@ -323,7 +323,11 @@ class I2CPort:
             return False
 
 
+#--------------------------------------------------------------------------------------------------
+
 if __name__ == "__main__":
     i2c_port = I2CPort(I2C_BRIDGE_IP, I2C_BRIDGE_PORT)
     i2c_port.writeto(0x77, bytearray([0x01]))
     print(i2c_port.i2c_bus_scan())
+
+# END OF FILE

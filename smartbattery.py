@@ -914,8 +914,8 @@ class Battery:
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    from i2c.ncd_eth_i2c_interface import I2CPort
-    from i2c.smbus import BusMaster, BusMux_PCA9548A
+    from ncd_eth_i2c_interface import I2CPort
+    from smbus import BusMaster, BusMux_PCA9548A
 
     ncd = I2CPort("192.168.1.149", 2101)
     #print(ncd.i2c_bus_scan())

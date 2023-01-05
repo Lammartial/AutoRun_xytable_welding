@@ -6,7 +6,8 @@ from typing import List
 import errno
 from struct import pack, unpack
 from time import sleep
-from .pec import calc as pec_calc
+from smbus_pec import calc as pec_calc
+from ncd_errors import NCDError
 
 #--------------------------------------------------------------------------------------------------
 class BusmasterError(Exception):
@@ -515,14 +516,15 @@ class BusMux_PCA9548A(BusMux):
             return True
 
 #--------------------------------------------------------------------------------------------------
-if __name__ == "__main__":
 
-    ncd = I2CPort("192.168.1.149", 2101)
-    bus = BusMaster(ncd)
+if __name__ == "__main__":
+    #ncd = I2CPort("192.168.1.149", 2101)
+    #bus = BusMaster(ncd)
     #print(bus.isReady(0x77))
-    mux = BusMux_PCA9548A(ncd, address=0x77)
-    mux.setChannel(1)
-    print(mux.getChannels())
-    print(bus.readWord(0x0b,0x09))
+    #mux = BusMux_PCA9548A(ncd, address=0x77)
+    #mux.setChannel(1)
+    #print(mux.getChannels())
+    #print(bus.readWord(0x0b,0x09))
+    pass
 
 # END OF FILE

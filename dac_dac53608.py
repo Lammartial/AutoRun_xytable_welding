@@ -1,8 +1,5 @@
 
 
-
-
-
 class DAC53608:
     """A class to control the 8-channel 10-bit DAC DAC53608 by TI via I2C.
     The channels are numbered from 1 to 8.
@@ -144,6 +141,7 @@ class DAC53608:
         if channel < 1 or channel > DAC53608.number_of_channels:
             raise ValueError(f"Channel number {channel} is invalid for DAC53608 (ranges from 1 to {DAC53608.number_of_channels}).")
 
+#--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
     from ncd_eth_i2c_interface import I2CPort
@@ -157,3 +155,5 @@ if __name__ == "__main__":
     for i in range(1, 9):
         dac.set_channel_n_voltage(i, 5)
     dac.enable_channel_n(5)
+
+# END OF FILE

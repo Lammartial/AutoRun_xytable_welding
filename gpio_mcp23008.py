@@ -165,3 +165,11 @@ class MCP23008:
         if pin_n < 0 or pin_n >= MCP23008.number_of_pins:
             raise ValueError(f"Invalid pin number for MCP23008 at address 0x{self.i2c_address_7bit:02X}. Must be "
                              f"between 0 and {self.i2c_address_7bit-1}")
+
+#--------------------------------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    pass
+
+
+# END OF FILE
