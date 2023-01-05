@@ -6,7 +6,8 @@ class StationConfiguration:
 
     def __init__(self) -> None:
         self._CONFIG = None
-        _filename = Path(".") / "station_config_example.yaml"
+        _filename = Path(".") / "station_config_example.yaml"  # development
+        #_filename = Path("C:") / "Production" / "station_config_example.yaml"  # production
         self._read_yaml_file(_filename)
 
     def _read_yaml_file(self, filepath: str | Path) -> dict:
@@ -15,13 +16,18 @@ class StationConfiguration:
 
     # --- TestStand Interfaces --------------------------------------------------------------------
 
-    def get_station_configuration(self) -> tuple:
-        # return the station's configuration in a convenient way for teststand
-        order = ["test_type", "station_id", "line_id"]
-        result = tuple([(field, self._CONFIG[field]) for field in order])
-        result += (("test_sockets", len(self._CONFIG["test_sockets"])),)
-        #result = tuple([self._CONFIG[field] for field in order])
-        return result
+    def get_station_configuration(self, seq_context) -> tuple:
+        # # return the station's configuration in a convenient way for teststand
+        # order = ["test_type", "station_id", "line_id"]
+        # result = tuple([(field, self._CONFIG[field]) for field in order])
+        # result += (("test_sockets", len(self._CONFIG["test_sockets"])),)
+        # #result = tuple([self._CONFIG[field] for field in order])
+        # return result
+        context_id = seq_context.Id
+        executing_sequence_name = seq_context.Sequence.Name
+        executing_step_name = seq_context.Step.Name
+        seq_context.Locals.SerialNumber = "FUCK!"
+        return seq_context
 
     def get_resource_strings_for_socket(self, socket: str) -> tuple:
         # return the selected socket configuration in a convenient way for teststand

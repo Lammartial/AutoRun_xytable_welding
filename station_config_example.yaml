@@ -15,21 +15,21 @@ test_sockets:
     resource_strings:
       scanner:      "192.168.1.83:2000"
       led_analyzer: "192.168.1.83:3000"
-      daq:          "TCPIP0::192.168.1.179::inst0::INSTR"
+      daq:          "TCPIP0::192.168.1.53::inst0::INSTR"
       ncd_ethi2c:   "192.168.1.55:3000"
       eeprom:       "1:7"  # "<MUX-Channel>:<7-bit slave addess>"
   "2":
     resource_strings:
       scanner:      "192.168.1.84:2000"
       led_analyzer: "192.168.1.84:3000"
-      daq:          "TCPIP0::192.168.1.180::inst0::INSTR"
+      daq:          "TCPIP0::192.168.1.54::inst0::INSTR"
       ncd_ethi2c:   "192.168.1.55:3000"
       eeprom:       "1:7"  # "<MUX-Channel>:<7-bit slave addess>"
   "3":
     resource_strings:
       scanner:      "192.168.1.84:2000"
       led_analyzer: "192.168.1.84:3000"
-      daq:          "TCPIP0::192.168.1.180::inst0::INSTR"
+      daq:          "TCPIP0::192.168.1.55::inst0::INSTR"
       ncd_ethi2c:   "192.168.1.55:3000"
       eeprom:       "1:7"  # "<MUX-Channel>:<7-bit slave addess>"
 
