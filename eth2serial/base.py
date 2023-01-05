@@ -58,8 +58,9 @@ class Eth2SerialDevice(object):
 
         self.termination = termination
         self._termination_as_bytes = bytes(termination, "utf-8")  # need them also as bytes
-        self.host = host
-        self.port = port
+        # !!! IMPORTANT. Type casting !!!
+        self.host = str(host)
+        self.port = int(port)
 
     def send(self, msg: str, timeout: float = 1.0) -> bool:
         """_summary_

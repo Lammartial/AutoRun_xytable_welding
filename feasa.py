@@ -150,7 +150,7 @@ class FEASA_CH9121(Eth2SerialDevice):
     # Get Functions ----------------------------------------------------------------------------------
      
     # getRGBI##
-    def get_rgbi_num(self, num: int) -> list:
+    def get_rgbi_num(self, num: int):
         """
         This command instructs the LED Analyser to return RGB and Intensity data for fiber ## (01-
         20) in format rrr ggg bbb iiiii where rrr, ggg and bbb are the red, green and blue
