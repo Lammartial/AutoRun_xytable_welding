@@ -30,12 +30,14 @@ class StationConfiguration:
         return tuple([(k, v) for k,v in d.items()])
         #return tuple([self._CONFIG[field] for field in order])
 
+#--------------------------------------------------------------------------------------------------
 
-cfg = StationConfiguration()
-pprint(cfg._CONFIG)
+if __name__ == "__main__":
+    cfg = StationConfiguration()
+    pprint(cfg._CONFIG)
 
-pprint(cfg.get_station_configuration())
-pprint(cfg.get_resource_strings_for_socket(2))
+    pprint(cfg.get_station_configuration())
+    pprint(cfg.get_resource_strings_for_socket(2))
 
 
 # END OF FILE
