@@ -6,8 +6,8 @@ class StationConfiguration:
 
     def __init__(self) -> None:
         self._CONFIG = None
-        _filename = Path(".") / "station_config_example.yaml"  # development
-        #_filename = Path("C:") / "Production" / "station_config_example.yaml"  # production
+        #_filename = Path(".") / "station_config_example.yaml"  # development
+        _filename = Path("C:/") / "Production" / "station_config.yaml"  # production
         self._read_yaml_file(_filename)
 
     def _read_yaml_file(self, filepath: str | Path) -> dict:
@@ -16,34 +16,35 @@ class StationConfiguration:
 
     # --- TestStand Interfaces --------------------------------------------------------------------
 
-    def get_station_configuration(self, seq_context) -> tuple:
-        # # return the station's configuration in a convenient way for teststand
-        # order = ["test_type", "station_id", "line_id"]
-        # result = tuple([(field, self._CONFIG[field]) for field in order])
-        # result += (("test_sockets", len(self._CONFIG["test_sockets"])),)
-        # #result = tuple([self._CONFIG[field] for field in order])
-        # return result
-        context_id = seq_context.Id
-        executing_sequence_name = seq_context.Sequence.Name
-        executing_step_name = seq_context.Step.Name
-        seq_context.Locals.SerialNumber = "FUCK!"
-        return seq_context
-
-    def get_resource_strings_for_socket(self, socket: str) -> tuple:
+    def get_resource_strings_for_socket(self, socket: int | str) -> tuple:
         # return the selected socket configuration in a convenient way for teststand
-        assert (socket > 0 and socket <= 3), ValueError("Socket must be in [1..3].")
-        d = dict(self._CONFIG["test_sockets"][str(socket)]["resource_strings"])
-        return tuple([(k, v) for k,v in d.items()])
-        #return tuple([self._CONFIG[field] for field in order])
+        socket = int(socket)
+        d = self._CONFIG
+        _ns = len(d["test_sockets"])
+        assert (socket > 0 and socket <= _ns), ValueError(f"Socket must be in [1..{_ns}].")
+        r = dict(self._CONFIG["test_sockets"][str(socket)]["resource_strings"])
+        return tuple([v for k,v in r.items()])
+        
+    def get_station_configuration(self) -> tuple:
+        # return the station's configuration in a convenient way for teststand       
+        d = self._CONFIG
+        _ns = len(d["test_sockets"])
+        result = (
+            d["test_type"], 
+            d["station_id"], 
+            d["line_id"], 
+            _ns,
+            #tuple([self.get_resource_strings_for_socket(s+1) for s in range(_ns)])
+        )
+        return result
 
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
     cfg = StationConfiguration()
-    pprint(cfg._CONFIG)
-
+    #pprint(cfg._CONFIG)
     pprint(cfg.get_station_configuration())
-    pprint(cfg.get_resource_strings_for_socket(2))
+    #pprint(cfg.get_resource_strings_for_socket(2))
 
 
 # END OF FILE
