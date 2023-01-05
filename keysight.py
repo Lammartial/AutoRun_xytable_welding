@@ -1,5 +1,4 @@
-import pyvisa
-from pyvisa import ResourceManager, constants
+from pyvisa import ResourceManager
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
@@ -7,6 +6,22 @@ from pyvisa import ResourceManager, constants
 VERSION = "0.0.1"
 
 __version__ = VERSION
+
+DEBUG = 0
+
+# --------------------------------------------------------------------------- #
+# Logging
+# --------------------------------------------------------------------------- #
+import logging
+
+_log = logging.getLogger(__name__)
+_log.setLevel(logging.DEBUG)
+
+# Initialize the logging
+try:
+    logging.basicConfig()
+except Exception as e:
+    print("Logging is not supported on this system")
 
 #--------------------------------------------------------------------------------------------------
 class DAQ970A(object):
@@ -35,32 +50,50 @@ class DAQ970A(object):
         self.rm = ResourceManager()          # auto decision for backend
         pass    
 
-    def connect_by_name(self, DAQ970A_NAME_STR):
-        """ Creates a connection (session) with the device by Name """
+    def connect_by_name(self, DAQ970A_NAME_STR: str):
+        """
+        Creates a connection (session) with the device by Name
+
+        Args:
+            DAQ970A_NAME_STR (str): device name
+
+        Returns:
+            _type_: exception
+        """
         try:
             self.session = self.rm.open_resource(DAQ970A_NAME_STR)
             # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
             if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
                 self.session.read_termination = '\n'
-        except pyvisa.Error as ex:
+        except Exception as ex:
+            _log.error(ex)
             return ex
-        except NameError as ex:
-            return ex
-        
-    def connect_by_IP(self, DAQ970A_IP_STR):
-        """ Creates a connection (session) with the device by IP """
+  
+    def connect_by_IP(self, DAQ970A_IP_STR: str):
+        """
+        Creates a connection (session) with the device by IP.
+
+        Args:
+            DAQ970A_IP_STR (str): device IP address
+
+        Returns:
+            _type_: exception
+        """
         try:
             self.session = self.rm.open_resource(DAQ970A_IP_STR)
             # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
             if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
                 self.session.read_termination = '\n'
-        except pyvisa.Error as ex:
-            return ex
-        except NameError as ex:
+        except Exception as ex:
+            _log.error(ex)
             return ex
 
     def selftest(self):
-        """ Returns device self-test results, takes ~ 2 sec """
+        """Returns device self-test results, takes ~ 2 sec.
+
+        Returns:
+            _type_: exception
+        """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
@@ -68,13 +101,17 @@ class DAQ970A(object):
                 result = self.session.query(f"*TST?")
                 self.session.timeout = 2000 
                 return result
-            except pyvisa.Error as ex:
-                return ex
-            except NameError as ex:     
+            except Exception as ex:
+                _log.error(ex)
                 return ex
 
     def selftest_all(self):
-        """ Returns device full self-test results, takes ~5 sec """
+        """
+        Returns device full self-test results, takes ~5 sec
+
+        Returns:
+            _type_: exception
+        """   
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
@@ -82,17 +119,20 @@ class DAQ970A(object):
                 result = self.session.query(f"TEST:ALL?")
                 self.session.timeout = 2000 
                 return result
-            except pyvisa.Error as ex:
-                return ex
-            except NameError as ex:
+            except Exception as ex:
+                _log.error(ex)
                 return ex
 
-    def set_raw_command(self, cmd):
-        """ Sets raw SCPI command and returns the result or error
+    def set_raw_command(self, cmd: str):
+        """
+        Sets raw SCPI command and returns the result or error.
 
-            Parameters
-            ----------
-            cmd : str, SCPI command """
+        Args:
+            cmd (str): SCPI command 
+
+        Returns:
+            _type_: exception
+        """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
@@ -101,180 +141,194 @@ class DAQ970A(object):
                 #    return result
                 #else:
                 #    raise ValueError('Error, set_raw_command: invalid parameters')
-            except pyvisa.Error as ex:
-                return ex
-            except NameError as ex:
-                return ex
-            except ValueError as ex:
+            except Exception as ex:
+                _log.error(ex)
                 return ex
 
-    def get_resistance(self, slot, channel):
-        """ Returns resistance measurement 
-        
-        Parameters
-        ----------
-        slot : int, slot number (1, 2, 3)
-        channel : int, channel number (1 ... 20) """
+    def get_resistance(self, slot: int, channel: int):
+        """
+        Returns resistance measurement.
 
+        Args:
+            slot (int): slot number (1, 2, 3)
+            channel (int): channel number (1 ... 20)
+
+        Raises:
+            ValueError: invalid argument
+
+        Returns:
+            _type_: resistance(float) or exception
+        """
         # trick to use function in NI Teststand
         slot = int(slot)
         channel = int(channel)
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
+            assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
+            assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
             try:
-                if (1 <= slot <= 3) and (1 <= channel <= 20):
-                    slot_str = str(slot)
-                    channel_str = str(channel).zfill(2)
-                    cmd = "MEAS:RES? AUTO,DEF,(@" + slot_str + channel_str + ")"
-                    self.session.timeout = 5000
-                    result = self.session.query(cmd)
-                    self.session.timeout = 2000
-                    return float(result)
-                else:
-                    raise ValueError('Error, get_resistance: invalid parameters')
-            except pyvisa.Error as ex:
-                return ex
-            except NameError as ex:
-                return ex
-            except ValueError as ex:
+                slot_str = str(slot)
+                channel_str = str(channel).zfill(2)
+                cmd = "MEAS:RES? AUTO,DEF,(@" + slot_str + channel_str + ")"
+                self.session.timeout = 5000
+                result = self.session.query(cmd)
+                self.session.timeout = 2000
+                return float(result)
+            except Exception as ex:
+                _log.error(ex)
                 return ex
 
-    def get_4w_resistance(self, slot, channel):
-        """ Returns 4-wire resistance measurement 
-        
-        Parameters
-        ----------
-        slot : int, slot number (1, 2, 3)
-        channel : int, channel number (1 ... 10) """
+    def get_4w_resistance(self, slot: int, channel: int):
+        """
+        Returns 4-wire resistance measurement.
 
+        Args:
+            slot (int): slot number (1, 2, 3)
+            channel (int): channel number (1 ... 10)
+
+        Raises:
+            ValueError: invalid argument
+
+        Returns:
+            _type_: resistance(float) or exception
+        """
         # trick to use function in NI Teststand
         slot = int(slot)
         channel = int(channel)
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
+            assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
+            assert ((channel >= 1) and (channel <= 10)), ValueError('Invalid channel. Allowed range is 1 .. 10.')
             try:
-                if (1 <= slot <= 3) and (1 <= channel <= 10):
-                    slot_str = str(slot)
-                    channel_str = str(channel).zfill(2)
-                    cmd = "MEAS:FRES? AUTO,DEF,(@" + slot_str + channel_str + ")"
-                    self.session.timeout = 5000
-                    result = self.session.query(cmd)
-                    self.session.timeout = 2000
-                    return float(result)
-                else:
-                    raise ValueError('Error, get_4w_resistance: invalid parameters')
-            except pyvisa.Error as ex:
-                return ex
-            except NameError as ex:
-                return ex
-            except ValueError as ex:
+                slot_str = str(slot)
+                channel_str = str(channel).zfill(2)
+                cmd = "MEAS:FRES? AUTO,DEF,(@" + slot_str + channel_str + ")"
+                self.session.timeout = 5000
+                result = self.session.query(cmd)
+                self.session.timeout = 2000
+                return float(result)
+            except Exception as ex:
+                _log.error(ex)
                 return ex
 
-    def get_VDC(self, slot, channel):
-        """ Returns DC voltage measurement 
-        
-        Parameters
-        ----------
-        slot : int, slot number (1, 2, 3)
-        channel : int, channel number (1 ... 20) """
+    def get_VDC(self, slot: int, channel: int):
+        """
+        Returns DC voltage measurement.
 
+        Args:
+            slot (int): slot number (1, 2, 3)
+            channel (int): channel number (1 ... 20)
+
+        Raises:
+            ValueError: invalid argument
+
+        Returns:
+            _type_: VDC (float) or exception
+        """
         # trick to use function in NI Teststand
         slot = int(slot)
         channel = int(channel)
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
+            assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
+            assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
             try:
-                if (1 <= slot <= 3) and (1 <= channel <= 20):
-                    slot_str = str(slot)
-                    channel_str = str(channel).zfill(2)
-                    cmd = "MEAS:VOLT:DC? AUTO,DEF,(@" + slot_str + channel_str + ")"
-                    self.session.timeout = 5000
-                    result = self.session.query(cmd)
-                    self.session.timeout = 2000
-                    return float(result)
-                else:
-                    raise ValueError('Error, get_VDC: invalid parameters')
-            except pyvisa.Error as ex:
-                return ex
-            except NameError as ex:
-                return ex
-            except ValueError as ex:
+                slot_str = str(slot)
+                channel_str = str(channel).zfill(2)
+                cmd = "MEAS:VOLT:DC? AUTO,DEF,(@" + slot_str + channel_str + ")"
+                self.session.timeout = 5000
+                result = self.session.query(cmd)
+                self.session.timeout = 2000
+                return float(result)
+            except Exception as ex:
+                _log.error(ex)
                 return ex
 
-    def get_VAC(self, slot, channel):
-        """ Returns AC voltage measurement 
-        
-        Parameters
-        ----------
-        slot : int, slot number (1, 2, 3)
-        channel : int, channel number (1 ... 20) """
+    def get_VAC(self, slot: int, channel: int):
+        """
+        Returns AC voltage measurement.
 
+        Args:
+            slot (int): slot number (1, 2, 3)
+            channel (int): channel number (1 ... 20)
+
+        Raises:
+            ValueError: invalid argument
+
+        Returns:
+            _type_: VAC (float) or exception
+        """
         # trick to use function code in NI Teststand
         slot = int(slot)
         channel = int(channel)
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
+            assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
+            assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
             try:
-                if (1 <= slot <= 3) and (1 <= channel <= 20):
-                    slot_str = str(slot)
-                    channel_str = str(channel).zfill(2)
-                    cmd = "MEAS:VOLT:AC? AUTO,DEF,(@" + slot_str + channel_str + ")"
-                    self.session.timeout = 5000
-                    result = self.session.query(cmd)
-                    self.session.timeout = 2000
-                    return float(result)
-                else:
-                    raise ValueError('Error, get_VAC: invalid parameters')
-            except pyvisa.Error as ex:
-                return ex
-            except NameError as ex:
-                return ex
-            except ValueError as ex:
+                slot_str = str(slot)
+                channel_str = str(channel).zfill(2)
+                cmd = "MEAS:VOLT:AC? AUTO,DEF,(@" + slot_str + channel_str + ")"
+                self.session.timeout = 5000
+                result = self.session.query(cmd)
+                self.session.timeout = 2000
+                return float(result)
+            except Exception as ex:
+                _log.error(ex)
                 return ex      
 
-    def get_ADC(self, slot, channel):
-        """ Returns DC current measurement 
-        
-        Parameters
-        ----------
-        slot : int, slot number (1, 2, 3)
-        channel : int, channel number (21 or 22) """
+    def get_ADC(self, slot: int, channel: int):
+        """
+        Returns DC current measurement.
 
+        Args:
+            slot (int): slot number (1, 2, 3)
+            channel (int): channel number (21 or 22)
+
+        Raises:
+            ValueError: invalid argument
+
+        Returns:
+            _type_: ADC (float) or exception
+        """
         # trick to use function in NI Teststand
         slot = int(slot)
         channel = int(channel)
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
+            assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
+            assert ((channel == 21) or (channel == 22)), ValueError('Invalid channel. Only 21 or 22 allowed.')
             try:
-                if (1 <= slot <= 3) and (21 <= channel <= 22):
-                    slot_str = str(slot)
-                    channel_str = str(channel).zfill(2)
-                    cmd = "MEAS:CURR:DC? AUTO,DEF,(@" + slot_str + channel_str + ")"
-                    self.session.timeout = 5000
-                    result = self.session.query(cmd)
-                    self.session.timeout = 2000
-                    return float(result)
-                else:
-                    raise ValueError('Error, get_ADC: invalid parameters')
-            except pyvisa.Error as ex:
-                return ex
-            except NameError as ex:
-                return ex
-            except ValueError as ex:
+                slot_str = str(slot)
+                channel_str = str(channel).zfill(2)
+                cmd = "MEAS:CURR:DC? AUTO,DEF,(@" + slot_str + channel_str + ")"
+                self.session.timeout = 5000
+                result = self.session.query(cmd)
+                self.session.timeout = 2000
+                return float(result)
+            except Exception as ex:
+                _log.error(ex)
                 return ex  
 
-    def get_temp(self, slot, channel, tran_type, rtd_resist, fth_type, tc_type):
-        """ Returns temperature measurement 
-        
-        Parameters
-        ----------
-        slot       : int, slot number (1, 2, 3)
-        channel      : int, channel number (1 ... 20) 
-        tran_type  : str, transducer type (TC, FRTD, RTD, FTH, THER or DEF(TCouple))
-        rtd_resist : int, FRTD|RTD trancduser resistance (100 or 1000 Ohm), otherwise = 0
-        fth_type   : int, FTH|THER type (2252, 5000, 10000), otherwise = 0
-        tc_type    : str, TCouple type (B, E, J, K, N, R, S, or T), otherwise = 'empty string' """
 
+    def get_temp(self, slot: int, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str):
+        """
+        Returns temperature measurement.
+
+        Args:
+            slot (int): slot number (1, 2, 3)
+            channel (int): channel number (1 ... 20) 
+            tran_type (str): transducer type (TC, FRTD, RTD, FTH, THER or DEF(TCouple))
+            rtd_resist (int): FRTD|RTD trancduser resistance (100 or 1000 Ohm), otherwise = 0
+            fth_type (int): FTH|THER type (2252, 5000, 10000), otherwise = 0
+            tc_type (str): TCouple type (B, E, J, K, N, R, S, or T), otherwise = 'empty string'
+
+        Raises:
+            ValueError: invalid argument 
+
+        Returns:
+            _type_: Temperature (float) or exception
+        """
         # trick to use function in NI Teststand
         slot = int(slot)
         channel = int(channel)
@@ -282,59 +336,52 @@ class DAQ970A(object):
         fth_type = int(fth_type)
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
-            try:
-                if (1 <= slot <= 3) and (1 <= channel <= 20):
-                    slot_str = str(slot)
-                    channel_str = str(channel).zfill(2)
-                    match tran_type:
-                        case 'TC' | 'DEF':
-                            if (tc_type in ["B", "E", "J", "K", "N", "R", "S", "T"]):
-                                cmd = "MEAS:TEMP:TC?" + " " + tc_type + ",(@" + slot_str + channel_str + ")"
-                                self.session.timeout = 5000
-                                result = self.session.query(cmd)
-                                self.session.timeout = 2000
-                                return float(result)
-                            else:
-                                raise ValueError('Error, get_temp: invalid parameters')
-                        case 'FTH' | 'THER':
-                            if (fth_type == 2252) or (fth_type == 5000) or (fth_type == 10000):
-                                cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(fth_type) + ",(@" + slot_str + channel_str + ")"
-                                self.session.timeout = 5000
-                                result = self.session.query(cmd)
-                                self.session.timeout = 2000
-                                return float(result)
-                            else:
-                                raise ValueError('Error, get_temp: invalid parameters')
-                        case 'FRTD' | 'RTD':
-                            if (rtd_resist == 100) or (rtd_resist == 1000):
-                                cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(rtd_resist) + ",(@" + slot_str + channel_str + ")"
-                                self.session.timeout = 5000
-                                result = self.session.query(cmd)
-                                self.session.timeout = 2000
-                                return float(result)
-                            else:
-                                raise ValueError('Error, get_temp: invalid parameters')
-                        case _:
-                            raise ValueError('Error, get_temp: invalid parameters')
-                else:
-                    raise ValueError('Error, get_temp: invalid parameters')
-            except pyvisa.Error as ex:
-                return ex
-            except NameError as ex:
-                return ex
-            except ValueError as ex:
-                return ex  
+            assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
+            assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
+            try:                    
+                slot_str = str(slot)
+                channel_str = str(channel).zfill(2)
+                match tran_type:
+                    case 'TC' | 'DEF':
+                        assert (tc_type in ["B", "E", "J", "K", "N", "R", "S", "T"]), ValueError('Error, get_temp: invalid tc_type parameter')
+                        cmd = "MEAS:TEMP:TC?" + " " + tc_type + ",(@" + slot_str + channel_str + ")"
+                        self.session.timeout = 5000
+                        result = self.session.query(cmd)
+                        self.session.timeout = 2000
+                        return float(result)
+                    case 'FTH' | 'THER':
+                        assert ((fth_type == 2252) or (fth_type == 5000) or (fth_type == 10000)), ValueError('Error, get_temp: invalid fth_type parameter')
+                        cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(fth_type) + ",(@" + slot_str + channel_str + ")"
+                        self.session.timeout = 5000
+                        result = self.session.query(cmd)
+                        self.session.timeout = 2000
+                        return float(result)
+                    case 'FRTD' | 'RTD':
+                        assert((rtd_resist == 100) or (rtd_resist == 1000)), ValueError('Error, get_temp: invalid rtd_resist parameters')
+                        cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(rtd_resist) + ",(@" + slot_str + channel_str + ")"
+                        self.session.timeout = 5000
+                        result = self.session.query(cmd)
+                        self.session.timeout = 2000
+                        return float(result)
+                    case _:
+                        raise ValueError('Error, get_temp: unknown parameter')
+            except Exception as ex:
+                _log.error(ex)
+                return ex 
 
     def disconnect(self):
-        """ Closes the connection (session) and the device """
+        """Closes the connection (session) and the device.
+
+        Returns:
+            _type_: exception
+        """
         # Last operation completed successfully -> Connection is OK
         if (self.rm.last_status == 0):
             try:
                 self.session.close()
                 self.rm.close()
-            except pyvisa.Error as ex:
-                return ex
-            except NameError as ex:
+            except Exception as ex:
+                _log.error(ex)
                 return ex
 #--------------------------------------------------------------------------------------------------
 
