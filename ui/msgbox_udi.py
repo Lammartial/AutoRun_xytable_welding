@@ -1,5 +1,6 @@
 from typing import Tuple
 from datetime import datetime, timedelta
+from pathlib import Path
 import ctypes
 import queue
 import threading
@@ -181,12 +182,12 @@ class App(threading.Thread):
         self.root.title("ENTER UID")
         # set App icon
         # if we have an ICO file we can simply use this:
-        self.root.iconbitmap("app-icon.ico")
+        self.root.iconbitmap(Path(__file__).resolve().parent / "app-icon.ico")
         # if only PNG or JPG available we need to convert:
         #photo = tk.PhotoImage(file="app-icon.png")
         #self.root.wm_iconphoto(False, photo)
         # Simply set the theme
-        self.root.tk.call("source", "theme_sv.tcl")
+        self.root.tk.call("source", Path(__file__).resolve().parent / "theme_sv.tcl")
         self.root.tk.call("set_theme", "light")
         # create the Widgets and keep them inside our App object
         self.dialog = DialogWin(self.root)

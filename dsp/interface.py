@@ -29,9 +29,7 @@ class DspInterface:
         "station_id": None,       # str: fixed by PC (e.g. PC name)
         "line_id": None,          # str: fixed by PC [1,2,3,...]
         "test_socket": None,      # str: -> from TestStand PC before start of sequence, known by TestStand at that time only
-
         "test_program_id": None,  # str: <- from MPI Server before start of sequence
-
         "serial_number": None,    # str: <- from MPI Server before start of sequence
         "udi_pcba": None,         # str: -> from TestStand PC scanned by user to start the sequence
         "udi_stack": None,         # str: -> from TestStand PC scanned by user to start the sequence
@@ -46,8 +44,7 @@ class DspInterface:
         self.API_BASE_URL = api_base_url
         self.LOCAL_RESULT_FILE = Path(local_result_file)
     
-    def get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> dict:
-        
+    def get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> dict:        
         response = requests.get(f"{self.API_BASE_URL}/parameter/{test_type}/{station_id}/{line_id}/{test_socket}")
         # expects JSON of
         # {
@@ -59,8 +56,10 @@ class DspInterface:
         # }
         if response.status_code != 200:
             raise Exception("Cannot start test!", response.json())
-        print(response.json())
-        return response.json()
+        runparams = response.json()
+        print(runparams)
+        self.api = {**runparams, **self.api} 
+        return runparams
 
 
     def ifc_get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> tuple:
@@ -120,22 +119,16 @@ class DspInterface:
 
     #--------------------------------------------------------------------------------------------------
 
-    def ifc_send_result_for_testrun(self, result: tuple) -> None:        
-        result_dict = dict(zip([
-                "execution_time",
-                "line_id",
-                "result",
-                "serial_number",
-                "start_datetime",
-                "station_id",
-                "test_program_id",
-                "test_socket",
-                "test_type",
-                "udi_pcba",
-                "udi_stack",
-            ], result))
+    def ifc_send_result_for_testrun(self, result: str, start_datetime: str, execution_time: float, 
+                                    udi_pcba: str, udi_stack: str, serial_number: str) -> None:        
+        self.api["result"] = result[:1].upper()  # only first letter
+        self.api["start_datetime"] = start_datetime
+        self.api["execution_time"] = execution_time
+        self.api["udi_pcba"] = udi_pcba
+        self.api["udi_stack"] = udi_stack
+        self.api["serial_number"] = serial_number               
         result_list = self.load_result_list_from_json()
-        result_list.append(result)
+        result_list.append(self.api)
         remaining_list = self.send_result_of_testrun(result_list)
         self.save_result_list_to_json(remaining_list)
 

@@ -19,6 +19,7 @@ class StationConfiguration:
     def get_resource_strings_for_socket(self, socket: int | str) -> tuple:
         # return the selected socket configuration in a convenient way for teststand
         socket = int(socket)
+        if socket == -1: socket = 1  # -1 is the SingleSequential setting
         d = self._CONFIG
         _ns = len(d["test_sockets"])
         assert (socket > 0 and socket <= _ns), ValueError(f"Socket must be in [1..{_ns}].")
