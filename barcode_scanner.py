@@ -93,7 +93,7 @@ async def tcp_send_and_receive_from_server(message: str, timeout=1.0, limit: str
     return data
 
 #--------------------------------------------------------------------------------------------------
-def poll(timeout = 0.5):
+def poll(timeout = 2.5):
     dev = Eth2SerialDevice(UART_BRIDGE_IP, UART_PORT)
     #dev.send("Hallo Welt!", timeout=timeout)
     s = dev.request(None, timeout=timeout)
@@ -102,14 +102,23 @@ def poll(timeout = 0.5):
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     from time import perf_counter
+    from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
 
     DEBUG = 1
     tic = perf_counter()
+
+    cfg = StationConfiguration(filename=CONF_FILENAME_DEV)
+    #_IP = cfg._CONFIG["test_sockets"]["1"]["resource_strings"]["scanner"]
+    _IP, _PORT = cfg.get_resource_strings_for_socket(1)[0].split(":")
+    print(_IP, _PORT)
+
     # test the client send and receive:
     #asyncio.run(tcp_send_and_receive_from_server(message="Hallo Welt!", timeout=2.0))
     #asyncio.run(tcp_send_and_receive_from_server(None, limit=10, timeout=25.0))
     try:
-        poll()
+        dev = Eth2SerialDevice(_IP, _PORT)
+        s = dev.request(None, timeout=2.5)
+        print(s)
     except TimeoutError:
         _log.info("Timeout!")
 
