@@ -1,0 +1,10 @@
+# configure database which will be expected to be a MySQL/MariaDB type;
+sourceDatabase:
+    #servertype: "mysql"  # default
+    #servertype: "mysql+mysqldb"  # C-implentation, a maintained fork of MySQL-Python, not avail here
+    servertype: "mysql+pymysql" # pure python
+    serverhost: "someserver"
+    database:   "a_datatable"
+    login:      "xxx"
+    password:   "yyy"
+    encoding:   "utf8"

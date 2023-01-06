@@ -1,0 +1,11 @@
+# configure database which will be expected to be a Postgres type;
+# we use a READ ONLY user to access
+sourceDatabase:
+    #servertype: "postgresql"  # default    
+    servertype: "postgresql+psycopg2"  # more features, faster bulk processing (ext. tested at RRC)
+    #servertype: "postgresql+pg8000"  # pure python - supports Python DB-API version 2.0
+    serverhost: "sv-renos:5432"
+    database:   "postgres"
+    login:      "reuser"
+    password:   "renos0rrc"
+    encoding:   "utf8"
