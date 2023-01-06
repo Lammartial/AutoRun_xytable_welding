@@ -62,7 +62,7 @@ class Eth2SerialDevice(object):
         self.host = str(host)
         self.port = int(port)
 
-    def send(self, msg: str, timeout: float = 1.0) -> bool:
+    def send(self, msg: str, timeout: float = 1.0) -> None:
         """_summary_
 
         Args:
@@ -72,20 +72,22 @@ class Eth2SerialDevice(object):
         Returns:
             bool: _description_
         """
+
         try:
             _s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             _s.settimeout(timeout)
             _s.connect((self.host, self.port))
             _s.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
-            result = True
+        except TimeoutError as ex:
+            # do NOT log, we need this exception being quiet when polling
+            raise
         except Exception as ex:
             _log.exception(ex)
             raise
         finally:
             _s.close()
-        return result
 
-    def request(self, msg: str, timeout: float = 5.0, limit: int = 0, decode: str = "ascii") -> str:
+    def request(self, msg: str | None, timeout: float = 5.0, limit: int = 0, decode: str = "ascii") -> str:
         """_summary_
 
         Args:
@@ -100,7 +102,7 @@ class Eth2SerialDevice(object):
             _s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             _s.settimeout(timeout)
             _s.connect((self.host, self.port))
-            if len(msg)>0:
+            if msg:
                 _s.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
             # now read data until termination or timeout
             rcvdata = b""
@@ -113,17 +115,20 @@ class Eth2SerialDevice(object):
                     rcvdata = rcvdata[:limit]  # slice the received data
                     break
                 if (rcvdata.decode(decode).rfind(self.termination) >= 0):
-                    break             
+                    break
             #rcvdata = _s.recv(4096)
             result = rcvdata.decode(decode) if len(rcvdata)>0 else None
             _log.debug(f"Received: {result!r}")
-            return result
+        except TimeoutError as ex:
+            # do NOT log, we need this exception being quiet when polling
+            raise
         except Exception as ex:
             _log.exception(ex)
             raise
         finally:
             _s.close()
-        
+        return result
+
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     from time import perf_counter
