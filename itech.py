@@ -73,7 +73,6 @@ class M3400_DEV(object):
             NAME_STR (str): device name
         """
         try:
-            assert (NAME_STR is str), ValueError("Itech, connect_by_name, argument is not a string.")
             self.session = self.rm.open_resource(NAME_STR)
             # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
             if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
@@ -91,7 +90,6 @@ class M3400_DEV(object):
         """
         
         try:
-            assert (IP_STR is str), ValueError("Itech, connect_by_IP, argument is not a string.")
             self.session = self.rm.open_resource(IP_STR)            
             # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
             if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
