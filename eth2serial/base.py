@@ -114,10 +114,8 @@ class Eth2SerialDevice(object):
                 if (limit) and (len(rcvdata) > limit):
                     rcvdata = rcvdata[:limit]  # slice the received data
                     break
-                #if (rcvdata.decode(decode).rfind(self.termination) >= 0):
                 if (rcvdata.rfind(self._termination_as_bytes) >= 0):
                     break
-            #rcvdata = _s.recv(4096)
             result = rcvdata.decode(decode) if len(rcvdata)>0 else None
             _log.debug(f"Received: {result!r}")
         except TimeoutError as ex:

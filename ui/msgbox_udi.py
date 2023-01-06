@@ -38,6 +38,7 @@ def udi_cancel():
     global app, entered_udi
 
     entered_udi = None  # signal not to continue testing
+    app.entered_udi = entered_udi
     app.close()
     #root.destroy()
     #root.quit()
@@ -46,11 +47,19 @@ def udi_accept(udi: str):
     global app, entered_udi
 
     entered_udi = udi.strip()
+    app.entered_udi = entered_udi
     if DEBUG:
         print("ACCEPT:", udi)
     #root.destroy()
     #root.quit()
     app.close()
+
+def handle_focus(event):
+    global app
+
+    if event.widget == app.root:
+        app.root.focus_set()
+        app.dialog.entry.focus_set()
 
 #--------------------------------------------------------------------------------------------------
 class DialogWin(ttk.Frame):
@@ -76,6 +85,8 @@ class DialogWin(ttk.Frame):
     def setup_widgets(self):
 
         def _accept_udi(*args, **kwargs):
+            #global app
+
             if DEBUG:
                 print("Arguments:", args, kwargs)
             _udi = self.var_udi.get()
@@ -86,6 +97,8 @@ class DialogWin(ttk.Frame):
                     print("Nothing entered as UDI!")
 
         def _cancel(*args, **kwargs):
+            #global app
+
             if DEBUG:
                 print("Arguments:", args, kwargs)
             udi_cancel()
@@ -116,7 +129,7 @@ class DialogWin(ttk.Frame):
         self.entry.bind("<Return>", _accept_udi )
         self.entry.bind("<Key-Escape>", _cancel)
         self.entry.grid(row=1, column=0, padx=5, pady=(0, 10), sticky="ew")
-        self.entry.focus()
+        self.entry.focus_set()
 
          # Button
         self.ok_button = ttk.Button(self.widgets_frame, text="Start Test", style="Accent.TButton", command=_accept_udi)
@@ -137,6 +150,7 @@ class DialogWin(ttk.Frame):
         # # Sizegrip
         # self.sizegrip = ttk.Sizegrip(self)
         # self.sizegrip.grid(row=100, column=100, padx=(0, 5), pady=(0, 5))
+
 
 #--------------------------------------------------------------------------------------------------
 async def scan_uart_socket(timeout=0.5, message=None, debug_end_time=None):
@@ -192,8 +206,10 @@ class App(threading.Thread):
         threading (Thread): Base class to have the background task available under full control.
     """
     def __init__(self, scanner_resource_string: str):
+        self.entered_udi = None
         self.SCANNER_RESOURCE_STRING = scanner_resource_string
         self.root = tk.Tk()
+        self.root._after_id = None
         self.root.attributes('-alpha', 0)  # this hides the root window until we have arranged all the wigets
         self.root.title("ENTER UID")
         # set App icon
@@ -208,6 +224,7 @@ class App(threading.Thread):
         # create the Widgets and keep them inside our App object
         self.dialog = DialogWin(self.root)
         self.dialog.pack(fill="both", expand=True)
+        #self.dialog.focus_set()
         # Set a minsize for the window, and place it in the middle
         self.root.update()
         self.root.minsize(self.root.winfo_width(), self.root.winfo_height())
@@ -215,13 +232,36 @@ class App(threading.Thread):
         y_cordinate = int((self.root.winfo_screenheight() / 2) - (self.root.winfo_height() / 2))
         self.root.geometry("+{}+{}".format(x_cordinate, y_cordinate-20))
         self.root.attributes('-alpha', 1.0)  # now make the main window visible again
+        #self.root.lift()
+        #self.root.attributes("-topmost", True)
         self.root.protocol("WM_DELETE_WINDOW", self.callback)
+        #self.root.bind("<FocusIn>", handle_focus)
+        #self.root.focus_set()
+        #self.dialog.entry.focus_set()
         self.gui_queue = queue.Queue()
         threading.Thread.__init__(self)
         self.name = "DAHINTER"
         # to stop the Background task use either this signal:
         self._stop_event = threading.Event()
         # or the function self.raise_exception()
+
+    # Show the window
+    def show(self):
+        self.dialog.deiconify()
+
+    # Hide the window
+    def hide(self):
+        self.dialog.withdraw()
+
+    def udi_cancel(self):
+        self.entered_udi = None  # signal not to continue testing
+        self.close()
+
+    def udi_accept(self, udi: str):
+        self.entered_udi = udi.strip()
+        if DEBUG:
+            print("ACCEPT:", udi)
+        self.close()
 
     def get_id(self):
         """Needed to terminate this thread by SystemExit exception.
@@ -260,6 +300,9 @@ class App(threading.Thread):
 
     def close(self):
         self.stop()             # signal to the thread
+        #if self.root._after_id:
+        #    self.root.after_cancel(self.root._after_id)
+        #    self.root._after_id = None
         #self.raise_exception()  # hardly stop the thread
         #self.root.quit()        # soft stop (leaves stale app when used with Teststand)
         self.root.destroy()     # hard stop
@@ -267,20 +310,22 @@ class App(threading.Thread):
 
     def callback(self):
         """called from window manager close/quit function (cross right upper corner)."""
+
         if DEBUG:
             print("CALLBACK TO CLOSE.")
         #self.raise_exception()
-        udi_cancel()
+        self.udi_cancel()
 
     def scan_uart_socket(self, scanner, timeout=0.5, message=None, debug_end_time=None):
         data = None
         try:
-            data = scanner.request(message, timeout=timeout)
+            data = scanner.request(message, timeout=timeout/2)
             #_log.debug(data)
         except TimeoutError:
             pass
             # any other exception needs to bubble up
         if data:
+            _log.info(data)
             app.gui_queue.put({"udi":data})
 
         # DEBUG / SIMULATION SUPPORT
@@ -307,7 +352,7 @@ class App(threading.Thread):
                 self.scan_uart_socket(
                     scanner,
                 #asyncio.run(scan_uart_socket(
-                    timeout=0.5,
+                    timeout=0.75,
                     message=msg,              # DEBUG
                     debug_end_time=end_time,  # DEBUG
                 #))
@@ -347,16 +392,18 @@ class App(threading.Thread):
                         _udi = fn["udi"]
                         self.dialog.var_udi.set(_udi)
                         udi_accept(_udi)  # auto accept!
+                        return  # do NOT schedule more updates
                     if "error" in fn:
                         showerror("Error", fn["error"])
                         udi_cancel()  # stop application!
+                        return  # do NOT schedule more updates
         except queue.Empty:
             pass
         finally:
             pass
         #if DEBUG:
         #    print("Restart GUI update.")
-        self.root.after(100, self.periodic_gui_update)
+        self.root._after_id = self.root.after(100, self.periodic_gui_update)
 
 
     def start_gui(self):
@@ -366,7 +413,8 @@ class App(threading.Thread):
         """
 
         self.start()          # start background service thread
-        self.root.after(10, self.periodic_gui_update)
+        #self.after_id = self.root.after(10, self.periodic_gui_update)
+        self.periodic_gui_update()
         self.root.mainloop()  # GUI loop
 
 
@@ -380,13 +428,13 @@ def identify_uut(context) -> Tuple[bool, str]:
     Returns:
         Tuple[bool, str]: return values to a TestStand container that expects two types in this order.
     """
-    global app, entered_udi
+    global app
 
-    entered_udi = None  # reset here
+    #entered_udi = None  # reset here
     app = App(context["scanner"])
     app.start_gui()  # this runs Window Dialog in separate task and blocks until GUI is closed
-    if entered_udi is not None:
-        return (True, entered_udi)
+    if app.entered_udi is not None:
+        return (True, app.entered_udi)
     else:
         return (False, "")
 
@@ -395,7 +443,8 @@ def identify_uut(context) -> Tuple[bool, str]:
 if __name__ == "__main__":
     DEBUG = 0  # increase verbosity
     barcode_scanner.DEBUG = DEBUG # to see more infos
-    continue_testing, udi = identify_uut({"scanner":"192.168.1.120:2000"})
-    print(f"FINALIZED {entered_udi}. Continue testing: {continue_testing}, udi={udi}")
+    for i in range(0, 2):
+        continue_testing, udi = identify_uut({"scanner":"192.168.1.120:2000"})
+        print(f"FINALIZED {entered_udi}. Continue testing: {continue_testing}, udi={udi}")
 
 # END OF FILE
