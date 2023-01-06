@@ -19,7 +19,7 @@ class RelayBoard4Relay4GPIO:
     gpio7 = 7
     gpio_dict = {4: gpio4, 5: gpio5, 6: gpio6, 7: gpio7}
 
-    def __init__(self, i2c_port, i2c_address_7bit):
+    def __init__(self, i2c_port, i2c_address_7bit: int = 0x20):
         """Initialize the object with an I2CPort object and the 7-bit I2C address.
 
         Args:

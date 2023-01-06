@@ -16,7 +16,7 @@ class MCP23008:
     GPIO = 0x09
     OLAT = 0x0A
 
-    def __init__(self, i2c_port, i2c_address_7bit):
+    def __init__(self, i2c_port, i2c_address_7bit: int = 0x20):
         """Initialize the object with an I2CPort object and the 7-bit I2C address.
 
         Args:

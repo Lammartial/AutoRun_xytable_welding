@@ -13,7 +13,7 @@ class STS21:
     cmd_trigger_meas_no_hold = 0xF3
     measurement_resolution = {11: 0x81, 12: 0x01, 13: 0x80, 14: 0x00}
 
-    def __init__(self, i2c_port, i2c_address_7bit):
+    def __init__(self, i2c_port, i2c_address_7bit: int = 0x4A):
         """Initialize the object with an I2CPort object and the 7-bit I2C address.
 
         Args:
