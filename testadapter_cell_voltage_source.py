@@ -21,7 +21,7 @@ class CellVoltageSource:
                  5: cell5_dac_channel, 6: cell6_dac_channel, 7: cell7_dac_channel}
     aux_dac_channel = 8
 
-    def __init__(self, i2c_port: I2CPort, i2c_address_7bit: int):
+    def __init__(self, i2c_port: I2CPort, i2c_address_7bit: int = 0x48):
         """Initialize the object with an I2CPort object and the 7-bit I2C address.
 
         Args:

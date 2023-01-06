@@ -12,7 +12,7 @@ class DAC53608:
     device_config_register_addr = 0x01  # R/W
     dac0_data_register_addr = 0x08      # W
 
-    def __init__(self, i2c_port, i2c_address_7bit):
+    def __init__(self, i2c_port, i2c_address_7bit: int = 0x48):
         """Initialize the object with an I2CPort object and the 7-bit I2C address.
 
         Args:
