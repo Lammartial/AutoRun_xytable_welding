@@ -6,7 +6,6 @@
      Check FEASA LED ANALYSER RS232 settings. Default: baudrate 57600, Data bits 8, Stop bit 1
 
 """
-
 from eth2serial.base import Eth2SerialDevice
 
 #--------------------------------------------------------------------------------------------------
@@ -53,22 +52,6 @@ class FEASA_CH9121(Eth2SerialDevice):
 
     def test_float(self):
         return float(1)
-    
-    def _check_exception(self, resp) -> bool:
-        """
-        Checks response for exceptions
-
-        Args:
-            resp (_type_): response
-
-        Returns:
-            bool: false - success, true - exception
-        """
-        if (isinstance(resp, BaseException) == True):
-            _log.error(resp)
-            return True
-        else:
-            return False
 
     # Capture Fuctions ----------------------------------------------------------------------------
 
@@ -84,13 +67,11 @@ class FEASA_CH9121(Eth2SerialDevice):
 
 
         response = self.request("capture")
-        if (self._check_exception(response)):
-            return False
+        if (self.RESPONSE_OK in response):
+            return True 
         else:
-            if (self.RESPONSE_OK in response):
-                return True 
-            else: 
-                return False  # this way we ignore any line termination
+            _log.error("LED analyzer error, capture, %s", response, exc_info=1) 
+            return False 
 
     # CAPTURE#
     def capture_range(self, range: int) -> bool:
@@ -106,10 +87,11 @@ class FEASA_CH9121(Eth2SerialDevice):
         """
         cmd = "capture" + str(int(range))
         response = self.request(cmd)
-        if (self._check_exception(response)):
-            return False
+        if (self.RESPONSE_OK in response):
+            return True 
         else:
-            return True if self.RESPONSE_OK in response else False
+            _log.error("LED analyzer error, capture_range, %s", response, exc_info=1) 
+            return False  
 
     # CAPTUREPWM
     def capture_pwm(self) -> bool:
@@ -122,10 +104,11 @@ class FEASA_CH9121(Eth2SerialDevice):
             bool: False - failed, True - success
         """
         response = self.request("capturepwm")
-        if (self._check_exception(response)):
-            return False
+        if (self.RESPONSE_OK in response):
+            return True 
         else:
-            return True if self.RESPONSE_OK in response else False
+            _log.error("LED analyzer error, capture_pwm, %s", response, exc_info=1) 
+            return False 
 
     # CAPTURE#PWM@@
     def capture_pwm_range(self, range: int, factor: int) -> bool:
@@ -142,10 +125,11 @@ class FEASA_CH9121(Eth2SerialDevice):
         """
         cmd = "capture" + str(int(range)) + "PWM" + f"{(int(factor)):02d}"
         response = self.request(cmd)
-        if (self._check_exception(response)):
-            return False
+        if (self.RESPONSE_OK in response):
+            return True 
         else:
-            return True if self.RESPONSE_OK in response else False
+            _log.error("LED analyzer error, capture_pwm_range, %s", response, exc_info=1) 
+            return False 
  
     # Get Functions ----------------------------------------------------------------------------------
      
@@ -162,15 +146,18 @@ class FEASA_CH9121(Eth2SerialDevice):
         Returns:
             list (int): rrr, ggg, bbb, iiiii
         """
-        result = [0, 0, 0, 0]
         cmd = "getrgbi" + f"{(int(num)):02d}"
         response = self.request(cmd)
-        if (self._check_exception(response) == False):
+        try:
+            result = []
             lst = response.split(' ')
             result.append(int(lst[0]))
             result.append(int(lst[1]))
             result.append(int(lst[2]))
             result.append(int(lst[3]))
+        except Exception:
+            _log.error("LED analyzer error, get_rgbi_num")
+            raise 
         return result 
 
     # getINTENSITY##
@@ -186,13 +173,14 @@ class FEASA_CH9121(Eth2SerialDevice):
         Returns:
             int: intensity value
         """
-        cmd = "getintensity" + f"{(int(num)):02d}"
-        response = self.request(cmd)
-        if (self._check_exception(response)):
-            return int(0)
-        else:
-            return int(response)   
-    
+        try:
+            cmd = "getintensity" + f"{(int(num)):02d}"
+            response = int(self.request(cmd))  
+        except Exception:
+            _log.error("LED analyzer error, get_intensity_num")
+            raise
+        return response
+
     # Set Functions------------------------------------------------------------------------------------
  
     # SetIntGain##xxx
@@ -209,10 +197,11 @@ class FEASA_CH9121(Eth2SerialDevice):
         """
         cmd = "setintgain" + f"{(int(num)):02d}" + f"{(int(factor)):03d}"
         response = self.request(cmd)
-        if (self._check_exception(response)):
-            return False
+        if (self.RESPONSE_OK in response):
+            return True 
         else:
-            return True if self.RESPONSE_OK in response else False
+            _log.error("LED analyzer error, set_intgain_num, %s", response, exc_info=1) 
+            return False 
 
     # SetFactor##
     def set_factor(self, factor: int) -> bool:
@@ -227,10 +216,11 @@ class FEASA_CH9121(Eth2SerialDevice):
         """ 
         cmd = "setfactor" + f"{(int(factor)):02d}"
         response = self.request(cmd)
-        if (self._check_exception(response)):
-            return False
+        if (self.RESPONSE_OK in response):
+            return True 
         else:
-            return True if self.RESPONSE_OK in response else False   
+            _log.error("LED analyzer error, set_factor, %s", response, exc_info=1) 
+            return False   
 #-----------------------------------------------------------------------------------------------------
 
 #-----------------------------------------------------------------------------------------------------

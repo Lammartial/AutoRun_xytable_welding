@@ -79,7 +79,7 @@ class Eth2SerialDevice(object):
             _s.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
             result = True
         except Exception as ex:
-            #result = ex  # could not send
+            _log.exception(ex)
             raise
         finally:
             _s.close()
@@ -96,7 +96,6 @@ class Eth2SerialDevice(object):
         Returns:
             str: _description_
         """
-
         try:
             _s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             _s.settimeout(timeout)
@@ -104,22 +103,23 @@ class Eth2SerialDevice(object):
             if len(msg)>0:
                 _s.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
             # now read data until termination or timeout
-            #rcvdata = b""
-            #while True:
-            #    _chunk = _s.recv(4096)
-            #    if not _chunk:
-            #        break
-            #    rcvdata += _chunk
-            #    if limit and len(rcvdata > limit):
-            #        rcvdata = rcvdata[:limit]  # slice the received data
-            #        break
-            #
-            rcvdata = _s.recv(4096)
+            rcvdata = b""
+            while True:
+                _chunk = _s.recv(4096)
+                if not _chunk:
+                    break
+                rcvdata += _chunk
+                if (limit) and (len(rcvdata) > limit):
+                    rcvdata = rcvdata[:limit]  # slice the received data
+                    break
+                if (rcvdata.decode(decode).rfind(self.termination) >= 0):
+                    break             
+            #rcvdata = _s.recv(4096)
             result = rcvdata.decode(decode) if len(rcvdata)>0 else None
             _log.debug(f"Received: {result!r}")
             return result
         except Exception as ex:
-            result = ex
+            _log.exception(ex)
             raise
         finally:
             _s.close()
