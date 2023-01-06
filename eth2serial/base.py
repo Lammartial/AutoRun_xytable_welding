@@ -107,7 +107,7 @@ class Eth2SerialDevice(object):
             # now read data until termination or timeout
             rcvdata = b""
             while True:
-                _chunk = _s.recv(4096)
+                _chunk = _s.recv(1024)
                 if not _chunk:
                     break
                 rcvdata += _chunk
