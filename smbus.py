@@ -465,8 +465,9 @@ class BusMux_PCA9548A(BusMux):
     The channels are numbered 1 to 8
     Use .setChannel and .resetChannel to enable or disable a single channel.
     Use .getChannels to get a list of all enabled channels
+    The default address on the NCD ETH-I2C Converter is 0x77
     """
-    def __init__(self, i2c, address=0x70):
+    def __init__(self, i2c, address=0x77):
         super().__init__(i2c, address=int(address))
 
     def setChannelMask(self, mask: int):
