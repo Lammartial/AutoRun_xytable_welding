@@ -117,7 +117,7 @@ if __name__ == "__main__":
     #asyncio.run(tcp_send_and_receive_from_server(None, limit=10, timeout=25.0))
     try:
         dev = Eth2SerialDevice(_IP, _PORT)
-        s = dev.request(None, limit=3, timeout=15.5)
+        s = dev.request(None, limit=0, timeout=15.5)
         print(s)
     except TimeoutError:
         _log.info("Timeout!")

@@ -665,7 +665,7 @@ if __name__ == "__main__":
 
     # predefined resource ID
     #M3412_IP_STR = "TCPIP0::169.254.208.73::inst0::INSTR" 
-    M3412_IP_STR = "TCPIP0::192.168.1.63::inst0::INSTR" 
+    M3412_IP_STR = "TCPIP0::192.168.1.101::inst0::INSTR" 
     #M3412_NAME_STR = "TCPIP0::K-DAQ970A-17481.local::inst0::INSTR"
 
     # 1. Create an instance of ITECH_DEV class

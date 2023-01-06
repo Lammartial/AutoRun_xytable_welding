@@ -228,7 +228,7 @@ if __name__ == "__main__":
     from time import sleep
 
     HOST = "192.168.1.120"
-    PORT = 3000
+    PORT = 2000
 
     # 1. Create an instance of class as device controller
     feasa = FEASA_CH9121(HOST, PORT)
