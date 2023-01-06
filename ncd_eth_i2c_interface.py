@@ -177,6 +177,20 @@ class I2CPort:
         rx_payload = self.__data_exchange(tx_payload)
         return list(rx_payload)
 
+    def description_string(self, i2c_address_7bit: int) -> str:
+        """Create a string that contains IP address, port and I2C address. Used for error messages.
+
+        The string has the format "<ip address>:<port>:<i2c address>"
+        Example: "192.168.1.56:2101:0x40"
+
+        Args:
+            i2c_address_7bit (int): The device's i2c address
+
+        Returns:
+            string: description string
+        """
+        return f"{self.ncd_interface_address}:0x{i2c_address_7bit:02X}"
+
     def __check_for_errors(self, payload):
         """Check if the response contains an error message"""
         if len(payload) == 4:  # Error messages are always 4 bytes long
