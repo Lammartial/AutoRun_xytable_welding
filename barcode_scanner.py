@@ -8,15 +8,31 @@ barcode scanned UDI or human typed UDI or for whatever reason it is being used e
 """
 
 import asyncio
-from .eth2serial.base import Eth2SerialDevice
+from rrc.eth2serial.base import Eth2SerialDevice
 
 DEBUG = 0
+
+# --------------------------------------------------------------------------- #
+# Logging
+# --------------------------------------------------------------------------- #
+import logging
+
+_log = logging.getLogger(__name__)
+_log.setLevel(logging.DEBUG)
+
+# Initialize the logging
+try:
+    logging.basicConfig()
+except Exception as e:
+    print("Logging is not supported on this system")
+
+# --------------------------------------------------------------------------- #
 
 #
 # this is the ETH-to-UART bridge's IP address
 # set it static in production situation
 #
-UART_BRIDGE_IP = "192.168.1.90"
+UART_BRIDGE_IP = "192.168.1.120"
 UART_PORT = 2000 # UART1=2000, UART2=3000 # Industrial Scanner 23
 
 #--------------------------------------------------------------------------------------------------
@@ -79,14 +95,26 @@ async def tcp_send_and_receive_from_server(message: str, timeout=1.0, limit: str
 #--------------------------------------------------------------------------------------------------
 def poll(timeout = 0.5):
     dev = Eth2SerialDevice(UART_BRIDGE_IP, UART_PORT)
-    dev.send("Hallo Welt!", timeout=timeout)
+    #dev.send("Hallo Welt!", timeout=timeout)
+    s = dev.request(None, timeout=timeout)
+    print(s)
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    # test the client send and receive:
+    from time import perf_counter
+
     DEBUG = 1
+    tic = perf_counter()
+    # test the client send and receive:
     #asyncio.run(tcp_send_and_receive_from_server(message="Hallo Welt!", timeout=2.0))
     #asyncio.run(tcp_send_and_receive_from_server(None, limit=10, timeout=25.0))
-    poll()
+    try:
+        poll()
+    except TimeoutError:
+        _log.info("Timeout!")
+
+    toc = perf_counter()
+    _log.info(f"Need {toc - tic:0.4f} seconds")
+    _log.info("DONE.")
 
 # END OF FILE
