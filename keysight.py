@@ -50,7 +50,7 @@ class DAQ970A(object):
         self.rm = ResourceManager()          # auto decision for backend
         pass    
 
-    def connect_by_name(self, DAQ970A_NAME_STR: str):
+    def connect_by_name(self, DAQ970A_NAME_STR: str) -> None:
         """
         Creates a connection (session) with the device by Name
 
@@ -66,10 +66,10 @@ class DAQ970A(object):
             if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
                 self.session.read_termination = '\n'
         except Exception as ex:
-            _log.error(ex)
-            return ex
+            _log.exception(ex)
+            raise
   
-    def connect_by_IP(self, DAQ970A_IP_STR: str):
+    def connect_by_IP(self, DAQ970A_IP_STR: str) -> None:
         """
         Creates a connection (session) with the device by IP.
 
@@ -85,8 +85,8 @@ class DAQ970A(object):
             if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
                 self.session.read_termination = '\n'
         except Exception as ex:
-            _log.error(ex)
-            return ex
+            _log.exception(ex)
+            raise
 
     def selftest(self):
         """Returns device self-test results, takes ~ 2 sec.
@@ -102,8 +102,8 @@ class DAQ970A(object):
                 self.session.timeout = 2000 
                 return result
             except Exception as ex:
-                _log.error(ex)
-                return ex
+                _log.exception(ex)
+                raise
 
     def selftest_all(self):
         """
@@ -120,8 +120,8 @@ class DAQ970A(object):
                 self.session.timeout = 2000 
                 return result
             except Exception as ex:
-                _log.error(ex)
-                return ex
+                _log.exception(ex)
+                raise
 
     def set_raw_command(self, cmd: str):
         """
@@ -142,8 +142,8 @@ class DAQ970A(object):
                 #else:
                 #    raise ValueError('Error, set_raw_command: invalid parameters')
             except Exception as ex:
-                _log.error(ex)
-                return ex
+                _log.exception(ex)
+                raise
 
     def get_resistance(self, slot: int, channel: int):
         """
@@ -175,8 +175,8 @@ class DAQ970A(object):
                 self.session.timeout = 2000
                 return float(result)
             except Exception as ex:
-                _log.error(ex)
-                return ex
+                _log.exception(ex)
+                raise
 
     def get_4w_resistance(self, slot: int, channel: int):
         """
@@ -208,8 +208,8 @@ class DAQ970A(object):
                 self.session.timeout = 2000
                 return float(result)
             except Exception as ex:
-                _log.error(ex)
-                return ex
+                _log.exception(ex)
+                raise
 
     def get_VDC(self, slot: int, channel: int):
         """
@@ -241,8 +241,8 @@ class DAQ970A(object):
                 self.session.timeout = 2000
                 return float(result)
             except Exception as ex:
-                _log.error(ex)
-                return ex
+                _log.exception(ex)
+                raise
 
     def get_VAC(self, slot: int, channel: int):
         """
@@ -274,8 +274,8 @@ class DAQ970A(object):
                 self.session.timeout = 2000
                 return float(result)
             except Exception as ex:
-                _log.error(ex)
-                return ex      
+                _log.exception(ex)
+                raise     
 
     def get_ADC(self, slot: int, channel: int):
         """
@@ -307,8 +307,8 @@ class DAQ970A(object):
                 self.session.timeout = 2000
                 return float(result)
             except Exception as ex:
-                _log.error(ex)
-                return ex  
+                _log.exception(ex)
+                raise  
 
 
     def get_temp(self, slot: int, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str):
@@ -366,8 +366,8 @@ class DAQ970A(object):
                     case _:
                         raise ValueError('Error, get_temp: unknown parameter')
             except Exception as ex:
-                _log.error(ex)
-                return ex 
+                _log.exception(ex)
+                raise 
 
     def disconnect(self):
         """Closes the connection (session) and the device.
@@ -381,8 +381,8 @@ class DAQ970A(object):
                 self.session.close()
                 self.rm.close()
             except Exception as ex:
-                _log.error(ex)
-                return ex
+                _log.exception(ex)
+                raise
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
