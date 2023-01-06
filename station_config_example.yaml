@@ -8,6 +8,8 @@ test_type:  CELL_STACK_TEST  # CORE_TEST, PCBA_TEST
 station_id: PCPD1302         # AD Name of PC
 line_id:    1                # 1 .. 9
 
+dsp_api_base_url:  "http://127.0.0.1:8000"
+
 # List of TestSocket configurations
 # Minimum is one (the first) socket.
 test_sockets:

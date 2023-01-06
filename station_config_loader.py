@@ -34,7 +34,8 @@ class StationConfiguration:
             d["station_id"], 
             d["line_id"], 
             _ns,
-            #tuple([self.get_resource_strings_for_socket(s+1) for s in range(_ns)])
+            d["dsp_api_base_url"],
+            #tuple([self.get_resource_strings_for_socket(s+1) for s in range(_ns)]),
         )
         return result
 
