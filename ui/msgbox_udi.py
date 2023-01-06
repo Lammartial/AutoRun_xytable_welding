@@ -9,10 +9,25 @@ import tkinter as tk     # platform independent GUI
 from tkinter.messagebox import showerror
 from tkinter import ttk  # more modern TKinter with widget support
 
-#import eth2uart.wsocket_scanner as wsocket # communication with the ETH-to-UART bridge
-from rrc.barcode_scanner import DEBUG as wsocket_DEBUG, tcp_send_and_receive_from_server # communication with the ETH-to-UART bridge
+import rrc.barcode_scanner as barcode_scanner # communication with the ETH-to-UART bridge
 
 DEBUG = 0   # set to 0 for production
+
+# --------------------------------------------------------------------------- #
+# Logging
+# --------------------------------------------------------------------------- #
+import logging
+
+_log = logging.getLogger(__name__)
+_log.setLevel(logging.DEBUG)
+
+# Initialize the logging
+try:
+    logging.basicConfig()
+except Exception as e:
+    print("Logging is not supported on this system")
+
+# --------------------------------------------------------------------------- #
 
 app = None  # holds the GUI object running tkinter in main task and
             # socket service in separate thread using asyncio inside
@@ -136,7 +151,7 @@ async def scan_uart_socket(timeout=0.5, message=None, debug_end_time=None):
     """
     global app
 
-    data = await tcp_send_and_receive_from_server(message, timeout=timeout)  # this timeout is for open and send/receive
+    data = await barcode_scanner.tcp_send_and_receive_from_server(message, timeout=timeout)  # this timeout is for open and send/receive
     if data:
         app.gui_queue.put({"udi":data})
 
@@ -176,7 +191,8 @@ class App(threading.Thread):
     Args:
         threading (Thread): Base class to have the background task available under full control.
     """
-    def __init__(self):
+    def __init__(self, scanner_resource_string: str):
+        self.SCANNER_RESOURCE_STRING = scanner_resource_string
         self.root = tk.Tk()
         self.root.attributes('-alpha', 0)  # this hides the root window until we have arranged all the wigets
         self.root.title("ENTER UID")
@@ -256,11 +272,29 @@ class App(threading.Thread):
         #self.raise_exception()
         udi_cancel()
 
+    def scan_uart_socket(self, scanner, timeout=0.5, message=None, debug_end_time=None):
+        data = None
+        try:
+            data = scanner.request(message, timeout=timeout)
+            #_log.debug(data)
+        except TimeoutError:
+            pass
+            # any other exception needs to bubble up
+        if data:
+            app.gui_queue.put({"udi":data})
+
+        # DEBUG / SIMULATION SUPPORT
+        if debug_end_time is not None:
+            if datetime.now() > debug_end_time:
+                _sim_udi = round(datetime.now().timestamp() * 1e+6, 0)
+                app.gui_queue.put({"udi":f"SIM{_sim_udi:.0f}"})
+
 
     def run(self):
         """Runs the background task in parallel to the GUI in the main task."""
         global DEBUG
 
+        scanner = barcode_scanner.create_from_resource(self.SCANNER_RESOURCE_STRING)
         try:
             if DEBUG:
                 end_time = datetime.now() + timedelta(seconds=10) # DEBUG / Simulation
@@ -270,21 +304,25 @@ class App(threading.Thread):
                 msg=None
             # this is the background task function
             while not self.stopped():
-                asyncio.run(scan_uart_socket(
+                self.scan_uart_socket(
+                    scanner,
+                #asyncio.run(scan_uart_socket(
                     timeout=0.5,
                     message=msg,              # DEBUG
                     debug_end_time=end_time,  # DEBUG
-                    ))
+                #))
+                )
+
             if DEBUG:
                 print(f"Thread {self.name} signalled gracefully by stop flag.")
         except SystemExit as ex:
             if DEBUG:
                 print(f"Thread {self.name} terminated hardly by exception.")
-        except asyncio.exceptions.TimeoutError:
-            ermsg = "Cannot connect to TCP server."
-            if DEBUG:
-                print(ermsg)
-            app.gui_queue.put({"error": ermsg})
+        #except asyncio.exceptions.TimeoutError:
+        #    ermsg = "Cannot connect to TCP server."
+        #    if DEBUG:
+        #        print(ermsg)
+        #    app.gui_queue.put({"error": ermsg})
         finally:
             if DEBUG:
                 print(f"Thread {self.name} ended.")
@@ -337,7 +375,7 @@ def identify_uut(context) -> Tuple[bool, str]:
     """Entry function for TestStand.
 
     Args:
-        context (dict): TestStand context - unused right now
+        context (dict): TestStand context
 
     Returns:
         Tuple[bool, str]: return values to a TestStand container that expects two types in this order.
@@ -345,7 +383,7 @@ def identify_uut(context) -> Tuple[bool, str]:
     global app, entered_udi
 
     entered_udi = None  # reset here
-    app = App()
+    app = App(context["scanner"])
     app.start_gui()  # this runs Window Dialog in separate task and blocks until GUI is closed
     if entered_udi is not None:
         return (True, entered_udi)
@@ -356,8 +394,8 @@ def identify_uut(context) -> Tuple[bool, str]:
 
 if __name__ == "__main__":
     DEBUG = 0  # increase verbosity
-    wsocket_DEBUG = DEBUG # to see more infos
-    continue_testing, udi = identify_uut({})
+    barcode_scanner.DEBUG = DEBUG # to see more infos
+    continue_testing, udi = identify_uut({"scanner":"192.168.1.120:2000"})
     print(f"FINALIZED {entered_udi}. Continue testing: {continue_testing}, udi={udi}")
 
 # END OF FILE

@@ -100,6 +100,12 @@ def poll(timeout = 2.5):
     print(s)
 
 #--------------------------------------------------------------------------------------------------
+
+def create_from_resource(resource_string: str) -> Eth2SerialDevice:
+    _IP, _PORT = resource_string.split(":")
+    return Eth2SerialDevice(_IP, _PORT)
+
+#--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     from time import perf_counter
     from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
