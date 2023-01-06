@@ -85,7 +85,7 @@ class FEASA_CH9121(Eth2SerialDevice):
 
         response = self.request("capture")
         if (self._check_exception(response)):
-            return response
+            return False
         else:
             if (self.RESPONSE_OK in response):
                 return True 
@@ -107,7 +107,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         cmd = "capture" + str(int(range))
         response = self.request(cmd)
         if (self._check_exception(response)):
-            return response
+            return False
         else:
             return True if self.RESPONSE_OK in response else False
 
@@ -123,7 +123,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         """
         response = self.request("capturepwm")
         if (self._check_exception(response)):
-            return response
+            return False
         else:
             return True if self.RESPONSE_OK in response else False
 
@@ -143,7 +143,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         cmd = "capture" + str(int(range)) + "PWM" + f"{(int(factor)):02d}"
         response = self.request(cmd)
         if (self._check_exception(response)):
-            return response
+            return False
         else:
             return True if self.RESPONSE_OK in response else False
  
@@ -162,18 +162,16 @@ class FEASA_CH9121(Eth2SerialDevice):
         Returns:
             list (int): rrr, ggg, bbb, iiiii
         """
+        result = [0, 0, 0, 0]
         cmd = "getrgbi" + f"{(int(num)):02d}"
         response = self.request(cmd)
-        if (self._check_exception(response)):
-            return response
-        else:
+        if (self._check_exception(response) == False):
             lst = response.split(' ')
-            result = []
             result.append(int(lst[0]))
             result.append(int(lst[1]))
             result.append(int(lst[2]))
             result.append(int(lst[3]))
-            return result 
+        return result 
 
     # getINTENSITY##
     def get_intensity_num(self, num: int) -> int:
@@ -191,7 +189,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         cmd = "getintensity" + f"{(int(num)):02d}"
         response = self.request(cmd)
         if (self._check_exception(response)):
-            return response
+            return int(0)
         else:
             return int(response)   
     
@@ -212,7 +210,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         cmd = "setintgain" + f"{(int(num)):02d}" + f"{(int(factor)):03d}"
         response = self.request(cmd)
         if (self._check_exception(response)):
-            return response
+            return False
         else:
             return True if self.RESPONSE_OK in response else False
 
@@ -230,7 +228,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         cmd = "setfactor" + f"{(int(factor)):02d}"
         response = self.request(cmd)
         if (self._check_exception(response)):
-            return response
+            return False
         else:
             return True if self.RESPONSE_OK in response else False   
 #-----------------------------------------------------------------------------------------------------
