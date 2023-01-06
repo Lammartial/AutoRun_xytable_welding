@@ -79,8 +79,9 @@ class Eth2SerialDevice(object):
             _s.connect((self.host, self.port))
             _s.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
             result = True
-        except Exception as ex:
-            result = ex  # could not send
+        except Exception:
+            #result = ex  # could not send
+            raise
         finally:
             _s.close()
         return result
@@ -117,8 +118,9 @@ class Eth2SerialDevice(object):
             rcvdata = _s.recv(4096)
             result = rcvdata.decode(decode) if len(rcvdata)>0 else None
             _log.debug(f"Received: {result!r}")
-        except Exception as ex:
-            result = ex
+        except Exception:
+            #result = ex
+            raise
         finally:
             _s.close()
         return result
