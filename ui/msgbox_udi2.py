@@ -5,7 +5,6 @@ Created with Python 3.10
 
 import asyncio
 import concurrent.futures
-import functools
 import itertools
 import queue
 import sys
@@ -14,10 +13,7 @@ import time
 import tkinter as tk
 import tkinter.ttk as ttk
 from collections.abc import Iterator
-from contextlib import AbstractContextManager
-from dataclasses import dataclass
-from types import TracebackType
-from typing import Optional, Type, Tuple
+from typing import Optional, Tuple
 from pathlib import Path
 
 from rrc.eth2serial.base_async import tcp_send_and_receive_from_server
@@ -220,7 +216,6 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     """
     global UDI, var_udi, ok_button
 
-    #safeprint('tk_main starting\n')
     _log.debug('tk_main starting\n')
     row_itr = itertools.count()
 
@@ -266,6 +261,12 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     )
     mainframe.columnconfigure(index=0, weight=1)
 
+    # sticky − What to do if the cell is larger than widget.
+    #          By default, with sticky='', widget is centered in its cell.
+    #          sticky may be the string concatenation of zero or more of N, E, S, W, NE, NW, SE, and SW
+    #          compass directions indicating the sides and corners of the cell to which widget sticks.
+
+
     # Label
     label = ttk.Label(
         mainframe,
@@ -273,7 +274,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
         justify="center",
         font=("-size", 12, "-weight", "bold"),
     )
-    label.grid(row=next(row_itr), column=0, pady=10, columnspan=2)
+    label.grid(row=next(row_itr), column=0, columnspan=2 , pady=10)
 
     # Entry
     entry = ttk.Entry(
@@ -286,12 +287,11 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     entry.bind("<Key-Escape>", _cancel)
     entry.grid(row=next(row_itr), column=0, padx=5, pady=(0, 10), sticky="ew")
 
-
     # Button
     ok_button = ttk.Button(mainframe, text="Start Test", style="Accent.TButton", command=lambda: _accept_udi(None))
     ok_button.bind("<Return>", _accept_udi)
     ok_button.bind("<Key-Escape>", _cancel)
-    ok_button.grid(row=next(row_itr), column=0, padx=5, pady=10, sticky="nsew")
+    ok_button.grid(row=next(row_itr), column=0, ipady=50, padx=5, pady=10, sticky="nsew")
 
     # Separator
     separator = ttk.Separator(mainframe)
@@ -301,7 +301,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     cancel_button = ttk.Button(mainframe, text="Cancel", command=lambda: _cancel(None))
     cancel_button.bind("<Return>", _cancel )
     cancel_button.bind("<Key-Escape>", _cancel)
-    cancel_button.grid(row=next(row_itr), column=0, padx=5, pady=10, sticky="nsew")
+    cancel_button.grid(row=next(row_itr), column=0, ipady=50, padx=5, pady=10, sticky="nsew")
 
     # # Sizegrip
     # sizegrip = ttk.Sizegrip(self)
@@ -327,7 +327,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     root.minsize(root.winfo_width(), root.winfo_height())
     x_cordinate = int((root.winfo_screenwidth() / 2) - (root.winfo_width() / 2))
     y_cordinate = int((root.winfo_screenheight() / 2) - (root.winfo_height() / 2))
-    root.geometry("+{}+{}".format(x_cordinate, y_cordinate-20))
+    root.geometry("+{}+{}".format(x_cordinate-50, y_cordinate-180))
     #root.attributes('-alpha', 1.0)  # now make the main window visible again
 
     root.update()
@@ -347,9 +347,6 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     for k,v in mainframe._id_after.items():
         mainframe.after_cancel(v)
 
-    #safeprint(' ', timestamp=False)
-    #safeprint('tk_callback_consumer ending')
-    #safeprint('tk_main ending')
     _log.debug('tk_callback_consumer ending')
     _log.debug('tk_main ending')
     _log.debug(f"UDI={UDI}")
@@ -363,7 +360,7 @@ async def manage_aio_loop(aio_initiate_shutdown: threading.Event):
 
     This runs in Asyncio's thread and in asyncio's loop.
     """
-    #safeprint('manage_aio_loop starting')
+    #_log.debug('manage_aio_loop starting')
 
     # Communicate the asyncio loop status to tkinter via a global variable.
     global aio_loop
@@ -374,7 +371,7 @@ async def manage_aio_loop(aio_initiate_shutdown: threading.Event):
     while not aio_initiate_shutdown.is_set():
         await asyncio.sleep(0)
 
-    #safeprint('manage_aio_loop ending')
+    #_log.debug('manage_aio_loop ending')
 
 
 def aio_main(aio_initiate_shutdown: threading.Event):
@@ -382,9 +379,9 @@ def aio_main(aio_initiate_shutdown: threading.Event):
 
     This non-coroutine function runs in Asyncio's thread.
     """
-    #safeprint('aio_main starting')
+    #_log.debug('aio_main starting')
     asyncio.run(manage_aio_loop(aio_initiate_shutdown))
-    #safeprint('aio_main ending')
+    #_log.debug('aio_main ending')
 
 
 def main(resource_str: str, title: str = "ENTER UDI"):
@@ -392,7 +389,7 @@ def main(resource_str: str, title: str = "ENTER UDI"):
 
     This runs in the Main Thread.
     """
-    #safeprint('main starting')
+    #_log.debug('main starting')
 
     # Start the permanent asyncio loop in a new thread.
     # aio_shutdown is signalled between threads. `asyncio.Event()` is not threadsafe.
@@ -406,101 +403,7 @@ def main(resource_str: str, title: str = "ENTER UDI"):
     aio_initiate_shutdown.set()
     aio_thread.join()
 
-    #safeprint('main ending')
-
-
-@dataclass
-class SafePrinter(AbstractContextManager):
-    _time_0 = time.perf_counter()
-    _print_q = queue.Queue()
-    _print_thread: threading.Thread | None = None
-
-    def __enter__(self):
-        """ Run the safeprint consumer method in a print thread.
-
-        Returns:
-            Thw safeprint producer method. (a.k.a. the runtime context)
-        """
-        self._print_thread = threading.Thread(target=self._safeprint_consumer, name='Print Thread')
-        self._print_thread.start()
-        return self._safeprint
-
-    def __exit__(self, __exc_type: Type[BaseException] | None, __exc_value: BaseException | None,
-                 __traceback: TracebackType | None) -> bool | None:
-        """ Close the print and join the print thread.
-
-        Args:
-            None or the exception raised during the execution of the safeprint producer method.
-            __exc_type:
-            __exc_value:
-            __traceback:
-
-        Returns:
-            False to indicate that any exception raised in self._safeprint has not been handled.
-        """
-        self._print_q.put(None)
-        self._print_thread.join()
-        return False
-
-    def _safeprint(self, msg: str, *, timestamp: bool = True, reset: bool = False):
-        """Put a string into the print queue.
-
-        'None' is a special msg. It is not printed but will close the queue and this context manager.
-
-        The exclusive thread and a threadsafe print queue ensure race free printing.
-        This is the producer in the print queue's producer/consumer pattern.
-        It runs in the same thread as the calling function
-
-        Args:
-            msg: The message to be printed.
-            timestamp: Print a timestamp (Default = True).
-            reset: Reset the time to zero (Default = False).
-        """
-        if reset:
-            self._time_0 = time.perf_counter()
-        if timestamp:
-            self._print_q.put(f'{self._timestamp()} --- {msg}')
-        else:
-            self._print_q.put(msg)
-
-    def _safeprint_consumer(self):
-        """Get strings from the print queue and print them on stdout.
-
-        The print statement is not threadsafe, so it must run in its own thread.
-        This is the consumer in the print queue's producer/consumer pattern.
-        """
-        print(f'{self._timestamp()}: The SafePrinter is open for output.')
-        while True:
-            msg = self._print_q.get()
-
-            # Exit function when any producer function places 'None'.
-            if msg is not None:
-                print(msg)
-            else:
-                break
-        print(f'{self._timestamp()}: The SafePrinter has closed.')
-
-    def _timestamp(self) -> str:
-        """Create a timestamp with useful status information.
-
-        This is a support function for the print queue producers. It runs in the same thread as the calling function
-        so the returned data does not cross between threads.
-
-        Returns:
-            timestamp
-        """
-        secs = time.perf_counter() - self._time_0
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError as exc:
-            if exc.args[0] == 'no running event loop':
-                loop_text = 'without a loop'
-            else:
-                raise
-        else:
-            loop_text = 'with a loop'
-        return f'{secs:.3f}s In {threading.current_thread().name} of {threading.active_count()} {loop_text}'
-
+    #_log.debug('main ending')
 
 #--------------------------------------------------------------------------------------------------
 def identify_uut(context) -> Tuple[bool, str]:
@@ -527,7 +430,7 @@ if __name__ == '__main__':
     #     #sys.exit(main())
     #     for i in range(0, 2):
     #         main("169.254.36.1:2000")
-    for i in range(0,10):
+    for i in range(0,3):
         z = identify_uut({"scanner":"169.254.36.1:2000"})
         print(f"IDX:{i} -> {z}")
 # END OF FILE
