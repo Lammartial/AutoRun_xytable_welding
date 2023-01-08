@@ -17,10 +17,28 @@ from collections.abc import Iterator
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Optional, Type
+from typing import Optional, Type, Tuple
 from pathlib import Path
 
 from rrc.eth2serial.base_async import tcp_send_and_receive_from_server
+
+DEBUG = 0   # set to 0 for production
+
+# --------------------------------------------------------------------------- #
+# Logging
+# --------------------------------------------------------------------------- #
+import logging
+
+_log = logging.getLogger(__name__)
+_log.setLevel(logging.DEBUG)
+
+# Initialize the logging
+try:
+    logging.basicConfig()
+except Exception as e:
+    print("Logging is not supported on this system")
+
+# --------------------------------------------------------------------------- #
 
 # Global reference to loop allows access from different environments.
 aio_loop: Optional[asyncio.AbstractEventLoop] = None
@@ -43,13 +61,15 @@ async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> 
     Returns:
         Nothing. The work package is returned via the threadsafe tk_q.
     """
-    safeprint(f'aio_blocker starting. {resource_string}s.')
+    #safeprint(f'aio_blocker starting. {resource_string}s.')
     #await asyncio.sleep(block)
     while True:
         _response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = 30)
         if _response:
-            safeprint(f"RESPONSE={_response}")
-            work_package = f"RESPONSE={_response}"
+            _wp = f"RESPONSE={_response}"
+            #safeprint(_wp)
+            _log.info(_wp)
+            work_package = _wp
         else:
             #safeprint(f"NO RESPONSE!")
             #work_package = f"Task #{task_id}: NO RESPONSE!"
@@ -76,7 +96,7 @@ async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> 
         break
 
     # ends by force only
-    safeprint(f'aio_blocker ending.')
+    #safeprint(f'aio_blocker ending.')
 
 
 def aio_exception_handler(mainframe: ttk.Frame, future: concurrent.futures.Future, block: float,
@@ -92,8 +112,8 @@ def aio_exception_handler(mainframe: ttk.Frame, future: concurrent.futures.Futur
         block: The block time parameter used to identify which future coroutine callback is being reported.
         first_call: If True will cause an opening line to be printed on stdout.
     """
-    if first_call:
-        safeprint(f'aio_exception_handler starting. {block=}s')
+    #if first_call:
+    #    safeprint(f'aio_exception_handler starting. {block=}s')
     poll_interval = 100  # milliseconds
     try:
         # Python will not raise exceptions during future execution until `future.result` is called. A zero timeout is
@@ -108,11 +128,13 @@ def aio_exception_handler(mainframe: ttk.Frame, future: concurrent.futures.Futur
 
     # Handle an expected error.
     except IOError as exc:
-        safeprint(f'aio_exception_handler: {exc!r} was handled correctly. ')
+        #safeprint(f'aio_exception_handler: {exc!r} was handled correctly. ')
+        _log.warning(f'aio_exception_handler: {exc!r} was handled correctly. ')
+        pass
 
     else:
-        safeprint(f'aio_exception_handler ending. {block=}s')
-
+        #safeprint(f'aio_exception_handler ending. {block=}s')
+        pass
 
 def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Iterator):
     """ Display queued 'Hello world' messages in the Tkinter window.
@@ -165,12 +187,14 @@ def tk_callbacks(mainframe: ttk.Frame, row_itr: Iterator, resource_string: str):
 
     global tk_q
 
-    safeprint('tk_callbacks starting')
+    #safeprint('tk_callbacks starting')
+    _log.debug('tk_callbacks starting')
     task_id_itr = itertools.count(1)
 
     # Create the job queue and start its consumer.
     tk_q = queue.Queue()
-    safeprint('tk_callback_consumer starting')
+    #safeprint('tk_callback_consumer starting')
+    _log.debug('tk_callback_consumer starting')
     tk_callback_consumer(tk_q, mainframe, row_itr)
 
     # Schedule the asyncio blocker.
@@ -184,7 +208,7 @@ def tk_callbacks(mainframe: ttk.Frame, row_itr: Iterator, resource_string: str):
         # tkinter's event loop.
         aio_exception_handler(mainframe, future, block)
 
-    safeprint('tk_callbacks ending - All blocking callbacks have been scheduled.\n')
+    #safeprint('tk_callbacks ending - All blocking callbacks have been scheduled.\n')
 
 
 #--------------------------------------------------------------------------------------------------
@@ -196,7 +220,8 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     """
     global UDI, var_udi, ok_button
 
-    safeprint('tk_main starting\n')
+    #safeprint('tk_main starting\n')
+    _log.debug('tk_main starting\n')
     row_itr = itertools.count()
 
     # Create the Tk root and mainframe.
@@ -322,11 +347,12 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     for k,v in mainframe._id_after.items():
         mainframe.after_cancel(v)
 
-    safeprint(' ', timestamp=False)
-    safeprint('tk_callback_consumer ending')
-    safeprint('tk_main ending')
-
-    print(f"UDI={UDI}")
+    #safeprint(' ', timestamp=False)
+    #safeprint('tk_callback_consumer ending')
+    #safeprint('tk_main ending')
+    _log.debug('tk_callback_consumer ending')
+    _log.debug('tk_main ending')
+    _log.debug(f"UDI={UDI}")
 
 
 async def manage_aio_loop(aio_initiate_shutdown: threading.Event):
@@ -337,7 +363,7 @@ async def manage_aio_loop(aio_initiate_shutdown: threading.Event):
 
     This runs in Asyncio's thread and in asyncio's loop.
     """
-    safeprint('manage_aio_loop starting')
+    #safeprint('manage_aio_loop starting')
 
     # Communicate the asyncio loop status to tkinter via a global variable.
     global aio_loop
@@ -348,7 +374,7 @@ async def manage_aio_loop(aio_initiate_shutdown: threading.Event):
     while not aio_initiate_shutdown.is_set():
         await asyncio.sleep(0)
 
-    safeprint('manage_aio_loop ending')
+    #safeprint('manage_aio_loop ending')
 
 
 def aio_main(aio_initiate_shutdown: threading.Event):
@@ -356,9 +382,9 @@ def aio_main(aio_initiate_shutdown: threading.Event):
 
     This non-coroutine function runs in Asyncio's thread.
     """
-    safeprint('aio_main starting')
+    #safeprint('aio_main starting')
     asyncio.run(manage_aio_loop(aio_initiate_shutdown))
-    safeprint('aio_main ending')
+    #safeprint('aio_main ending')
 
 
 def main(resource_str: str, title: str = "ENTER UDI"):
@@ -366,7 +392,7 @@ def main(resource_str: str, title: str = "ENTER UDI"):
 
     This runs in the Main Thread.
     """
-    safeprint('main starting')
+    #safeprint('main starting')
 
     # Start the permanent asyncio loop in a new thread.
     # aio_shutdown is signalled between threads. `asyncio.Event()` is not threadsafe.
@@ -380,7 +406,7 @@ def main(resource_str: str, title: str = "ENTER UDI"):
     aio_initiate_shutdown.set()
     aio_thread.join()
 
-    safeprint('main ending')
+    #safeprint('main ending')
 
 
 @dataclass
@@ -476,8 +502,32 @@ class SafePrinter(AbstractContextManager):
         return f'{secs:.3f}s In {threading.current_thread().name} of {threading.active_count()} {loop_text}'
 
 
+#--------------------------------------------------------------------------------------------------
+def identify_uut(context) -> Tuple[bool, str]:
+    """Entry function for TestStand.
+
+    Args:
+        context (dict): TestStand context
+
+    Returns:
+        Tuple[bool, str]: return values to a TestStand container that expects two types in this order.
+    """
+    global UDI
+
+    #sys.exit(main())
+    main(context["scanner"])
+    if UDI is not None:
+        return (True, UDI)
+    else:
+        return (False, "")
+
+#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
-    with SafePrinter() as safeprint:
-        #sys.exit(main())
-        for i in range(0, 2):
-            main("169.254.36.1:2000")
+    #with SafePrinter() as safeprint:
+    #     #sys.exit(main())
+    #     for i in range(0, 2):
+    #         main("169.254.36.1:2000")
+    for i in range(0,10):
+        z = identify_uut({"scanner":"169.254.36.1:2000"})
+        print(f"IDX:{i} -> {z}")
+# END OF FILE
