@@ -1,15 +1,22 @@
-from typing import Tuple
-from datetime import datetime, timedelta
-from pathlib import Path
-import ctypes
-import queue
-import threading
-import asyncio
-import tkinter as tk     # platform independent GUI
-from tkinter.messagebox import showerror
-from tkinter import ttk  # more modern TKinter with widget support
+""" tkinter_demo.py
 
-import rrc.barcode_scanner as barcode_scanner # communication with the ETH-to-UART bridge
+Created with Python 3.10
+"""
+
+import asyncio
+import concurrent.futures
+import itertools
+import queue
+import sys
+import threading
+import time
+import tkinter as tk
+import tkinter.ttk as ttk
+from collections.abc import Iterator
+from typing import Optional, Tuple
+from pathlib import Path
+
+from rrc.eth2serial.base_async import tcp_send_and_receive_from_server
 
 DEBUG = 0   # set to 0 for production
 
@@ -29,394 +36,374 @@ except Exception as e:
 
 # --------------------------------------------------------------------------- #
 
-app = None  # holds the GUI object running tkinter in main task and
-            # socket service in separate thread using asyncio inside
-entered_udi: str = None
+# Global reference to loop allows access from different environments.
+aio_loop: Optional[asyncio.AbstractEventLoop] = None
+tk_q: queue.Queue = None
+UDI: str = None
+ok_button = None
+var_udi = None
 
-#--------------------------------------------------------------------------------------------------
-def udi_cancel():
-    global app, entered_udi
+async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> None:
+    """ Asynchronously block the thread and put a 'Hello World' work package into Tkinter's work queue.
 
-    entered_udi = None  # signal not to continue testing
-    app.entered_udi = entered_udi
-    app.close()
-    #root.destroy()
-    #root.quit()
-
-def udi_accept(udi: str):
-    global app, entered_udi
-
-    entered_udi = udi.strip()
-    app.entered_udi = entered_udi
-    if DEBUG:
-        print("ACCEPT:", udi)
-    #root.destroy()
-    #root.quit()
-    app.close()
-
-def handle_focus(event):
-    global app
-
-    if event.widget == app.root:
-        app.root.focus_set()
-        app.dialog.entry.focus_set()
-
-#--------------------------------------------------------------------------------------------------
-class DialogWin(ttk.Frame):
-    def __init__(self, parent):
-        ttk.Frame.__init__(self)
-
-        # Make the app responsive
-        for index in [0]:
-            self.columnconfigure(index=index, weight=1)
-            self.rowconfigure(index=index, weight=1)
-
-        # Create control variables
-        #self.var_1 = tk.BooleanVar(value=True)
-        # self.var_2 = tk.BooleanVar()
-        # self.var_3 = tk.IntVar(value=2)
-        # self.var_4 = tk.StringVar(value=self.option_menu_list[1])
-        # self.var_5 = tk.DoubleVar(value=75.0)
-        self.var_udi = tk.StringVar(value="")
-
-        # Create widgets :)
-        self.setup_widgets()
-
-    def setup_widgets(self):
-
-        def _accept_udi(*args, **kwargs):
-            #global app
-
-            if DEBUG:
-                print("Arguments:", args, kwargs)
-            _udi = self.var_udi.get()
-            if _udi != "":
-                udi_accept(_udi)
-            else:
-                if DEBUG:
-                    print("Nothing entered as UDI!")
-
-        def _cancel(*args, **kwargs):
-            #global app
-
-            if DEBUG:
-                print("Arguments:", args, kwargs)
-            udi_cancel()
-
-        # Create a Frame for input widgets
-        self.widgets_frame = ttk.Frame(self, padding=(0, 0, 0, 10))
-        self.widgets_frame.grid(
-            row=0, column=0, padx=10, pady=(30, 10), sticky="nsew", rowspan=3
-        )
-        self.widgets_frame.columnconfigure(index=0, weight=1)
-
-        # Label
-        self.label = ttk.Label(
-            self.widgets_frame,
-            text="Scan or Enter the UID of Device under Test",
-            justify="center",
-            font=("-size", 12, "-weight", "bold"),
-        )
-        self.label.grid(row=0, column=0, pady=10, columnspan=2)
-
-        # Entry
-        self.entry = ttk.Entry(
-            self.widgets_frame,
-            textvariable=self.var_udi,
-            font=("-size", 15),
-        )
-        self.entry.insert(0, "")
-        self.entry.bind("<Return>", _accept_udi )
-        self.entry.bind("<Key-Escape>", _cancel)
-        self.entry.grid(row=1, column=0, padx=5, pady=(0, 10), sticky="ew")
-        self.entry.focus_set()
-
-         # Button
-        self.ok_button = ttk.Button(self.widgets_frame, text="Start Test", style="Accent.TButton", command=_accept_udi)
-        self.ok_button.bind("<Return>", _accept_udi)
-        self.ok_button.bind("<Key-Escape>", _cancel)
-        self.ok_button.grid(row=2, column=0, padx=5, pady=10, sticky="nsew")
-
-        # Separator
-        self.separator = ttk.Separator(self.widgets_frame)
-        self.separator.grid(row=3, column=0, padx=(20, 10), pady=10, sticky="ew")
-
-        # Button
-        self.cancel_button = ttk.Button(self.widgets_frame, text="Cancel", command=_cancel)
-        self.cancel_button.bind("<Return>", _cancel )
-        self.cancel_button.bind("<Key-Escape>", _cancel)
-        self.cancel_button.grid(row=4, column=0, padx=5, pady=10, sticky="nsew")
-
-        # # Sizegrip
-        # self.sizegrip = ttk.Sizegrip(self)
-        # self.sizegrip.grid(row=100, column=100, padx=(0, 5), pady=(0, 5))
-
-
-#--------------------------------------------------------------------------------------------------
-async def scan_uart_socket(timeout=0.5, message=None, debug_end_time=None):
-    """
-    Calls the send & receive from socket function. We need this trampoline
-    function for the async call, as we do not need the whole App class to be async.
+    This is a producer for Tkinter's work queue. It will run in the same thread as the asyncio loop. The statement
+    `await asyncio.sleep(block)` can be replaced with any awaitable blocking code.
 
     Args:
-        timeout (float, optional): Limits the wait for send/receive time on the socket. Defaults to 0.5.
-        message (_type_, optional): If given this message will be sent to the socket before reading. Defaults to None.
-        debug_end_time (_type_, optional): Only for DEBUG support to set a response after the end_time. Defaults to None.
+        task_id: Sequentially issued tkinter task number.
+        tk_q: tkinter's work queue.
+        block: block time
+
+    Returns:
+        Nothing. The work package is returned via the threadsafe tk_q.
     """
-    global app
+    #safeprint(f'aio_blocker starting. {resource_string}s.')
+    #await asyncio.sleep(block)
+    while True:
+        _response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = 30)
+        if _response:
+            _wp = f"RESPONSE={_response}"
+            #safeprint(_wp)
+            _log.info(_wp)
+            work_package = _wp
+        else:
+            #safeprint(f"NO RESPONSE!")
+            #work_package = f"Task #{task_id}: NO RESPONSE!"
+            continue
 
-    data = await barcode_scanner.tcp_send_and_receive_from_server(message, timeout=timeout)  # this timeout is for open and send/receive
-    if data:
-        app.gui_queue.put({"udi":data})
+        # Exceptions for testing handlers. Uncomment these to see what happens when exceptions are raised.
+        # raise IOError('Just testing an expected error.')
+        # raise ValueError('Just testing an unexpected error.')
 
-    # DEBUG / SIMULATION SUPPORT
-    if debug_end_time is not None:
-        if datetime.now() > debug_end_time:
-            _sim_udi = round(datetime.now().timestamp() * 1e+6, 0)
-            app.gui_queue.put({"udi":f"SIM{_sim_udi:.0f}"})
+        #work_package = f"Task #{task_id} {block}s: 'Hello Asynchronous World'."
 
-#
-# When there is a need for more parallel tasks, we can put them into a fire and forget more
-# but they need to have a strong reference to protect against GC
-#
-# Example:
-# background_tasks = set()
-# async def run_in_background(some_coroutine):
-#     # Create "fire and forget" task
-#     task = asyncio.create_task(some_coroutine(param=i))
-#     # Add task to the set. This creates a strong reference.
-#     background_tasks.add(task)
-#     # To prevent keeping references to finished tasks forever,
-#     # make each task remove its own reference from the set after
-#     # completion:
-#     task.add_done_callback(background_tasks.discard)
-#
-#--------------------------------------------------------------------------------------------------
-class App(threading.Thread):
-    """
-    This application class combines the GUI task with a background service task that is connected to
-    a socket for UDI input.
-    After creation simply run the start_gui() function of this class which starts both tasks and waits
-    for completion.
+        # Put the work package into the tkinter's work queue.
+        while True:
+            try:
+                # Asyncio can't wait for the thread blocking `put` method…
+                tk_q.put_nowait(work_package)
 
-    The result is being put into the global "entered_udi" by using the glibal callbacks udi_accept() or
-    udi_cyncel().
+            except queue.Full:
+                # Give control back to asyncio's loop.
+                await asyncio.sleep(0)
+            else:
+                # The work package has been placed in the queue so we're done.
+                break
+        break
+
+    # ends by force only
+    #safeprint(f'aio_blocker ending.')
+
+
+def aio_exception_handler(mainframe: ttk.Frame, future: concurrent.futures.Future, block: float,
+                          first_call: bool = True) -> None:
+    """ Exception handler for future coroutine callbacks.
+
+    This non-coroutine function uses tkinter's event loop to wait for the future to finish.
+    It runs in the Main Thread.
 
     Args:
-        threading (Thread): Base class to have the background task available under full control.
+        mainframe: The after method of this object is used to poll this function.
+        future: The future running the future coroutine callback.
+        block: The block time parameter used to identify which future coroutine callback is being reported.
+        first_call: If True will cause an opening line to be printed on stdout.
     """
-    def __init__(self, scanner_resource_string: str):
-        self.entered_udi = None
-        self.SCANNER_RESOURCE_STRING = scanner_resource_string
-        self.root = tk.Tk()
-        self.root._after_id = None
-        self.root.attributes('-alpha', 0)  # this hides the root window until we have arranged all the wigets
-        self.root.title("ENTER UID")
-        # set App icon
-        # if we have an ICO file we can simply use this:
-        self.root.iconbitmap(Path(__file__).resolve().parent / "app-icon.ico")
-        # if only PNG or JPG available we need to convert:
-        #photo = tk.PhotoImage(file="app-icon.png")
-        #self.root.wm_iconphoto(False, photo)
-        # Simply set the theme
-        self.root.tk.call("source", Path(__file__).resolve().parent / "theme_sv.tcl")
-        self.root.tk.call("set_theme", "light")
-        # create the Widgets and keep them inside our App object
-        self.dialog = DialogWin(self.root)
-        self.dialog.pack(fill="both", expand=True)
-        #self.dialog.focus_set()
-        # Set a minsize for the window, and place it in the middle
-        self.root.update()
-        self.root.minsize(self.root.winfo_width(), self.root.winfo_height())
-        x_cordinate = int((self.root.winfo_screenwidth() / 2) - (self.root.winfo_width() / 2))
-        y_cordinate = int((self.root.winfo_screenheight() / 2) - (self.root.winfo_height() / 2))
-        self.root.geometry("+{}+{}".format(x_cordinate, y_cordinate-20))
-        self.root.attributes('-alpha', 1.0)  # now make the main window visible again
-        #self.root.lift()
-        #self.root.attributes("-topmost", True)
-        self.root.protocol("WM_DELETE_WINDOW", self.callback)
-        #self.root.bind("<FocusIn>", handle_focus)
-        #self.root.focus_set()
-        #self.dialog.entry.focus_set()
-        self.gui_queue = queue.Queue()
-        threading.Thread.__init__(self)
-        self.name = "DAHINTER"
-        # to stop the Background task use either this signal:
-        self._stop_event = threading.Event()
-        # or the function self.raise_exception()
+    #if first_call:
+    #    safeprint(f'aio_exception_handler starting. {block=}s')
+    poll_interval = 100  # milliseconds
+    try:
+        # Python will not raise exceptions during future execution until `future.result` is called. A zero timeout is
+        # required to avoid blocking the thread.
+        future.result(0)
 
-    # Show the window
-    def show(self):
-        self.dialog.deiconify()
+    # If the future hasn't completed, reschedule this function on tkinter's event loop.
+    except concurrent.futures.TimeoutError:
+        #mainframe._id_after["aio_exception_handler"] = mainframe.after(poll_interval, functools.partial(aio_exception_handler, mainframe, future, block,
+        #                                                 first_call=False))
+        mainframe._id_after["aio_exception_handler"] = mainframe.after(poll_interval, lambda: aio_exception_handler(mainframe, future, block, first_call=False))
 
-    # Hide the window
-    def hide(self):
-        self.dialog.withdraw()
+    # Handle an expected error.
+    except IOError as exc:
+        #safeprint(f'aio_exception_handler: {exc!r} was handled correctly. ')
+        _log.warning(f'aio_exception_handler: {exc!r} was handled correctly. ')
+        pass
 
-    def udi_cancel(self):
-        self.entered_udi = None  # signal not to continue testing
-        self.close()
+    else:
+        #safeprint(f'aio_exception_handler ending. {block=}s')
+        pass
 
-    def udi_accept(self, udi: str):
-        self.entered_udi = udi.strip()
-        if DEBUG:
-            print("ACCEPT:", udi)
-        self.close()
+def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Iterator):
+    """ Display queued 'Hello world' messages in the Tkinter window.
 
-    def get_id(self):
-        """Needed to terminate this thread by SystemExit exception.
+    This is the consumer for Tkinter's work queue. It runs in the Main Thread. After starting, it runs
+    continuously until the GUI is closed by the user.
+    """
+    # Poll continuously while queue has work needing processing.
+    poll_interval = 0
+    _stop = False
+    try:
+        # Tkinter can't wait for the thread blocking `get` method…
+        work_package = tk_q.get_nowait()
 
-        Returns:
-            int: thread id
-        """
-        # returns id of the respective thread
-        if hasattr(self, '_thread_id'):
-            return self._thread_id
-        for id, thread in threading._active.items():
-            if thread is self:
-                return id
+    except queue.Empty:
+        # …so be prepared for an empty queue and slow the polling rate.
+        poll_interval = 40
 
-    def raise_exception(self):
-        """
-        Robust termination function for this thread using asynchronous SystemExit
-        exception on thread.
-
-        Raises:
-            failure: SystemExit exception to terminate the thread
-        """
-        thread_id = self.get_id()
-        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, ctypes.py_object(SystemExit))
-        if res > 1:
-            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
-            print("Exception raise failure")
-
-    def stop(self):
-        self._stop_event.set()
-        if DEBUG:
-            print("THREAD STOP FLAG SET.")
-
-    def stopped(self):
-        return self._stop_event.is_set()
-
-    def close(self):
-        self.stop()             # signal to the thread
-        #if self.root._after_id:
-        #    self.root.after_cancel(self.root._after_id)
-        #    self.root._after_id = None
-        #self.raise_exception()  # hardly stop the thread
-        #self.root.quit()        # soft stop (leaves stale app when used with Teststand)
-        self.root.destroy()     # hard stop
-        self.join()             # wait until the background service thread has ended
-
-    def callback(self):
-        """called from window manager close/quit function (cross right upper corner)."""
-
-        if DEBUG:
-            print("CALLBACK TO CLOSE.")
-        #self.raise_exception()
-        self.udi_cancel()
-
-    def scan_uart_socket(self, scanner, timeout=0.5, message=None, debug_end_time=None):
-        data = None
-        try:
-            data = scanner.request(message, timeout=timeout/2)
-            #_log.debug(data)
-        except TimeoutError:
-            pass
-            # any other exception needs to bubble up
-        if data:
-            _log.info(data)
-            app.gui_queue.put({"udi":data})
-
-        # DEBUG / SIMULATION SUPPORT
-        if debug_end_time is not None:
-            if datetime.now() > debug_end_time:
-                _sim_udi = round(datetime.now().timestamp() * 1e+6, 0)
-                app.gui_queue.put({"udi":f"SIM{_sim_udi:.0f}"})
+    else:
+        # Process a work package.
+        #label = ttk.Label(mainframe, text=work_package)
+        #label.grid(column=0, row=(next(row_itr)), sticky='w', padx=10)
+        if "RESPONSE" in work_package:
+            global var_udi
+            _udi = work_package.split("=")[1]
+            var_udi.set(_udi)
+            _stop = True
+    finally:
+        if _stop:
+            #mainframe.master.withdraw()
+            #mainframe.master.destroy()
+            global ok_button
+            ok_button.invoke()
+            # do NOT reschedule after()
+        #else:
+        # Have tkinter call this function again after the poll interval.
+        #mainframe._id_after["tk_callback_consumer"] = mainframe.after(poll_interval, functools.partial(tk_callback_consumer, tk_q, mainframe, row_itr))
+        mainframe._id_after["tk_callback_consumer"] = mainframe.after(poll_interval, lambda: tk_callback_consumer(tk_q, mainframe, row_itr))
 
 
-    def run(self):
-        """Runs the background task in parallel to the GUI in the main task."""
-        global DEBUG
+def tk_callbacks(mainframe: ttk.Frame, row_itr: Iterator, resource_string: str):
+    """ Set up 'Hello world' callbacks.
 
-        scanner = barcode_scanner.create_from_resource(self.SCANNER_RESOURCE_STRING)
-        try:
-            if DEBUG:
-                end_time = datetime.now() + timedelta(seconds=10) # DEBUG / Simulation
-                msg = "GIB MIR BYTES, SCANNER!" # DEBUG
-            else:
-                end_time = None
-                msg=None
-            # this is the background task function
-            while not self.stopped():
-                self.scan_uart_socket(
-                    scanner,
-                #asyncio.run(scan_uart_socket(
-                    timeout=0.75,
-                    message=msg,              # DEBUG
-                    debug_end_time=end_time,  # DEBUG
-                #))
-                )
+    This runs in the Main Thread.
 
-            if DEBUG:
-                print(f"Thread {self.name} signalled gracefully by stop flag.")
-        except SystemExit as ex:
-            if DEBUG:
-                print(f"Thread {self.name} terminated hardly by exception.")
-        #except asyncio.exceptions.TimeoutError:
-        #    ermsg = "Cannot connect to TCP server."
-        #    if DEBUG:
-        #        print(ermsg)
-        #    app.gui_queue.put({"error": ermsg})
-        finally:
-            if DEBUG:
-                print(f"Thread {self.name} ended.")
+    Args:
+        mainframe: The mainframe of the GUI used for displaying results from the work queue.
+        row_itr: A generator of line numbers for displaying items from the work queue.
+    """
+
+    global tk_q
+
+    #safeprint('tk_callbacks starting')
+    _log.debug('tk_callbacks starting')
+    task_id_itr = itertools.count(1)
+
+    # Create the job queue and start its consumer.
+    tk_q = queue.Queue()
+    #safeprint('tk_callback_consumer starting')
+    _log.debug('tk_callback_consumer starting')
+    tk_callback_consumer(tk_q, mainframe, row_itr)
+
+    # Schedule the asyncio blocker.
+    for block in range(0, 1):
+        # This is a concurrent.futures.Future not an asyncio.Future because it isn't threadsafe. Also,
+        # it doesn't have a wait with timeout which we shall need.
+        task_id = next(task_id_itr)
+        future = asyncio.run_coroutine_threadsafe(aio_blocker(task_id, tk_q, resource_string), aio_loop)
+
+        # Can't use Future.add_done_callback here. It doesn't return until the future is done and that would block
+        # tkinter's event loop.
+        aio_exception_handler(mainframe, future, block)
+
+    #safeprint('tk_callbacks ending - All blocking callbacks have been scheduled.\n')
 
 
-    def periodic_gui_update(self):
-        """
-        Using a simple timed GUI task every 0.1s to check the incoming message queue.
-        This way we can automatically accept UDI by remote UART.
-        When an udi dict is received, we propagate it to the UI variable and trigger
-        the accept funtcion to close the GUI and return to Teststand.
-        """
+#--------------------------------------------------------------------------------------------------
 
-        # we are using the Queue to get data from background task
-        try:
-            fn = self.gui_queue.get_nowait()
-            if fn:
-                if DEBUG:
-                    print(fn)
-                if isinstance(fn, dict):
-                    if "udi" in fn:
-                        _udi = fn["udi"]
-                        self.dialog.var_udi.set(_udi)
-                        udi_accept(_udi)  # auto accept!
-                        return  # do NOT schedule more updates
-                    if "error" in fn:
-                        showerror("Error", fn["error"])
-                        udi_cancel()  # stop application!
-                        return  # do NOT schedule more updates
-        except queue.Empty:
-            pass
-        finally:
-            pass
-        #if DEBUG:
-        #    print("Restart GUI update.")
-        self.root._after_id = self.root.after(100, self.periodic_gui_update)
+def tk_main(resource_string: str, title: str = "ENTER UID"):
+    """ Run tkinter.
+
+    This runs in the Main Thread.
+    """
+    global UDI, var_udi, ok_button
+
+    _log.debug('tk_main starting\n')
+    row_itr = itertools.count()
+
+    # Create the Tk root and mainframe.
+    root = tk.Tk()
+
+     # Create control variables
+    var_udi = tk.StringVar(value="")
+
+    def _accept_udi(parent):
+        global UDI, var_udi
+        UDI = var_udi.get()
+        root.destroy()
+
+    def _cancel(parent):
+        global UDI
+        UDI = None
+        root.destroy()
+
+    root.withdraw()  # hide window
+    #root.attributes('-alpha', 0)  # this hides the root window until we have arranged all the wigets
+    root.title(title)
+    # set App icon
+    # if we have an ICO file we can simply use this:
+    root.iconbitmap(Path(__file__).resolve().parent / "app-icon.ico")
+    # Simply set the theme
+    root.tk.call("source", Path(__file__).resolve().parent / "theme_sv.tcl")
+    root.tk.call("set_theme", "light")
+    # create the Widgets and keep them inside our App object
+
+    mainframe = ttk.Frame(root, padding="15 15 15 15", takefocus=True)
+    #mainframe.grid(column=0, row=0)
+
+    # Make the app responsive
+    #for index in [0]:
+    #    mainframe.columnconfigure(index=index, weight=1)
+    #    mainframe.rowconfigure(index=index, weight=1)
+
+    # Create a Frame for input widgets
+    mainframe.grid(
+        row=0, column=0, padx=10, pady=(30, 10),
+        sticky="nsew", rowspan=3
+    )
+    mainframe.columnconfigure(index=0, weight=1)
+
+    # sticky − What to do if the cell is larger than widget.
+    #          By default, with sticky='', widget is centered in its cell.
+    #          sticky may be the string concatenation of zero or more of N, E, S, W, NE, NW, SE, and SW
+    #          compass directions indicating the sides and corners of the cell to which widget sticks.
 
 
-    def start_gui(self):
-        """
-        Starts a parallel task for UART service and runs the GUI in this
-        (main) task and blocks until the GUI has been closed.
-        """
+    # Label
+    label = ttk.Label(
+        mainframe,
+        text="Scan or Enter the UID of Device under Test",
+        justify="center",
+        font=("-size", 12, "-weight", "bold"),
+    )
+    label.grid(row=next(row_itr), column=0, columnspan=2 , pady=10)
 
-        self.start()          # start background service thread
-        #self.after_id = self.root.after(10, self.periodic_gui_update)
-        self.periodic_gui_update()
-        self.root.mainloop()  # GUI loop
+    # Entry
+    entry = ttk.Entry(
+        mainframe,
+        textvariable=var_udi,
+        font=("-size", 15),
+    )
+    entry.insert(0, "")
+    entry.bind("<Return>", _accept_udi )
+    entry.bind("<Key-Escape>", _cancel)
+    entry.grid(row=next(row_itr), column=0, padx=5, pady=(0, 10), sticky="ew")
 
+    # Button
+    ok_button = ttk.Button(mainframe, text="Start Test", style="Accent.TButton", command=lambda: _accept_udi(None))
+    ok_button.bind("<Return>", _accept_udi)
+    ok_button.bind("<Key-Escape>", _cancel)
+    ok_button.grid(row=next(row_itr), column=0, ipady=50, padx=5, pady=10, sticky="nsew")
+
+    # Separator
+    separator = ttk.Separator(mainframe)
+    separator.grid(row=next(row_itr), column=0, padx=(20, 10), pady=10, sticky="ew")
+
+    # Button
+    cancel_button = ttk.Button(mainframe, text="Cancel", command=lambda: _cancel(None))
+    cancel_button.bind("<Return>", _cancel )
+    cancel_button.bind("<Key-Escape>", _cancel)
+    cancel_button.grid(row=next(row_itr), column=0, ipady=50, padx=5, pady=10, sticky="nsew")
+
+    # # Sizegrip
+    # sizegrip = ttk.Sizegrip(self)
+    # sizegrip.grid(row=100, column=100, padx=(0, 5), pady=(0, 5))
+
+
+    # # Add a close button
+    # button = ttk.Button(mainframe, text='Shutdown', command=root.destroy)
+    # button.grid(column=0, row=next(row_itr), sticky='w')
+
+    ## Add an information widget.
+    #label = ttk.Label(mainframe, text=f'\nWelcome to hello_world*4.py.\n')
+    #label.grid(column=0, row=next(row_itr), sticky='w')
+
+    # Schedule the 'Hello World' callbacks
+    mainframe._id_after = {}
+    #mainframe._id_after["tk_callbacks"] = mainframe.after(0, functools.partial(tk_callbacks, mainframe, row_itr, resource_string))
+    mainframe._id_after["tk_callbacks"] = mainframe.after(0, lambda: tk_callbacks(mainframe, row_itr, resource_string))
+
+
+    # Set a minsize for the window, and place it in the middle
+    #root.update()
+    root.minsize(root.winfo_width(), root.winfo_height())
+    x_cordinate = int((root.winfo_screenwidth() / 2) - (root.winfo_width() / 2))
+    y_cordinate = int((root.winfo_screenheight() / 2) - (root.winfo_height() / 2))
+    root.geometry("+{}+{}".format(x_cordinate-50, y_cordinate-180))
+    #root.attributes('-alpha', 1.0)  # now make the main window visible again
+
+    root.update()
+    root.deiconify()
+
+    root.focus_force()  # this is to activate the window again (important after programmatically closed)
+    entry.focus_set()   # now set the focus to the dialog element
+
+    # The asyncio loop must start before the tkinter event loop.
+    while not aio_loop:
+        time.sleep(0)
+
+    root.mainloop()
+
+
+    # kill the potentially active schedules for 2 after() callbacks
+    for k,v in mainframe._id_after.items():
+        mainframe.after_cancel(v)
+
+    _log.debug('tk_callback_consumer ending')
+    _log.debug('tk_main ending')
+    _log.debug(f"UDI={UDI}")
+
+
+async def manage_aio_loop(aio_initiate_shutdown: threading.Event):
+    """ Run the asyncio loop.
+
+    This provides an always available asyncio service for tkinter to make any number of simultaneous blocking IO
+    calls. 'Any number' includes zero.
+
+    This runs in Asyncio's thread and in asyncio's loop.
+    """
+    #_log.debug('manage_aio_loop starting')
+
+    # Communicate the asyncio loop status to tkinter via a global variable.
+    global aio_loop
+    aio_loop = asyncio.get_running_loop()
+
+    # If there are no awaitables left in the queue asyncio will close.
+    # The usual wait command — Event.wait() — would block the current thread and the asyncio loop.
+    while not aio_initiate_shutdown.is_set():
+        await asyncio.sleep(0)
+
+    #_log.debug('manage_aio_loop ending')
+
+
+def aio_main(aio_initiate_shutdown: threading.Event):
+    """ Start the asyncio loop.
+
+    This non-coroutine function runs in Asyncio's thread.
+    """
+    #_log.debug('aio_main starting')
+    asyncio.run(manage_aio_loop(aio_initiate_shutdown))
+    #_log.debug('aio_main ending')
+
+
+def main(resource_str: str, title: str = "ENTER UDI"):
+    """Set up working environments for asyncio and tkinter.
+
+    This runs in the Main Thread.
+    """
+    #_log.debug('main starting')
+
+    # Start the permanent asyncio loop in a new thread.
+    # aio_shutdown is signalled between threads. `asyncio.Event()` is not threadsafe.
+    aio_initiate_shutdown = threading.Event()
+    aio_thread = threading.Thread(target=aio_main, args=(aio_initiate_shutdown,), name="Asyncio's Thread")
+    aio_thread.start()
+
+    tk_main(resource_str, title)
+
+    # Close the asyncio permanent loop and join the thread in which it runs.
+    aio_initiate_shutdown.set()
+    aio_thread.join()
+
+    #_log.debug('main ending')
 
 #--------------------------------------------------------------------------------------------------
 def identify_uut(context) -> Tuple[bool, str]:
@@ -428,23 +415,22 @@ def identify_uut(context) -> Tuple[bool, str]:
     Returns:
         Tuple[bool, str]: return values to a TestStand container that expects two types in this order.
     """
-    global app
+    global UDI
 
-    #entered_udi = None  # reset here
-    app = App(context["scanner"])
-    app.start_gui()  # this runs Window Dialog in separate task and blocks until GUI is closed
-    if app.entered_udi is not None:
-        return (True, app.entered_udi)
+    #sys.exit(main())
+    main(context["scanner"])
+    if UDI is not None:
+        return (True, UDI)
     else:
         return (False, "")
 
 #--------------------------------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    DEBUG = 0  # increase verbosity
-    barcode_scanner.DEBUG = DEBUG # to see more infos
-    for i in range(0, 2):
-        continue_testing, udi = identify_uut({"scanner":"192.168.1.120:2000"})
-        print(f"FINALIZED {entered_udi}. Continue testing: {continue_testing}, udi={udi}")
-
+if __name__ == '__main__':
+    #with SafePrinter() as safeprint:
+    #     #sys.exit(main())
+    #     for i in range(0, 2):
+    #         main("169.254.36.1:2000")
+    for i in range(0,3):
+        z = identify_uut({"scanner":"169.254.36.1:2000"})
+        print(f"IDX:{i} -> {z}")
 # END OF FILE
