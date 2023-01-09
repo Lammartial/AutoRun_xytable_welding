@@ -22,7 +22,7 @@ except Exception as e:
 #--------------------------------------------------------------------------------------------------
 class Eth2SerialVisaDevice(object):
 
-    def __init__(self, name_ip: str, channel: int):
+    def __init__(self, name_ip: str, channel: int | None):
         """
         Initialize the object with visa IP name.
         Example "TCPIP0::192.168.1.101::inst0::INSTR"
@@ -32,7 +32,8 @@ class Eth2SerialVisaDevice(object):
         """
         self.rm = ResourceManager()          # auto decision for backend
         self.host = str(name_ip)
-        self.channel = int(channel)
+        if (channel != None):
+            self.channel = int(channel)
 
     def send(self, msg: str, timeout: float = 1000) -> None:
         """_summary_
@@ -77,8 +78,11 @@ class Eth2SerialVisaDevice(object):
             if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
                 self.session.read_termination = '\n'
             self.session.timeout = timeout
-            chn = "CHAN " + str(self.channel) + ";"
-            result = self.session.query(chn + msg)
+            if (self.channel != None):
+                chn = "CHAN " + str(self.channel) + ";"
+                result = self.session.query(chn + msg)
+            else:
+                result = self.session.query(msg)
             _log.debug(f"Received: {result!r}")
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling

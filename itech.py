@@ -471,16 +471,16 @@ class M3400_DEV(Eth2SerialVisaDevice):
             _log.exception(ex)
             raise   
 
-    def disconnect(self):
-        """
-        Closes the connection (session) and the device.
-        """
-        try:
-            self.session.close()
-            self.rm.close()
-        except Exception as ex:
-            _log.exception(ex)
-            raise
+    #def disconnect(self):
+    #    """
+    #    Closes the connection (session) and the device.
+    #    """
+    #    try:
+    #        self.session.close()
+    #        self.rm.close()
+    #    except Exception as ex:
+    #        _log.exception(ex)
+    #        raise
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
