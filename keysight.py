@@ -107,8 +107,8 @@ class DAQ970A(Eth2SerialVisaDevice):
         # trick to use function in NI Teststand
         slot = int(slot)
         channel = int(channel)
-        assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
-        assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
+        assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_resistance: Allowed slot range is 1 .. 3')
+        assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_resistance: Allowed channel range is 1 .. 20.')
         try:
             slot_str = str(slot)
             channel_str = str(channel).zfill(2)
@@ -135,8 +135,8 @@ class DAQ970A(Eth2SerialVisaDevice):
         # trick to use function in NI Teststand
         slot = int(slot)
         channel = int(channel)
-        assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
-        assert ((channel >= 1) and (channel <= 10)), ValueError('Invalid channel. Allowed range is 1 .. 10.')
+        assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_4w_resistance: Allowed slot range is 1 .. 3')
+        assert ((channel >= 1) and (channel <= 10)), ValueError('Error, get_4w_resistance: Allowed channel range is 1 .. 10.')
         try:
             slot_str = str(slot)
             channel_str = str(channel).zfill(2)
@@ -163,8 +163,8 @@ class DAQ970A(Eth2SerialVisaDevice):
         # trick to use function in NI Teststand
         slot = int(slot)
         channel = int(channel)
-        assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
-        assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
+        assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_VDC: Allowed slot range is 1 .. 3')
+        assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VDC: Allowed channel range is 1 .. 20.')
         try:
             slot_str = str(slot)
             channel_str = str(channel).zfill(2)
@@ -191,8 +191,8 @@ class DAQ970A(Eth2SerialVisaDevice):
         # trick to use function code in NI Teststand
         slot = int(slot)
         channel = int(channel)
-        assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
-        assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
+        assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_VAC: Allowed slot range is 1 .. 3')
+        assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VAC: Allowed channel range is 1 .. 20.')
         try:
             slot_str = str(slot)
             channel_str = str(channel).zfill(2)
@@ -261,15 +261,15 @@ class DAQ970A(Eth2SerialVisaDevice):
             channel_str = str(channel).zfill(2)
             match tran_type:
                 case 'TC' | 'DEF':
-                    assert (tc_type in ["B", "E", "J", "K", "N", "R", "S", "T"]), ValueError('Error, get_temp: invalid tc_type parameter')
+                    assert (tc_type in ["B", "E", "J", "K", "N", "R", "S", "T"]), ValueError('Error, get_temp: incorrect tc_type parameter')
                     cmd = "MEAS:TEMP:TC?" + " " + tc_type + ",(@" + slot_str + channel_str + ")"
                     return float(self.request(cmd, 5000))
                 case 'FTH' | 'THER':
-                    assert ((fth_type == 2252) or (fth_type == 5000) or (fth_type == 10000)), ValueError('Error, get_temp: invalid fth_type parameter')
+                    assert ((fth_type == 2252) or (fth_type == 5000) or (fth_type == 10000)), ValueError('Error, get_temp: incorrect fth_type parameter')
                     cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(fth_type) + ",(@" + slot_str + channel_str + ")"
                     return float(self.request(cmd, 5000))
                 case 'FRTD' | 'RTD':
-                    assert((rtd_resist == 100) or (rtd_resist == 1000)), ValueError('Error, get_temp: invalid rtd_resist parameters')
+                    assert((rtd_resist == 100) or (rtd_resist == 1000)), ValueError('Error, get_temp: incorrect rtd_resist parameters')
                     cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(rtd_resist) + ",(@" + slot_str + channel_str + ")"
                     return float(self.request(cmd, 5000))
                 case _:
