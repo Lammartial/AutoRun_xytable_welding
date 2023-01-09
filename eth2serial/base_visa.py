@@ -22,7 +22,7 @@ except Exception as e:
 #--------------------------------------------------------------------------------------------------
 class Eth2SerialVisaDevice(object):
 
-    def __init__(self, name_ip: str, channel: int | None):
+    def __init__(self, name_ip: str, channel: int):
         """
         Initialize the object with visa IP name.
         Example "TCPIP0::192.168.1.101::inst0::INSTR"
@@ -32,8 +32,7 @@ class Eth2SerialVisaDevice(object):
         """
         self.rm = ResourceManager()          # auto decision for backend
         self.host = str(name_ip)
-        if (channel != None):
-            self.channel = int(channel)
+        self.channel = int(channel)
 
     def send(self, msg: str, timeout: float = 1000) -> None:
         """_summary_
@@ -53,7 +52,7 @@ class Eth2SerialVisaDevice(object):
             self.session.timeout = timeout
             # In case of use without channel separation
             chn = ""
-            if (self.channel != None):
+            if (self.channel != 0):
                 chn = "CHAN " + str(self.channel) + ";"
             self.session.write(chn + msg)
         except TimeoutError as ex:
@@ -83,7 +82,7 @@ class Eth2SerialVisaDevice(object):
             self.session.timeout = timeout
             # In case of use without channel separation
             chn = ""
-            if (self.channel != None):
+            if (self.channel != 0):
                 chn = "CHAN " + str(self.channel) + ";"
             result = self.session.query(chn + msg)
             _log.debug(f"Received: {result!r}")
