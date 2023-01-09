@@ -54,7 +54,7 @@ class Hioki_BT3561A(Eth2SerialDevice):
                     2 - EEPROM Error
                     3 - RAM and EEPROM Errors
         """
-        return int(self.request('*TST?'))
+        return True if (self.request('*TST?').strip() == "0") else False
 
     def set_function(self, mode: str) -> None:
         """
@@ -131,12 +131,6 @@ class Hioki_BT3561A(Eth2SerialDevice):
                    60.0000E+0/100.000E+0/300.000E+0
         """
         return float(self.request(':VOLT:RANG?'))  
-
-        """ 
-
-            Parameters
-            ----------
-            state: int 1|0 or string 'ON'|'OFF' """
 
     def set_autorange(self, state: int) -> None:
         """
@@ -315,14 +309,8 @@ class Hioki_SW1001(Eth2SerialDevice):
         Returns:
             str: result 'PASS'|'FAIL'
         """
-        return self.request('*TST?')
+        return True if (self.request('*TST?').strip() == "PASS") else False
 
-        """ 
-
-        Parameters
-        ---------
-        slot: int,  
-        mode: int,  """
 
     def set_wire_mode(self, slot: int, mode: int):
         """
@@ -428,6 +416,7 @@ class Hioki_SW1001(Eth2SerialDevice):
         """
 
         slot = int(slot)
+        channel = int(channel)
         assert((slot >= 1) and (slot <= 3)), ValueError('Error, Hioki close: Allowed slot range is 1 .. 3') 
         assert((channel >= 1) and (channel <= 22)), ValueError('Error, Hioki close: Allowed channel range is 1 .. 22')
         self.send(f':CLOS {slot}{channel:02d}')
@@ -568,15 +557,15 @@ class Hioki_Cell_Tester(object):
         for i in range(22):
             # Channel 1/Slot1 or Channel 1/Slot 2. Needs to switch shield mode and wire mode
             if (i == 0):
-                self.sw.set_shield_mode(1, 'GND')
-                self.sw.set_shield_mode(1, 'GND')
                 self.sw.set_wire_mode(1, 4)
-                self.sw.set_wire_mode(1, 4)
+                #self.sw.set_wire_mode(1, 4)
+                self.sw.set_shield_mode(1, 'GND')
+                #self.sw.set_shield_mode(1, 'GND')
             if (i == 11):
-                self.sw.set_shield_mode(2, 'GND')
-                self.sw.set_shield_mode(2, 'GND')
                 self.sw.set_wire_mode(2, 4)
-                self.sw.set_wire_mode(2, 4)
+                #self.sw.set_wire_mode(2, 4)
+                self.sw.set_shield_mode(2, 'GND')
+                #self.sw.set_shield_mode(2, 'GND')
             if (i < 11):
                 #SLOT 1
                 self.sw.close(1, i+1)
@@ -584,6 +573,7 @@ class Hioki_Cell_Tester(object):
                 #SLOT 2
                 self.sw.close(2, (i-11)+1)  
             #[BT3561A] :READ? Execute single measurement using BT3561A.
+            sleep(0.1)
             resp = self.bt.request(':READ?').strip()
             if (bt_function_type == 'RV'):
                 lst = resp.split(',')
@@ -639,7 +629,7 @@ if __name__ == "__main__":
     print('BT3561A Voltage Range: ', hioki.bt.get_voltage_range())
 
     # Set auto range ON
-    hioki.bt.set_autorange(1)
+    hioki.bt.set_autorange(0)
 
     # Get auto range
     print('BT3561A Auto Range : ', hioki.bt.get_autorange())
@@ -660,7 +650,7 @@ if __name__ == "__main__":
     print('BT3561A Key Lock: ', hioki.bt.get_syst_klock())
 
     # Set system key lock OFF
-    hioki.bt.set_syst_klock(0)
+    #hioki.bt.set_syst_klock(0)
 
     # System Local
     hioki.bt.set_local_control()
@@ -674,24 +664,24 @@ if __name__ == "__main__":
     # =============== READ? ============================
 
     # IMPORTANT! Set continuous measurement OFF.
-    hioki.bt.set_continous_measurement(0)
+    #hioki.bt.set_continous_measurement(0)
 
-    sleep(0.1)
+    #sleep(0.1)
 
-    print('BT3561A measurement ', hioki.bt.read())
+    #print('BT3561A measurement ', hioki.bt.read())
 
-    hioki.bt.set_continous_measurement(1)
+    #hioki.bt.set_continous_measurement(1)
 
     # 3. ==== SW1001 functions ===========================================================================
 
     # *IDN?
-    print('SW1001 ID: ', hioki.sw.get_idn())
+    #print('SW1001 ID: ', hioki.sw.get_idn())
 
     # *RST
     #hioki.sw.set_reset()
 
     # *TST?
-    print('SW1001 Self Test: ', hioki.sw.self_test())
+    #print('SW1001 Self Test: ', hioki.sw.self_test())
 
     # Raw query command
     #print('SW1001 Get Scan List: ', hioki.sw.set_raw_query(':SCAN?'))
@@ -701,9 +691,13 @@ if __name__ == "__main__":
 
     # IMPORTANAT! Switching the channel:
     # 1. Set wire mode
-    #hioki.sw.set_wire_mode(1, 4)
+    hioki.sw.set_wire_mode(1, 4)
     # 2. Set shield mode (if needed)
-    #hioki.sw.set_shield_mode(1, 'TERM2')
+    hioki.sw.set_shield_mode(1, 'GND')
+
+    print(hioki.sw.get_wire_mode(1))
+    print(hioki.sw.get_shield_mode(1))
+
     # 3. CLOSE channel
     #hioki.sw.close(1, 1)
 
@@ -725,10 +719,10 @@ if __name__ == "__main__":
     sleep(0.1)
 
     # measure single channel (1 ... 22)
-    #print(hioki.measure_channnel(15))
+    print(hioki.measure_channnel(1))
 
     # measure all 22 4-wire channels (Could be useful for Zero-adjustment procedure)
-    print(hioki.measure_all_channels())
+    #print(hioki.measure_all_channels())
 
     hioki.sw.open()
 

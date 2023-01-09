@@ -166,9 +166,6 @@ class M3400_DEV(Eth2SerialVisaDevice):
 
         Args:
             state (int):  1 - On, 0 - Off 
-
-        Raises:
-            ValueError: invalid parameters
         """
         # trick to use function in NI Teststand
         state = int(state) 
