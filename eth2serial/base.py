@@ -88,7 +88,7 @@ class Eth2SerialDevice(object):
         finally:
             _s.close()
 
-    def request(self, msg: str | None, timeout: float = 5.0, limit: int = 0, encoding: str = "ascii") -> str:
+    def request(self, msg: str | None, timeout: float = 5.0, limit: int = 0, encoding: str = "utf-8") -> str:
         """_summary_
 
         Args:
@@ -129,7 +129,7 @@ class Eth2SerialDevice(object):
             _s.close()
         return result
 
-    async def request_async(self,  message: str | None, timeout=1.0, limit: str | bytes | int = b'\n', encoding: str = "utf-8") -> str:
+    async def request_async(self,  message: str | None, limit: str | bytes | int = b'\n', encoding: str = "utf-8") -> str:
 
         async def xchange(reader, writer):
             if message:
@@ -175,15 +175,13 @@ class Eth2SerialDevice(object):
 
 #--------------------------------------------------------------------------------------------------
 
-async def tcp_send_and_receive_from_server(resource_string: str, message: str | None, timeout=1.0, limit: str | bytes | int = b'\n') -> str:
+async def tcp_send_and_receive_from_server(resource_string: str, message: str | None, limit: str | bytes | int = b'\n') -> str:
     """
-    Connects to the ETH to UART bridge at the port 23 on the fixed IP UART_BRIDGE_IP.
-    It sends some message if given and afterwards it waits for incoming with limit timeout.
+    Connects to the destination socket at IP:PORT.
+    It sends some message if given and afterwards it waits for incoming without timeout.
 
     Args:
         message (str): message
-        timeout (float, optional): Timeout for open, wait send and receive in seconds.
-            timeout/2 is for open, rest for send/receive. Defaults to 1.0.
         limit (bytes, str or int, optional): Defines if the read function used:
             if limit is of bytes, it uses stream.readuntil(separator=limit)) so that the line
                 termination can be set freely. Note that the terminator is stripped from data.
@@ -195,7 +193,7 @@ async def tcp_send_and_receive_from_server(resource_string: str, message: str | 
             Defaults to b"\n".
 
     Returns:
-        str: received data or None on timeout.
+        str: received data.
     """
 
     _IP, _PORT = resource_string.split(":")
