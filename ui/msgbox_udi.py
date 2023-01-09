@@ -26,7 +26,7 @@ DEBUG = 0   # set to 0 for production
 import logging
 
 _log = logging.getLogger(__name__)
-_log.setLevel(logging.DEBUG)
+_log.setLevel(logging.DEBUG if DEBUG else logging.INFO)
 
 # Initialize the logging
 try:
@@ -60,7 +60,9 @@ async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> 
     #safeprint(f'aio_blocker starting. {resource_string}s.')
     #await asyncio.sleep(block)
     while True:
-        _response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = 30)
+        #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = 30)
+        _response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0)  # uses .readuntil()
+        #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = None)  # uses .readln()
         if _response:
             _wp = f"RESPONSE={_response}"
             #safeprint(_wp)
@@ -430,7 +432,7 @@ if __name__ == '__main__':
     #     #sys.exit(main())
     #     for i in range(0, 2):
     #         main("169.254.36.1:2000")
-    for i in range(0,3):
-        z = identify_uut({"scanner":"169.254.36.1:2000"})
+    for i in range(0,10):
+        z = identify_uut({"scanner":"192.168.1.120:2000"})
         print(f"IDX:{i} -> {z}")
 # END OF FILE
