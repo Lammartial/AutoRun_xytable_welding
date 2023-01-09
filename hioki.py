@@ -257,6 +257,7 @@ class Hioki_BT3561A(Eth2SerialDevice):
         Raises:
             ValueError: invalid parameters
         """
+        state = int(state)
         assert((state == 0) or (state == 1)),  ValueError('Error, Hioki set_continous_measurement: Only 0 or 1 are allowed.')
         self.send(f':INIT:CONT {state}')
 
@@ -694,15 +695,21 @@ if __name__ == "__main__":
     hioki.sw.set_wire_mode(1, 4)
     # 2. Set shield mode (if needed)
     hioki.sw.set_shield_mode(1, 'GND')
-
-    print(hioki.sw.get_wire_mode(1))
-    print(hioki.sw.get_shield_mode(1))
-
+    #print(hioki.sw.get_wire_mode(1))
+    #print(hioki.sw.get_shield_mode(1))
     # 3. CLOSE channel
-    #hioki.sw.close(1, 1)
+    hioki.sw.close(1, 1)
 
-    #print('SW1001 Slot1 Wire Mode: ', hioki.sw.get_wire_mode(1))
-    #print('SW1001 Slot1 Shield Mode: ', hioki.sw.get_shield_mode(1))
+    print('SW1001 Slot1 Wire Mode: ', hioki.sw.get_wire_mode(1))
+    print('SW1001 Slot1 Shield Mode: ', hioki.sw.get_shield_mode(1))
+
+    hioki.bt.set_continous_measurement(0)
+
+    print(hioki.bt.read())
+
+    hioki.bt.set_continous_measurement(1)
+
+    hioki.sw.open()
 
     # Get module count
     #print('SW1001 Slot1 Count: ', hioki.sw.get_module_count(1))
@@ -716,15 +723,15 @@ if __name__ == "__main__":
 
     # 4. ==== Cells tester (BT3561A + SW1001) functions ================================================
 
-    sleep(0.1)
+    #sleep(0.1)
 
     # measure single channel (1 ... 22)
-    print(hioki.measure_channnel(1))
+    #print(hioki.measure_channnel(1))
 
     # measure all 22 4-wire channels (Could be useful for Zero-adjustment procedure)
     #print(hioki.measure_all_channels())
 
-    hioki.sw.open()
+    #hioki.sw.open()
 
     print("DONE.")
 
