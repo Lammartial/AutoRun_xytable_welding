@@ -492,6 +492,7 @@ if __name__ == "__main__":
     M3412_IP_STR = "TCPIP0::192.168.1.101::inst0::INSTR"
 
     # 1. Create an instance of ITECH_DEV class
+    # using multi-channel communication
     it_m3412_1 = M3400_DEV(M3412_IP_STR, 1)
     it_m3412_2 = M3400_DEV(M3412_IP_STR, 2)
     it_m3412_3 = M3400_DEV(M3412_IP_STR, 3)
@@ -574,24 +575,13 @@ if __name__ == "__main__":
     # Set voltage under-protection
     #it_m3412.set_voltage_under_protection(10.00)      # No return value
 
-    # 4. ERRORS 
-
-    # Check errors
-    #print(it_m3412.set_raw_query('SYST:ERR?'))
-
-    # Check Standard Event Status Register (SESR)
-    #print(it_m3412.set_raw_query('*ESR?'))
-
-    # 5. Close connection
-    #it_m3412.disconnect()
-
     # Set voltage value
     it_m3412_1.set_voltage(1.00)                       # No return value
-    it_m3412_2.set_voltage(2.00)                       # No return value
-    it_m3412_3.set_voltage(3.00)                       # No return value
-    it_m3412_4.set_voltage(4.00)                       # No return value
-    it_m3412_5.set_voltage(5.00)                       # No return value
-    it_m3412_6.set_voltage(6.00)                       # No return value
+    it_m3412_2.set_voltage(1.00)                       # No return value
+    it_m3412_3.set_voltage(1.00)                       # No return value
+    it_m3412_4.set_voltage(1.00)                       # No return value
+    it_m3412_5.set_voltage(1.00)                       # No return value
+    it_m3412_6.set_voltage(1.00)                       # No return value
 
     # Set current. curr - string 'MIN', 'MAX' or'XX.XXX' Amp
     it_m3412_1.set_current(0.100)                      # No return value
