@@ -267,7 +267,7 @@ class Hioki_SW1001(Eth2SerialDevice):
     def __init__(self, host: str, port: int, termination: str = "\r\n"):
         super().__init__(host, port, termination)
 
-    #---COMMON FUNCTIONS---
+    #---STANDARD FUNCTIONS---
 
     def get_idn(self) -> str:
         """
@@ -295,6 +295,10 @@ class Hioki_SW1001(Eth2SerialDevice):
         """ Initializes the device. """
         return self.send('*RST')
 
+    def clear_status(self) -> None:
+        """ Resets the Status byte and Event status registers. """
+        return self.send('*CLS')
+
     def self_test(self) -> bool:
         """
         Initiates a self-test and queries the result.
@@ -307,7 +311,10 @@ class Hioki_SW1001(Eth2SerialDevice):
         """
         return True if (self.request('*TST?').strip() == "0") else False
 
-    #---SPECIFIC FUNCTIONS---
+    #---DEVICE FUNCTIONS---
+
+    def read_error_info(self) -> str:
+        return self.request(":SYST:ERR?")
 
     def set_wire_mode(self, slot: int, mode: int) -> bool:
         """
@@ -681,6 +688,8 @@ if __name__ == "__main__":
     # *RST
     #hioki.sw.set_reset()
     print(hioki.sw.get_idn())
+    print(hioki.sw.read_error_info())
+    hioki.sw.clear_status()
 
     # *TST?
     #print('SW1001 Self Test: ', hioki.sw.self_test())
