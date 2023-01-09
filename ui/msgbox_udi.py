@@ -39,9 +39,9 @@ except Exception as e:
 # Global reference to loop allows access from different environments.
 aio_loop: Optional[asyncio.AbstractEventLoop] = None
 tk_q: queue.Queue = None
-UDI: str = None
 ok_button = None
 var_udi = None
+scanned_udi: str = None
 
 async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> None:
     """ Asynchronously block the thread and put a 'Hello World' work package into Tkinter's work queue.
@@ -216,7 +216,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
 
     This runs in the Main Thread.
     """
-    global UDI, var_udi, ok_button
+    global scanned_udi, var_udi, ok_button
 
     _log.debug('tk_main starting\n')
     row_itr = itertools.count()
@@ -228,13 +228,13 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     var_udi = tk.StringVar(value="")
 
     def _accept_udi(parent):
-        global UDI, var_udi
-        UDI = var_udi.get()
+        global scanned_udi, var_udi
+        scanned_udi = var_udi.get()
         root.destroy()
 
     def _cancel(parent):
-        global UDI
-        UDI = None
+        global scanned_udi
+        scanned_udi = None
         root.destroy()
 
     root.withdraw()  # hide window
@@ -351,7 +351,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
 
     _log.debug('tk_callback_consumer ending')
     _log.debug('tk_main ending')
-    _log.debug(f"UDI={UDI}")
+    _log.debug(f"UDI={scanned_udi}")
 
 
 async def manage_aio_loop(aio_initiate_shutdown: threading.Event):
@@ -408,8 +408,8 @@ def main(resource_str: str, title: str = "ENTER UDI"):
     #_log.debug('main ending')
 
 #--------------------------------------------------------------------------------------------------
-def identify_uut(context) -> Tuple[bool, str]:
-    """Entry function for TestStand.
+def identify_uut(seq_context) -> Tuple[bool, str]:
+    """Entry function for TestStand using context IDispatch interface (block of data)
 
     Args:
         context (dict): TestStand context
@@ -417,12 +417,17 @@ def identify_uut(context) -> Tuple[bool, str]:
     Returns:
         Tuple[bool, str]: return values to a TestStand container that expects two types in this order.
     """
-    global UDI
+    global scanned_udi
 
-    #sys.exit(main())
-    main(context["scanner"])
-    if UDI is not None:
-        return (True, UDI)
+    scanned_udi = None  # clear the last UDI
+    # this is just to demonstrate the parameter passing from TestStand
+    context_id = seq_context.Id
+    executing_sequence_name = seq_context.Sequence.Name
+    executing_step_name = seq_context.Step.Name
+    _scanner = str(seq_context.Locals.TestSocketResources.scanner)
+    main(_scanner)
+    if scanned_udi is not None:
+        return (True, scanned_udi)
     else:
         return (False, "")
 
