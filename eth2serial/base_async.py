@@ -8,11 +8,6 @@ from time import sleep
 
 DEBUG = 0
 
-#
-# this is the ETH-to-UART bridge's IP address
-# set it static in production situation
-#
-UART_BRIDGE_IP = "192.168.1.90"
 
 #--------------------------------------------------------------------------------------------------
 def get_ipv4():
@@ -35,8 +30,6 @@ def get_ipv4():
         s.close()
     return IP
 
-OWN_PRIMARY_IP = get_ipv4()
-
 #--------------------------------------------------------------------------------------------------
 async def send_msg(message: str):
     reader, writer = await asyncio.open_connection(UART_BRIDGE_IP, 23)
@@ -50,12 +43,13 @@ async def send_msg(message: str):
 
 #--------------------------------------------------------------------------------------------------
 async def handle_echo(reader, writer):
-    data = await reader.read(100)
+    DEBUG = 1
+    data = await reader.read(10)
     message = data.decode()
     addr = writer.get_extra_info('peername')
     if DEBUG:
         print(f"Received {message!r} from {addr!r}")
-    await send_msg(message + " DU SACK!")
+    #await send_msg(message + " DU SACK!")
     #print(f"Send: {message!r}")
     #writer.write(data)
     #await writer.drain()
@@ -63,10 +57,16 @@ async def handle_echo(reader, writer):
         print("Close the RECEIVE connection")
     writer.close()
 
-async def server_main():
+async def server_main(resource_string):
     """Start a server that can be connected by the ETH-to-UART bridge in TCP client mode."""
 
-    server = await asyncio.start_server(handle_echo, OWN_PRIMARY_IP, 8888)
+    if not resource_string:
+        _IP = get_ipv4()
+        _PORT = 8888
+    else:
+        _IP, _PORT = resource_string.split(":")
+
+    server = await asyncio.start_server(handle_echo, _IP, _PORT)
     addrs = ', '.join(str(sock.getsockname()) for sock in server.sockets)
     if DEBUG:
         print(f'Serving on {addrs}')
@@ -74,7 +74,7 @@ async def server_main():
         await server.serve_forever()
 
 #--------------------------------------------------------------------------------------------------
-async def tcp_send_and_receive_from_server(message: str, timeout=1.0, limit: str | bytes | int = b'\n') -> str:
+async def tcp_send_and_receive_from_server(resource_string: str, message: str | None, timeout=1.0, limit: str | bytes | int = b'\n') -> str:
     """
     Connects to the ETH to UART bridge at the port 23 on the fixed IP UART_BRIDGE_IP.
     It sends some message if given and afterwards it waits for incoming with limit timeout.
@@ -97,7 +97,7 @@ async def tcp_send_and_receive_from_server(message: str, timeout=1.0, limit: str
         str: received data or None on timeout.
     """
 
-    global UART_BRIDGE_IP, UART_PORT
+    _IP, _PORT = resource_string.split(":")
 
     async def xchange(reader, writer):
         if message:
@@ -106,7 +106,16 @@ async def tcp_send_and_receive_from_server(message: str, timeout=1.0, limit: str
             writer.write(message.encode())
             await writer.drain()
         if isinstance(limit, int):
-            rcvdata = await reader.read(limit)  # read until limit bytes or EOF
+            #rcvdata = await reader.read()  # read until limit bytes or EOF
+            rcvdata = bytes()
+            while chunk := await reader.read(512):
+                # read until limit bytes or EOF
+                if not chunk:
+                    break
+                rcvdata += chunk
+                if len(rcvdata) >= limit:
+                    rcvdata = rcvdata[:limit]
+                    break
         elif isinstance(limit, bytes):
             rcvdata = await reader.readuntil(separator=limit)  # read until \n or \r\n
         else:
@@ -117,31 +126,41 @@ async def tcp_send_and_receive_from_server(message: str, timeout=1.0, limit: str
 
     data = None
     # do NOT catch the exception for timeout here, propagate to the caller!
-    reader, writer = await asyncio.wait_for(asyncio.open_connection(UART_BRIDGE_IP, UART_PORT), timeout=timeout/2)
+    #reader, writer = await asyncio.wait_for(asyncio.open_connection(_IP, _PORT), timeout/2)
+    reader, writer = await asyncio.open_connection(_IP, _PORT)
 
     # Wait for at most 1 second (which is also the pause time for this loop)
     try:
-        data = await asyncio.wait_for(xchange(reader, writer), timeout=timeout/2)
-    except asyncio.TimeoutError:
+        #data = await asyncio.wait_for(xchange(reader, writer), timeout)
+        data = await xchange(reader, writer)
+    except asyncio.exceptions.TimeoutError:
         pass
     finally:
         # Close the connection
         writer.close()
         await writer.wait_closed()
+
     return data
-
-
-
 
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     DEBUG = 1
-    # test the client only:
-    #asyncio.run(tcp_send_and_receive_from_server('Hello World!\r\n'))
+
+    #UART_BRIDGE_IP = "192.168.1.120:2000"
+    UART_BRIDGE_IP = "169.254.36.1:2000"
+
+    # # test the client only:
+    # i = 0
+    # while True:
+    #     i += 1
+    #     print(i)
+    #     #asyncio.run(tcp_send_and_receive_from_server(UART_BRIDGE_IP, 'Hello World!\r\n'))
+    #     asyncio.run(tcp_send_and_receive_from_server(UART_BRIDGE_IP, None, timeout=10.0))
+
     # test the server method:
     # configure the 2nd socket at Waveshare as client to this server,
     # so we can get incoming data at any time (e.g. Barcodereader)
-    asyncio.run(server_main())
+    asyncio.run(server_main("169.254.36.86:8888"))
 
 # END OF FILE
