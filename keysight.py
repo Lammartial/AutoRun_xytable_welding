@@ -1,4 +1,4 @@
-from pyvisa import ResourceManager
+from eth2serial.base_visa import Eth2SerialVisaDevice
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
@@ -46,82 +46,36 @@ class DAQ970A(object):
     #        print(inst.args)     # arguments stored in .args
     #        print(inst)          # __str__ allows args to be printed directly,
 
-    def __init__(self) -> None:
-        self.rm = ResourceManager()          # auto decision for backend
-        pass    
-
-    def connect_by_name(self, DAQ970A_NAME_STR: str) -> None:
+    def __init__(self, name_ip: str, channel: int):
         """
-        Creates a connection (session) with the device by Name
+        Initialize the object with visa IP name.
+        Example "TCPIP0::192.168.1.101::inst0::INSTR"
 
         Args:
-            DAQ970A_NAME_STR (str): device name
+            host (str): visa IP name
+        """
+        super().__init__(name_ip, None)
+        pass   
+
+    def selftest(self) -> int:
+        """
+        Returns device self-test results, takes ~ 2 sec.
 
         Returns:
-            _type_: exception
+            int: 0 (pass) or 1 (one or more tests failed)
         """
-        try:
-            self.session = self.rm.open_resource(DAQ970A_NAME_STR)
-            # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
-            if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
-                self.session.read_termination = '\n'
-        except Exception as ex:
-            _log.exception(ex)
-            raise
-  
-    def connect_by_IP(self, DAQ970A_IP_STR: str) -> None:
-        """
-        Creates a connection (session) with the device by IP.
+        cmd = f"*TST?"
+        return int(self.request(cmd, 5000))
 
-        Args:
-            DAQ970A_IP_STR (str): device IP address
-
-        Returns:
-            _type_: exception
-        """
-        try:
-            self.session = self.rm.open_resource(DAQ970A_IP_STR)
-            # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
-            if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
-                self.session.read_termination = '\n'
-        except Exception as ex:
-            _log.exception(ex)
-            raise
-
-    def selftest(self):
-        """Returns device self-test results, takes ~ 2 sec.
-
-        Returns:
-            _type_: exception
-        """
-        # Last operation completed successfully -> Connection is OK
-        if (self.rm.last_status == 0):
-            try:
-                self.session.timeout = 5000
-                result = self.session.query(f"*TST?")
-                self.session.timeout = 2000 
-                return result
-            except Exception as ex:
-                _log.exception(ex)
-                raise
-
-    def selftest_all(self):
+    def selftest_all(self) -> int:
         """
         Returns device full self-test results, takes ~5 sec
 
         Returns:
-            _type_: exception
-        """   
-        # Last operation completed successfully -> Connection is OK
-        if (self.rm.last_status == 0):
-            try:
-                self.session.timeout = 10000 
-                result = self.session.query(f"TEST:ALL?")
-                self.session.timeout = 2000 
-                return result
-            except Exception as ex:
-                _log.exception(ex)
-                raise
+            int: 0 (pass) or 1 (one or more tests failed)
+        """
+        cmd = f"TEST:ALL?"
+        return int(self.request(cmd, 10000))
 
     def set_raw_command(self, cmd: str):
         """
@@ -131,21 +85,11 @@ class DAQ970A(object):
             cmd (str): SCPI command 
 
         Returns:
-            _type_: exception
+            str: response
         """
-        # Last operation completed successfully -> Connection is OK
-        if (self.rm.last_status == 0):
-            try:
-                #if (cmd is str):
-                    self.session.write(cmd)
-                #    return result
-                #else:
-                #    raise ValueError('Error, set_raw_command: invalid parameters')
-            except Exception as ex:
-                _log.exception(ex)
-                raise
+        return self.request(str(cmd), 2000)
 
-    def get_resistance(self, slot: int, channel: int):
+    def get_resistance(self, slot: int, channel: int) -> float:
         """
         Returns resistance measurement.
 
@@ -157,26 +101,21 @@ class DAQ970A(object):
             ValueError: invalid argument
 
         Returns:
-            _type_: resistance(float) or exception
+            float: resistance
         """
         # trick to use function in NI Teststand
         slot = int(slot)
         channel = int(channel)
-        # Last operation completed successfully -> Connection is OK
-        if (self.rm.last_status == 0):
-            assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
-            assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
-            try:
-                slot_str = str(slot)
-                channel_str = str(channel).zfill(2)
-                cmd = "MEAS:RES? AUTO,DEF,(@" + slot_str + channel_str + ")"
-                self.session.timeout = 5000
-                result = self.session.query(cmd)
-                self.session.timeout = 2000
-                return float(result)
-            except Exception as ex:
-                _log.exception(ex)
-                raise
+        assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
+        assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
+        try:
+            slot_str = str(slot)
+            channel_str = str(channel).zfill(2)
+            cmd = "MEAS:RES? AUTO,DEF,(@" + slot_str + channel_str + ")"
+            return float(self.request(cmd, 5000))
+        except Exception as ex:
+            _log.exception(ex)
+            raise
 
     def get_4w_resistance(self, slot: int, channel: int):
         """
@@ -190,28 +129,23 @@ class DAQ970A(object):
             ValueError: invalid argument
 
         Returns:
-            _type_: resistance(float) or exception
+            float: resistance
         """
         # trick to use function in NI Teststand
         slot = int(slot)
         channel = int(channel)
-        # Last operation completed successfully -> Connection is OK
-        if (self.rm.last_status == 0):
-            assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
-            assert ((channel >= 1) and (channel <= 10)), ValueError('Invalid channel. Allowed range is 1 .. 10.')
-            try:
-                slot_str = str(slot)
-                channel_str = str(channel).zfill(2)
-                cmd = "MEAS:FRES? AUTO,DEF,(@" + slot_str + channel_str + ")"
-                self.session.timeout = 5000
-                result = self.session.query(cmd)
-                self.session.timeout = 2000
-                return float(result)
-            except Exception as ex:
-                _log.exception(ex)
-                raise
+        assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
+        assert ((channel >= 1) and (channel <= 10)), ValueError('Invalid channel. Allowed range is 1 .. 10.')
+        try:
+            slot_str = str(slot)
+            channel_str = str(channel).zfill(2)
+            cmd = "MEAS:FRES? AUTO,DEF,(@" + slot_str + channel_str + ")"
+            return float(self.request(cmd, 5000))
+        except Exception as ex:
+            _log.exception(ex)
+            raise
 
-    def get_VDC(self, slot: int, channel: int):
+    def get_VDC(self, slot: int, channel: int) -> float:
         """
         Returns DC voltage measurement.
 
@@ -223,28 +157,23 @@ class DAQ970A(object):
             ValueError: invalid argument
 
         Returns:
-            _type_: VDC (float) or exception
+            float: VDC
         """
         # trick to use function in NI Teststand
         slot = int(slot)
         channel = int(channel)
-        # Last operation completed successfully -> Connection is OK
-        if (self.rm.last_status == 0):
-            assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
-            assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
-            try:
-                slot_str = str(slot)
-                channel_str = str(channel).zfill(2)
-                cmd = "MEAS:VOLT:DC? AUTO,DEF,(@" + slot_str + channel_str + ")"
-                self.session.timeout = 5000
-                result = self.session.query(cmd)
-                self.session.timeout = 2000
-                return float(result)
-            except Exception as ex:
-                _log.exception(ex)
-                raise
+        assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
+        assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
+        try:
+            slot_str = str(slot)
+            channel_str = str(channel).zfill(2)
+            cmd = "MEAS:VOLT:DC? AUTO,DEF,(@" + slot_str + channel_str + ")"
+            return float(self.request(cmd, 5000))
+        except Exception as ex:
+            _log.exception(ex)
+            raise
 
-    def get_VAC(self, slot: int, channel: int):
+    def get_VAC(self, slot: int, channel: int) -> float:
         """
         Returns AC voltage measurement.
 
@@ -256,28 +185,23 @@ class DAQ970A(object):
             ValueError: invalid argument
 
         Returns:
-            _type_: VAC (float) or exception
+            float: VAC 
         """
         # trick to use function code in NI Teststand
         slot = int(slot)
         channel = int(channel)
-        # Last operation completed successfully -> Connection is OK
-        if (self.rm.last_status == 0):
-            assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
-            assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
-            try:
-                slot_str = str(slot)
-                channel_str = str(channel).zfill(2)
-                cmd = "MEAS:VOLT:AC? AUTO,DEF,(@" + slot_str + channel_str + ")"
-                self.session.timeout = 5000
-                result = self.session.query(cmd)
-                self.session.timeout = 2000
-                return float(result)
-            except Exception as ex:
-                _log.exception(ex)
-                raise     
+        assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
+        assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
+        try:
+            slot_str = str(slot)
+            channel_str = str(channel).zfill(2)
+            cmd = "MEAS:VOLT:AC? AUTO,DEF,(@" + slot_str + channel_str + ")"
+            return float(self.request(cmd, 5000))
+        except Exception as ex:
+            _log.exception(ex)
+            raise     
 
-    def get_ADC(self, slot: int, channel: int):
+    def get_ADC(self, slot: int, channel: int) -> float:
         """
         Returns DC current measurement.
 
@@ -289,29 +213,24 @@ class DAQ970A(object):
             ValueError: invalid argument
 
         Returns:
-            _type_: ADC (float) or exception
+            float: ADC
         """
         # trick to use function in NI Teststand
         slot = int(slot)
         channel = int(channel)
-        # Last operation completed successfully -> Connection is OK
-        if (self.rm.last_status == 0):
-            assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
-            assert ((channel == 21) or (channel == 22)), ValueError('Invalid channel. Only 21 or 22 allowed.')
-            try:
-                slot_str = str(slot)
-                channel_str = str(channel).zfill(2)
-                cmd = "MEAS:CURR:DC? AUTO,DEF,(@" + slot_str + channel_str + ")"
-                self.session.timeout = 5000
-                result = self.session.query(cmd)
-                self.session.timeout = 2000
-                return float(result)
-            except Exception as ex:
-                _log.exception(ex)
-                raise  
+        assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
+        assert ((channel == 21) or (channel == 22)), ValueError('Invalid channel. Only 21 or 22 allowed.')
+        try:
+            slot_str = str(slot)
+            channel_str = str(channel).zfill(2)
+            cmd = "MEAS:CURR:DC? AUTO,DEF,(@" + slot_str + channel_str + ")"
+            return float(self.request(cmd, 5000))
+        except Exception as ex:
+            _log.exception(ex)
+            raise  
 
 
-    def get_temp(self, slot: int, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str):
+    def get_temp(self, slot: int, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str) -> float:
         """
         Returns temperature measurement.
 
@@ -327,62 +246,51 @@ class DAQ970A(object):
             ValueError: invalid argument 
 
         Returns:
-            _type_: Temperature (float) or exception
+            float: Temperature
         """
         # trick to use function in NI Teststand
         slot = int(slot)
         channel = int(channel)
         rtd_resist = int(rtd_resist)
         fth_type = int(fth_type)
-        # Last operation completed successfully -> Connection is OK
-        if (self.rm.last_status == 0):
-            assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
-            assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
-            try:                    
-                slot_str = str(slot)
-                channel_str = str(channel).zfill(2)
-                match tran_type:
-                    case 'TC' | 'DEF':
-                        assert (tc_type in ["B", "E", "J", "K", "N", "R", "S", "T"]), ValueError('Error, get_temp: invalid tc_type parameter')
-                        cmd = "MEAS:TEMP:TC?" + " " + tc_type + ",(@" + slot_str + channel_str + ")"
-                        self.session.timeout = 5000
-                        result = self.session.query(cmd)
-                        self.session.timeout = 2000
-                        return float(result)
-                    case 'FTH' | 'THER':
-                        assert ((fth_type == 2252) or (fth_type == 5000) or (fth_type == 10000)), ValueError('Error, get_temp: invalid fth_type parameter')
-                        cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(fth_type) + ",(@" + slot_str + channel_str + ")"
-                        self.session.timeout = 5000
-                        result = self.session.query(cmd)
-                        self.session.timeout = 2000
-                        return float(result)
-                    case 'FRTD' | 'RTD':
-                        assert((rtd_resist == 100) or (rtd_resist == 1000)), ValueError('Error, get_temp: invalid rtd_resist parameters')
-                        cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(rtd_resist) + ",(@" + slot_str + channel_str + ")"
-                        self.session.timeout = 5000
-                        result = self.session.query(cmd)
-                        self.session.timeout = 2000
-                        return float(result)
-                    case _:
-                        raise ValueError('Error, get_temp: unknown parameter')
-            except Exception as ex:
-                _log.exception(ex)
-                raise 
+        assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
+        assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
+        try:                    
+            slot_str = str(slot)
+            channel_str = str(channel).zfill(2)
+            match tran_type:
+                case 'TC' | 'DEF':
+                    assert (tc_type in ["B", "E", "J", "K", "N", "R", "S", "T"]), ValueError('Error, get_temp: invalid tc_type parameter')
+                    cmd = "MEAS:TEMP:TC?" + " " + tc_type + ",(@" + slot_str + channel_str + ")"
+                    return float(self.request(cmd, 5000))
+                case 'FTH' | 'THER':
+                    assert ((fth_type == 2252) or (fth_type == 5000) or (fth_type == 10000)), ValueError('Error, get_temp: invalid fth_type parameter')
+                    cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(fth_type) + ",(@" + slot_str + channel_str + ")"
+                    return float(self.request(cmd, 5000))
+                case 'FRTD' | 'RTD':
+                    assert((rtd_resist == 100) or (rtd_resist == 1000)), ValueError('Error, get_temp: invalid rtd_resist parameters')
+                    cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(rtd_resist) + ",(@" + slot_str + channel_str + ")"
+                    return float(self.request(cmd, 5000))
+                case _:
+                    raise ValueError('Error, get_temp: unknown parameter')
+        except Exception as ex:
+            _log.exception(ex)
+            raise 
 
-    def disconnect(self):
-        """Closes the connection (session) and the device.
-
-        Returns:
-            _type_: exception
-        """
-        # Last operation completed successfully -> Connection is OK
-        if (self.rm.last_status == 0):
-            try:
-                self.session.close()
-                self.rm.close()
-            except Exception as ex:
-                _log.exception(ex)
-                raise
+    #def disconnect(self):
+    #    """Closes the connection (session) and the device.
+    #
+    #    Returns:
+    #        _type_: exception
+    #    """
+    #    # Last operation completed successfully -> Connection is OK
+    #    if (self.rm.last_status == 0):
+    #        try:
+    #            self.session.close()
+    #            self.rm.close()
+    #        except Exception as ex:
+    #            _log.exception(ex)
+    #            raise
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -395,14 +303,9 @@ if __name__ == "__main__":
     DAQ970A_NAME_STR = "TCPIP0::K-DAQ970A-17481.local::inst0::INSTR"
 
     # 1. Create an instance of DAQ970A class
-    daq970a = DAQ970A()
+    daq970a = DAQ970A(DAQ970A_IP_STR)
 
-    # 2. Connect to the device
-    #daq970a.connect_by_name(DAQ970A_NAME_STR)
-    # or
-    daq970a.connect_by_IP(DAQ970A_IP_STR)
-
-    # 3. Do some stuff
+    # 2. Do some stuff
     print(daq970a.selftest())
 
     res = daq970a.get_resistance(1,1)
@@ -417,19 +320,6 @@ if __name__ == "__main__":
     #print(daq970a.get_ADC(1,21))
 
     #print(daq970a.get_temp(1, 1, "DEF", 0, 0, "B"))
-
-    # 4. ERRORS 
-    # Value error (channel = 25):
-    #print(daq970a.get_resistance(1,25))
-
-    # Value error (tran_type is not a string)
-    #print(daq970a.get_temp(1, 1, 0, 0, 0, "B"))
-
-    # Value error (tc_type is not a string)
-    #print(daq970a.get_temp(1, 1, "DEF", 0, 0, 0))
-
-    # 4. Close connection
-    daq970a.disconnect()
     
     print("DONE.")
     
