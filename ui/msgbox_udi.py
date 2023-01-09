@@ -419,6 +419,7 @@ def identify_uut(seq_context) -> Tuple[bool, str]:
     """
     global scanned_udi
 
+    scanned_udi = None  # clear the last UDI
     # this is just to demonstrate the parameter passing from TestStand
     context_id = seq_context.Id
     executing_sequence_name = seq_context.Sequence.Name
