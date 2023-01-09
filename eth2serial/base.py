@@ -2,6 +2,7 @@
 Provides basic ETH to SERIAL conversion handling the socket communication.
 """
 import socket
+import asyncio
 
 DEBUG = 0
 
@@ -11,7 +12,7 @@ DEBUG = 0
 import logging
 
 _log = logging.getLogger(__name__)
-_log.setLevel(logging.DEBUG)
+_log.setLevel(logging.DEBUG if DEBUG else logging.INFO)
 
 # Initialize the logging
 try:
@@ -87,7 +88,7 @@ class Eth2SerialDevice(object):
         finally:
             _s.close()
 
-    def request(self, msg: str | None, timeout: float = 5.0, limit: int = 0, decode: str = "ascii") -> str:
+    def request(self, msg: str | None, timeout: float = 5.0, limit: int = 0, encoding: str = "ascii") -> str:
         """_summary_
 
         Args:
@@ -116,7 +117,7 @@ class Eth2SerialDevice(object):
                     break
                 if (rcvdata.rfind(self._termination_as_bytes) >= 0):
                     break
-            result = rcvdata.decode(decode) if len(rcvdata)>0 else None
+            result = rcvdata.decode(encoding=encoding)
             _log.debug(f"Received: {result!r}")
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling
@@ -127,6 +128,121 @@ class Eth2SerialDevice(object):
         finally:
             _s.close()
         return result
+
+    async def request_async(self,  message: str | None, timeout=1.0, limit: str | bytes | int = b'\n', encoding: str = "utf-8") -> str:
+
+        async def xchange(reader, writer):
+            if message:
+                _log.debug(f'Send: {message!r}')
+                writer.write(message.encode())
+                await writer.drain()
+            if isinstance(limit, int):
+                #rcvdata = await reader.read()  # read until limit bytes or EOF
+                rcvdata = bytes()
+                while chunk := await reader.read(512):
+                    # read until limit bytes or EOF
+                    if not chunk:
+                        break
+                    rcvdata += chunk
+                    if len(rcvdata) >= limit:
+                        rcvdata = rcvdata[:limit]
+                        break
+            elif isinstance(limit, bytes):
+                rcvdata = await reader.readuntil(separator=limit)  # read until \n or \r\n
+            else:
+                rcvdata = await reader.readline()  # read until \n or \r\n
+            result = rcvdata.decode(encoding=encoding)
+            _log.debug(f"Received: {result!r}")
+            return result
+
+        data = None
+        # do NOT catch the exception for timeout here, propagate to the caller!
+        #reader, writer = await asyncio.wait_for(asyncio.open_connection(_IP, _PORT), timeout/2)
+        reader, writer = await asyncio.open_connection(self.host, self.port)
+
+        # Wait for at most 1 second (which is also the pause time for this loop)
+        try:
+            #data = await asyncio.wait_for(xchange(reader, writer), timeout)
+            data = await xchange(reader, writer)
+        except asyncio.exceptions.TimeoutError:
+            pass
+        finally:
+            # Close the connection
+            writer.close()
+            await writer.wait_closed()
+
+        return data
+
+#--------------------------------------------------------------------------------------------------
+
+async def tcp_send_and_receive_from_server(resource_string: str, message: str | None, timeout=1.0, limit: str | bytes | int = b'\n') -> str:
+    """
+    Connects to the ETH to UART bridge at the port 23 on the fixed IP UART_BRIDGE_IP.
+    It sends some message if given and afterwards it waits for incoming with limit timeout.
+
+    Args:
+        message (str): message
+        timeout (float, optional): Timeout for open, wait send and receive in seconds.
+            timeout/2 is for open, rest for send/receive. Defaults to 1.0.
+        limit (bytes, str or int, optional): Defines if the read function used:
+            if limit is of bytes, it uses stream.readuntil(separator=limit)) so that the line
+                termination can be set freely. Note that the terminator is stripped from data.
+            if limit is of string, it uses stream.readline(). Note that the line terminator
+                is NOT stripped from data.
+            if limit is of integer, is uses stream.read(limit) so that the user can set the
+                limit of bytes to be read. Note that at EOF the function returns even if less
+                bytes than limit have been read.
+            Defaults to b"\n".
+
+    Returns:
+        str: received data or None on timeout.
+    """
+
+    _IP, _PORT = resource_string.split(":")
+
+    async def xchange(reader, writer):
+        if message:
+            if DEBUG:
+                print(f'Send: {message!r}')
+            writer.write(message.encode())
+            await writer.drain()
+        if isinstance(limit, int):
+            #rcvdata = await reader.read()  # read until limit bytes or EOF
+            rcvdata = bytes()
+            while chunk := await reader.read(512):
+                # read until limit bytes or EOF
+                if not chunk:
+                    break
+                rcvdata += chunk
+                if len(rcvdata) >= limit:
+                    rcvdata = rcvdata[:limit]
+                    break
+        elif isinstance(limit, bytes):
+            rcvdata = await reader.readuntil(separator=limit)  # read until \n or \r\n
+        else:
+            rcvdata = await reader.readline()  # read until \n or \r\n
+        if DEBUG:
+            print(f'Received: {rcvdata.decode()!r}')
+        return rcvdata.decode()
+
+    data = None
+    # do NOT catch the exception for timeout here, propagate to the caller!
+    #reader, writer = await asyncio.wait_for(asyncio.open_connection(_IP, _PORT), timeout/2)
+    reader, writer = await asyncio.open_connection(_IP, _PORT)
+
+    # Wait for at most 1 second (which is also the pause time for this loop)
+    try:
+        #data = await asyncio.wait_for(xchange(reader, writer), timeout)
+        data = await xchange(reader, writer)
+    except asyncio.exceptions.TimeoutError:
+        pass
+    finally:
+        # Close the connection
+        writer.close()
+        await writer.wait_closed()
+
+    return data
+
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
