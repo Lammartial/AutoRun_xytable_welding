@@ -16,7 +16,7 @@ from collections.abc import Iterator
 from typing import Optional, Tuple
 from pathlib import Path
 
-from rrc.eth2serial.base_async import tcp_send_and_receive_from_server
+from rrc.eth2serial.base import tcp_send_and_receive_from_server, Eth2SerialDevice
 
 DEBUG = 0   # set to 0 for production
 
@@ -59,10 +59,13 @@ async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> 
     """
     #safeprint(f'aio_blocker starting. {resource_string}s.')
     #await asyncio.sleep(block)
+    _ip, _port = resource_string.split(":")
+    dev = Eth2SerialDevice(_ip, _port)
     while True:
         #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = 30)
-        _response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0)  # uses .readuntil()
+        #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0)  # uses .readuntil()
         #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = None)  # uses .readln()
+        _response = await dev.request_async(None, timeout=3.0)
         if _response:
             _wp = f"RESPONSE={_response}"
             #safeprint(_wp)
@@ -437,7 +440,7 @@ if __name__ == '__main__':
     #     #sys.exit(main())
     #     for i in range(0, 2):
     #         main("169.254.36.1:2000")
-    for i in range(0,10):
-        z = identify_uut({"scanner":"192.168.1.120:2000"})
-        print(f"IDX:{i} -> {z}")
+    for i in range(0,1):
+        main("192.168.1.120:2000", title="TEST FROM COMMANDLINE")
+        print(f"IDX:{i} -> {scanned_udi}")
 # END OF FILE
