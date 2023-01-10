@@ -370,7 +370,7 @@ class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
         assert((mode == 2) or (mode == 4)), ValueError('Error, Hioki set_wire_mode: Only 2 or 4 modes are allowed')
         self.send(f":SYST:MOD:WIRE:MODE {slot},WIRE{mode}")
         #return hioki.sw.set_raw_query("*ESR?")
-        #return self.get_opc()
+        return self.get_opc()
 
 
     def get_wire_mode(self, slot: int) -> str:
@@ -407,7 +407,7 @@ class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
         assert((slot >= 1) and (slot <= 3)), ValueError('Error, Hioki set_shield_mode: Allowed slot range is 1 .. 3')
         assert(mode in arr_mode), ValueError('Error, Hioki set_shield_mode: incorrect mode')
         self.send(f':SYST:MOD:SHI {slot},{mode}')
-        #return self.get_opc()
+        return self.get_opc()
 
     def get_shield_mode(self, slot: int) -> str:
         """
@@ -462,7 +462,7 @@ class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
         assert((slot >= 1) and (slot <= 3)), ValueError('Error, Hioki close: Allowed slot range is 1 .. 3')
         assert((channel >= 1) and (channel <= 22)), ValueError('Error, Hioki close: Allowed channel range is 1 .. 22')
         self.send(f':ROUT:CLOS {slot}{channel:02d}')
-        #return self.get_opc()
+        return self.get_opc()
         #return hioki.sw.set_raw_query("*ESR?")
 
     def open(self) -> bool:
@@ -862,8 +862,8 @@ if __name__ == "__main__":
     #hioki.sw.open()
 
     # Sockets need to be closed
-    hioki.bt.close_socket()
-    hioki.sw.close_socket()
+    #hioki.bt.close_socket()
+    #hioki.sw.close_socket()
 
     print("DONE.")
 

@@ -69,11 +69,13 @@ class Eth2Serial_SockSingleConnection_Device(object):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.settimeout(5.0)
         self.socket.connect((self.host, self.port))
-        pass
+        return self
 
-    def __exit__(self):
-        self.socket.close()
-        pass     
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.socket.close() 
+
+    def close_socket(self):
+        self.socket.close()   
 
     def send(self, msg: str, timeout: float = 3.0) -> None:
         """_summary_
@@ -149,9 +151,6 @@ class Eth2SerialDevice(object):
         #self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         #self.socket.settimeout(3.0)
         #self.socket.connect((self.host, self.port))
-
-    def close_socket(self):
-        self.socket.close()
 
     def send(self, msg: str, timeout: float = 3.0) -> None:
         """_summary_
