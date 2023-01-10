@@ -264,7 +264,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
         try:
             param_str =  f"{curr:06.3f}"
             cmd = 'CURR:LIM:POS ' + param_str
-            return float(self.request(cmd, 2000))    
+            return float(self.send(cmd, 2000))    
         except Exception as ex:
             _log.exception(ex)
             raise
@@ -579,6 +579,14 @@ if __name__ == "__main__":
     it_m3412_4.set_voltage(1.00)                       # No return value
     it_m3412_5.set_voltage(1.00)                       # No return value
     it_m3412_6.set_voltage(1.00)                       # No return value
+
+    # Set current. curr - string 'MIN', 'MAX' or'XX.XXX' Amp
+    it_m3412_1.set_current_limit_positive(0.05)                      # No return value
+    it_m3412_2.set_current_limit_positive(0.05)                      # No return value
+    it_m3412_3.set_current_limit_positive(0.05)                      # No return value
+    it_m3412_4.set_current_limit_positive(0.05)                      # No return value
+    it_m3412_5.set_current_limit_positive(0.05)                      # No return value
+    it_m3412_6.set_current_limit_positive(0.05)                      # No return value
 
     # Set current. curr - string 'MIN', 'MAX' or'XX.XXX' Amp
     it_m3412_1.set_current(0.100)                      # No return value
