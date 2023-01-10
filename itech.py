@@ -264,7 +264,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
         try:
             param_str =  f"{curr:06.3f}"
             cmd = 'CURR:LIM:POS ' + param_str
-            return float(self.send(cmd, 2000))    
+            self.send(cmd, 2000)    
         except Exception as ex:
             _log.exception(ex)
             raise
