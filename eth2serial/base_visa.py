@@ -50,7 +50,10 @@ class Eth2SerialVisaDevice(object):
             if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
                 self.session.read_termination = '\n'
             self.session.timeout = timeout
-            chn = "CHAN " + str(self.channel) + ";"
+            # In case of use without channel separation
+            chn = ""
+            if (self.channel != 0):
+                chn = "CHAN " + str(self.channel) + ";"
             self.session.write(chn + msg)
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling
@@ -77,7 +80,10 @@ class Eth2SerialVisaDevice(object):
             if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
                 self.session.read_termination = '\n'
             self.session.timeout = timeout
-            chn = "CHAN " + str(self.channel) + ";"
+            # In case of use without channel separation
+            chn = ""
+            if (self.channel != 0):
+                chn = "CHAN " + str(self.channel) + ";"
             result = self.session.query(chn + msg)
             _log.debug(f"Received: {result!r}")
         except TimeoutError as ex:

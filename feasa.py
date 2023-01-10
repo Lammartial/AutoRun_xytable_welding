@@ -64,8 +64,6 @@ class FEASA_CH9121(Eth2SerialDevice):
         Returns:
             bool: False - failed, True - success
         """
-
-
         response = self.request("capture")
         if (self.RESPONSE_OK in response):
             return True 

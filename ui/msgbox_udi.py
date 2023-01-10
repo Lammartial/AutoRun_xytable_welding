@@ -16,7 +16,7 @@ from collections.abc import Iterator
 from typing import Optional, Tuple
 from pathlib import Path
 
-from rrc.eth2serial.base_async import tcp_send_and_receive_from_server
+from rrc.eth2serial.base import tcp_send_and_receive_from_server, Eth2SerialDevice
 
 DEBUG = 0   # set to 0 for production
 
@@ -26,7 +26,7 @@ DEBUG = 0   # set to 0 for production
 import logging
 
 _log = logging.getLogger(__name__)
-_log.setLevel(logging.DEBUG)
+_log.setLevel(logging.DEBUG if DEBUG else logging.INFO)
 
 # Initialize the logging
 try:
@@ -39,9 +39,9 @@ except Exception as e:
 # Global reference to loop allows access from different environments.
 aio_loop: Optional[asyncio.AbstractEventLoop] = None
 tk_q: queue.Queue = None
-UDI: str = None
 ok_button = None
 var_udi = None
+scanned_udi: str = None
 
 async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> None:
     """ Asynchronously block the thread and put a 'Hello World' work package into Tkinter's work queue.
@@ -59,8 +59,13 @@ async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> 
     """
     #safeprint(f'aio_blocker starting. {resource_string}s.')
     #await asyncio.sleep(block)
+    _ip, _port = resource_string.split(":")
+    dev = Eth2SerialDevice(_ip, _port)
     while True:
-        _response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = 30)
+        #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = 30)
+        #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0)  # uses .readuntil()
+        #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = None)  # uses .readln()
+        _response = await dev.request_async(None, timeout=3.0)
         if _response:
             _wp = f"RESPONSE={_response}"
             #safeprint(_wp)
@@ -214,7 +219,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
 
     This runs in the Main Thread.
     """
-    global UDI, var_udi, ok_button
+    global scanned_udi, var_udi, ok_button
 
     _log.debug('tk_main starting\n')
     row_itr = itertools.count()
@@ -226,13 +231,13 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     var_udi = tk.StringVar(value="")
 
     def _accept_udi(parent):
-        global UDI, var_udi
-        UDI = var_udi.get()
+        global scanned_udi, var_udi
+        scanned_udi = var_udi.get()
         root.destroy()
 
     def _cancel(parent):
-        global UDI
-        UDI = None
+        global scanned_udi
+        scanned_udi = None
         root.destroy()
 
     root.withdraw()  # hide window
@@ -349,7 +354,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
 
     _log.debug('tk_callback_consumer ending')
     _log.debug('tk_main ending')
-    _log.debug(f"UDI={UDI}")
+    _log.debug(f"UDI={scanned_udi}")
 
 
 async def manage_aio_loop(aio_initiate_shutdown: threading.Event):
@@ -406,8 +411,8 @@ def main(resource_str: str, title: str = "ENTER UDI"):
     #_log.debug('main ending')
 
 #--------------------------------------------------------------------------------------------------
-def identify_uut(context) -> Tuple[bool, str]:
-    """Entry function for TestStand.
+def identify_uut(seq_context) -> Tuple[bool, str]:
+    """Entry function for TestStand using context IDispatch interface (block of data)
 
     Args:
         context (dict): TestStand context
@@ -415,12 +420,17 @@ def identify_uut(context) -> Tuple[bool, str]:
     Returns:
         Tuple[bool, str]: return values to a TestStand container that expects two types in this order.
     """
-    global UDI
+    global scanned_udi
 
-    #sys.exit(main())
-    main(context["scanner"])
-    if UDI is not None:
-        return (True, UDI)
+    scanned_udi = None  # clear the last UDI
+    # this is just to demonstrate the parameter passing from TestStand
+    context_id = seq_context.Id
+    executing_sequence_name = seq_context.Sequence.Name
+    executing_step_name = seq_context.Step.Name
+    _scanner = str(seq_context.Locals.TestSocketResources.scanner)
+    main(_scanner)
+    if scanned_udi is not None:
+        return (True, scanned_udi)
     else:
         return (False, "")
 
@@ -430,7 +440,7 @@ if __name__ == '__main__':
     #     #sys.exit(main())
     #     for i in range(0, 2):
     #         main("169.254.36.1:2000")
-    for i in range(0,3):
-        z = identify_uut({"scanner":"169.254.36.1:2000"})
-        print(f"IDX:{i} -> {z}")
+    for i in range(0,1):
+        main("192.168.1.120:2000", title="TEST FROM COMMANDLINE")
+        print(f"IDX:{i} -> {scanned_udi}")
 # END OF FILE
