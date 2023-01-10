@@ -2,7 +2,7 @@ import logging
 import pathlib
 import sys
 from time import sleep
-from typing import Union, Tuple
+from typing import Union, Tuple, List
 from rrc.smartbattery import Battery
 
 
