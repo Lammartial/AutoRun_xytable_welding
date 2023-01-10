@@ -357,8 +357,8 @@ class Battery:
 
     def __init__(self, smbus, slvAddress=0x0b, pec=False):
         self.bus = smbus
-        self.address = slvAddress
-        self.pec = pec
+        self.address = int(slvAddress)
+        self.pec = bool(pec)
         _bat = self
         # dataset special commands
         self.ds[Cmd.BATTERY_STATUS] = BatteryStatus(_bat, Cmd.BATTERY_STATUS)

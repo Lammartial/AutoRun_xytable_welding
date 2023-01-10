@@ -51,9 +51,9 @@ class BusMaster:
         """
         self.i2c = i2c
 
-        self.pause_us = pause_us  # in micro seconds
-        self.retry_limit = retry_limit  # number of read repetitions, must be integer in range 1 .. 10
-        self.verify_rounds = verify_rounds  # number of read repetitions, must be 1,3,5,7,9, etc. (odd numbers > 0)
+        self.pause_us = int(pause_us)  # in micro seconds
+        self.retry_limit = int(retry_limit)  # number of read repetitions, must be integer in range 1 .. 10
+        self.verify_rounds = int(verify_rounds)  # number of read repetitions, must be 1,3,5,7,9, etc. (odd numbers > 0)
 
     # ----------------------------------------------------------------------------------------------
     @property
