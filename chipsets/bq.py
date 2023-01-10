@@ -37,7 +37,7 @@ class ChipsetTexasInstruments(Chipset):
         """Identifies the presence of a chipset of this type."""
         pass
 
-    def cell_voltages(self):
+    def cell_voltages(self) -> tuple:
         """ Returns the cell voltage registers of the chip as array.
 
             Independent how many cells are connected, all four registers
@@ -45,12 +45,12 @@ class ChipsetTexasInstruments(Chipset):
         Returns:
             array: integers
         """
-        return [
+        return (
             self.readWordVerified(Cmd.CELL1_VOLTAGE)[0],
             self.readWordVerified(Cmd.CELL2_VOLTAGE)[0],
             self.readWordVerified(Cmd.CELL3_VOLTAGE)[0],
             self.readWordVerified(Cmd.CELL4_VOLTAGE)[0]
-        ]
+        )
 
     def is_sealed(self, refresh=True):
         """Returns true of the device is sealed.
@@ -77,7 +77,7 @@ class ChipsetTexasInstruments(Chipset):
         """Contains important status flage like sealed/unsealed status etc."""
         pass
 
-    def authenticate(self, key):
+    def authenticate(self, key: bytes | bytearray | str) -> bool:
         """Authenticate battery by using SHA1 key with a random challenge.
 
         Args:
@@ -104,7 +104,7 @@ class ChipsetTexasInstruments(Chipset):
                 return (hmac2 in rresponse) and (len(hmac2) == len(rresponse))
         return False
 
-    def _write_key(self, key):
+    def _write_key(self, key: int | bytes | bytearray | str) -> None:
         """Writes a given key of 32bits to the battery by manufacturer_access.
 
             Used to unseal the battery for TI chipsets.
@@ -136,7 +136,7 @@ class ChipsetTexasInstruments(Chipset):
         self.manufacturer_access = (ikey & 0xffff)         # low word first
         self.manufacturer_access = ((ikey >> 16) & 0xffff) # high word then
 
-    def unseal(self, unseal_key, fullaccess_key=None):
+    def unseal(self, unseal_key: int | bytes | bytearray | str, fullaccess_key: int | bytes | bytearray | str = None) -> bool:
         """Unseals the battery using a key given in hexadecimal format.
 
            Note: this function needs to have is_unsealed() implemented!
@@ -181,7 +181,7 @@ class ChipsetTexasInstruments(Chipset):
         #print("grrr")
         return False
 
-    def read_manufacturer_info_block(self, hexi=None):
+    def read_manufacturer_info_block(self, hexi: bool | str | None = None) -> bytes | bytearray | str:
         block, _ = self.readBlockVerified(0x70)
         return self._maybe_hexlify(block, hexi)
 

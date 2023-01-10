@@ -31,11 +31,11 @@ class Chipset(Battery):
         """Identifies the presence of a chipset of this type."""
         pass
 
-    def authenticate(self, key):
+    def authenticate(self, key) -> bool:
         """Authenticate battery by using a cryptographic feature."""
         pass
 
-    def _validate_buffer(self, buffer, name="buffer", length=None):
+    def _validate_buffer(self, buffer: bytes | bytearray | str, name: str = "buffer", length: int = None) -> bytes | bytearray:
         """Validates a given buffer and also converts it into bytes from a hex char string if possible.
 
         Args:
