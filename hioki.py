@@ -1,3 +1,4 @@
+from eth2serial.base import Eth2Serial_SockSingleConnection_Device
 from eth2serial.base import Eth2SerialDevice
 
 #--------------------------------------------------------------------------------------------------
@@ -32,7 +33,7 @@ class Hioki_BT3561A(Eth2SerialDevice):
     def __init__(self, host: str, port: int, termination: str = "\r\n"):
          super().__init__(host, port, termination)
 
-    def set_function(self, mode: str) -> None:
+    def set_function(self, mode: str) -> bool:
         """
         Select the Measurement Mode Setting.
 
@@ -41,9 +42,13 @@ class Hioki_BT3561A(Eth2SerialDevice):
 
         Raises:
             ValueError: _description_
+
+        Returns:
+            bool : True - success, False - failed
         """
         assert((mode == 'RV') or (mode == 'RES') or (mode == 'VOLT')), ValueError("Error, Hioki set_function: Only 'RV', 'RES' and 'VOLT' modes are allowed.")
         self.send(f':FUNC {mode}')
+        return True if self.request("*ESR?").strip() == "0" else False
 
     def get_function(self) -> str:
         """
@@ -54,7 +59,7 @@ class Hioki_BT3561A(Eth2SerialDevice):
         """
         return self.request(':FUNC?')
 
-    def set_resistance_range(self, range: float) -> None:
+    def set_resistance_range(self, range: float) -> bool:
         """
         Set the Resistance Measurement Range.
 
@@ -67,6 +72,7 @@ class Hioki_BT3561A(Eth2SerialDevice):
         range = float(range)
         assert((range >= 0) and (range <= 3100)), ValueError('Error, Hioki set_resistance_range: Allowed range is 0 .. 3100')
         self.send(f':RES:RANG {range}')
+        return True if self.request("*ESR?").strip() == "0" else False
 
     def get_resistance_range(self) -> float:
         """
@@ -84,7 +90,7 @@ class Hioki_BT3561A(Eth2SerialDevice):
             ----------
             range: float,  """
 
-    def set_voltage_range(self, range: float) -> None:
+    def set_voltage_range(self, range: float) -> bool:
         """
         Set the Voltage Measurement Range.
 
@@ -96,7 +102,8 @@ class Hioki_BT3561A(Eth2SerialDevice):
         """
         range = float(range)
         assert((range >= -300) and (range <= 300)), ValueError('Error, Hioki set_voltage_range: Allowed range is -300 .. 300')
-        return self.send(f':VOLT:RANG {range}')
+        self.send(f':VOLT:RANG {range}')
+        return True if self.request("*ESR?").strip() == "0" else False
 
     def get_voltage_range(self) -> float:
         """
@@ -108,7 +115,7 @@ class Hioki_BT3561A(Eth2SerialDevice):
         """
         return float(self.request(':VOLT:RANG?'))
 
-    def set_autorange(self, state: int) -> None:
+    def set_autorange(self, state: int) -> bool:
         """
         Set the Auto-Ranging Setting.
 
@@ -121,6 +128,7 @@ class Hioki_BT3561A(Eth2SerialDevice):
         state = int(state)
         assert((state == 0) or (state == 1)), ValueError('Error, Hioki set_autorange: Only 0 or 1 are allowed.')
         self.send(f':AUT {state}')
+        return True if self.request("*ESR?").strip() == "0" else False
 
     def get_autorange(self) -> str:
         """
@@ -131,9 +139,10 @@ class Hioki_BT3561A(Eth2SerialDevice):
         """
         return self.request(':AUT?')
 
-    def set_adjustment_clear(self):
+    def set_adjustment_clear(self) -> bool:
         """ Cancel Zero-Adjustment. """
-        return self.send(':ADJ:CLEA')
+        self.send(':ADJ:CLEA')
+        return True if self.request("*ESR?").strip() == "0" else False
 
     def set_adjustment(self) -> int:
         """
@@ -145,11 +154,12 @@ class Hioki_BT3561A(Eth2SerialDevice):
         """
         return self.request(':ADJ?')
 
-    def set_syst_calibration(self):
+    def set_syst_calibration(self) -> bool:
         """ Execute Self-Calibration. """
-        return self.send(':SYST:CAL')
+        self.send(':SYST:CAL')
+        return True if self.request("*ESR?").strip() == "0" else False
 
-    def set_syst_calibration_auto(self, state: int) -> None:
+    def set_syst_calibration_auto(self, state: int) -> bool:
         """_summary_
 
         Args:
@@ -160,7 +170,8 @@ class Hioki_BT3561A(Eth2SerialDevice):
         """
         state = int(state)
         assert((state == 0) or (state == 1)), ValueError('Error, Hioki set_autorange: Only 0 or 1 are allowed.')
-        return self.send(f':SYST:CAL:AUTO {state}')
+        self.send(f':SYST:CAL:AUTO {state}')
+        return True if self.request("*ESR?").strip() == "0" else False
 
     def get_syst_calibration_auto(self) -> str:
         """
@@ -258,11 +269,36 @@ class Hioki_BT3561A(Eth2SerialDevice):
         except Exception:
             raise
 
+    def set_raw_command(self, msg: str) -> None:
+        """
+        Sets raw command and returns error.
+
+        Args:
+            msg (str): command
+        """
+        return self.send(msg)
+
+    def set_raw_query(self, msg: str) -> str:
+        """
+        Query raw command and returns response.
+
+        Args:
+            msg (str): command
+
+        Returns:
+            str: response
+        """
+        return self.request(msg)
+
+    def clear_status(self) -> None:
+        """ Resets the Status byte and Event status registers. """
+        return self.send('*CLS')
+
 #--------------------------------------------------------------------------------------------------
 # SW1001
 #--------------------------------------------------------------------------------------------------
 
-class Hioki_SW1001(Eth2SerialDevice):
+class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
 
     def __init__(self, host: str, port: int, termination: str = "\r\n"):
         super().__init__(host, port, termination)
@@ -333,7 +369,9 @@ class Hioki_SW1001(Eth2SerialDevice):
         assert((slot >= 1) and (slot <= 3)), ValueError('Error, Hioki set_wire_mode: Allowed slot range is 1 .. 3')
         assert((mode == 2) or (mode == 4)), ValueError('Error, Hioki set_wire_mode: Only 2 or 4 modes are allowed')
         self.send(f":SYST:MOD:WIRE:MODE {slot},WIRE{mode}")
-        return self.get_opc()
+        #return hioki.sw.set_raw_query("*ESR?")
+        #return self.get_opc()
+
 
     def get_wire_mode(self, slot: int) -> str:
         """
@@ -369,7 +407,7 @@ class Hioki_SW1001(Eth2SerialDevice):
         assert((slot >= 1) and (slot <= 3)), ValueError('Error, Hioki set_shield_mode: Allowed slot range is 1 .. 3')
         assert(mode in arr_mode), ValueError('Error, Hioki set_shield_mode: incorrect mode')
         self.send(f':SYST:MOD:SHI {slot},{mode}')
-        return self.get_opc()
+        #return self.get_opc()
 
     def get_shield_mode(self, slot: int) -> str:
         """
@@ -423,8 +461,9 @@ class Hioki_SW1001(Eth2SerialDevice):
         channel = int(channel)
         assert((slot >= 1) and (slot <= 3)), ValueError('Error, Hioki close: Allowed slot range is 1 .. 3')
         assert((channel >= 1) and (channel <= 22)), ValueError('Error, Hioki close: Allowed channel range is 1 .. 22')
-        self.send(f':CLOS {slot}{channel:02d}')
-        return self.get_opc()
+        self.send(f':ROUT:CLOS {slot}{channel:02d}')
+        #return self.get_opc()
+        #return hioki.sw.set_raw_query("*ESR?")
 
     def open(self) -> bool:
         """ Opens all channels. """
@@ -484,12 +523,8 @@ class Hioki_SW1001(Eth2SerialDevice):
         #:SYSTem:COMMunicate:LAN:UPDate
         self.send(f':SYST:COMM:LAN:UPD')
         # now we need to update our communication host and port internally...
-        self.host = new_ip
-        self.port = new_port
-        # ...and wait for reboot of the device.
-        #
-        # !!! USER has to toggle a switch also !!!
-        #
+        #self.host = new_ip
+        #self.port = new_port
         sleep(pause_reboot)
         try:
             # check if the new address is available
@@ -532,18 +567,19 @@ class Hioki_Cell_Tester(object):
         assert((channel >= 1) and (channel <= 22)), ValueError('Error, measure_channnel: Only channels 1 .. 22 are allowed')
         # IMPORTANT! Set continuous measurement OFF.
         self.bt.set_continous_measurement(0)
-        # SW1001 operations ==================
-        if (channel <= 11):
-            #SLOT 1
-            self.sw.set_shield_mode(1, 'GND')
-            self.sw.set_wire_mode(1, 4)
-            self.sw.close(1, channel)
-        else:
-            #SLOT 2
-            channel = channel - 11
-            self.sw.set_shield_mode(2, 'GND')
-            self.sw.set_wire_mode(2, 4)
-            self.sw.close(2, channel)
+        with self.sw as sw_dev:
+            # SW1001 operations ==================
+            if (channel <= 11):
+                #SLOT 1
+                #self.sw.set_shield_mode(1, 'GND')
+                sw_dev.set_wire_mode(1, 4)
+                sw_dev.close(1, channel)
+            else:
+                #SLOT 2
+                channel = channel - 11
+                #self.sw.set_shield_mode(2, 'GND')
+                sw_dev.set_wire_mode(2, 4)
+                sw_dev.close(2, channel)
         # BT3561A operations =================
         #[BT3561A] :READ? Execute single measurement using BT3561A.
         result = self.bt.read()
@@ -566,14 +602,8 @@ class Hioki_Cell_Tester(object):
             # Channel 1/Slot1 or Channel 1/Slot 2. Needs to switch shield mode and wire mode
             if (i == 0):
                 self.sw.set_wire_mode(1, 4)
-                #self.sw.set_wire_mode(1, 4)
-                self.sw.set_shield_mode(1, 'GND')
-                #self.sw.set_shield_mode(1, 'GND')
             if (i == 11):
                 self.sw.set_wire_mode(2, 4)
-                #self.sw.set_wire_mode(2, 4)
-                self.sw.set_shield_mode(2, 'GND')
-                #self.sw.set_shield_mode(2, 'GND')
             if (i < 11):
                 #SLOT 1
                 self.sw.close(1, i+1)
@@ -599,6 +629,19 @@ if __name__ == "__main__":
 
     res : float = 0
 
+    #======================================================================================================
+    # Set SW 1001 IP address
+    #SW_DEFAULT_IP_STR = "192.168.0.254"     # SW1001 IP addr
+    #SW_DEFAULT_PORT = 23                    # SW1001 port
+    #sw = Hioki_SW1001(SW_DEFAULT_IP_STR, SW_DEFAULT_PORT)
+    #print(sw.set_new_ip_address("192.168.1.203"))
+
+    # Switch off the SW1001. 
+    # Set communication setting mode switch (DFLT/USER) to USER. 
+    # Switch on the device.
+
+    #======================================================================================================
+
     # predefined resource ID
     BT_IP_STR = "192.168.1.202"     # BT3561A IP addr
     BT_PORT = 23                    # BT3561A port
@@ -609,17 +652,21 @@ if __name__ == "__main__":
     hioki = Hioki_Cell_Tester(BT_IP_STR, BT_PORT, SW_IP_STR, SW_PORT)
 
     # # 2. ==== BT3561A functions ==========================================================================
-    # # *IDN?
-    # print('BT3561A ID: ', hioki.bt.get_idn())
 
-    # # *RST
-    # #hioki.bt.set_reset()
+    # Device initialization
+    # *IDN?
+    #print('BT3561A ID: ', hioki.bt.get_idn())
+    # *CLR 
+    #hioki.clear_status()
+
+    # Set trigger source - IMM
+    #hioki.bt.set_trigger_source('IMM')
+
+    # Set function 'RV'
+    #hioki.bt.set_function('RV')
 
     # # *TST?
     # print('BT3561A TEST: ', hioki.bt.self_test())
-
-    # # Set function 'RV'
-    # hioki.bt.set_function('RV')
 
     # # Get function
     # print('BT3561A Func: ', hioki.bt.get_function())
@@ -682,14 +729,79 @@ if __name__ == "__main__":
 
     # 3. ==== SW1001 functions ===========================================================================
 
+
+    #======== TEST =======================================================================================
+    #hioki.sw.clear_status()
+    #print("ESR ", hioki.sw.set_raw_query("*ESR?"))
+    #print(hioki.sw.get_idn())
+    #print("ESR ", hioki.sw.set_raw_query("*ESR?"))
+    #print("TYPE ", hioki.sw.set_raw_query(":SYST:CTYP? 1"))
+    #print("ESR ", hioki.sw.set_raw_query("*ESR?"))
+    #print("TYPE ", hioki.sw.set_raw_query(":SYST:CTYP? 2"))
+    #print("ESR ", hioki.sw.set_raw_query("*ESR?"))
+    #hioki.sw.set_raw_command(":ROUT:OPEN")
+    #print("ESR ", hioki.sw.set_raw_query("*ESR?"))
+
+    #===== BT ===================================================
+
+    #hioki.bt.set_raw_command("*CLS")
+    #print("BT ESR ", hioki.bt.set_raw_query("*ESR?"))
+    #hioki.bt.set_raw_command(":SYST:HEAD OFF")
+    #print("BT ESR ", hioki.bt.set_raw_query("*ESR?"))
+    #hioki.bt.set_continous_measurement(0)
+    #print("BT ESR ", hioki.bt.set_raw_query("*ESR?"))
+    #hioki.bt.set_trigger_source("IMM")
+    #print("BT ESR ", hioki.bt.set_raw_query("*ESR?"))
+    #hioki.bt.set_raw_command(":CALC:LIM:STAT OFF")
+    #print("BT ESR ", hioki.bt.set_raw_query("*ESR?"))
+
+    #============================================================
+
+    #hioki.sw.set_wire_mode(1, 4)
+    #hioki.sw.set_raw_command(":SYST:MOD:WIRE:MODE 1,WIRE4")
+    #sleep(0.1)
+    #print("ESR ", hioki.sw.set_raw_query("*ESR?"))
+    #print("OPC ", hioki.sw.set_raw_query("*OPC?"))
+    #print("ESR ", hioki.sw.set_raw_query("*ESR?"))
+    #hioki.sw.set_wire_mode(2, 4)
+    #hioki.sw.set_raw_command(":SYST:MOD:WIRE:MODE 2,WIRE4")
+    #sleep(0.1)
+    #print("ESR ", hioki.sw.set_raw_query("*ESR?"))
+    #print("OPC ", hioki.sw.set_raw_query("*OPC?"))
+    #print("ESR ", hioki.sw.set_raw_query("*ESR?"))
+    #hioki.sw.set_raw_command(":SYST:MOD:DEL 1,0")
+    #sleep(0.1)
+    #print("ESR ", hioki.sw.set_raw_query("*ESR?"))
+    #print("OPC ", hioki.sw.set_raw_query("*OPC?"))
+    #print("ESR ", hioki.sw.set_raw_query("*ESR?"))
+    #hioki.sw.set_raw_command(":SYST:MOD:DEL 2,0")
+    #sleep(0.1)
+    #print("ESR ", hioki.sw.set_raw_query("*ESR?"))
+    #print("OPC ", hioki.sw.set_raw_query("*OPC?"))
+    #print("ESR ", hioki.sw.set_raw_query("*ESR?"))
+    #hioki.sw.close(1, 1)
+    #hioki.sw.set_raw_command(":ROUT:CLOS 0101")
+    #sleep(0.1)
+    #print("ESR ", hioki.sw.set_raw_query("*ESR?"))
+    #print("OPC ", hioki.sw.set_raw_query("*OPC?"))
+    #print("ESR ", hioki.sw.set_raw_query("*ESR?"))
+
+    #print(hioki.bt.read())
+
+    #hioki.bt.set_continous_measurement(1)
+
+    #print('SW1001 Slot1 Wire Mode: ', hioki.sw.get_wire_mode(1))
+    #print('SW1001 Slot2 Wire Mode: ', hioki.sw.get_wire_mode(2))
+    #======================================================================================================
+
     # *IDN?
     #print('SW1001 ID: ', hioki.sw.get_idn())
 
     # *RST
     #hioki.sw.set_reset()
-    print(hioki.sw.get_idn())
-    print(hioki.sw.read_error_info())
-    hioki.sw.clear_status()
+    #print(hioki.sw.get_idn())
+    #print(hioki.sw.read_error_info())
+    #hioki.sw.clear_status()
 
     # *TST?
     #print('SW1001 Self Test: ', hioki.sw.self_test())
@@ -703,23 +815,29 @@ if __name__ == "__main__":
 
     # IMPORTANAT! Switching the channel:
     # 1. Set wire mode
-    hioki.sw.set_wire_mode(1, 4)
+    #hioki.sw.set_wire_mode(1, 4)
+    #sleep(5)
     # 2. Set shield mode (if needed)
-    hioki.sw.set_shield_mode(1, 'GND')
-    #print(hioki.sw.get_shield_mode(1))
+    #hioki.sw.set_shield_mode(1, 'GND')
+    #hioki.sw.set_shield_mode(2, 'GND')
+    #sleep(5)
     # 3. CLOSE channel
-    hioki.sw.close(1, 1)
+    #hioki.sw.close(1, 1)
 
-    print('SW1001 Slot1 Wire Mode: ', hioki.sw.get_wire_mode(1))
-    print('SW1001 Slot1 Shield Mode: ', hioki.sw.get_shield_mode(1))
+    #print(hioki.sw.set_raw_query("SCAN?"))
 
-    hioki.bt.set_continous_measurement(0)
+    #print('SW1001 Slot1 Wire Mode: ', hioki.sw.get_wire_mode(1))
+    #print('SW1001 Slot1 Shield Mode: ', hioki.sw.get_shield_mode(1))
+    #print('SW1001 Slot2 Wire Mode: ', hioki.sw.get_wire_mode(2))
+    #print('SW1001 Slot2 Shield Mode: ', hioki.sw.get_shield_mode(2))
 
-    print(hioki.bt.read())
+    #hioki.bt.set_continous_measurement(0)
 
-    hioki.bt.set_continous_measurement(1)
+    #print(hioki.bt.read())
 
-    hioki.sw.open()
+    #hioki.bt.set_continous_measurement(1)
+
+    #hioki.sw.open()
 
     # Get module count
     #print('SW1001 Slot1 Count: ', hioki.sw.get_module_count(1))
@@ -736,12 +854,16 @@ if __name__ == "__main__":
     #sleep(0.1)
 
     # measure single channel (1 ... 22)
-    #print(hioki.measure_channnel(1))
+    print(hioki.measure_channnel(1))
 
     # measure all 22 4-wire channels (Could be useful for Zero-adjustment procedure)
     #print(hioki.measure_all_channels())
 
     #hioki.sw.open()
+
+    # Sockets need to be closed
+    hioki.bt.close_socket()
+    hioki.sw.close_socket()
 
     print("DONE.")
 

@@ -47,6 +47,90 @@ OWN_PRIMARY_IP = get_ipv4()
 
 # --------------------------------------------------------------------------- #
 
+class Eth2Serial_SockSingleConnection_Device(object):
+    # !!!!! IMPORTANT !!!!!!
+    # For normal operation HIOKI SW1001 must stay connected via socket
+
+    def __init__(self, host: str, port: int, termination: str = "\r\n"):
+        """Initialize the object with IP address and port number.
+
+        Args:
+            host (str): hostname or IPv4 address
+            port (int): port to use for communication
+        """
+
+        self.termination = termination
+        self._termination_as_bytes = bytes(termination, "utf-8")  # need them also as bytes
+        # !!! IMPORTANT. Type casting !!!
+        self.host = str(host)
+        self.port = int(port)
+
+    def __enter__(self):
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.settimeout(5.0)
+        self.socket.connect((self.host, self.port))
+        pass
+
+    def __exit__(self):
+        self.socket.close()
+        pass     
+
+    def send(self, msg: str, timeout: float = 3.0) -> None:
+        """_summary_
+
+        Args:
+            msg (str): _description_
+            timeout (float, optional): _description_. Defaults to 1.0.
+
+        Returns:
+            bool: _description_
+        """
+
+        try:
+            self.socket.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
+        except TimeoutError as ex:
+            # do NOT log, we need this exception being quiet when polling
+            raise
+        except Exception as ex:
+            _log.exception(ex)
+            raise
+
+    def request(self, msg: str | None, timeout: float = 3.0, limit: int = 0, encoding: str = "utf-8") -> str:
+        """_summary_
+
+        Args:
+            msg (str): _description_
+            timeout (float, optional): _description_. Defaults to 5.0.
+            limit (int, optional): _description_. Defaults to 0.
+
+        Returns:
+            str: _description_
+        """
+        try:
+            if msg:
+                self.socket.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
+            # now read data until termination or timeout
+            rcvdata = b""
+            while True:
+                _chunk = self.socket.recv(1024)
+                if not _chunk:
+                    break
+                rcvdata += _chunk
+                if (limit) and (len(rcvdata) > limit):
+                    rcvdata = rcvdata[:limit]  # slice the received data
+                    break
+                if (rcvdata.rfind(self._termination_as_bytes) >= 0):
+                    break
+            result = rcvdata.decode(encoding=encoding)
+            _log.debug(f"Received: {result!r}")
+        except TimeoutError as ex:
+            # do NOT log, we need this exception being quiet when polling
+            raise
+        except Exception as ex:
+            _log.exception(ex)
+            raise
+        return result
+
 class Eth2SerialDevice(object):
 
     def __init__(self, host: str, port: int, termination: str = "\r\n"):
@@ -62,6 +146,12 @@ class Eth2SerialDevice(object):
         # !!! IMPORTANT. Type casting !!!
         self.host = str(host)
         self.port = int(port)
+        #self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #self.socket.settimeout(3.0)
+        #self.socket.connect((self.host, self.port))
+
+    def close_socket(self):
+        self.socket.close()
 
     def send(self, msg: str, timeout: float = 3.0) -> None:
         """_summary_
@@ -78,6 +168,7 @@ class Eth2SerialDevice(object):
             _s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             _s.settimeout(timeout)
             _s.connect((self.host, self.port))
+            _s.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
             _s.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling

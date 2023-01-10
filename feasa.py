@@ -225,7 +225,7 @@ class FEASA_CH9121(Eth2SerialDevice):
 if __name__ == "__main__":
     from time import sleep
 
-    HOST = "192.168.1.120"
+    HOST = "192.168.1.162"
     PORT = 3000
 
     # 1. Create an instance of class as device controller
