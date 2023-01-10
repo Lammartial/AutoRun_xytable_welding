@@ -412,7 +412,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
         try:
             param_str =  f"{volt:05.2f}"
             cmd = 'VOLT:LIM ' + param_str 
-            self.session.write(cmd)    
+            self.send(cmd)    
         except Exception as ex:
             _log.exception(ex)
             raise
@@ -467,17 +467,6 @@ class M3400_DEV(Eth2SerialVisaDevice):
         except Exception as ex:
             _log.exception(ex)
             raise   
-
-    #def disconnect(self):
-    #    """
-    #    Closes the connection (session) and the device.
-    #    """
-    #    try:
-    #        self.session.close()
-    #        self.rm.close()
-    #    except Exception as ex:
-    #        _log.exception(ex)
-    #        raise
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
