@@ -14,8 +14,7 @@ from binascii import hexlify
 from struct import pack, unpack_from
 from rrc.battery_errors import BatteryError, BatterySecurityError
 #from rrc.smartbattery import BlockData
-
-from .bq import ChipsetTexasInstruments
+from rrc.chipsets.bq import ChipsetTexasInstruments
 
 ###################################################################################################
 #

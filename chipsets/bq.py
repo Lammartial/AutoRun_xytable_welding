@@ -14,10 +14,9 @@ from time import sleep
 from binascii import unhexlify
 from os import urandom
 from hashlib import sha1
-#from battery.exceptions import BatteryError
+#from rrc.battery_errors import BatteryError
 from rrc.smartbattery import Cmd
-
-from .base import Chipset
+from rrc.chipsets.base import Chipset
 
 #--------------------------------------------------------------------------------------------------
 class ChipsetTexasInstruments(Chipset):

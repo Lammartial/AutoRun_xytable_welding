@@ -20,8 +20,7 @@ from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
 from rrc.battery_errors import BatteryError, BatterySecurityError
 from rrc.smbus import BusMaster
 from rrc.smartbattery import Cmd
-
-from .bq import ChipsetTexasInstruments
+from rrc.chipsets.bq import ChipsetTexasInstruments
 
 
 #--------------------------------------------------------------------------------------------------
