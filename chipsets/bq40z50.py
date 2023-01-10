@@ -15,10 +15,29 @@ from binascii import hexlify
 from struct import pack, unpack, unpack_from
 #from uos import urandom
 #from uhashlib import sha1
+from collections import OrderedDict
+from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC, K2C, C2K
 from rrc.battery_errors import BatteryError, BatterySecurityError
+from rrc.smbus import BusMaster
 from rrc.smartbattery import Cmd
 
 from .bq import ChipsetTexasInstruments
+
+
+#--------------------------------------------------------------------------------------------------
+
+def _od2t(d: OrderedDict) -> tuple:
+    """To convert an ordered dict to a tuple of values for TestStand Container.
+
+    Args:
+        d (OrderedDict): _description_
+
+    Returns:
+        tuple: _description_
+    """
+
+    return tuple([t for t in d.values()])
+
 
 ###################################################################################################
 #
@@ -28,16 +47,16 @@ from .bq import ChipsetTexasInstruments
 
 # -R1-
 class BQ40Z50R1(ChipsetTexasInstruments):
-    def __init__(self, smbus):
+    def __init__(self, smbus: BusMaster):
         super().__init__(smbus)
         self._operation_status = None # shadow copy of operation_status() read to avoid redundant reads for seal/unseal checks
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Returns the battery chipset name in lower case."""
         return "bq40z50r1"
 
-    def autodetect(self):
+    def autodetect(self) -> bool:
         """Identifies the presence of a chipset of this type.
 
            We need to use some kind of SIGNATURE functions or check known responses.
@@ -64,19 +83,22 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 raise ex
         return yesno
 
-    def device_type(self):
+    def device_type(self) -> int:
         """Returns the BQ IC part number."""
         self.manufacturer_access = 0x0001
         buf = self.manufacturer_data
         value = unpack("<H", buf)[0]  # data come litte endian
         return value
 
-    def firmware_version(self):
+    def firmware_version(self, hexi: bool | str | None = None) -> tuple:
         """Returns the chip firmware version."""
         self.manufacturer_access = 0x0002
         buf = self.manufacturer_data
-        return {
-            "value": self._maybe_hexlify(buf, hexi=True), # data come big endian - they SUCK!
+        #if (not isinstance(buf, bytearray) or len(buf) != 11):
+        #    raise BatteryError("Readings implausible: Unexpected battery firmware version return value.", buf)
+        return _od2t(OrderedDict({
+            "value": self._maybe_hexlify(buf, hexi),
+            # data come big endian - they SUCK!
             "device_number": unpack_from(">H", buf, 0)[0],
             "version":       unpack_from(">H", buf, 2)[0],
             "build_number":  unpack_from(">H", buf, 4)[0],
@@ -84,38 +106,38 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "impedance_track_version": unpack_from(">H", buf, 7)[0],
             "reserved1":     unpack_from(">B", buf, 9)[0],
             "reserved2":     unpack_from(">B", buf, 10)[0],
-        }
+        }))
 
-    def hardware_version(self):
+    def hardware_version(self) -> int:
         """Returns the chip hardware version."""
         self.manufacturer_access = 0x0003
         buf = self.manufacturer_data
         value = unpack("<H", buf)[0]  # data come litte endian
         return value
 
-    def chemistry_id(self):
+    def chemistry_id(self) -> int:
         """Returns the OCV table chemistry ID of the battery."""
         self.manufacturer_access = 0x0008
         buf = self.manufacturer_data
         value = unpack("<H", buf)[0]  # data come litte endian
         return value
 
-    def manufacturer_status(self):
+    def manufacturer_status(self) -> int:
         raise NotImplementedError("manufacturer_status() only available for bq20z65.")
 
-    def operation_status(self, hexi=None):
+    def operation_status(self, hexi: bool | str | None = None) -> tuple:
         """
             SIGNATURE function: We can use this function to identify the chipset type,
                                 by checking the Exception()
 
         """
         self.manufacturer_access = 0x0054
-        value = self.manufacturer_data
-        if (not isinstance(value, bytearray) or len(value) != 4):
-            raise BatteryError("Readings implausible: Unexpected battery operation status return value.", value)
-        os = int.from_bytes(value, "little")
-        self._operation_status = {
-            "block"     : self._maybe_hexlify(value, hexi),
+        buf = self.manufacturer_data
+        if (not isinstance(buf, bytearray) or len(buf) != 4):
+            raise BatteryError("Readings implausible: Unexpected battery operation status return value.", buf)
+        os = int.from_bytes(buf, "little")
+        self._operation_status = OrderedDict({
+            "block"     : self._maybe_hexlify(buf, hexi),
             "value"     : os,
             "emshut"    : ((os>>29) & 1), # (os & (1<<29)) != 0,
             "cb"        : ((os>>28) & 1), # (os & (1<<28)) != 0,
@@ -146,22 +168,84 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "chg"       : ((os>>2) & 1), # (os & (1<<2)) != 0,
             "dsg"       : ((os>>1) & 1), # (os & (1<<1)) != 0,
             "pres"      : ((os>>0) & 1), # (os & (1<<0)) != 0
-        }
-        return self._operation_status
+        })
+        return _od2t(self._operation_status)
 
-    def manufacturing_status(self, hexi=None):
+    def manufacturing_status(self, hexi: bool | str | None = None) -> tuple:
         self.manufacturer_access = 0x0057
-        value = self.manufacturer_data
-        if (not isinstance(value, bytearray) or len(value) != 2):
-            raise BatteryError("Readings implausible: Unexpected battery manufacturing status return value.", value)
-        os = int.from_bytes(value, "little")
-        return {
-            "block"     : self._maybe_hexlify(value, hexi),
+        buf = self.manufacturer_data
+        if (not isinstance(buf, bytearray) or len(buf) != 2):
+            raise BatteryError("Readings implausible: Unexpected battery manufacturing status return value.", buf)
+        os = int.from_bytes(buf, "little")
+        return _od2t(OrderedDict({
+            "block"     : self._maybe_hexlify(buf, hexi),
             "value"     : os,
+            # bitflags
+            "cal_test":  ((os>>15) & 1), # (os & (1<<15)) != 0,
+            "lt_test":   ((os>>14) & 1), # (os & (1<<14)) != 0,
             # ...
-        }
+        }))
 
-    def is_sealed(self, refresh=False):
+    # --- more functionality for production -------------------------------------------------------
+
+    def manufacturing_dastatus1(self, si_units: bool = True, hexi: bool | str | None = None) -> tuple:
+        """Read DAStatus1 and return the registers as they come.
+
+        Raises:
+            BatteryError: _description_
+
+        Returns:
+            OrderedDict: _description_
+        """
+        self.manufacturer_access = 0x0071
+        buf = self.manufacturer_data
+        if (not isinstance(buf, bytearray) or len(buf) != 32):
+            raise BatteryError("Readings implausible: Unexpected return value.", buf)
+        return _od2t(OrderedDict({
+            "block" : self._maybe_hexlify(buf, hexi),
+            # data come little endian
+            "cell_voltage_1": unpack_from("<H", buf, 0)[0] * (0.001 if si_units else 1),
+            "cell_voltage_2": unpack_from("<H", buf, 2)[0] * (0.001 if si_units else 1),
+            "cell_voltage_3": unpack_from("<H", buf, 4)[0] * (0.001 if si_units else 1),
+            "cell_voltage_4": unpack_from("<H", buf, 6)[0] * (0.001 if si_units else 1),
+            "bat_voltage":    unpack_from("<H", buf, 8)[0] * (0.001 if si_units else 1),
+            "pack_voltage":   unpack_from("<H", buf, 10)[0] * (0.001 if si_units else 1),
+            "cell_current_1": unpack_from("<h", buf, 12)[0] * (0.001 if si_units else 1),
+            "cell_current_2": unpack_from("<h", buf, 14)[0] * (0.001 if si_units else 1),
+            "cell_current_3": unpack_from("<h", buf, 16)[0] * (0.001 if si_units else 1),
+            "cell_current_4": unpack_from("<h", buf, 18)[0] * (0.001 if si_units else 1),
+            "cell_power_1":   unpack_from("<H", buf, 20)[0] * (0.01 if si_units else 1),
+            "cell_power_2":   unpack_from("<h", buf, 22)[0] * (0.01 if si_units else 1),
+            "cell_power_3":   unpack_from("<H", buf, 24)[0] * (0.01 if si_units else 1),
+            "cell_power_4":   unpack_from("<H", buf, 26)[0] * (0.01 if si_units else 1),
+            "power_calculated": unpack_from("<H", buf, 28)[0] * (0.01 if si_units else 1),
+            "average_power":  unpack_from("<H", buf, 30)[0] * (0.01 if si_units else 1),
+        }))
+
+    def manufacturing_dastatus2(self, si_units:bool = True, celsius: bool = False, hexi: bool | str | None = None) -> tuple:
+        self.manufacturer_access = 0x0072
+        buf = self.manufacturer_data
+        if (not isinstance(buf, bytearray) or len(buf) != 16):
+            raise BatteryError("Readings implausible: Unexpected battery manufacturing return value.", buf)
+        return _od2t(OrderedDict({
+            "block" : self._maybe_hexlify(buf, hexi),
+            # data come little endian
+            "int_temperature": unpack_from("<h", buf, 0)[0] * (1 if si_units else 0.1) + (KELVIN_ZERO_DEGC if celsius else 0),
+            "ts1_temperature": unpack_from("<h", buf, 2)[0] * (1 if si_units else 0.1) + (KELVIN_ZERO_DEGC if celsius else 0),
+            "ts2_temperature": unpack_from("<h", buf, 4)[0] * (1 if si_units else 0.1) + (KELVIN_ZERO_DEGC if celsius else 0),
+            "ts3_temperature": unpack_from("<h", buf, 6)[0] * (1 if si_units else 0.1) + (KELVIN_ZERO_DEGC if celsius else 0),
+            "ts4_temperature": unpack_from("<h", buf, 8)[0] * (1 if si_units else 0.1) + (KELVIN_ZERO_DEGC if celsius else 0),
+            "cell_temperature":    unpack_from("<h", buf, 10)[0] * (1 if si_units else 0.1) + (KELVIN_ZERO_DEGC if celsius else 0),
+            "fet_temperature":     unpack_from("<h", buf, 12)[0] * (1 if si_units else 0.1) + (KELVIN_ZERO_DEGC if celsius else 0),
+            "gauging_temperature": unpack_from("<h", buf, 14)[0] * (1 if si_units else 0.1) + (KELVIN_ZERO_DEGC if celsius else 0),
+        }))
+
+
+    # ...
+
+
+    # ---------------------------------------------------------------------------------------------
+    def is_sealed(self, refresh: bool = False) -> bool:
         """check if batetry is sealed
 
         Args:
@@ -176,7 +260,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return self._operation_status["sec"] == 0x03 # using shadow copy to avoid bus access
 
 
-    def is_unsealed(self, check_fullaccess=False, refresh=False):
+    def is_unsealed(self, check_fullaccess: bool = False, refresh: bool = False):
         """Checks if the battery is sealed.
 
         NOTE: Something is wrong in the manual.
@@ -198,7 +282,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             return (int(self._operation_status["sec"]) == 1) # full access
         return (int(self._operation_status["sec"]) in [1, 2]) # unsealed OR full access
 
-    def lifetime_datablock(self, hexi=None):
+    def lifetime_datablock(self, hexi: bool | str | None = None):
         """Compatibility function: reading just first block of lifetimedata for use e.g. in production.
 
         Returns:
@@ -212,7 +296,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             raise BatteryError("No correct lifetime data from battery for block {}. Got {} bytes expected {}".format(1, len(data), 32+2))
         # all fine, store the data
         b1 = data[2:]
-        return {
+        return _od2t(OrderedDict({
             "values": self._maybe_hexlify(b1, hexi), # all blocks of bytes as they are - but hexlified as it looks better in JSON files later ...
             # decode block 1
             "cell1_vmax":          unpack_from("<H", b1, 0)[0]*1e-3, # mV, unsigned short, little endian
@@ -234,9 +318,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "max_temp_int_sensor": unpack_from("<b", b1, 29)[0]*1e-0, # °C, signed char, little endian
             "min_temp_int_sensor": unpack_from("<b", b1, 30)[0]*1e-0, # °C, signed char, little endian
             "min_temp_fet":        unpack_from("<b", b1, 31)[0]*1e-0, # °C, signed char, little endian
-        }
+        }))
 
-    def lifetime_data(self, hexi=None):
+    def lifetime_data(self, hexi: bool | str | None = None) -> tuple:
         """Returns the life time data block (blocks 1 - 5) as decoded dict.
 
         Note: from datasheet
@@ -273,7 +357,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         #            To have the dict sorted, the caller can use OrderedDict from collections module:
         #                OrderedDict(sorted(lifetime_data().items()))
         #
-        return {
+        return _od2t(OrderedDict({
             "values": h, # all blocks of bytes as they are - but hexlified as it looks better in JSON files later ...
             # decode block 1
             "cell1_vmax":          unpack_from("<H", b1, 0)[0]*1e-3, # mV, unsigned short, little endian
@@ -346,17 +430,17 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "last_ra_update":         unpack_from("<H", b5, 26)[0], # cycles, unsigned short, little endian
             "num_of_ra_disable":      unpack_from("<H", b5, 28)[0], # events, unsigned short, little endian
             "last_ra_disable":        unpack_from("<H", b5, 30)[0], # cycles, unsigned short, little endian
-        }
+        }))
 
-    def soh(self):
+    def soh(self) -> tuple:
         self.manufacturer_access = 0x0077
         buf = self.manufacturer_data
-        return {
+        return _od2t(OrderedDict({
             "fcc_ah": unpack_from("<H", buf, 0)[0]*1e-3, # mAh -> Ah (is not in SI but also allowed as unit)
             "fcc_wh": unpack_from("<H", buf, 2)[0]*1e+2, # cWh -> Wh (is not in SI but also allowed as unit)
-        }
+        }))
 
-    def shipping_mode(self, ship_delay=2.0):
+    def shipping_mode(self, ship_delay: float = 2.0) -> bool:
         """Enter shipping mode which is equal to shutdown mode but repects different timing of sealed and unsealed modes.
 
         If sealed, waits ship_delay seconds then checks for another ship_delay seconds time if
@@ -389,7 +473,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             if not self.isReady(): return True
         return False
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Sends a shutdown command to the battery.
 
         Available in seald AND unsealed but with different delay times. (See Note)
@@ -410,7 +494,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     # --- commands that work only in unsealed mode ---
     # ------------------------------------------------
 
-    def seal(self):
+    def seal(self) -> bool:
         """Seals the battery."""
         if self.is_sealed(refresh=True): return True
         self.manufacturer_access = 0x0030 # this is chipset specific!
@@ -422,7 +506,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         sleep(0.5) # was 5s !!!
         return True
 
-    def change_keys(self, new_unseal_key, new_fullaccess_key):
+    def change_keys(self, new_unseal_key: bytes | bytearray, new_fullaccess_key: bytes | bytearray):
         """Change unseal and fullaccess keys.
 
         To be compatible with newer chipsets like the bq40z50, we need to write both keys together.
@@ -438,7 +522,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # ....
         pass
 
-    def sleep(self):
+    def sleep(self) -> None:
         """Enter sleepmode if the conditions are met.
 
         From Datasheet:
@@ -451,13 +535,13 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.manufacturer_access = 0x0011
 
 
-    def read_flash_subclass(self, subclassid, hexi=None):
+    def read_flash_subclass(self, subclassid: str, hexi: bool | str | None = None) -> str | bytearray:
         raise NotImplementedError("read_flash_page() only available for bq20z65, use read_flash_block() instead for bq40z50")
 
-    def write_flash_subclass(self, subclassid, data):
+    def write_flash_subclass(self, subclassid: str, data: bytes | bytearray) -> str | bytearray:
         raise NotImplementedError("write_flash_page() only available for bq20z65, use write_flash_block() instead for bq40z50")
 
-    def read_flash_block(self, flash_address, length=32, hexi=None):
+    def read_flash_block(self, flash_address: int, length: int = 32,  hexi: bool | str | None = None) -> str | bytearray:
         """Reads the bq chip data flash at a flash address with given length.
         The length may be up to 8192 bytes (full flash)
 
@@ -511,7 +595,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         #         f.write(self._maybe_hexlify(flash, True))
         return self._maybe_hexlify(flash, hexi)
 
-    def write_flash_block(self, flash_address, block_data):
+    def write_flash_block(self, flash_address: int, block_data: bytes | bytearray) -> bool:
         """Writes a defined data block (array) into the bq chip data flash at a defined flash address.
 
         Args:
@@ -545,11 +629,11 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return True
 
 
-    def read_authentication_key(self):
+    def read_authentication_key(self) -> None:
         """Returns the programmed authentication key."""
         raise NotImplementedError("There is no direct read access to the sha1 key for this chipset.")
 
-    def change_authentication_key(self, new_key):
+    def change_authentication_key(self, new_key: bytes | bytearray) -> bool:
         """Program a new authentication key.
 
         Using variant (2) from Manual:
@@ -582,7 +666,7 @@ class BQ40Z50R2(BQ40Z50R1):
         """Returns the battery chipset name in lower case."""
         return "bq40z50r2"
 
-    def autodetect(self):
+    def autodetect(self) -> bool:
         """Identifies the presence of a chipset of this type.
 
            We need to use some kind of SIGNATURE functions or check known responses.
@@ -590,7 +674,7 @@ class BQ40Z50R2(BQ40Z50R1):
 
         """
         #print(self.name)
-        yesno=False
+        yesno = False
         try:
             self.operation_status() # if other chipset, this read will raise exception
             dev = self.device_type()

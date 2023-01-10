@@ -12,9 +12,7 @@ from time import sleep, monotonic_ns
 from binascii import hexlify
 from struct import pack
 from battery_errors import BatteryError
-
-
-KELVIN = 273.15
+from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
 
 
 # allowed command set for the battery
@@ -71,12 +69,12 @@ class Cmd:
 
 # -------------------------------------------------------------------------------------------
 class SpecSOHData:
-    def __init__(self, battery, command, value=None):
+    def __init__(self, battery, command: int, value: int = None):
         self._battery = battery
         self._cmd = command
         self.read = value
 
-    def update(self):
+    def update(self) -> bool:
         dsc = self._battery.design_capacity()[0]
         fcc = self._battery.full_charge_capacity()[0]
         if dsc is not None and fcc is not None:
@@ -85,14 +83,14 @@ class SpecSOHData:
         return False
 
     @property
-    def value(self):
+    def value(self) -> int:
         if self.read is None: self.update()
         return self.read
 
 
 # Standard data representation classes
 class WordData:
-    def __init__(self, battery, command, value=None):
+    def __init__(self, battery, command: int, value: int = None):
         self._battery = battery
         self._cmd = command
         self.read = value
@@ -104,7 +102,7 @@ class WordData:
         return ok
 
     @property
-    def value(self):
+    def value(self) -> int:
         if self.read is None: self.update()
         # self.update() # always update!
         return self.read
@@ -118,30 +116,30 @@ class WordData:
 
 
 class StringData:
-    def __init__(self, battery, command, value=None):
+    def __init__(self, battery, command: int, value: str | bytes | bytearray = None):
         self._battery = battery
         self._cmd = command
         self.read = value
 
-    def update(self):
+    def update(self) -> bool:
         v, ok = self._battery.readStringVerified(self._cmd)  # try to update the value
         if ok: self.read = v  # update
         return ok
 
     @property
-    def value(self):
+    def value(self) -> str | bytes | bytearray:
         if self.read is None: self.update()  # only update once as this is constant data
         return self.read
 
 
 class BlockData:
-    def __init__(self, battery, command, value=None):
+    def __init__(self, battery, command: int, value: bytes | bytearray = None):
         self._battery = battery
         self._cmd = command
         self.read = value
         self.written = None
 
-    def update(self):
+    def update(self) -> bool:
         v, ok = self._battery.readBlockVerified(self._cmd)  # try to update the value(s)
         if ok: self.read = v  # update
         return ok
@@ -152,7 +150,7 @@ class BlockData:
         return self.read
 
     @value.setter
-    def value(self, value):
+    def value(self, value: int | bytes | bytearray):
         if isinstance(value, int):  # we do a graceful convert from integer to bytes here
             if value > 0xFFFFFFFF:
                 value = pack("<Q", value)  # unsigned long long, 8 bytes
@@ -174,12 +172,12 @@ class BlockData:
 # Some include writing but all have special data representations.
 
 class BatteryStatus:
-    def __init__(self, battery, command, value=None):
+    def __init__(self, battery, command: int, value: int = None):
         self._battery = battery
         self._cmd = command
         self._set_v(value)
 
-    def _set_v(self, v):
+    def _set_v(self, v: int):
         self._v = v
         if v is None:
             self.error_code = \
@@ -207,7 +205,7 @@ class BatteryStatus:
             self.overcharged_alarm = (v >> 15) & 1  # OCA
 
     @property
-    def text(self):
+    def text(self) -> str:
         return "EC:{},FD:{},FC:{},DSG:{},INIT:{},RTA:{},RCA:{},TDA:{},OTA:{},TCA:{},OCA{}".format(
             self.error_code,
             self.fully_discharged,
@@ -222,7 +220,7 @@ class BatteryStatus:
             self.overcharged_alarm)
 
     @property
-    def error(self):
+    def error(self) -> tuple(int, str):
         txt = ['OK', 'Busy', 'Reserved Command', 'Unsupported Command', 'AccessDenied',
                'Overflow/Underflow', 'BadSize', 'UnknownError']
         ec = self._v & 0x0f
@@ -231,24 +229,24 @@ class BatteryStatus:
         else:
             return ec, txt[ec]
 
-    def update(self):
+    def update(self) -> bool:
         v, ok = self._battery.readWordVerified(self._cmd)  # try to update the value
         if ok: self._set_v(v)  # update
         return ok
 
     @property
-    def value(self):
+    def value(self) -> int:
         if self._v is None: self.update()
         return self._v
 
     @value.setter
-    def value(self, value):
+    def value(self, value: int):
         self._set_v(value)
 
 
 # -------------------------------------------------------------------------------------------
 class BatteryMode:
-    def __init__(self, battery, command, value=None):
+    def __init__(self, battery, command: int, value: int = None):
         self._battery = battery
         self._cmd = command
         self._set_v(value)
@@ -294,7 +292,7 @@ class BatteryMode:
 
 # -------------------------------------------------------------------------------------------
 class BatterySpecification:
-    def __init__(self, battery, command, value=None):
+    def __init__(self, battery, command: int, value: int = None):
         self._battery = battery
         self._cmd = command
         self._set_v(value)
@@ -325,7 +323,7 @@ class BatterySpecification:
 
 # -------------------------------------------------------------------------------------------
 class ManufacturerAccess:
-    def __init__(self, battery, command, value=None):
+    def __init__(self, battery, command: int , value: int = None):
         self._battery = battery
         self._cmd = command
         self.read = value
@@ -355,7 +353,7 @@ class ManufacturerAccess:
 class Battery:
     ds = {}
 
-    def __init__(self, smbus, slvAddress=0x0b, pec=False):
+    def __init__(self, smbus: BusMaster, slvAddress: int = 0x0b, pec: bool = False):
         self.bus = smbus
         self.address = int(slvAddress)
         self.pec = bool(pec)
@@ -421,7 +419,7 @@ class Battery:
         self.table = None
 
     # --------------------------------------------
-    def _maybe_hexlify(self, what, hexi):
+    def _maybe_hexlify(self, what: bytes | bytearray, hexi: None | bool | str) -> bytes | bytearray | str:
         """Helper to convert returned bytes on user request from bytearray or bytes to hex string with optional separator.
 
         Note: for internal use mainly in the chipset functions which inherits all from this class.
@@ -449,7 +447,7 @@ class Battery:
         return hexlify(what, ",").decode()
 
     # --------------------------------------------
-    def isReady(self):
+    def isReady(self) -> bool:
         # return self.bus.isReady(self.address)
         ok = False
         try:
@@ -461,7 +459,7 @@ class Battery:
                 raise ex
         return ok
 
-    def waitForReady(self, timeout_ms=250, invert=False, throw=False):
+    def waitForReady(self, timeout_ms: int = 250, invert: bool = False, throw: bool = False) -> bool:
         t0 = monotonic_ns()
         pause = int(timeout_ms * 100)  # = timeout_ms/10 * 1000
         while ((monotonic_ns() - t0) / 1000000) < timeout_ms:
@@ -471,7 +469,7 @@ class Battery:
         if throw: raise BatteryError("Timeout {}ms while waiting for battery ready.".format(timeout_ms))
         return False
 
-    def autodetectPEC(self):
+    def autodetectPEC(self) -> bool:
         ok = False
         try:
             _, ok = self.bus.readWord(self.address, Cmd.BATTERY_MODE, True)
@@ -484,10 +482,10 @@ class Battery:
     # pylint: disable=C0116,C0321
     # ------ SMBus-Protocols----------
     # convenience functions to call BusMaster
-    def writeWordVerified(self, cmd, w):
+    def writeWordVerified(self, cmd, w) -> bool:
         return self.bus.vWriteWord(self.address, cmd, w, self.pec)  # VERIFIED by read-back!!!
 
-    def writeWord(self, cmd, w):
+    def writeWord(self, cmd, w) -> bool:
         return self.bus.writeWord(self.address, cmd, w, self.pec)  # NO read-back (verify)
 
     def readWordVerified(self, cmd):
@@ -496,10 +494,10 @@ class Battery:
     def readWord(self, cmd):
         return self.bus.readWord(self.address, cmd, self.pec)  # NO verification
 
-    def writeBytesVerified(self, cmd, buffer):
+    def writeBytesVerified(self, cmd, buffer) -> bool:
         return self.bus.vWriteBytes(self.address, cmd, buffer, self.pec)  # VERIFIED by read-back!!!
 
-    def writeBytes(self, cmd, buffer):
+    def writeBytes(self, cmd, buffer) -> bool:
         return self.bus.writeBytes(self.address, cmd, buffer, self.pec)  # NO read-back (verify)
 
     def readBytesVerified(self, cmd, count):
@@ -511,11 +509,11 @@ class Battery:
     def readStringVerified(self, cmd):
         return self.bus.vReadString(self.address, cmd, self.pec)
 
-    def writeBlockVerified(self, cmd, buffer):
+    def writeBlockVerified(self, cmd, buffer) -> bool:
         return self.bus.vWriteBytes(self.address, cmd, bytearray(bytes([len(buffer)]) + bytes(buffer)),
                                     self.pec)  # VERIFIED by read-back!!!
 
-    def writeBlock(self, cmd, buffer):
+    def writeBlock(self, cmd, buffer) -> bool:
         return self.bus.writeBytes(self.address, cmd, bytearray(bytes([len(buffer)]) + bytes(buffer)),
                                    self.pec)  # NO read-back (verify)
 
@@ -604,7 +602,7 @@ class Battery:
         c = self.ds[Cmd.TEMPERATURE];              return c.value * 1e-2, "°C", "Temperature", c
 
     def temperature_kelvin(self):
-        c = self.ds[Cmd.TEMPERATURE];              return c.value * 1e-2 + KELVIN, "K", "Temperature", c
+        c = self.ds[Cmd.TEMPERATURE];              return c.value * 1e-2 + KELVIN_ZERO_DEGC, "K", "Temperature", c
 
     def voltage(self):
         c = self.ds[Cmd.VOLTAGE];                  return c.value * 1e-3, "V", "Voltage", c
