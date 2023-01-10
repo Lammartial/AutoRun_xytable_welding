@@ -65,7 +65,7 @@ async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> 
         #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = 30)
         #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0)  # uses .readuntil()
         #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = None)  # uses .readln()
-        _response = await dev.request_async(None, timeout=3.0)
+        _response = await dev.request_async(None)
         if _response:
             _wp = f"RESPONSE={_response}"
             #safeprint(_wp)
