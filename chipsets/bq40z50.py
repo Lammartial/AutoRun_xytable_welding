@@ -16,7 +16,7 @@ from struct import pack, unpack, unpack_from
 #from uos import urandom
 #from uhashlib import sha1
 from collections import OrderedDict
-from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC, K2C, C2K
+from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
 from rrc.battery_errors import BatteryError, BatterySecurityError
 from rrc.smbus import BusMaster
 from rrc.smartbattery import Cmd
@@ -94,8 +94,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """Returns the chip firmware version."""
         self.manufacturer_access = 0x0002
         buf = self.manufacturer_data
-        #if (not isinstance(buf, bytearray) or len(buf) != 11):
-        #    raise BatteryError("Readings implausible: Unexpected battery firmware version return value.", buf)
+        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 11):
+            raise BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
         return _od2t(OrderedDict({
             "value": self._maybe_hexlify(buf, hexi),
             # data come big endian - they SUCK!
@@ -133,8 +133,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
         self.manufacturer_access = 0x0054
         buf = self.manufacturer_data
-        if (not isinstance(buf, bytearray) or len(buf) != 4):
-            raise BatteryError("Readings implausible: Unexpected battery operation status return value.", buf)
+        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 4):
+            BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
         os = int.from_bytes(buf, "little")
         self._operation_status = OrderedDict({
             "block"     : self._maybe_hexlify(buf, hexi),
@@ -174,8 +174,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def manufacturing_status(self, hexi: bool | str | None = None) -> tuple:
         self.manufacturer_access = 0x0057
         buf = self.manufacturer_data
-        if (not isinstance(buf, bytearray) or len(buf) != 2):
-            raise BatteryError("Readings implausible: Unexpected battery manufacturing status return value.", buf)
+        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 2):
+            BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
         os = int.from_bytes(buf, "little")
         return _od2t(OrderedDict({
             "block"     : self._maybe_hexlify(buf, hexi),
@@ -199,8 +199,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
         self.manufacturer_access = 0x0071
         buf = self.manufacturer_data
-        if (not isinstance(buf, bytearray) or len(buf) != 32):
-            raise BatteryError("Readings implausible: Unexpected return value.", buf)
+        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 32):
+            BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
         return _od2t(OrderedDict({
             "block" : self._maybe_hexlify(buf, hexi),
             # data come little endian
@@ -225,8 +225,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def manufacturing_dastatus2(self, si_units:bool = True, celsius: bool = False, hexi: bool | str | None = None) -> tuple:
         self.manufacturer_access = 0x0072
         buf = self.manufacturer_data
-        if (not isinstance(buf, bytearray) or len(buf) != 16):
-            raise BatteryError("Readings implausible: Unexpected battery manufacturing return value.", buf)
+        #buf = b"0123456789012345"
+        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 16):
+            raise BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
         return _od2t(OrderedDict({
             "block" : self._maybe_hexlify(buf, hexi),
             # data come little endian

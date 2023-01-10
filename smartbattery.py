@@ -13,7 +13,7 @@ from binascii import hexlify
 from struct import pack
 from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
 from rrc.battery_errors import BatteryError
-
+from rrc.smbus import BusMaster
 
 # allowed command set for the battery
 class Cmd:
@@ -220,7 +220,7 @@ class BatteryStatus:
             self.overcharged_alarm)
 
     @property
-    def error(self) -> tuple(int, str):
+    def error(self) -> tuple:
         txt = ['OK', 'Busy', 'Reserved Command', 'Unsupported Command', 'AccessDenied',
                'Overflow/Underflow', 'BadSize', 'UnknownError']
         ec = self._v & 0x0f
@@ -912,8 +912,8 @@ class Battery:
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    from ncd_eth_i2c_interface import I2CPort
-    from smbus import BusMaster, BusMux_PCA9548A
+    from rrc.ncd_eth_i2c_interface import I2CPort
+    from rrc.smbus import BusMaster, BusMux_PCA9548A
 
     ncd = I2CPort("192.168.1.149", 2101)
     #print(ncd.i2c_bus_scan())

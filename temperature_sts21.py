@@ -1,4 +1,5 @@
 from time import sleep
+from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
 
 
 class STS21:

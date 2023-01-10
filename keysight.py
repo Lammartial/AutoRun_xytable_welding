@@ -1,4 +1,4 @@
-from eth2serial.base_visa import Eth2SerialVisaDevice
+from rrc.eth2serial.base_visa import Eth2SerialVisaDevice
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
@@ -15,7 +15,7 @@ DEBUG = 0
 import logging
 
 _log = logging.getLogger(__name__)
-_log.setLevel(logging.DEBUG)
+_log.setLevel(logging.DEBUG if DEBUG else logging.INFO)
 
 # Initialize the logging
 try:

@@ -1,5 +1,5 @@
-from eth2serial.base import Eth2Serial_SockSingleConnection_Device
-from eth2serial.base import Eth2SerialDevice
+from rrc.eth2serial.base import Eth2Serial_SockSingleConnection_Device
+from rrc.eth2serial.base import Eth2SerialDevice
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
