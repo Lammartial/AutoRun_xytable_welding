@@ -9,7 +9,7 @@ __author__ = "Markus Ruth"
 
 # pylint: disable=line-too-long,C0103,C0321,C0413,W0703,W0107,R1702,R0904
 import errno
-from time import sleep, sleep_us
+from time import sleep
 from binascii import hexlify
 from struct import pack, unpack_from
 from rrc.battery_errors import BatteryError, BatterySecurityError
@@ -82,9 +82,9 @@ class BQ20Z65R1(ChipsetTexasInstruments):
         return value
 
     def manufacturer_status(self):
-        sleep_us(1000)
+        sleep(0.001)
         self.manufacturer_access = 0x0006
-        sleep_us(1000)
+        sleep(0.001)
         raw = self.manufacturer_access
         status = { "value": raw, "state": "" }
         switch = str((raw >> 14) & 0x03)
@@ -369,7 +369,7 @@ class BQ20Z65R1(ChipsetTexasInstruments):
         """
         if self.is_sealed(): raise BatteryError("Device is sealed, firmware checksum not available.")
         self.manufacturer_access = 0x0004
-        sleep_us(135000) # @refman: takes about 45ms, safety factor=3.
+        sleep(0.135) # @refman: takes about 45ms, safety factor=3.
         return self.manufacturer_access
 
     def enable_impedance_tracking(self):
