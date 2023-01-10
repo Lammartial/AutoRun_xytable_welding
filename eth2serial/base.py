@@ -63,7 +63,7 @@ class Eth2SerialDevice(object):
         self.host = str(host)
         self.port = int(port)
 
-    def send(self, msg: str, timeout: float = 1.0) -> None:
+    def send(self, msg: str, timeout: float = 3.0) -> None:
         """_summary_
 
         Args:
@@ -88,7 +88,7 @@ class Eth2SerialDevice(object):
         finally:
             _s.close()
 
-    def request(self, msg: str | None, timeout: float = 5.0, limit: int = 0, encoding: str = "utf-8") -> str:
+    def request(self, msg: str | None, timeout: float = 3.0, limit: int = 0, encoding: str = "utf-8") -> str:
         """_summary_
 
         Args:
