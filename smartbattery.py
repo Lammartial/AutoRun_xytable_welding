@@ -11,8 +11,8 @@ import errno
 from time import sleep, monotonic_ns
 from binascii import hexlify
 from struct import pack
-from battery_errors import BatteryError
 from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
+from rrc.battery_errors import BatteryError
 
 
 # allowed command set for the battery
