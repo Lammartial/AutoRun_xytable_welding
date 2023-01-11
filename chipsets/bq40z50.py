@@ -187,7 +187,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     # --- more functionality for production -------------------------------------------------------
 
-    def manufacturing_dastatus1(self, si_units: bool = True, hexi: bool | str | None = None) -> tuple:
+    def manufacturing_dastatus1(self, hexi: bool | str | None = None) -> tuple:
         """Read DAStatus1 and return the registers as they come.
 
         Raises:
@@ -203,25 +203,25 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return _od2t(OrderedDict({
             "block" : self._maybe_hexlify(buf, hexi),
             # data come little endian
-            "cell_voltage_1": unpack_from("<H", buf, 0)[0] * (0.001 if si_units else 1),
-            "cell_voltage_2": unpack_from("<H", buf, 2)[0] * (0.001 if si_units else 1),
-            "cell_voltage_3": unpack_from("<H", buf, 4)[0] * (0.001 if si_units else 1),
-            "cell_voltage_4": unpack_from("<H", buf, 6)[0] * (0.001 if si_units else 1),
-            "bat_voltage":    unpack_from("<H", buf, 8)[0] * (0.001 if si_units else 1),
-            "pack_voltage":   unpack_from("<H", buf, 10)[0] * (0.001 if si_units else 1),
-            "cell_current_1": unpack_from("<h", buf, 12)[0] * (0.001 if si_units else 1),
-            "cell_current_2": unpack_from("<h", buf, 14)[0] * (0.001 if si_units else 1),
-            "cell_current_3": unpack_from("<h", buf, 16)[0] * (0.001 if si_units else 1),
-            "cell_current_4": unpack_from("<h", buf, 18)[0] * (0.001 if si_units else 1),
-            "cell_power_1":   unpack_from("<H", buf, 20)[0] * (0.01 if si_units else 1),
-            "cell_power_2":   unpack_from("<h", buf, 22)[0] * (0.01 if si_units else 1),
-            "cell_power_3":   unpack_from("<H", buf, 24)[0] * (0.01 if si_units else 1),
-            "cell_power_4":   unpack_from("<H", buf, 26)[0] * (0.01 if si_units else 1),
-            "power_calculated": unpack_from("<H", buf, 28)[0] * (0.01 if si_units else 1),
-            "average_power":  unpack_from("<H", buf, 30)[0] * (0.01 if si_units else 1),
+            "cell_voltage_1": unpack_from("<H", buf, 0)[0] * 1e-3,  # mV, unsigned short, little endian
+            "cell_voltage_2": unpack_from("<H", buf, 2)[0] * 1e-3,  # mV, unsigned short, little endian
+            "cell_voltage_3": unpack_from("<H", buf, 4)[0] * 1e-3,  # mV, unsigned short, little endian
+            "cell_voltage_4": unpack_from("<H", buf, 6)[0] * 1e-3,  # mV, unsigned short, little endian
+            "bat_voltage":    unpack_from("<H", buf, 8)[0] * 1e-3,  # mV, unsigned short, little endian
+            "pack_voltage":   unpack_from("<H", buf, 10)[0] * 1e-3,  # mV, unsigned short, little endian
+            "cell_current_1": unpack_from("<h", buf, 12)[0] * 1e-3,  # mA, signed short, little endian
+            "cell_current_2": unpack_from("<h", buf, 14)[0] * 1e-3,  # mA, signed short, little endian
+            "cell_current_3": unpack_from("<h", buf, 16)[0] * 1e-3,  # mA, signed short, little endian
+            "cell_current_4": unpack_from("<h", buf, 18)[0] * 1e-3,  # mA, signed short, little endian
+            "cell_power_1":   unpack_from("<H", buf, 20)[0] * 1e-2,  # cW, signed short, little endian
+            "cell_power_2":   unpack_from("<h", buf, 22)[0] * 1e-2,  # cW, signed short, little endian
+            "cell_power_3":   unpack_from("<h", buf, 24)[0] * 1e-2,  # cW, signed short, little endian
+            "cell_power_4":   unpack_from("<h", buf, 26)[0] * 1e-2,  # cW, signed short, little endian
+            "power_calculated": unpack_from("<h", buf, 28)[0] * 1e-2,  # cW, signed short, little endian
+            "average_power":  unpack_from("<h", buf, 30)[0] * 1e-2,  # cW, signed short, little endian
         }))
 
-    def manufacturing_dastatus2(self, si_units:bool = True, celsius: bool = False, hexi: bool | str | None = None) -> tuple:
+    def manufacturing_dastatus2(self, celsius: bool = True, hexi: bool | str | None = None) -> tuple:
         self.manufacturer_access = 0x0072
         buf = self.manufacturer_data
         #buf = b"0123456789012345"
@@ -230,14 +230,14 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return _od2t(OrderedDict({
             "block" : self._maybe_hexlify(buf, hexi),
             # data come little endian
-            "int_temperature": unpack_from("<h", buf, 0)[0] * (1 if si_units else 0.1) + (KELVIN_ZERO_DEGC if celsius else 0),
-            "ts1_temperature": unpack_from("<h", buf, 2)[0] * (1 if si_units else 0.1) + (KELVIN_ZERO_DEGC if celsius else 0),
-            "ts2_temperature": unpack_from("<h", buf, 4)[0] * (1 if si_units else 0.1) + (KELVIN_ZERO_DEGC if celsius else 0),
-            "ts3_temperature": unpack_from("<h", buf, 6)[0] * (1 if si_units else 0.1) + (KELVIN_ZERO_DEGC if celsius else 0),
-            "ts4_temperature": unpack_from("<h", buf, 8)[0] * (1 if si_units else 0.1) + (KELVIN_ZERO_DEGC if celsius else 0),
-            "cell_temperature":    unpack_from("<h", buf, 10)[0] * (1 if si_units else 0.1) + (KELVIN_ZERO_DEGC if celsius else 0),
-            "fet_temperature":     unpack_from("<h", buf, 12)[0] * (1 if si_units else 0.1) + (KELVIN_ZERO_DEGC if celsius else 0),
-            "gauging_temperature": unpack_from("<h", buf, 14)[0] * (1 if si_units else 0.1) + (KELVIN_ZERO_DEGC if celsius else 0),
+            "int_temperature": unpack_from("<H", buf, 0)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+            "ts1_temperature": unpack_from("<H", buf, 2)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+            "ts2_temperature": unpack_from("<H", buf, 4)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+            "ts3_temperature": unpack_from("<H", buf, 6)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+            "ts4_temperature": unpack_from("<H", buf, 8)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+            "cell_temperature":    unpack_from("<H", buf, 10)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+            "fet_temperature":     unpack_from("<H", buf, 12)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+            "gauging_temperature": unpack_from("<H", buf, 14)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
         }))
 
 
