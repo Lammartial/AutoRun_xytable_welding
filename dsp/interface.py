@@ -3,6 +3,7 @@ import requests
 from datetime import datetime
 from pathlib import Path
 
+DEBUG = 0
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -137,7 +138,7 @@ class DspInterface:
 if __name__ == "__main__":
     
     # define the JSON file for storage until data sent to MPI
-    LOCAL_RESULT_FILE = Path(".") / "unsent_results.json"
+    LOCAL_RESULT_FILE = Path(".") / ".." / "filestore" / "unsent_results.json"
 
     # define the route
     #api_url = "https://production-network.rrc/testcontrol"
