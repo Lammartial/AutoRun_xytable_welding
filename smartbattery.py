@@ -453,10 +453,11 @@ class Battery:
         try:
             _, ok = self.bus.readWord(self.address, Cmd.BATTERY_MODE, self.pec)
         except OSError as ex:
-            if (ex.args[0] != errno.ENODEV) and (ex.args[0] != errno.ETIMEDOUT):
-                # only expected execption is "device not present" or "timed out"
-                # -> forward this exception
-                raise ex
+            #if (ex.args[0] != errno.ENODEV) and (ex.args[0] != errno.ETIMEDOUT):
+            #    # only expected exception is "device not present" or "timed out"
+            #    # -> forward this exception
+            #    raise ex
+            pass
         return ok
 
     def waitForReady(self, timeout_ms: int = 250, invert: bool = False, throw: bool = False) -> bool:

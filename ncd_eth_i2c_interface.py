@@ -202,20 +202,27 @@ class I2CPort:
             return payload
 
     def __handle_error_message(self, error_code):
+        #
+        # the OSError is to be SMBUS compliant
+        #
         if error_code == NCD_I2C_READ_ERROR:
-            raise I2CReadError(self.last_i2c_address, self.ncd_interface_address)
+            raise OSError(NCD_I2C_READ_ERROR, f"Slave: {self.last_i2c_address}, IP: {self.ncd_interface_address}")
+            #raise I2CReadError(self.last_i2c_address, self.ncd_interface_address)
 
         elif error_code == NCD_I2C_WRITE_ERROR:
-            raise I2CWriteError1(self.last_i2c_address, self.ncd_interface_address)
+            raise OSError(NCD_I2C_READ_ERROR, f"Slave: {self.last_i2c_address}, IP: {self.ncd_interface_address}")
+            #raise I2CWriteError1(self.last_i2c_address, self.ncd_interface_address)
 
         elif error_code == NCD_I2C_WRITE_ERROR2:
-            raise I2CWriteError2(self.last_i2c_address, self.ncd_interface_address)
+            raise OSError(NCD_I2C_READ_ERROR, f"Slave: {self.last_i2c_address}, IP: {self.ncd_interface_address}")
+            #raise I2CWriteError2(self.last_i2c_address, self.ncd_interface_address)
 
-        elif error_code == NCD_NOT_IMPLEMENTED_ERROR:
-            raise I2CNotImplementedError
+        elif error_code == NCD_NOT_IMPLEMENTED_ERROR:            
+            raise Exception("Not implemented function used")
 
         elif error_code == NCD_I2C_ACK_ERROR:
-            raise I2CAckError(self.last_i2c_address, self.ncd_interface_address)
+            raise OSError(NCD_I2C_READ_ERROR, f"Slave: {self.last_i2c_address}, IP: {self.ncd_interface_address}")           
+            #raise I2CAckError(self.last_i2c_address, self.ncd_interface_address)
 
         else:
             raise UnknownNCDError(self.ncd_interface_address, error_code)
