@@ -453,10 +453,11 @@ class Battery:
         try:
             _, ok = self.bus.readWord(self.address, Cmd.BATTERY_MODE, self.pec)
         except OSError as ex:
-            if (ex.args[0] != errno.ENODEV) and (ex.args[0] != errno.ETIMEDOUT):
-                # only expected execption is "device not present" or "timed out"
-                # -> forward this exception
-                raise ex
+            #if (ex.args[0] != errno.ENODEV) and (ex.args[0] != errno.ETIMEDOUT):
+            #    # only expected exception is "device not present" or "timed out"
+            #    # -> forward this exception
+            #    raise ex
+            pass
         return ok
 
     def waitForReady(self, timeout_ms: int = 250, invert: bool = False, throw: bool = False) -> bool:
@@ -483,45 +484,45 @@ class Battery:
     # ------ SMBus-Protocols----------
     # convenience functions to call BusMaster
     def writeWordVerified(self, cmd, w) -> bool:
-        return self.bus.vWriteWord(self.address, cmd, w, self.pec)  # VERIFIED by read-back!!!
+        return self.bus.vWriteWord(self.address, int(cmd), int(w), self.pec)  # VERIFIED by read-back!!!
 
     def writeWord(self, cmd, w) -> bool:
-        return self.bus.writeWord(self.address, cmd, w, self.pec)  # NO read-back (verify)
+        return self.bus.writeWord(self.address, int(cmd), int(w), self.pec)  # NO read-back (verify)
 
     def readWordVerified(self, cmd):
-        return self.bus.vReadWord(self.address, cmd, self.pec)  # VERIFIED by read-back!!!
+        return self.bus.vReadWord(self.address, int(cmd), self.pec)  # VERIFIED by read-back!!!
 
     def readWord(self, cmd):
-        return self.bus.readWord(self.address, cmd, self.pec)  # NO verification
+        return self.bus.readWord(self.address, int(cmd), self.pec)  # NO verification
 
     def writeBytesVerified(self, cmd, buffer) -> bool:
-        return self.bus.vWriteBytes(self.address, cmd, buffer, self.pec)  # VERIFIED by read-back!!!
+        return self.bus.vWriteBytes(self.address, int(cmd), buffer, self.pec)  # VERIFIED by read-back!!!
 
     def writeBytes(self, cmd, buffer) -> bool:
-        return self.bus.writeBytes(self.address, cmd, buffer, self.pec)  # NO read-back (verify)
+        return self.bus.writeBytes(self.address, int(cmd), buffer, self.pec)  # NO read-back (verify)
 
     def readBytesVerified(self, cmd, count):
-        return self.bus.vReadBytes(self.address, cmd, count, self.pec)
+        return self.bus.vReadBytes(self.address, int(cmd), int(count), self.pec)
 
     def readBytes(self, cmd, count):
-        return self.bus.readBytes(self.address, cmd, count, self.pec)  # NO read-back (verify)
+        return self.bus.readBytes(self.address, int(cmd), int(count), self.pec)  # NO read-back (verify)
 
     def readStringVerified(self, cmd):
-        return self.bus.vReadString(self.address, cmd, self.pec)
+        return self.bus.vReadString(self.address, int(cmd), self.pec)
 
     def writeBlockVerified(self, cmd, buffer) -> bool:
-        return self.bus.vWriteBytes(self.address, cmd, bytearray(bytes([len(buffer)]) + bytes(buffer)),
+        return self.bus.vWriteBytes(self.address, int(cmd), bytearray(bytes([len(buffer)]) + bytes(buffer)),
                                     self.pec)  # VERIFIED by read-back!!!
 
     def writeBlock(self, cmd, buffer) -> bool:
-        return self.bus.writeBytes(self.address, cmd, bytearray(bytes([len(buffer)]) + bytes(buffer)),
+        return self.bus.writeBytes(self.address, int(cmd), bytearray(bytes([len(buffer)]) + bytes(buffer)),
                                    self.pec)  # NO read-back (verify)
 
     def readBlockVerified(self, cmd):
-        return self.bus.vReadBlock(self.address, cmd, self.pec)
+        return self.bus.vReadBlock(self.address, int(cmd), self.pec)
 
     def readBlock(self, cmd, byte_count=-1):
-        return self.bus.readBlock(self.address, cmd, self.pec, byte_count)  # NO read-back (verify)
+        return self.bus.readBlock(self.address, int(cmd), self.pec, int(byte_count))  # NO read-back (verify)
 
     # ------ SMBus-Protocols----------
 
