@@ -915,18 +915,16 @@ if __name__ == "__main__":
     from rrc.ncd_eth_i2c_interface import I2CPort
     from rrc.smbus import BusMaster, BusMux_PCA9548A
 
-    ncd = I2CPort("192.168.1.149", 2101)
+    ncd = I2CPort("192.168.1.56", 2101)
     #print(ncd.i2c_bus_scan())
 
     bus = BusMaster(ncd)
-    mux = BusMux_PCA9548A(ncd, address=0x77)
-    mux.setChannel(1)
-
     bat = Battery(bus)
+    mux = BusMux_PCA9548A(ncd, address=0x77)
+    if not mux.setChannel(1): raise Exception("Bullshit")
 
     # print(bat.voltage())
-    print(bat.readBlock(6))
-
+    #print(bat.readBlock(6))
     print(bat.device_name()[0])
     # print(bat.voltage())
     # print(f"S: {bat.is_sealed()}")

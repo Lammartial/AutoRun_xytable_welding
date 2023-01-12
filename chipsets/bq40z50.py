@@ -177,8 +177,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
         os = int.from_bytes(buf, "little")
         return _od2t(OrderedDict({
-            "block"     : self._maybe_hexlify(buf, hexi),
-            "value"     : os,
+            "block": self._maybe_hexlify(buf, hexi),
+            "value": os,
             # bitflags
             "cal_test":  ((os>>15) & 1), # (os & (1<<15)) != 0,
             "lt_test":   ((os>>14) & 1), # (os & (1<<14)) != 0,
@@ -201,7 +201,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 32):
             BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
         return _od2t(OrderedDict({
-            "block" : self._maybe_hexlify(buf, hexi),
+            "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
             "cell_voltage_1": unpack_from("<H", buf, 0)[0] * 1e-3,  # mV, unsigned short, little endian
             "cell_voltage_2": unpack_from("<H", buf, 2)[0] * 1e-3,  # mV, unsigned short, little endian
@@ -228,7 +228,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 16):
             raise BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
         return _od2t(OrderedDict({
-            "block" : self._maybe_hexlify(buf, hexi),
+            "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
             "int_temperature": unpack_from("<H", buf, 0)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
             "ts1_temperature": unpack_from("<H", buf, 2)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
@@ -255,8 +255,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             bool: True, if sealed False otherwise
         """
         if refresh or self._operation_status is None: self.operation_status()
-         # using shadow copy to avoid bus access
-        print("s_SEC:", self._operation_status["sec"])
+        # using shadow copy to avoid bus access
+        #print("s_SEC:", self._operation_status["sec"])
         return self._operation_status["sec"] == 0x03 # using shadow copy to avoid bus access
 
 
@@ -277,7 +277,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
         if refresh or self._operation_status is None: self.operation_status()
         # using shadow copy to avoid bus access
-        print("u_SEC:", self._operation_status["sec"])
+        #print("u_SEC:", self._operation_status["sec"])
         if check_fullaccess:
             return (int(self._operation_status["sec"]) == 1) # full access
         return (int(self._operation_status["sec"]) in [1, 2]) # unsealed OR full access
@@ -297,7 +297,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # all fine, store the data
         b1 = data[2:]
         return _od2t(OrderedDict({
-            "values": self._maybe_hexlify(b1, hexi), # all blocks of bytes as they are - but hexlified as it looks better in JSON files later ...
+            "block": self._maybe_hexlify(b1, hexi), # all blocks of bytes as they are - but hexlified as it looks better in JSON files later ...
             # decode block 1
             "cell1_vmax":          unpack_from("<H", b1, 0)[0]*1e-3, # mV, unsigned short, little endian
             "cell2_vmax":          unpack_from("<H", b1, 2)[0]*1e-3, # mV, unsigned short, little endian
@@ -358,7 +358,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         #                OrderedDict(sorted(lifetime_data().items()))
         #
         return _od2t(OrderedDict({
-            "values": h, # all blocks of bytes as they are - but hexlified as it looks better in JSON files later ...
+            "block": h, # all blocks of bytes as they are - but hexlified as it looks better in JSON files later ...
             # decode block 1
             "cell1_vmax":          unpack_from("<H", b1, 0)[0]*1e-3, # mV, unsigned short, little endian
             "cell2_vmax":          unpack_from("<H", b1, 2)[0]*1e-3, # mV, unsigned short, little endian
@@ -653,6 +653,60 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         sleep(0.52) # for bq40z50: wait 500ms
         return self.authenticate(new_key) # verify if the new key is installed
 
+    #---HELPER FOR PRODUCTION----------------------------------------------------------------------
+
+    def read_ccadc_cal(self, hexi: bool | str | None = None) -> tuple:
+        self.manufacturer_access = 0xf081  # output CCADC Cal
+        buf = self.manufacturer_block_access
+        if not isinstance(buf, bytearray):
+            raise BatteryError("No correct lifetime data from battery for block {}. Got {} expected bytesarray".format(1, type(buf)))
+        if (len(buf) != 32 + 2):
+            raise BatteryError("No correct lifetime data from battery for block {}. Got {} bytes expected {}".format(1, len(buf), 32+2))
+        return _od2t(OrderedDict({
+            "block": self._maybe_hexlify(buf, hexi),  # all blocks of bytes as they are - but hexlified as it looks better in JSON files later ...
+            "counter":        unpack_from("<b", buf, 0)[0],
+            "status":         unpack_from("<b", buf, 1)[0],
+            "current_cc":     unpack_from(">h", buf, 2)[0]*1e-3,  # mA, signed short, big endian, current (coulomb counter)
+            "cell_voltage_1": unpack_from(">H", buf, 4)[0]*1e-3,  # mV, unsigned short, big endian,
+            "cell_voltage_2": unpack_from(">H", buf, 6)[0]*1e-3,  # mV, unsigned short, big endian,
+            "cell_voltage_3": unpack_from(">H", buf, 8)[0]*1e-3,  # mV, unsigned short, big endian,
+            "cell_voltage_4": unpack_from(">H", buf, 10)[0]*1e-3,  # mV, unsigned short, big endian,
+            "pack_voltage":   unpack_from(">H", buf, 12)[0]*1e-3,  # mV, unsigned short, big endian,
+            "bat_voltage":    unpack_from(">H", buf, 14)[0]*1e-3,  # mV, unsigned short, big endian,
+            "cell_current_1": unpack_from(">h", buf, 16)[0]*1e-3,  # mA, signed short, big endian,
+            "cell_current_2": unpack_from(">h", buf, 18)[0]*1e-3,  # mA, signed short, big endian,
+            "cell_current_3": unpack_from(">h", buf, 20)[0]*1e-3,  # mA, signed short, big endian,
+            "cell_current_4": unpack_from(">h", buf, 22)[0]*1e-3,  # mA, signed short, big endian,
+        }))
+
+    def cell_voltage_calibration(self):
+        if self.operation_status()["cal"] == 0:
+            self.manufacturer_access = 0x002d  # activate calibration
+            sleep(0.05)
+        # enable raw cell voltage output on ManufacturerData()
+        c = self.read_ccadc_cal()["counter"]
+        while self.read_ccadc_cal()["counter"] - c > 2:
+            pass
+
+        self.manufacturer_access = 0xf081  # output CCADC Cal
+        #self.manufacturer_access = 0xf082  # output shorted CCADC Cal
+
+        # ...
+
+        buf = self.manufacturer_data
+        pass
+
+    def bat_voltage_calibration(self):
+        pass
+
+    def pack_voltage_calibration(self):
+        pass
+
+    def current_voltage_calibration(self):
+        pass
+
+    def temperature_voltage_calibration(self):
+        pass
 
 #--------------------------------------------------------------------------------------------------
 # -R2-
