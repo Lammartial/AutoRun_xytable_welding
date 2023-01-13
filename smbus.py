@@ -2,7 +2,7 @@
 __author__ = "Markus Ruth"
 __version__ = "1.0.0"
 
-from typing import List
+from typing import Tuple
 import errno
 from struct import pack, unpack
 from time import sleep
@@ -382,18 +382,19 @@ class BusMaster:
 # --------------------------------------------------------------------------------------------------
 # --------------------------------------------------------------------------------------------------
 
+
 class BusMux:
-    i2c = None
-    address = None
-    current_channel = None
-    current_ic_address = None
-    current_ch_selector = None
-
-    def __init__(self, i2c, address=0x70):
+    
+    def __init__(self, i2c, address: int = 0x70):
         """Bus multiplexer IC control.
-
-           Multiplexes a I²C bus, e.g. 1 out of 8 depending on the selected channel.
-           After start no channel is selected (=blocked).
+        
+        Controls the 8-channel I2C switch connected on the same I2C bus like PCA9548A.
+        Multiplexes a I²C bus, e.g. 1 out of 8 depending on the selected channel.
+        Handles consecutive device addresses for numbers > 8
+        After start no channel is selected (=blocked).
+        The channels are numbered 1 to 8
+        Use .setChannel and .resetChannel to enable or disable a single channel.
+        Use .getChannels to get a list of all enabled channels
 
         Args:
             i2c (I2C instance): Any I2C bus (Soft or Hard)
@@ -401,9 +402,7 @@ class BusMux:
         """
         self.i2c = i2c
         self.address = int(address)
-        self.current_channel = -1
-        self.current_ic_address = 0x70
-        self.current_ch_selector = 0x00
+        self.current_mask = 0x00  # shadow register; initial value after reset -> no channels active
 
     def isReady(self):
         """Checks if the MUX' slave address is being ACK'd on bus.
@@ -424,6 +423,81 @@ class BusMux:
                 # forward this exception
                 raise ex
         return isready
+
+    def setChannelMask(self, mask: int) -> bool:
+        new_mask = int(mask) & 0xFF
+        # try to set the new channel mask (may throw OSError exception!)
+        ok = (1 == self.i2c.writeto(self.address, bytearray([new_mask])))
+        if ok:
+            self.current_mask = new_mask  # update shadow register
+        return ok
+
+    def getChannelMask(self) -> int:
+        return self.current_mask  # work with shadow only
+        
+    def reset(self) -> bool:
+        """Disable ALL channels"""
+        self.setChannelMask(0x00)
+
+    def getChannels(self) -> Tuple[int]:
+        mask = self.current_mask  # work with shadow only
+        channels = []
+        for i in range(8):
+            if mask & 1 << i:
+                channels.append(i+1)
+        return channels
+
+    def resetChannel(self, number: int) -> bool:
+        number = int(number)
+        if number < 1 or number > 8:
+            return False        
+        mask = self.current_mask & ~(1 << ((number - 1) & 0x07)) # un-select the channel
+        if self.current_mask == mask:
+            return True  # channel already deactivated
+        return self.setChannelMask(mask)
+        
+    def setChannel(self, number: int) -> bool:
+        """Switches the I²C bus to the selected channel.
+
+        Args:
+            number (int): Channel number to select 1..8 as only active channel.
+                          Will be written to the bus only if is is different to the already selecetd channel.
+        Raises:
+            OSError: on Errors from I²C functions.
+
+        Returns:
+            Boolean: True if successfully written, False else
+        """
+        number = int(number)
+        if number < 1 or number > 8:
+            return False
+        mask = 1 << ((number - 1) & 0x07)  # select the channel in the IC
+        if self.current_mask == mask:
+            return True  # channel already active
+        return self.setChannelMask(mask)
+
+class MultiBusMux(BusMux):
+
+    #
+    # UNFINISHED!
+    #
+
+    def __init__(self, i2c, address: int = 0x70):
+        """Bus multiplexer IC control.
+
+           Multiplexes a I²C bus, e.g. 1 out of 8 depending on the selected channel.
+           Handles consecutive device addresses for numbers > 8
+           After start no channel is selected (=blocked).
+
+        Args:
+            i2c (I2C instance): Any I2C bus (Soft or Hard)
+            address (Byte, optional): Device slave address on the bus. Defaults to 0x70.
+        """
+
+        super().__init__(i2c, address=int(address))
+        self.current_channel = -1
+        self.current_ic_address = 0x70
+        self.current_ch_selector = 0
 
     def setChannel(self, number):
         """Switches the I²C bus to the selected channel.
@@ -455,66 +529,49 @@ class BusMux:
             self.current_ch_selector = bitSelector
         return ok
 
-    def getChannel(self):
-        return self.current_channel
 
+# class BusMux_PCA9548A(BusMux):
+#     """Controls the PCA9548A 8-channel I2C switch.
 
-class BusMux_PCA9548A(BusMux):
-    """Controls the PCA9548A 8-channel I2C switch.
-    It can select any combination of the 8 channels.
-    The channels are numbered 1 to 8
-    Use .setChannel and .resetChannel to enable or disable a single channel.
-    Use .getChannels to get a list of all enabled channels
-    The default address on the NCD ETH-I2C Converter is 0x77
-    """
-    def __init__(self, i2c, address=0x77):
-        super().__init__(i2c, address=int(address))
+#     It can select any combination of the 8 channels.
+#     The channels are numbered 1 to 8
+#     Use .setChannel and .resetChannel to enable or disable a single channel.
+#     Use .getChannels to get a list of all enabled channels
+#     The default address on the NCD ETH-I2C Converter is 0x77
+#     """
+#     def __init__(self, i2c, address=0x77):
+#         super().__init__(i2c, address=int(address))
+#         self.current_mask = 0x00  # shadow register; initial value after reset -> no channels active
 
-    def setChannelMask(self, mask: int):
-        mask = int(mask)
-        if mask < 0 or mask > 0xFF:
-            return False
+#     def setChannelMask(self, mask: int) -> bool:
+#         self.current_mask = int(mask) & 0xFF
+#         wlen = self.i2c.writeto(self.address, bytearray([self.current_mask]))
+#         return (wlen == 1)
 
-        self.i2c.writeto(self.address, bytearray([mask]))
-        return True
+#     def getChannelMask(self) -> int:
+#         return self.current_mask  # work with shadow only
+        
+#     def getChannels(self) -> Tuple[int]:
+#         mask = self.current_mask  # work with shadow only
+#         channels = []
+#         for i in range(8):
+#             if mask & 1 << i:
+#                 channels.append(i+1)
+#         return channels
 
-    def getChannelMask(self) -> int:
-        response = self.i2c.readfrom(self.address, 1)
-        return int(response[0])
-
-    def getChannels(self) -> List[int]:
-        mask = self.getChannelMask()
-        channels = []
-        for i in range(8):
-            if mask & 1 << i:
-                channels.append(i+1)
-        return channels
-
-    def resetChannel(self, number: int):
-        number = int(number)
-        if number < 1 or number > 8:
-            return False
-
-        mask = self.getChannelMask()
-        new_mask = mask & ~(1 << (number - 1))
-
-        if mask != new_mask:
-            return self.setChannelMask(new_mask)
-        else:
-            return True
-
-    def setChannel(self, number: int):
-        number = int(number)
-        if number < 1 or number > 8:
-            return False
-
-        mask = self.getChannelMask()
-        new_mask = mask | (1 << (number - 1))
-
-        if mask != new_mask:
-            return self.setChannelMask(new_mask)
-        else:
-            return True
+#     def resetChannel(self, number: int) -> bool:
+#         number = int(number)
+#         if number < 1 or number > 8:
+#             return False
+#         mask = ~(1 << (number - 1))
+#         return self.setChannelMask(mask)
+        
+#     def setChannel(self, number: int) -> bool:
+#         number = int(number)
+#         if number < 1 or number > 8:
+#             return False
+#         mask = (1 << (number - 1))        
+#         return self.setChannelMask(mask)
 
 #--------------------------------------------------------------------------------------------------
 
@@ -522,7 +579,7 @@ if __name__ == "__main__":
     #ncd = I2CPort("192.168.1.149", 2101)
     #bus = BusMaster(ncd)
     #print(bus.isReady(0x77))
-    #mux = BusMux_PCA9548A(ncd, address=0x77)
+    #mux = BusMux(ncd, address=0x77)
     #mux.setChannel(1)
     #print(mux.getChannels())
     #print(bus.readWord(0x0b,0x09))
