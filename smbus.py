@@ -573,6 +573,10 @@ class MultiBusMux(BusMux):
 #         mask = (1 << (number - 1))        
 #         return self.setChannelMask(mask)
 
+
+class MuxedBusMaster(BusMaster):
+    pass
+
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
