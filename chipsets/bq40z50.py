@@ -46,13 +46,14 @@ def _od2t(d: OrderedDict) -> tuple:
 
 # -R1-
 class BQ40Z50R1(ChipsetTexasInstruments):
-    
+
     def __init__(self, smbus: BusMaster, slvAddress: int = 0x0b, pec: bool = False):
-        # Note: explicitely replicate the parameters here for having 
+        # Note: explicitely replicate the parameters here for having
         # option in teststand to change them on call
         super().__init__(smbus, slvAddress=slvAddress, pec=pec)
         self._operation_status = None  # shadow copy of operation_status() read to avoid redundant reads for seal/unseal checks
         self._manufacturing_status = None  # shadow copy of manufacturing_status()
+        self._ccadc_cal = None  # shadow copy
 
     @property
     def name(self) -> str:
@@ -139,12 +140,12 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     def operation_status(self, hexi: bool | str | None = None) -> tuple:
         """This command returns the OperationStatus() flags.
-        
+
         SIGNATURE function: We can use this function to identify the chipset type,
                             by checking the Exception()
 
         Args:
-            hexi (bool | str | None, optional): activates a conversion of data into "blocks" 
+            hexi (bool | str | None, optional): activates a conversion of data into "blocks"
                 if not None or bool and False. If bool and True "blocks" contains ascii hex nibbles.
                 Defaults to None.
 
@@ -200,7 +201,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """This command returns the ManufacturingStatus() flags.
 
         Args:
-            hexi (bool | str | None, optional): activates a conversion of data into "blocks" 
+            hexi (bool | str | None, optional): activates a conversion of data into "blocks"
                 if not None or bool and False. If bool and True "blocks" contains ascii hex nibbles.
                 Defaults to None.
 
@@ -280,7 +281,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     #---UNSEALED HELPER FOR PRODUCTION-------------------------------------------------------------
 
     # ...
-    
+
     def enable_full_access(self) -> bool:
         #
         # no encrypted keys here!
@@ -751,15 +752,13 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "gauging_temperature": unpack_from("<H", buf, 14)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
         }))
 
-    
+
     def read_ccadc_cal(self, hexi: bool | str | None = None) -> tuple:
         self.manufacturer_access = 0xf081  # output CCADC Cal
         buf = self.manufacturer_block_access
-        if not isinstance(buf, bytearray):
-            raise BatteryError("No correct lifetime data from battery for block {}. Got {} expected bytesarray".format(1, type(buf)))
-        if (len(buf) != 32 + 2):
-            raise BatteryError("No correct lifetime data from battery for block {}. Got {} bytes expected {}".format(1, len(buf), 32+2))
-        return _od2t(OrderedDict({
+        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 24):
+            raise BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
+        self._ccadc_cal = OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),  # all blocks of bytes as they are - but hexlified as it looks better in JSON files later ...
             "counter":        unpack_from("<b", buf, 0)[0],
             "status":         unpack_from("<b", buf, 1)[0],
@@ -774,32 +773,69 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "cell_current_2": unpack_from(">h", buf, 18)[0]*1e-3,  # mA, signed short, big endian,
             "cell_current_3": unpack_from(">h", buf, 20)[0]*1e-3,  # mA, signed short, big endian,
             "cell_current_4": unpack_from(">h", buf, 22)[0]*1e-3,  # mA, signed short, big endian,
-        }))
+        })
+        return _od2t(self._ccadc_cal)
 
-    def cell_voltage_calibration(self, shorted: bool = False, timeout: float = 1.0):
-        if self.operation_status()["cal"] == 0:
-            self.manufacturer_access = 0x002d  # activate calibration
-            sleep(0.05)
+    def _wait_for_adc_update(self, num_of_changes: int, timeout :int, t0_ns: int = None):
+        # wait the 8-bit counter changed by "num_of_changes" -> overflow need to be respected!
+        self.read_ccadc_cal()
+        c0 = self._ccadc_cal["counter"]  # get the current counter
+        if t0_ns is None:
+            t0_ns = monotonic_ns()
+        pause = timeout / 10   # do 10 times access maximum
+        while ((c0 - self._read_ccadc_cal["counter"]) & 0xff) < num_of_changes + 1:
+            if (monotonic_ns() - t0_ns) > timeout * 1000000:
+                raise TimeoutError("While wait for calibration counter")
+            self.read_ccadc_cal()  # update calibration reading
+            sleep(pause)
+
+    def measure_cell_voltage_raw_adcs_for_calibration(self, num_cells: int, samples: int = 8, shorted: bool = False, timeout: float = 5.0) -> tuple:
+        """_summary_
+
+        Args:
+            num_cells (int): 1 .. 4
+            samples (int, optional): number of samples to average. Defaults to 8.
+            shorted (bool, optional): Decides if shorted CCADC mode or normal. This mode enables an
+                    internal short on the coulomb counter inputs (SRP, SRN). Defaults to False.
+            timeout (float, optional): Overall timeout in seconds. Defaults to 5.0.
+
+        Returns:
+            tuple: num_cell values of averaged ADC measurements
+        """
+        def _get_adc_reading(i: int) -> int:
+            _v = self._read_ccadc_cal[f"cell_voltage_{i + 1}"]
+            # correct the sign of value
+            return _v if _v < 0x8000 else -(0xFFFF - _v + 0x0001)
+
+        t0 = monotonic_ns()  # common timout over the whole function
+        # make sure that calibration test is enabled
+        self._ms_toggle_helper("cal_test", True, 0x002d)
+        sleep(0.05)
         # enable selected raw cell voltage output on ManufacturerData()
         if shorted:
             self.manufacturer_access = 0xf082  # output shorted CCADC Cal
         else:
             self.manufacturer_access = 0xf081  # output CCADC Cal
         # wait the 8-bit counter changed by 2 -> overflow need to be respected!
-        c0 = self.read_ccadc_cal()["counter"]
-        t0 = monotonic_ns()
-        pause = timeout / 10
-        while ((c0 - (c := self.read_ccadc_cal()["counter"])) & 0xff) < 3:
-            if (monotonic_ns() - t0) > timeout * 1000000:
-                raise TimeoutError("While wait for calibration counter")
-            sleep(pause)
-        # now get the ADC from the last block read
-        c[""]
+        self._wait_for_adc_update(2, timeout, t0_ns=t0)
+        # now get the ADCs from the last block read with corrected signs
+        voltages = [_get_adc_reading(v) for v in range(0, num_cells)]
+        n = 8  # take 8 measurements
+        for _ in range(0, n):
+            self._wait_for_adc_update(1, timeout, t0_ns=t0)
+            voltages = [voltages[i] + _get_adc_reading(i) for i in range(0, num_cells)]
+        # calc mean values
+        voltages = [voltages[i]/n for i in range(0, num_cells)]
+        return tuple(voltages)
 
-        # ...
+    def end_adc_calibration(self):
+        self.manufacturer_access = 0xf080
+        self._ms_toggle_helper("cal_test", False, 0x002d)
 
-        buf = self.manufacturer_data
-        pass
+    #def write_cell_voltage_gain(self, gain_values: tuple):
+    #    # len of tuple is number of cells
+    #    self._ms_toggle_helper("cal_test", False, 0x002d)
+
 
     def bat_voltage_calibration(self):
         pass
@@ -813,11 +849,11 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def temperature_voltage_calibration(self):
         pass
 
-    def _toggle_helper(self, ms_key: str, enable: bool, ma_cmd: int, retries: int = 1) -> bool:
-        """Internal function to set a defined state using toggle and operation_status() reads for control.
-        
+    def _ms_toggle_helper(self, ms_key: str, enable: bool, ma_cmd: int, retries: int = 1) -> bool:
+        """Internal function to set a defined state using toggle and manufacturing_status() reads for control.
+
         Having retries = 1 results in always one control read of operation status after potential toggle.
-        
+
         Args:
             ms_key (str): _description_
             enable (bool): _description_
@@ -843,45 +879,45 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return (bool(self.manufacturing_status[ms_key]) == enable)
 
     def toggle_fuse(self) -> None:
-        """This command manually activates/deactivates the FUSE output to ease testing during manufacturing. 
-        
+        """This command manually activates/deactivates the FUSE output to ease testing during manufacturing.
+
         If the OperationStatus()[FUSE] = 0 indicates the FUSE output is low. Sending this command toggles the
         FUSE output to be high and the OperationStatus()[FUSE] = 1.
 
         Args:
-            enable (None | bool, optional): toggle (enable is None) or optionally use toggle to set a defined 
+            enable (None | bool, optional): toggle (enable is None) or optionally use toggle to set a defined
                 state (enable is bool) if not set already. Defaults to None.
-    
-        """        
+
+        """
         self.manufacturer_access = 0x001d
-    
+
     def set_fuse(self, enable: bool) -> bool:
-        return self._toggle_helper("fuse", enable, 0x001d)
+        return self._ms_toggle_helper("fuse", enable, 0x001d)
 
 
     def toggle_pchg_fet(self) -> None:
         """This command turns on/off the PCHG FET drive function to ease testing during manufacturing."""
         self.manufacturer_access = 0x001e
-    
+
     def set_pchg_fet(self, enable: bool) -> bool:
-        return self._toggle_helper("pchg_en", enable, 0x001e)
+        return self._ms_toggle_helper("pchg_en", enable, 0x001e)
 
     def toggle_chg_fet(self) -> None:
-        """This command turns on/off the CHG FET drive function to ease testing during manufacturing. 
-        
+        """This command turns on/off the CHG FET drive function to ease testing during manufacturing.
+
         If the ManufacturingStatus()[CHG_TEST] = 0, sending this command turns on the CHG FET and the
-        ManufacturingStatus()[CHG_TEST] = 1 and vice versa. This toggling command is only enabled if 
+        ManufacturingStatus()[CHG_TEST] = 1 and vice versa. This toggling command is only enabled if
         ManufacturingStatus()[FET_EN] = 0, indicating an FW FET control is not active and manual control is
         allowed. A reset clears the [CHG_TEST] flag and turns off the CHG FET.
         """
         self.manufacturer_access = 0x001f
 
     def set_chg_fet(self, enable: bool) -> bool:
-        return self._toggle_helper("chg_en", enable, 0x001f)
+        return self._ms_toggle_helper("chg_en", enable, 0x001f)
 
     def toggle_dsg_fet(self):
-        """This command turns on/off DSG FET drive function to ease testing during manufacturing. 
-        
+        """This command turns on/off DSG FET drive function to ease testing during manufacturing.
+
         If the ManufacturingStatus()[DSG_TEST] = 0, sending this command turns on the DSG FET and the
         ManufacturingStatus()[DSG_TEST] = 1 and vice versa. This toggling command is only enabled if
         ManufacturingStatus()[FET_EN] = 0, indicating an FW FET control is not active and manual control is
@@ -890,29 +926,29 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.manufacturer_access = 0x0020
 
     def set_dsg_fet(self, enable: bool) -> bool:
-        return self._toggle_helper("dsg_en", enable, 0x0020)
+        return self._ms_toggle_helper("dsg_en", enable, 0x0020)
 
     def toggle_gauging(self):
         """This command enables or disables the gauging function to ease testing during manufacturing.
-        
+
         The initial setting is loaded from Mfg Status Init[GAUGE_EN]. If the ManufacturingStatus()[GAUGE_EN] = 0,
         sending this command will enable gauging and the ManufacturingStatus()[GAUGE_EN] = 1 and vice
-        versa. In UNSEALED mode, the ManufacturingStatus()[GAUGE_EN] status is copied to Mfg Status 
+        versa. In UNSEALED mode, the ManufacturingStatus()[GAUGE_EN] status is copied to Mfg Status
         Init[GAUGE_EN] when the command is received by the gauge. The bq40z50-R2 device remains on its
         latest gauging status prior to a reset.
         """
         self.manufacturer_access = 0x0021
 
     def set_gauging(self, enable: bool) -> bool:
-        return self._toggle_helper("gauge_en", enable, 0x0021)
+        return self._ms_toggle_helper("gauge_en", enable, 0x0021)
 
     def toggle_fet_control(self):
-        """This command disables/enables control of the CHG, DSG, and PCHG FET by the firmware. 
-        
-        The initial setting is loaded from Mfg Status Init[FET_EN]. If the ManufacturingStatus()[FET_EN] = 0, 
-        sending this command allows the FW to control the PCHG, CHG, and DSG FETs and the 
-        ManufacturingStatus()[FET_EN] = 1 and vice versa. 
-        
+        """This command disables/enables control of the CHG, DSG, and PCHG FET by the firmware.
+
+        The initial setting is loaded from Mfg Status Init[FET_EN]. If the ManufacturingStatus()[FET_EN] = 0,
+        sending this command allows the FW to control the PCHG, CHG, and DSG FETs and the
+        ManufacturingStatus()[FET_EN] = 1 and vice versa.
+
         In UNSEALED mode, the ManufacturingStatus()[FET_EN] status is copied to Mfg Status Init[FET_EN]
         when the command is received by the gauge. The bq40z50-R2 device remains on its latest FET control
         status prior to a reset.
@@ -920,15 +956,15 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.manufacturer_access = 0x0022
 
     def set_fet_control(self, enable: bool) -> bool:
-        return self._toggle_helper("fet_en", enable, 0x0022)
+        return self._ms_toggle_helper("fet_en", enable, 0x0022)
 
     def toggle_lifetime_data_collection(self):
-        """This command disables/enables Lifetime Data Collection to help streamline production testing. 
-        
-        The initial setting is loaded from Mfg Status Init[LF_EN]. If the ManufacturingStatus()[LF_EN] = 0, 
+        """This command disables/enables Lifetime Data Collection to help streamline production testing.
+
+        The initial setting is loaded from Mfg Status Init[LF_EN]. If the ManufacturingStatus()[LF_EN] = 0,
         sending this command starts the Lifetime Data Collection and the ManufacturingStatus()[LF_EN] = 1 and vice versa.
         In UNSEALED mode, the ManufacturingStatus()[LF_EN] status is copied to Mfg Status Init[LF_EN] when the
-        command is received by the gauge. The bq40z50-R2 device remains on its latest Lifetime Data Collection 
+        command is received by the gauge. The bq40z50-R2 device remains on its latest Lifetime Data Collection
         setting prior to a reset.
         """
         self.manufacturer_access = 0x0023
@@ -953,7 +989,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
         return _od2t(OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
-            # data come little endian            
+            # data come little endian
             "interrupt_status":  unpack_from("<b", buf, 0)[0],
             "fet_status":  unpack_from("<b", buf, 0)[0],
             "rxin":  unpack_from("<b", buf, 0)[0],
@@ -976,17 +1012,17 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "scd1":  unpack_from("<b", buf, 0)[0],
             "scd2":  unpack_from("<b", buf, 0)[0],
         }))
-    
+
 
 #--------------------------------------------------------------------------------------------------
 # -R2-
 class BQ40Z50R2(BQ40Z50R1):
 
     def __init__(self, smbus: BusMaster, slvAddress: int = 0x0b, pec: bool = False):
-        # Note: explicitely replicate the parameters here for having 
+        # Note: explicitely replicate the parameters here for having
         # option in teststand to change them on call
         super().__init__(smbus, slvAddress=slvAddress, pec=pec)
-        self._operation_status = None # shadow copy of operation_status() read to avoid redundant reads for seal/unseal checks    
+        self._operation_status = None # shadow copy of operation_status() read to avoid redundant reads for seal/unseal checks
 
     @property
     def name(self):
