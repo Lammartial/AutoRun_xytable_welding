@@ -128,11 +128,24 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         raise NotImplementedError("manufacturer_status() only available for bq20z65.")
 
     def operation_status(self, hexi: bool | str | None = None) -> tuple:
-        """
-            SIGNATURE function: We can use this function to identify the chipset type,
-                                by checking the Exception()
+        """This command returns the OperationStatus() flags.
+        
+        SIGNATURE function: We can use this function to identify the chipset type,
+                            by checking the Exception()
 
+        Args:
+            hexi (bool | str | None, optional): activates a conversion of data into "blocks" 
+                if not None or bool and False. If bool and True "blocks" contains ascii hex nibbles.
+                Defaults to None.
+
+        Returns:
+            tuple: (
+                block: bytes or str with hex as ascii string, depending on hexi
+                value: the bitflag register as singned 64bit integer
+                bitflags: 0 or 1 values in descending bit order bit29 ... bit0
+            )
         """
+        
         self.manufacturer_access = 0x0054
         buf = self.manufacturer_data
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 4):
@@ -174,6 +187,20 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return _od2t(self._operation_status)
 
     def manufacturing_status(self, hexi: bool | str | None = None) -> tuple:
+        """This command returns the ManufacturingStatus() flags.
+
+        Args:
+            hexi (bool | str | None, optional): activates a conversion of data into "blocks" 
+                if not None or bool and False. If bool and True "blocks" contains ascii hex nibbles.
+                Defaults to None.
+
+        Returns:
+            tuple: (
+                block: bytes or str with hex as ascii string, depending on hexi
+                value: the bitflag register as singned 64bit integer
+                bitflags: 0 or 1 values in descending bit order bit15 ... bit0
+            )
+        """
         self.manufacturer_access = 0x0057
         buf = self.manufacturer_data
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 2):
@@ -183,9 +210,22 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "block": self._maybe_hexlify(buf, hexi),
             "value": os,
             # bitflags
-            "cal_test":  ((os>>15) & 1), # (os & (1<<15)) != 0,
-            "lt_test":   ((os>>14) & 1), # (os & (1<<14)) != 0,
-            # ...
+            "cal_test":  ((os>>15) & 1),
+            "lt_test":   ((os>>14) & 1),
+            "reserved4": ((os>>13) & 1),
+            "reserved3": ((os>>12) & 1),
+            "reserved2": ((os>>11) & 1),
+            "reserved1": ((os>>10) & 1),
+            "led_en":    ((os>>9) & 1),
+            "fuse_en":   ((os>>8) & 1),
+            "bbr_en":    ((os>>7) & 1),
+            "pf_en":     ((os>>6) & 1),
+            "lf_en":     ((os>>5) & 1),
+            "fet_en":    ((os>>4) & 1),
+            "gauge_en":  ((os>>3) & 1),
+            "dsg_en":    ((os>>2) & 1),
+            "chg_en":    ((os>>1) & 1),
+            "pchg_en":   ((os>>0) & 1),
         }))
 
     def is_sealed(self, refresh: bool = False) -> bool:
