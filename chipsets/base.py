@@ -12,7 +12,6 @@ __author__ = "Markus Ruth"
 from binascii import unhexlify
 from rrc.smartbattery import Battery
 
-
 #--------------------------------------------------------------------------------------------------
 class Chipset(Battery):
     """Abstract chipset type containing all common functions.

@@ -686,6 +686,10 @@ class Battery:
     def soh(self):
         c = self.ds[Cmd.SPEC_SOH];              return c.value, "%", "SOH", c
 
+    #
+    # the following are TI specific but we need them everywhere in the lab, so keep these here for now
+    # This is not ideal but all TI chipsets so far have these functions
+    #
     def cell1_voltage(self):
         c = self.ds[Cmd.CELL1_VOLTAGE];         return c.value * 1e-3, "V", "Cell 1 Volt.", c
 
@@ -698,40 +702,12 @@ class Battery:
     def cell4_voltage(self):
         c = self.ds[Cmd.CELL4_VOLTAGE];         return c.value * 1e-3, "V", "Cell 4 Volt.", c
 
-    def operation_status(self):
-        return int.from_bytes((self.read_mac_data(0x0054)[:2]), "little")
-
-    def full_access_battery(self):
-        UNSEAL_WORD1 = 0xFAC3
-        UNSEAL_WORD2 = 0x8D21
-        FA_WORD1 = 0x2CE4
-        FA_WORD2 = 0x63DB
-        self.writeWord(Cmd.MANUFACTURER_ACCESS, UNSEAL_WORD1)
-        self.writeWord(Cmd.MANUFACTURER_ACCESS, UNSEAL_WORD2)
-        self.writeWord(Cmd.MANUFACTURER_ACCESS, FA_WORD1)
-        self.writeWord(Cmd.MANUFACTURER_ACCESS, FA_WORD2)
-
-    def seal_mode(self) -> int:
-        return (self.operation_status() & 0x0300) >> 8
-
-    def is_full_access(self) -> bool:
-        return self.seal_mode() == 1
-
-    def is_unsealed(self) -> bool:
-        return self.seal_mode() == 2
-
-    def is_sealed(self) -> bool:
-        return self.seal_mode() == 3
-
-    def seal_battery(self):
-        self.writeBlock(Cmd.MANUFACTURER_BLOCK_ACCESS, bytearray([0x30, 0x00]))
-
-    def read_mac_data(self, cmd: int):
-        self.writeBlock(Cmd.MANUFACTURER_BLOCK_ACCESS, cmd.to_bytes(2, "little"))
-        result = self.readBlock(Cmd.MANUFACTURER_BLOCK_ACCESS)
-        if result[1]:
-            return result[0][2:]
-
+    #
+    # NOTE:
+    # all the chipset specific functions are located in the corresponding 
+    # chipset class which inherits all from the SmartBattery -> use a Chipset() instead!
+    #
+   
     # pylint: enable=C0116,C0321
 
     # --------------------------------------------

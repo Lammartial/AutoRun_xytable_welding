@@ -4,7 +4,7 @@ import sys
 from time import sleep
 from typing import Union, Tuple, List
 from rrc.smartbattery import Battery
-
+from rrc.chipsets import ChipsetTexasInstruments
 
 class FlashStreamFlasher:
     """A class that can update the firmware on a TI BMS with a flash-stream file.
@@ -25,7 +25,7 @@ class FlashStreamFlasher:
     flasher.set_firmware_file(file_path)
     flasher.validate_and_program_fw_file()
     """
-    def __init__(self, battery: Battery, logger: logging.Logger = None):
+    def __init__(self, battery: ChipsetTexasInstruments, logger: logging.Logger = None):
         """Initialize a class instance."""
         self.battery = battery
         self.logger = logger
@@ -83,9 +83,7 @@ class FlashStreamFlasher:
         Raises:
             CantUnsealBatteryError: If the battery cannot be unsealed.
         """
-        self.battery.full_access_battery()
-        sleep(0.5)
-        if not self.battery.is_full_access():
+        if not self.battery.enable_full_access():        
             self.logger.error("Could not set battery to full access mode.")
             raise CantUnsealBatteryError()
         self.logger.info(f"Battery name: {self.battery.device_name()[0]}")

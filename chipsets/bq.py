@@ -180,6 +180,10 @@ class ChipsetTexasInstruments(Chipset):
         #print("grrr")
         return False
 
+    def enable_full_access(self) -> bool:
+        """Sets the battery into full-access mode by calling the unseal function with keys for the chipset."""
+        pass
+
     def read_manufacturer_info_block(self, hexi: bool | str | None = None) -> bytes | bytearray | str:
         block, _ = self.readBlockVerified(0x70)
         return self._maybe_hexlify(block, hexi)

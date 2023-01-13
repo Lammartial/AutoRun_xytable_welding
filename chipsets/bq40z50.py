@@ -46,8 +46,11 @@ def _od2t(d: OrderedDict) -> tuple:
 
 # -R1-
 class BQ40Z50R1(ChipsetTexasInstruments):
-    def __init__(self, smbus: BusMaster):
-        super().__init__(smbus)
+    
+    def __init__(self, smbus: BusMaster, slvAddress: int = 0x0b, pec: bool = False):
+        # Note: explicitely replicate the parameters here for having 
+        # option in teststand to change them on call
+        super().__init__(smbus, slvAddress=slvAddress, pec=pec)
         self._operation_status = None # shadow copy of operation_status() read to avoid redundant reads for seal/unseal checks
 
     @property
@@ -281,6 +284,51 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         if check_fullaccess:
             return (int(self._operation_status["sec"]) == 1) # full access
         return (int(self._operation_status["sec"]) in [1, 2]) # unsealed OR full access
+
+
+    def enable_full_access(self) -> bool:
+        #
+        # no encrypted keys here!
+        #
+        return self.unseal(0x8D21FAC3, 0x63DB2CE4)  # low-word goes first to battery
+
+
+    # def operation_status(self):
+    #     return int.from_bytes((self.read_mac_data(0x0054)[:2]), "little")
+
+    # def full_access_battery(self):
+    #     # this is without hiding the secrets
+    #     UNSEAL_WORD1 = 0xFAC3
+    #     UNSEAL_WORD2 = 0x8D21
+    #     FA_WORD1 = 0x2CE4
+    #     FA_WORD2 = 0x63DB
+    #     self.writeWord(Cmd.MANUFACTURER_ACCESS, UNSEAL_WORD1)
+    #     self.writeWord(Cmd.MANUFACTURER_ACCESS, UNSEAL_WORD2)
+    #     self.writeWord(Cmd.MANUFACTURER_ACCESS, FA_WORD1)
+    #     self.writeWord(Cmd.MANUFACTURER_ACCESS, FA_WORD2)
+
+    # def seal_mode(self) -> int:
+    #     return (self.operation_status() & 0x0300) >> 8
+
+    # def is_full_access(self) -> bool:
+    #     return self.seal_mode() == 1
+
+    # def is_unsealed(self) -> bool:
+    #     return self.seal_mode() == 2
+
+    # def is_sealed(self) -> bool:
+    #     return self.seal_mode() == 3
+
+    # def seal_battery(self):
+    #     self.writeBlock(Cmd.MANUFACTURER_BLOCK_ACCESS, bytearray([0x30, 0x00]))
+
+    # def read_mac_data(self, cmd: int):
+    #     self.writeBlock(Cmd.MANUFACTURER_BLOCK_ACCESS, cmd.to_bytes(2, "little"))
+    #     result = self.readBlock(Cmd.MANUFACTURER_BLOCK_ACCESS)
+    #     if result[1]:
+    #         return result[0][2:]
+
+
 
     def lifetime_datablock(self, hexi: bool | str | None = None):
         """Compatibility function: reading just first block of lifetimedata for use e.g. in production.
@@ -711,9 +759,12 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 #--------------------------------------------------------------------------------------------------
 # -R2-
 class BQ40Z50R2(BQ40Z50R1):
-    def __init__(self, smbus):
-        super().__init__(smbus)
-        return
+
+    def __init__(self, smbus: BusMaster, slvAddress: int = 0x0b, pec: bool = False):
+        # Note: explicitely replicate the parameters here for having 
+        # option in teststand to change them on call
+        super().__init__(smbus, slvAddress=slvAddress, pec=pec)
+        self._operation_status = None # shadow copy of operation_status() read to avoid redundant reads for seal/unseal checks    
 
     @property
     def name(self):
