@@ -10,7 +10,7 @@ __author__ = "Markus Ruth"
 # pylint: disable=line-too-long,C0103,C0321,C0413,W0703,W0107,R1702,R0904
 import errno
 #from battery.smartbattery import Battery
-from time import sleep
+from time import sleep, monotonic_ns
 from binascii import hexlify
 from struct import pack, unpack, unpack_from
 #from uos import urandom
@@ -776,17 +776,25 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "cell_current_4": unpack_from(">h", buf, 22)[0]*1e-3,  # mA, signed short, big endian,
         }))
 
-    def cell_voltage_calibration(self):
+    def cell_voltage_calibration(self, shorted: bool = False, timeout: float = 1.0):
         if self.operation_status()["cal"] == 0:
             self.manufacturer_access = 0x002d  # activate calibration
             sleep(0.05)
-        # enable raw cell voltage output on ManufacturerData()
-        c = self.read_ccadc_cal()["counter"]
-        while self.read_ccadc_cal()["counter"] - c > 2:
-            pass
-
-        self.manufacturer_access = 0xf081  # output CCADC Cal
-        #self.manufacturer_access = 0xf082  # output shorted CCADC Cal
+        # enable selected raw cell voltage output on ManufacturerData()
+        if shorted:
+            self.manufacturer_access = 0xf082  # output shorted CCADC Cal
+        else:
+            self.manufacturer_access = 0xf081  # output CCADC Cal
+        # wait the 8-bit counter changed by 2 -> overflow need to be respected!
+        c0 = self.read_ccadc_cal()["counter"]
+        t0 = monotonic_ns()
+        pause = timeout / 10
+        while ((c0 - (c := self.read_ccadc_cal()["counter"])) & 0xff) < 3:
+            if (monotonic_ns() - t0) > timeout * 1000000:
+                raise TimeoutError("While wait for calibration counter")
+            sleep(pause)
+        # now get the ADC from the last block read
+        c[""]
 
         # ...
 
