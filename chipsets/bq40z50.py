@@ -51,7 +51,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # Note: explicitely replicate the parameters here for having 
         # option in teststand to change them on call
         super().__init__(smbus, slvAddress=slvAddress, pec=pec)
-        self._operation_status = None # shadow copy of operation_status() read to avoid redundant reads for seal/unseal checks
+        self._operation_status = None  # shadow copy of operation_status() read to avoid redundant reads for seal/unseal checks
+        self._manufacturing_status = None  # shadow copy of manufacturing_status()
 
     @property
     def name(self) -> str:
@@ -127,6 +128,15 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def manufacturer_status(self) -> int:
         raise NotImplementedError("manufacturer_status() only available for bq20z65.")
 
+
+    # def _operation_status_int(self) -> int:
+    #     """This command returns the OperationStatus() flags only as int.
+    #     It is intended for use in other functions here.
+    #     """
+    #     self.manufacturer_access = 0x0054
+    #     buf = self.manufacturer_data
+    #     return int.from_bytes(buf, "little")
+
     def operation_status(self, hexi: bool | str | None = None) -> tuple:
         """This command returns the OperationStatus() flags.
         
@@ -145,7 +155,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 bitflags: 0 or 1 values in descending bit order bit29 ... bit0
             )
         """
-        
+
         self.manufacturer_access = 0x0054
         buf = self.manufacturer_data
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 4):
@@ -206,7 +216,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 2):
             BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
         os = int.from_bytes(buf, "little")
-        return _od2t(OrderedDict({
+        self._manufacturing_status = OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             "value": os,
             # bitflags
@@ -226,7 +236,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "dsg_en":    ((os>>2) & 1),
             "chg_en":    ((os>>1) & 1),
             "pchg_en":   ((os>>0) & 1),
-        }))
+        })
+        return _od2t(self._manufacturing_status)
 
     def is_sealed(self, refresh: bool = False) -> bool:
         """check if batetry is sealed
@@ -794,19 +805,58 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def temperature_voltage_calibration(self):
         pass
 
+    def _toggle_helper(self, ms_key: str, enable: bool, ma_cmd: int, retries: int = 1) -> bool:
+        """Internal function to set a defined state using toggle and operation_status() reads for control.
+        
+        Having retries = 1 results in always one control read of operation status after potential toggle.
+        
+        Args:
+            ms_key (str): _description_
+            enable (bool): _description_
+            ma_cmd (int): _description_
+            retries (int, optional): _description_. Defaults to 1.
+
+        Returns:
+            bool: _description_
+        """
+        while (retries >= 0):
+            self.manufacturing_status()  # => update the self._manufacturing_status attribute
+            if enable:
+                if not self.manufacturing_status[ms_key]:
+                    self.manufacturer_access = ma_cmd  # need to toggle
+                else:
+                    pass  # already on the target state
+            else:
+                if self.manufacturing_status[ms_key]:
+                    self.manufacturer_access = ma_cmd  # need to toggle
+                else:
+                    pass  # already on the target state
+            retries -= 1
+        return (bool(self.manufacturing_status[ms_key]) == enable)
 
     def toggle_fuse(self) -> None:
         """This command manually activates/deactivates the FUSE output to ease testing during manufacturing. 
         
         If the OperationStatus()[FUSE] = 0 indicates the FUSE output is low. Sending this command toggles the
         FUSE output to be high and the OperationStatus()[FUSE] = 1.
-        """
+
+        Args:
+            enable (None | bool, optional): toggle (enable is None) or optionally use toggle to set a defined 
+                state (enable is bool) if not set already. Defaults to None.
+    
+        """        
         self.manufacturer_access = 0x001d
-        
+    
+    def set_fuse(self, enable: bool) -> bool:
+        return self._toggle_helper("fuse", enable, 0x001d)
+
+
     def toggle_pchg_fet(self) -> None:
         """This command turns on/off the PCHG FET drive function to ease testing during manufacturing."""
         self.manufacturer_access = 0x001e
-        #buf = self.manufacturer_block_access
+    
+    def set_pchg_fet(self, enable: bool) -> bool:
+        return self._toggle_helper("pchg_en", enable, 0x001e)
 
     def toggle_chg_fet(self) -> None:
         """This command turns on/off the CHG FET drive function to ease testing during manufacturing. 
@@ -817,7 +867,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         allowed. A reset clears the [CHG_TEST] flag and turns off the CHG FET.
         """
         self.manufacturer_access = 0x001f
-        
+
+    def set_chg_fet(self, enable: bool) -> bool:
+        return self._toggle_helper("chg_en", enable, 0x001f)
 
     def toggle_dsg_fet(self):
         """This command turns on/off DSG FET drive function to ease testing during manufacturing. 
@@ -829,6 +881,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
         self.manufacturer_access = 0x0020
 
+    def set_dsg_fet(self, enable: bool) -> bool:
+        return self._toggle_helper("dsg_en", enable, 0x0020)
+
     def toggle_gauging(self):
         """This command enables or disables the gauging function to ease testing during manufacturing.
         
@@ -839,6 +894,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         latest gauging status prior to a reset.
         """
         self.manufacturer_access = 0x0021
+
+    def set_gauging(self, enable: bool) -> bool:
+        return self._toggle_helper("gauge_en", enable, 0x0021)
 
     def toggle_fet_control(self):
         """This command disables/enables control of the CHG, DSG, and PCHG FET by the firmware. 
@@ -853,6 +911,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
         self.manufacturer_access = 0x0022
 
+    def set_fet_control(self, enable: bool) -> bool:
+        return self._toggle_helper("fet_en", enable, 0x0022)
 
     def toggle_lifetime_data_collection(self):
         """This command disables/enables Lifetime Data Collection to help streamline production testing. 
