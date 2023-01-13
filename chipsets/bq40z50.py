@@ -188,66 +188,6 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             # ...
         }))
 
-    # --- more functionality for production -------------------------------------------------------
-
-    def manufacturing_dastatus1(self, hexi: bool | str | None = None) -> tuple:
-        """Read DAStatus1 and return the registers as they come.
-
-        Raises:
-            BatteryError: _description_
-
-        Returns:
-            OrderedDict: _description_
-        """
-        self.manufacturer_access = 0x0071
-        buf = self.manufacturer_data
-        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 32):
-            BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
-        return _od2t(OrderedDict({
-            "block": self._maybe_hexlify(buf, hexi),
-            # data come little endian
-            "cell_voltage_1": unpack_from("<H", buf, 0)[0] * 1e-3,  # mV, unsigned short, little endian
-            "cell_voltage_2": unpack_from("<H", buf, 2)[0] * 1e-3,  # mV, unsigned short, little endian
-            "cell_voltage_3": unpack_from("<H", buf, 4)[0] * 1e-3,  # mV, unsigned short, little endian
-            "cell_voltage_4": unpack_from("<H", buf, 6)[0] * 1e-3,  # mV, unsigned short, little endian
-            "bat_voltage":    unpack_from("<H", buf, 8)[0] * 1e-3,  # mV, unsigned short, little endian
-            "pack_voltage":   unpack_from("<H", buf, 10)[0] * 1e-3,  # mV, unsigned short, little endian
-            "cell_current_1": unpack_from("<h", buf, 12)[0] * 1e-3,  # mA, signed short, little endian
-            "cell_current_2": unpack_from("<h", buf, 14)[0] * 1e-3,  # mA, signed short, little endian
-            "cell_current_3": unpack_from("<h", buf, 16)[0] * 1e-3,  # mA, signed short, little endian
-            "cell_current_4": unpack_from("<h", buf, 18)[0] * 1e-3,  # mA, signed short, little endian
-            "cell_power_1":   unpack_from("<H", buf, 20)[0] * 1e-2,  # cW, signed short, little endian
-            "cell_power_2":   unpack_from("<h", buf, 22)[0] * 1e-2,  # cW, signed short, little endian
-            "cell_power_3":   unpack_from("<h", buf, 24)[0] * 1e-2,  # cW, signed short, little endian
-            "cell_power_4":   unpack_from("<h", buf, 26)[0] * 1e-2,  # cW, signed short, little endian
-            "power_calculated": unpack_from("<h", buf, 28)[0] * 1e-2,  # cW, signed short, little endian
-            "average_power":  unpack_from("<h", buf, 30)[0] * 1e-2,  # cW, signed short, little endian
-        }))
-
-    def manufacturing_dastatus2(self, celsius: bool = True, hexi: bool | str | None = None) -> tuple:
-        self.manufacturer_access = 0x0072
-        buf = self.manufacturer_data
-        #buf = b"0123456789012345"
-        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 16):
-            raise BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
-        return _od2t(OrderedDict({
-            "block": self._maybe_hexlify(buf, hexi),
-            # data come little endian
-            "int_temperature": unpack_from("<H", buf, 0)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-            "ts1_temperature": unpack_from("<H", buf, 2)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-            "ts2_temperature": unpack_from("<H", buf, 4)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-            "ts3_temperature": unpack_from("<H", buf, 6)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-            "ts4_temperature": unpack_from("<H", buf, 8)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-            "cell_temperature":    unpack_from("<H", buf, 10)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-            "fet_temperature":     unpack_from("<H", buf, 12)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-            "gauging_temperature": unpack_from("<H", buf, 14)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-        }))
-
-
-    # ...
-
-
-    # ---------------------------------------------------------------------------------------------
     def is_sealed(self, refresh: bool = False) -> bool:
         """check if batetry is sealed
 
@@ -286,6 +226,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return (int(self._operation_status["sec"]) in [1, 2]) # unsealed OR full access
 
 
+    #---UNSEALED HELPER FOR PRODUCTION-------------------------------------------------------------
+
+    # ...
+    
     def enable_full_access(self) -> bool:
         #
         # no encrypted keys here!
@@ -703,6 +647,60 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     #---HELPER FOR PRODUCTION----------------------------------------------------------------------
 
+    def manufacturing_dastatus1(self, hexi: bool | str | None = None) -> tuple:
+        """Read DAStatus1 and return the registers as they come.
+
+        Raises:
+            BatteryError: _description_
+
+        Returns:
+            OrderedDict: _description_
+        """
+        self.manufacturer_access = 0x0071
+        buf = self.manufacturer_data
+        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 32):
+            BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
+        return _od2t(OrderedDict({
+            "block": self._maybe_hexlify(buf, hexi),
+            # data come little endian
+            "cell_voltage_1": unpack_from("<H", buf, 0)[0] * 1e-3,  # mV, unsigned short, little endian
+            "cell_voltage_2": unpack_from("<H", buf, 2)[0] * 1e-3,  # mV, unsigned short, little endian
+            "cell_voltage_3": unpack_from("<H", buf, 4)[0] * 1e-3,  # mV, unsigned short, little endian
+            "cell_voltage_4": unpack_from("<H", buf, 6)[0] * 1e-3,  # mV, unsigned short, little endian
+            "bat_voltage":    unpack_from("<H", buf, 8)[0] * 1e-3,  # mV, unsigned short, little endian
+            "pack_voltage":   unpack_from("<H", buf, 10)[0] * 1e-3,  # mV, unsigned short, little endian
+            "cell_current_1": unpack_from("<h", buf, 12)[0] * 1e-3,  # mA, signed short, little endian
+            "cell_current_2": unpack_from("<h", buf, 14)[0] * 1e-3,  # mA, signed short, little endian
+            "cell_current_3": unpack_from("<h", buf, 16)[0] * 1e-3,  # mA, signed short, little endian
+            "cell_current_4": unpack_from("<h", buf, 18)[0] * 1e-3,  # mA, signed short, little endian
+            "cell_power_1":   unpack_from("<H", buf, 20)[0] * 1e-2,  # cW, signed short, little endian
+            "cell_power_2":   unpack_from("<h", buf, 22)[0] * 1e-2,  # cW, signed short, little endian
+            "cell_power_3":   unpack_from("<h", buf, 24)[0] * 1e-2,  # cW, signed short, little endian
+            "cell_power_4":   unpack_from("<h", buf, 26)[0] * 1e-2,  # cW, signed short, little endian
+            "power_calculated": unpack_from("<h", buf, 28)[0] * 1e-2,  # cW, signed short, little endian
+            "average_power":  unpack_from("<h", buf, 30)[0] * 1e-2,  # cW, signed short, little endian
+        }))
+
+    def manufacturing_dastatus2(self, celsius: bool = True, hexi: bool | str | None = None) -> tuple:
+        self.manufacturer_access = 0x0072
+        buf = self.manufacturer_data
+        #buf = b"0123456789012345"
+        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 16):
+            raise BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
+        return _od2t(OrderedDict({
+            "block": self._maybe_hexlify(buf, hexi),
+            # data come little endian
+            "int_temperature": unpack_from("<H", buf, 0)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+            "ts1_temperature": unpack_from("<H", buf, 2)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+            "ts2_temperature": unpack_from("<H", buf, 4)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+            "ts3_temperature": unpack_from("<H", buf, 6)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+            "ts4_temperature": unpack_from("<H", buf, 8)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+            "cell_temperature":    unpack_from("<H", buf, 10)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+            "fet_temperature":     unpack_from("<H", buf, 12)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+            "gauging_temperature": unpack_from("<H", buf, 14)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+        }))
+
+    
     def read_ccadc_cal(self, hexi: bool | str | None = None) -> tuple:
         self.manufacturer_access = 0xf081  # output CCADC Cal
         buf = self.manufacturer_block_access
@@ -755,6 +753,122 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     def temperature_voltage_calibration(self):
         pass
+
+
+    def toggle_fuse(self) -> None:
+        """This command manually activates/deactivates the FUSE output to ease testing during manufacturing. 
+        
+        If the OperationStatus()[FUSE] = 0 indicates the FUSE output is low. Sending this command toggles the
+        FUSE output to be high and the OperationStatus()[FUSE] = 1.
+        """
+        self.manufacturer_access = 0x001d
+        
+    def toggle_pchg_fet(self) -> None:
+        """This command turns on/off the PCHG FET drive function to ease testing during manufacturing."""
+        self.manufacturer_access = 0x001e
+        #buf = self.manufacturer_block_access
+
+    def toggle_chg_fet(self) -> None:
+        """This command turns on/off the CHG FET drive function to ease testing during manufacturing. 
+        
+        If the ManufacturingStatus()[CHG_TEST] = 0, sending this command turns on the CHG FET and the
+        ManufacturingStatus()[CHG_TEST] = 1 and vice versa. This toggling command is only enabled if 
+        ManufacturingStatus()[FET_EN] = 0, indicating an FW FET control is not active and manual control is
+        allowed. A reset clears the [CHG_TEST] flag and turns off the CHG FET.
+        """
+        self.manufacturer_access = 0x001f
+        
+
+    def toggle_dsg_fet(self):
+        """This command turns on/off DSG FET drive function to ease testing during manufacturing. 
+        
+        If the ManufacturingStatus()[DSG_TEST] = 0, sending this command turns on the DSG FET and the
+        ManufacturingStatus()[DSG_TEST] = 1 and vice versa. This toggling command is only enabled if
+        ManufacturingStatus()[FET_EN] = 0, indicating an FW FET control is not active and manual control is
+        allowed. A reset clears the [DSG_TEST] flag and turns off the DSG FET.
+        """
+        self.manufacturer_access = 0x0020
+
+    def toggle_gauging(self):
+        """This command enables or disables the gauging function to ease testing during manufacturing.
+        
+        The initial setting is loaded from Mfg Status Init[GAUGE_EN]. If the ManufacturingStatus()[GAUGE_EN] = 0,
+        sending this command will enable gauging and the ManufacturingStatus()[GAUGE_EN] = 1 and vice
+        versa. In UNSEALED mode, the ManufacturingStatus()[GAUGE_EN] status is copied to Mfg Status 
+        Init[GAUGE_EN] when the command is received by the gauge. The bq40z50-R2 device remains on its
+        latest gauging status prior to a reset.
+        """
+        self.manufacturer_access = 0x0021
+
+    def toggle_fet_control(self):
+        """This command disables/enables control of the CHG, DSG, and PCHG FET by the firmware. 
+        
+        The initial setting is loaded from Mfg Status Init[FET_EN]. If the ManufacturingStatus()[FET_EN] = 0, 
+        sending this command allows the FW to control the PCHG, CHG, and DSG FETs and the 
+        ManufacturingStatus()[FET_EN] = 1 and vice versa. 
+        
+        In UNSEALED mode, the ManufacturingStatus()[FET_EN] status is copied to Mfg Status Init[FET_EN]
+        when the command is received by the gauge. The bq40z50-R2 device remains on its latest FET control
+        status prior to a reset.
+        """
+        self.manufacturer_access = 0x0022
+
+
+    def toggle_lifetime_data_collection(self):
+        """This command disables/enables Lifetime Data Collection to help streamline production testing. 
+        
+        The initial setting is loaded from Mfg Status Init[LF_EN]. If the ManufacturingStatus()[LF_EN] = 0, 
+        sending this command starts the Lifetime Data Collection and the ManufacturingStatus()[LF_EN] = 1 and vice versa.
+        In UNSEALED mode, the ManufacturingStatus()[LF_EN] status is copied to Mfg Status Init[LF_EN] when the
+        command is received by the gauge. The bq40z50-R2 device remains on its latest Lifetime Data Collection 
+        setting prior to a reset.
+        """
+        self.manufacturer_access = 0x0023
+
+    def toggle_permanent_failure(self):
+        self.manufacturer_access = 0x0024
+
+    def toggle_permanent_black_box_recorder(self):
+        self.manufacturer_access = 0x0025
+
+    def toggle_fuse(self):
+        self.manufacturer_access = 0x0026
+
+    def toggle_led_display_enable(self):
+        self.manufacturer_access = 0x0027
+
+
+    def get_afe_register(self, hexi: bool | str | None = None) -> tuple:
+        self.manufacturer_access = 0x0058
+        buf = self.manufacturer_block_access
+        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 32):
+            BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
+        return _od2t(OrderedDict({
+            "block": self._maybe_hexlify(buf, hexi),
+            # data come little endian            
+            "interrupt_status":  unpack_from("<b", buf, 0)[0],
+            "fet_status":  unpack_from("<b", buf, 0)[0],
+            "rxin":  unpack_from("<b", buf, 0)[0],
+            "latch_status":  unpack_from("<b", buf, 0)[0],
+            "interrupt_enable":  unpack_from("<b", buf, 0)[0],
+            "fet_control":  unpack_from("<b", buf, 0)[0],
+            "rxien":  unpack_from("<b", buf, 0)[0],
+            "rlout":  unpack_from("<b", buf, 0)[0],
+            "rhout":  unpack_from("<b", buf, 0)[0],
+            "rhint":  unpack_from("<b", buf, 0)[0],
+            "cell_balance":  unpack_from("<b", buf, 0)[0],
+            "adc_cc_control":  unpack_from("<b", buf, 0)[0],
+            "adc_mux_control":  unpack_from("<b", buf, 0)[0],
+            "led_control":  unpack_from("<b", buf, 0)[0],
+            "control_various":  unpack_from("<b", buf, 0)[0],
+            "timer_control":  unpack_from("<b", buf, 0)[0],
+            "protection_delay_control":  unpack_from("<b", buf, 0)[0],
+            "ocd":  unpack_from("<b", buf, 0)[0],
+            "scc":  unpack_from("<b", buf, 0)[0],
+            "scd1":  unpack_from("<b", buf, 0)[0],
+            "scd2":  unpack_from("<b", buf, 0)[0],
+        }))
+    
 
 #--------------------------------------------------------------------------------------------------
 # -R2-
