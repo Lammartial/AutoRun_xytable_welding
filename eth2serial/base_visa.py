@@ -22,17 +22,25 @@ except Exception as e:
 #--------------------------------------------------------------------------------------------------
 class Eth2SerialVisaDevice(object):
 
-    def __init__(self, name_ip: str, channel: int):
+    def __init__(self, resource_str: str, channel: int):
         """
-        Initialize the object with visa IP name.
+        Initialize the object with visa resource string (IP name).
         Example "TCPIP0::192.168.1.101::inst0::INSTR"
 
         Args:
-            host (str): visa IP name
+            resource_str (str): visa resource string
         """
         self.rm = ResourceManager()          # auto decision for backend
-        self.host = str(name_ip)
+        self.resource_str = str(resource_str)
         self.channel = int(channel)
+
+    def __str__(self) -> str:
+        return f"ETH to VISA bridge at {self.resource_str}:{self.channel}"
+
+    def __repr__(self) -> str:
+        return f"Eth2SerialVisaDevice({self.resource_str}, {self.channel})"
+
+    #----------------------------------------------------------------------------------------------
 
     def send(self, msg: str, timeout: float = 1000) -> None:
         """_summary_
@@ -45,7 +53,7 @@ class Eth2SerialVisaDevice(object):
             bool: _description_
         """
         try:
-            self.session = self.rm.open_resource(self.host)            
+            self.session = self.rm.open_resource(self.resource_str)
             # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
             if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
                 self.session.read_termination = '\n'
@@ -75,7 +83,7 @@ class Eth2SerialVisaDevice(object):
             str: result
         """
         try:
-            self.session = self.rm.open_resource(self.host)            
+            self.session = self.rm.open_resource(self.resource_str)
             # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
             if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
                 self.session.read_termination = '\n'
@@ -103,7 +111,7 @@ if __name__ == "__main__":
     DEBUG = 1
 
     tic = perf_counter()
-    _log.info("Own IP: %s", OWN_PRIMARY_IP)
+    #_log.info("Own IP: %s", OWN_PRIMARY_IP)
 
     #c = Eth2SerialDevice("192.168.1.90", 23)
     #c.send("Hallo Welt!")

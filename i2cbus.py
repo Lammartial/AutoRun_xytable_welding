@@ -27,6 +27,14 @@ class BusMux:
         self.address = int(address)
         self.current_mask = 0x00  # shadow register; initial value after reset -> no channels active
 
+    def __str__(self) -> str:
+        return f"I²C bus MUX on bus {self.i2c} having slave address of 0x{self.address:02x}, channel mask 0x{self.current_mask:02x}"
+
+    def __repr__(self) -> str:
+        return f"BusMux({repr(self.i2c)}, {self.address})"
+
+    #----------------------------------------------------------------------------------------------
+
     def isReady(self):
         """Checks if the MUX' slave address is being ACK'd on bus.
 
@@ -192,6 +200,14 @@ class I2CMuxedBus(I2CBase):
         self.i2c = i2c  # we use a separate i2c bus instance for real execution
         self.mux = mux
         self.channel = int(channel)
+
+    def __str__(self) -> str:
+        return f"I²C bus {self.i2c} using channel {self.channel} which translates to {self.mux}"
+
+    def __repr__(self) -> str:
+        return f"I2CMuxedBus({repr(self.i2c)}, {repr(self.mux)}), {self.channel})"
+
+    #----------------------------------------------------------------------------------------------
 
     def writeto(self, i2c_address: int, data: bytearray) -> int:
         """Send a bytearray (up to 100 bytes) to the specified I2C address and return the number of sent bytes.

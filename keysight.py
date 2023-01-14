@@ -46,18 +46,24 @@ class DAQ970A(Eth2SerialVisaDevice):
     #        print(inst.args)     # arguments stored in .args
     #        print(inst)          # __str__ allows args to be printed directly,
 
-    def __init__(self, name_ip: str, channel: int):
+    def __init__(self, resource_str: str, channel: int):
         """
-        Initialize the object with visa IP name.
+        Initialize the object with visa resource string (IP name).
         Example "TCPIP0::192.168.1.101::inst0::INSTR"
 
         Args:
-            name_ip (str): visa IP name
-            channel (int): 0 - default
+            resource_str (str): visa resource string
         """
-        super().__init__(name_ip, channel)
-        pass   
+        super().__init__(resource_str, channel)
+        pass
 
+    def __str__(self) -> str:
+        return f"DAQ970A VISA device on {self.super().__str__()}"
+
+    def __repr__(self) -> str:
+        return f"DAQ970A({self.resource_str}, {self.channel})"
+
+    #----------------------------------------------------------------------------------------------
     def selftest(self) -> int:
         """
         Returns device self-test results, takes ~ 2 sec.
@@ -83,7 +89,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         Sets raw SCPI command and returns the result or error.
 
         Args:
-            cmd (str): SCPI command 
+            cmd (str): SCPI command
 
         Returns:
             str: response
@@ -186,7 +192,7 @@ class DAQ970A(Eth2SerialVisaDevice):
             ValueError: invalid argument
 
         Returns:
-            float: VAC 
+            float: VAC
         """
         # trick to use function code in NI Teststand
         slot = int(slot)
@@ -200,7 +206,7 @@ class DAQ970A(Eth2SerialVisaDevice):
             return float(self.request(cmd, 5000))
         except Exception as ex:
             _log.exception(ex)
-            raise     
+            raise
 
     def get_ADC(self, slot: int, channel: int) -> float:
         """
@@ -228,7 +234,7 @@ class DAQ970A(Eth2SerialVisaDevice):
             return float(self.request(cmd, 5000))
         except Exception as ex:
             _log.exception(ex)
-            raise  
+            raise
 
 
     def get_temp(self, slot: int, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str) -> float:
@@ -237,14 +243,14 @@ class DAQ970A(Eth2SerialVisaDevice):
 
         Args:
             slot (int): slot number (1, 2, 3)
-            channel (int): channel number (1 ... 20) 
+            channel (int): channel number (1 ... 20)
             tran_type (str): transducer type (TC, FRTD, RTD, FTH, THER or DEF(TCouple))
             rtd_resist (int): FRTD|RTD trancduser resistance (100 or 1000 Ohm), otherwise = 0
             fth_type (int): FTH|THER type (2252, 5000, 10000), otherwise = 0
             tc_type (str): TCouple type (B, E, J, K, N, R, S, or T), otherwise = 'empty string'
 
         Raises:
-            ValueError: invalid argument 
+            ValueError: invalid argument
 
         Returns:
             float: Temperature
@@ -256,7 +262,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         fth_type = int(fth_type)
         assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
         assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
-        try:                    
+        try:
             slot_str = str(slot)
             channel_str = str(channel).zfill(2)
             match tran_type:
@@ -276,7 +282,7 @@ class DAQ970A(Eth2SerialVisaDevice):
                     raise ValueError('Error, get_temp: unknown parameter')
         except Exception as ex:
             _log.exception(ex)
-            raise 
+            raise
 
     #def disconnect(self):
     #    """Closes the connection (session) and the device.
@@ -322,7 +328,7 @@ if __name__ == "__main__":
     print(daq970a.get_ADC(1,21))
 
     #print(daq970a.get_temp(1, 1, "DEF", 0, 0, "B"))
-    
+
     print("DONE.")
-    
+
 # END OF FILE

@@ -13,6 +13,7 @@ from time import sleep
 from binascii import hexlify
 from struct import pack, unpack_from
 from rrc.battery_errors import BatteryError, BatterySecurityError
+from rrc.smbus import BusMaster
 #from rrc.smartbattery import BlockData
 from rrc.chipsets.bq import ChipsetTexasInstruments
 
@@ -27,14 +28,26 @@ from rrc.chipsets.bq import ChipsetTexasInstruments
 #     LIFETIME_DATA2 =      0x74
 
 class BQ20Z65R1(ChipsetTexasInstruments):
-    def __init__(self, smbus):
-        super().__init__(smbus)
+
+    def __init__(self, smbus: BusMaster, slvAddress: int = 0x0b, pec: bool = False):
+        # Note: explicitely replicate the parameters here for having
+        # option in teststand to change them on call
+        super().__init__(smbus, slvAddress=slvAddress, pec=pec)
+
         # _bat = self
         # for c in [
         #      ExtCmd.LIFETIME_DATA1,
         #      ExtCmd.LIFETIME_DATA2,
         #      ]: self.ds[c] = BlockData(_bat, c)
         self._operation_status = None # shadow copy of operation_status() read to avoid redundant reads for seal/unseal checks
+
+    def __str__(self) -> str:
+        return f"SmartBattery with BQ20Z65 chipset at 0x{self.address} on {str(self.smbus)}"
+
+    def __repr__(self) -> str:
+        return f"BQ20Z65R1({repr(self.smbus)}, slvAddress={self.slvAddress}, pec={self.pec})"
+
+    #--------------------------------------------------------------------------------------------------
 
     @property
     def name(self):
@@ -535,9 +548,18 @@ class BQ20Z65R1(ChipsetTexasInstruments):
 #--------------------------------------------------------------------------------------------------
 # -R2-
 class BQ20Z65R2(BQ20Z65R1):
-    def __init__(self, smbus):
-        super().__init__(smbus)
 
+    def __init__(self, smbus: BusMaster, slvAddress: int = 0x0b, pec: bool = False):
+        # Note: explicitely replicate the parameters here for having
+        # option in teststand to change them on call
+        super().__init__(smbus, slvAddress=slvAddress, pec=pec)
+
+    # no need to overwrite __str__()
+
+    def __repr__(self) -> str:
+        return f"BQ20Z65R2({repr(self.smbus)}, slvAddress={self.slvAddress}, pec={self.pec})"
+
+    #--------------------------------------------------------------------------------------------------
     @property
     def name(self):
         """Returns the battery chipset name in lower case."""

@@ -65,6 +65,14 @@ class Eth2Serial_SockSingleConnection_Device(object):
         self.host = str(host)
         self.port = int(port)
 
+    def __str__(self) -> str:
+        return f"ETH to UART bridge (single con) at {self.host}:{self.port}"
+
+    def __repr__(self) -> str:
+        return f"Eth2Serial_SockSingleConnection_Device({self.host}, {self.port}, termination={self.termination})"
+
+    #----------------------------------------------------------------------------------------------
+
     def open_socket(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.settimeout(5.0)
@@ -138,6 +146,9 @@ class Eth2Serial_SockSingleConnection_Device(object):
             raise
         return result
 
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+
 class Eth2SerialDevice(object):
 
     def __init__(self, host: str, port: int, termination: str = "\r\n"):
@@ -156,6 +167,14 @@ class Eth2SerialDevice(object):
         #self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         #self.socket.settimeout(3.0)
         #self.socket.connect((self.host, self.port))
+
+    def __str__(self) -> str:
+        return f"ETH to UART bridge at {self.host}:{self.port}"
+
+    def __repr__(self) -> str:
+        return f"Eth2SerialDevice({self.host}, {self.port}, termination={self.termination})"
+
+    #----------------------------------------------------------------------------------------------
 
     def send(self, msg: str, timeout: float = 3.0) -> None:
         """_summary_

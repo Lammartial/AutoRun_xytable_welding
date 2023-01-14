@@ -329,6 +329,12 @@ class ManufacturerAccess:
         self.read = value
         self.written = None
 
+    def __str__(self) -> str:
+        return f"READ:{self.read:04x},WRITE:{self.read:04x}"
+
+    def __repr__(self) -> str:
+        return f"ManufacturerAccess({repr(self._battery)},0x{self.command:02x},0x{self.value:04x})"
+
     def update(self):
         v, ok = self._battery.readWord(self._cmd)  # includes use of multiple read+compare strategy
         if ok: self.read = v  # update
@@ -417,6 +423,13 @@ class Battery:
         self._tcycidx = -1  # convinience getter index
         self._tupidx = -1  # execution index
         self.table = None
+
+    # --------------------------------------------
+    def __str__(self) -> str:
+        return f"SmartBattery at 0x{self.address} on {self.smbus}"
+
+    def __repr__(self) -> str:
+        return f"Battery({repr(self.smbus)}, slvAddress={self.slvAddress}, pec={self.pec})"
 
     # --------------------------------------------
     def _maybe_hexlify(self, what: bytes | bytearray, hexi: None | bool | str) -> bytes | bytearray | str:
@@ -704,10 +717,10 @@ class Battery:
 
     #
     # NOTE:
-    # all the chipset specific functions are located in the corresponding 
+    # all the chipset specific functions are located in the corresponding
     # chipset class which inherits all from the SmartBattery -> use a Chipset() instead!
     #
-   
+
     # pylint: enable=C0116,C0321
 
     # --------------------------------------------

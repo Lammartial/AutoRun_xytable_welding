@@ -23,11 +23,13 @@ class PCA9536:
         self.i2c = i2c
         self.i2c_address_7bit = int(i2c_address_7bit)
 
-    def __repr__(self) -> str:
-        """Returns a string that contains the device type, ip address of the ETH-I2C converter and the i2c address.
-        Used ALSO for error messages."""
+    def __str__(self) -> str:
+        return f"PCA9536 GPIO device with address {self.i2c_address_7bit:02x} on {self.i2c}"
 
-        return f"PCA9536 GPIO board at {self.i2c.__repr__()} having address 0x{self.i2c_address_7bit:02x}"
+    def __repr__(self) -> str:
+        return f"PCA9536({repr(self.i2c)}, i2c_address_7bit={self.i2c_address_7bit})"
+
+    #----------------------------------------------------------------------------------------------
 
     def set_gpio_n_as_input(self, gpio_n: int):
         """Configure the GPIO with the index n (starts at 0) as an input with a 100k pullup.
@@ -138,10 +140,11 @@ class PCA9536:
 
 
 if __name__ == '__main__':
-    from ncd_eth_i2c_interface import I2CPort
-    from smbus import BusMux_PCA9548A
+    from rrc.eth2i2c import I2CPort
+    from rrc.i2cbus import I2CMuxedBus, BusMux
+
     i2c_p = I2CPort("192.168.1.119")
-    mux = BusMux_PCA9548A(i2c_p)
+    mux = BusMux(i2c_p)
     mux.setChannelMask(0xff)
 
     gpio = PCA9536(i2c_p)

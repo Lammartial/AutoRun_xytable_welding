@@ -9,6 +9,12 @@ class I2CBase:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    def __str__(self) -> str:
+        return "I2CBase - ABSTRACT CLASS - SHOULD BE OVERWRITTEN!"
+
+    def __repr__(self) -> str:
+        return "I2CBase() - ABSTRACT CLASS - SHOULD BE OVERWRITTEN!"
+
     def open(self):
         pass
 

@@ -1,6 +1,6 @@
 from time import sleep
+from rrc.eth2i2c import I2CBase
 from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
-
 
 class STS21:
     """A class to control the STS21 temperature sensor by Sensirion.
@@ -14,16 +14,23 @@ class STS21:
     cmd_trigger_meas_no_hold = 0xF3
     measurement_resolution = {11: 0x81, 12: 0x01, 13: 0x80, 14: 0x00}
 
-    def __init__(self, i2c_port, i2c_address_7bit: int = 0x4A):
+    def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x4A):
         """Initialize the object with an I2CPort object and the 7-bit I2C address.
 
         Args:
             i2c_port: The I2CPort instance this sensor is connected to
             i2c_address_7bit: The sensor's 7-bit I2C address
         """
-        self.i2c_port = i2c_port
+        self.i2c = i2c
         self.i2c_address_7bit = int(i2c_address_7bit)
 
+    def __str__(self) -> str:
+        return f"STS21 temperature sensor device with address {self.i2c_address_7bit:02x} on {self.i2c}"
+
+    def __repr__(self) -> str:
+        return f"STS21({repr(self.i2c)}, i2c_address_7bit={self.i2c_address_7bit})"
+
+    #----------------------------------------------------------------------------------------------
     def start_measurement_hold(self, retries: int = 3) -> float:
         """Start a temperature measurement in "hold master mode" and return the temperature in °C as a float.
 
@@ -45,7 +52,7 @@ class STS21:
         """
         retries = int(retries)
         while retries > 0:
-            result = self.i2c_port.readfrom_mem(self.i2c_address_7bit, bytearray([STS21.cmd_trigger_meas_hold]), 3)
+            result = self.i2c.readfrom_mem(self.i2c_address_7bit, bytearray([STS21.cmd_trigger_meas_hold]), 3)
             if self.check_crc(result):
                 return self.__convert_sensor_response_to_temperature(result)
             retries -= 1
@@ -68,9 +75,9 @@ class STS21:
         """
         retries = int(retries)
         while retries > 0:
-            self.i2c_port.writeto(self.i2c_address_7bit, bytearray([STS21.cmd_trigger_meas_no_hold]))
+            self.i2c.writeto(self.i2c_address_7bit, bytearray([STS21.cmd_trigger_meas_no_hold]))
             sleep(0.085)  # This is the worst case waiting time for the measurement to be finished
-            result = self.i2c_port.readfrom(self.i2c_address_7bit, 3)
+            result = self.i2c.readfrom(self.i2c_address_7bit, 3)
             if self.check_crc(result):
                 return self.__convert_sensor_response_to_temperature(result)
             retries -= 1
@@ -109,11 +116,11 @@ class STS21:
         return crc_read == crc_calc
 
     def __get_user_register(self) -> int:
-        response = self.i2c_port.readfrom_mem(self.i2c_address_7bit, bytearray([STS21.cmd_user_register_read]), 1)
+        response = self.i2c.readfrom_mem(self.i2c_address_7bit, bytearray([STS21.cmd_user_register_read]), 1)
         return int.from_bytes(response, "big", signed=False)
 
     def __set_user_register(self, value: int):
-        self.i2c_port.writeto(self.i2c_address_7bit, bytearray([STS21.cmd_user_register_write, value]))
+        self.i2c.writeto(self.i2c_address_7bit, bytearray([STS21.cmd_user_register_write, value]))
 
 
 def calc_crc8(databytes):

@@ -1,23 +1,28 @@
 from typing import Tuple
 import struct
 from time import sleep
+from rrc.eth2i2c import I2CBase
 from rrc.eeprom_at24hc02c import AT24HC02C
 
 
 class ShuntCalibrationStorageReadError(Exception):
-    def __init__(self, i2c_port, i2c_address_7bit: int, what: str):
-        self.i2c_port = i2c_port
-        self.i2c_address_7bit = i2c_address_7bit
+
+    def __init__(self, eeprom: AT24HC02C, what: str):
+        self.eeprom = eeprom
         self.what = what
 
     def __str__(self):
-        return f"Error while reading the {self.what} from EPPROM at {self.i2c_port.description_string(self.i2c_address_7bit)}. " \
+        return f"Error while reading the {self.what} from {self.eeprom}. " \
                f"The {self.what} could not be clearly read. You can try again, but it looks like you have to reprogram" \
                f"the {self.what}."
 
 
+#----------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------
+
 class ShuntCalibrationStorage:
-    """A class that can access EEPROM storage via I2C (AT24HC02C) and store and load a resistance value and an
+    """
+    A class that can access EEPROM storage via I2C (AT24HC02C) and store and load a resistance value and an
     inventory number in it.
     The resistance is stored with double-precision which can hold ca. 16 significant digits.
     The inventory number can contain up to 8 ASCII characters without a null terminator.
@@ -28,10 +33,16 @@ class ShuntCalibrationStorage:
     struct_format_string_resistance = ">d"  # big-endian, double with 8 bytes
     struct_format_string_inventory_number = ">8s"  # big-endian, 8 byte string
 
-    def __init__(self, i2c_port, i2c_address_7bit: int = 0x50):
-        self.i2c_port = i2c_port
-        self.i2c_address_7bit = int(i2c_address_7bit)
-        self.eeprom = AT24HC02C(self.i2c_port, self.i2c_address_7bit)
+    def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x50):
+        self.eeprom = AT24HC02C(i2c, int(i2c_address_7bit))
+
+    def __str__(self) -> str:
+        return f"Shunt calibration storage class, using {self.eeprom}"
+
+    def __repr__(self) -> str:
+        return f"ShuntCalibrationStorage({repr(self.eeprom.i2c)}, i2c_address_7bit={self.eeprom.i2c_address_7bit})"
+
+    #----------------------------------------------------------------------------------------------
 
     def store_shunt_resistance_ohm(self, resistance_ohm: float) -> bool:
         """Store the resistance value in EEPROM and return whether it was successful.
@@ -61,7 +72,7 @@ class ShuntCalibrationStorage:
             else:
                 num_of_tries_left -= 1
                 sleep(0.1)
-        raise ShuntCalibrationStorageReadError(self.i2c_port, self.i2c_address_7bit, "shunt resistance")
+        raise ShuntCalibrationStorageReadError(self.eeprom, "shunt resistance")
 
     def store_inventory_number(self, inventory_number: str) -> bool:
         """Store the inventory number in EEPROM and return whether it was successful.
@@ -91,7 +102,7 @@ class ShuntCalibrationStorage:
             else:
                 num_of_tries_left -= 1
                 sleep(0.1)
-        raise ShuntCalibrationStorageReadError(self.i2c_port, self.i2c_address_7bit, "inventory number")
+        raise ShuntCalibrationStorageReadError(self.eeprom, "inventory number")
 
     def __store_calibration_value(self, value: float) -> bool:
         # Pack the value into a bytearray with the format specifier from the class variable
@@ -126,7 +137,7 @@ class ShuntCalibrationStorage:
 
     def __store_inventory_number(self, value: str) -> bool:
         if len(value) > struct.calcsize(ShuntCalibrationStorage.struct_format_string_inventory_number):
-            raise ValueError(f"The inventory number for EEPROM at {self.i2c_port.description_string(self.i2c_address_7bit)} is too long. "
+            raise ValueError(f"The inventory number for EEPROM at {self.eeprom.__repr__()} is too long. "
                              f"It can be at most 8 characters long. You used {len(value)} characters: \"{value}\"")
 
         value = value.encode("ascii")
@@ -134,7 +145,7 @@ class ShuntCalibrationStorage:
         try:
             value_bytearray = bytearray(struct.pack(ShuntCalibrationStorage.struct_format_string_inventory_number, value))
         except UnicodeEncodeError:
-            raise ValueError(f"Inventory number for EEPROM at {self.i2c_port.description_string(self.i2c_address_7bit)} contains illegal characters."
+            raise ValueError(f"Inventory number for EEPROM at {self.eeprom.__repr__()} contains illegal characters."
                              f"It can only contain ASCII-characters. You used: \"{value}\".")
 
         # Store the packed value on multiple pages for validation
@@ -169,11 +180,11 @@ class ShuntCalibrationStorage:
 
 
 if __name__ == "__main__":
-    from ncd_eth_i2c_interface import I2CPort
-    from smbus import BusMux_PCA9548A
+    from rrc.eth2i2c import I2CPort
+    from i2cbus import BusMux
     i2c_port = I2CPort("192.168.1.119")
     # print(i2c_port.i2c_bus_scan())
-    mux = BusMux_PCA9548A(i2c_port)
+    mux = BusMux(i2c_port)
     mux.setChannel(1)
     storage = ShuntCalibrationStorage(i2c_port)
     test_value = 3.1415

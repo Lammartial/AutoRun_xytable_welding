@@ -33,6 +33,14 @@ class Hioki_BT3561A(Eth2SerialDevice):
     def __init__(self, host: str, port: int, termination: str = "\r\n"):
          super().__init__(host, port, termination)
 
+    def __str__(self) -> str:
+        return f"Hioki BT3561A device on {self.super().__str__()}"
+
+    def __repr__(self) -> str:
+        return f"Hioki_BT3561A({self.host}, {self.port}, termination={self.termination})"
+
+    #----------------------------------------------------------------------------------------------
+
     def set_function(self, mode: str) -> bool:
         """
         Select the Measurement Mode Setting.
@@ -302,6 +310,9 @@ class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
 
     def __init__(self, host: str, port: int, termination: str = "\r\n"):
         super().__init__(host, port, termination)
+
+    def __repr__(self) -> str:
+        return super().__repr__()
 
     #---STANDARD FUNCTIONS---
 
@@ -636,8 +647,8 @@ if __name__ == "__main__":
     #sw = Hioki_SW1001(SW_DEFAULT_IP_STR, SW_DEFAULT_PORT)
     #print(sw.set_new_ip_address("192.168.1.203"))
 
-    # Switch off the SW1001. 
-    # Set communication setting mode switch (DFLT/USER) to USER. 
+    # Switch off the SW1001.
+    # Set communication setting mode switch (DFLT/USER) to USER.
     # Switch on the device.
 
     #======================================================================================================
@@ -656,7 +667,7 @@ if __name__ == "__main__":
     # Device initialization
     # *IDN?
     #print('BT3561A ID: ', hioki.bt.get_idn())
-    # *CLR 
+    # *CLR
     #hioki.clear_status()
 
     # Set trigger source - IMM

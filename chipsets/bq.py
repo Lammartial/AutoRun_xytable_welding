@@ -27,6 +27,13 @@ class ChipsetTexasInstruments(Chipset):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    def __str__(self) -> str:
+        return f"SmartBattery with TI-chipset at 0x{self.address} on {str(self.smbus)}"
+
+    def __repr__(self) -> str:
+        return f"ChipsetTexasInstruments({repr(self.smbus)}, slvAddress={self.slvAddress}, pec={self.pec})"
+
+    #----------------------------------------------------------------------------------------------
     @property
     def name(self):
         """Returns the battery chipset name."""

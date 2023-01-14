@@ -55,6 +55,14 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self._manufacturing_status = None  # shadow copy of manufacturing_status()
         self._ccadc_cal = None  # shadow copy
 
+    def __str__(self) -> str:
+        return f"SmartBattery with BQ40Z50 chipset at 0x{self.address} on {str(self.smbus)}"
+
+    def __repr__(self) -> str:
+        return f"BQ40Z50R1({repr(self.smbus)}, slvAddress={self.slvAddress}, pec={self.pec})"
+
+    #----------------------------------------------------------------------------------------------
+
     @property
     def name(self) -> str:
         """Returns the battery chipset name in lower case."""
@@ -1016,6 +1024,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
 #--------------------------------------------------------------------------------------------------
 # -R2-
+#--------------------------------------------------------------------------------------------------
+
 class BQ40Z50R2(BQ40Z50R1):
 
     def __init__(self, smbus: BusMaster, slvAddress: int = 0x0b, pec: bool = False):
@@ -1023,6 +1033,13 @@ class BQ40Z50R2(BQ40Z50R1):
         # option in teststand to change them on call
         super().__init__(smbus, slvAddress=slvAddress, pec=pec)
         self._operation_status = None # shadow copy of operation_status() read to avoid redundant reads for seal/unseal checks
+
+    # no need to overwrite __str__()
+
+    def __repr__(self) -> str:
+        return f"BQ40Z50R2({repr(self.smbus)}, slvAddress={self.slvAddress}, pec={self.pec})"
+
+    #----------------------------------------------------------------------------------------------
 
     @property
     def name(self):

@@ -45,12 +45,27 @@ class I2CPort(I2CBase):
             SelfTestFailedError: Raised if the selftest of the converter fails.
         """
         self.socket = None
-        self.host_port = (host, int(port))
+        self._host = str(host)
+        self._port = int(port)
+        self._open_connection = open_connection
         self.timeout_s = timeout_s
-        self.ncd_interface_address = f"{host}:{int(port)}"  # This the ip address ("192.168.1.61:2101"). Used in error messages.
+        self.ncd_interface_address = f"{self._host}:{self._port}"  # This the ip address ("192.168.1.61:2101"). Used in error messages.
         self.last_i2c_address = -1  # Used to remember which i2c_address_7bit was last spoken to if an error occurs.
         if open_connection:
             self.open()
+
+    def __str__(self) -> str:
+        """Create a string that contains IP address, port and I2C address. Used for error messages.
+
+        The string has the format "<ip address>:<port>:<i2c address>"
+        Example: "192.168.1.56:2101:0x40"
+        """
+        return f"NCD ETH-to-I²C bridge at {self._host}:{self._port}:0x{self.last_i2c_address:02X}"
+
+    def __repr__(self) -> str:
+        return f"I2CPort({self._host}, {self._port}, timeout_s={self.timeout_s}, open_connection={self._open_connection})"
+
+    #----------------------------------------------------------------------------------------------
 
     def open(self):
         self.__connect_socket()
@@ -75,7 +90,7 @@ class I2CPort(I2CBase):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.settimeout(self.timeout_s)
         try:
-            self.socket.connect(self.host_port)
+            self.socket.connect((self._host, self._port))
         except TimeoutError:
             raise CantFindNCDInterface(self.ncd_interface_address)
 
@@ -187,19 +202,6 @@ class I2CPort(I2CBase):
         rx_payload = self.__data_exchange(tx_payload)
         return list(rx_payload)
 
-    def description_string(self, i2c_address_7bit: int) -> str:
-        """Create a string that contains IP address, port and I2C address. Used for error messages.
-
-        The string has the format "<ip address>:<port>:<i2c address>"
-        Example: "192.168.1.56:2101:0x40"
-
-        Args:
-            i2c_address_7bit (int): The device's i2c address
-
-        Returns:
-            string: description string
-        """
-        return f"{self.ncd_interface_address}:0x{i2c_address_7bit:02X}"
 
     def __check_for_errors(self, payload):
         """Check if the response contains an error message"""

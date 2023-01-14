@@ -28,6 +28,14 @@ class MCP23008:
         self.i2c = i2c
         self.i2c_address_7bit = int(i2c_address_7bit)
 
+    def __str__(self) -> str:
+        return f"MCP23008 device with address {self.i2c_address_7bit:02x} on {self.i2c}"
+
+    def __repr__(self) -> str:
+        return f"MCP23008({repr(self.i2c)}, i2c_address_7bit={self.i2c_address_7bit})"
+
+    #----------------------------------------------------------------------------------------------
+
     def set_pin(self, pin_n: int):
         """Set the specified pin to a logic high level.
 
@@ -165,8 +173,8 @@ class MCP23008:
 
     def __validate_pin_number(self, pin_n: int):
         if pin_n < 0 or pin_n >= MCP23008.number_of_pins:
-            raise ValueError(f"Invalid pin number for MCP23008 at address 0x{self.i2c_address_7bit:02X}. Must be "
-                             f"between 0 and {self.i2c_address_7bit-1}")
+            raise ValueError(f"Invalid pin number for MCP23008 at address 0x{self.i2c_address_7bit:02X}. "
+                             f"Must be between 0 and {MCP23008.number_of_pins-1}")
 
 #--------------------------------------------------------------------------------------------------
 

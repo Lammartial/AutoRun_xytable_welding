@@ -97,7 +97,7 @@ class ModbusClient:
             word_order (str, optional): _description_. Defaults to Endian.Big.
 
         """
-
+        self._connection_str = connection_str
         self.byte_order = byte_order
         self.word_order = word_order
         self.group_by_gateway = group_by_gateway
@@ -149,6 +149,14 @@ class ModbusClient:
                 self.connection_open[self.gateway_str] = 0
         _log.debug("GATEWAY: %s", self.gateway_str)
         _log.debug("UNIT: %s", self.unit_address)
+
+    def __str__(self) -> str:
+        return f"Modbus/TCP client at {self._connection_str}"
+
+    def __repr__(self) -> str:
+        return f"ModbusClient({self._connection_str}, unit_address={self.unit_address},\
+                 group_by_gateway={self.group_by_gateway}, byte_order={self.byte_order}, word_order={self.word_order})"
+    # ---------------------------------------------
 
     # to provide the with ... statement protector
     def __enter__(self):

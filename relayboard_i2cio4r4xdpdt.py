@@ -1,4 +1,5 @@
 from rrc.gpio_mcp23008 import MCP23008
+from rrc.i2cbus import I2CBase
 
 
 class RelayBoard4Relay4GPIO:
@@ -19,19 +20,27 @@ class RelayBoard4Relay4GPIO:
     gpio7 = 7
     gpio_dict = {4: gpio4, 5: gpio5, 6: gpio6, 7: gpio7}
 
-    def __init__(self, i2c_port, i2c_address_7bit: int = 0x20):
+    def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x20):
         """Initialize the object with an I2CPort object and the 7-bit I2C address.
 
         Args:
-            i2c_port: The I2CPort instance this board is connected to
+            i2c: The I2CPort instance this board is connected to
             i2c_address_7bit: The board's 7-bit I2C address
         """
-        self.i2c_address_7bit = int(i2c_address_7bit)
-        self.gpio = MCP23008(i2c_port, self.i2c_address_7bit)
+
+        self.gpio = MCP23008(i2c, int(i2c_address_7bit))
 
         # Setup relay outputs
         for relay_pin in RelayBoard4Relay4GPIO.relay_dict.values():
             self.gpio.set_pin_as_output(relay_pin)
+
+    def __str__(self) -> str:
+        return f"4x relay board using {self.gpio}"
+
+    def __repr__(self) -> str:
+        return f"RelayBoard4Relay4GPIO({repr(self.gpio.i2c)}, i2c_address_7bit={self.gpio.i2c_address_7bit})"
+
+    #----------------------------------------------------------------------------------------------
 
     def enable_relay_n(self, relay_n: int):
         """Enable relay number relay_n.
@@ -155,12 +164,12 @@ class RelayBoard4Relay4GPIO:
 
     def __validate_relay_pin(self, relay_n: int):
         if relay_n not in RelayBoard4Relay4GPIO.relay_dict.keys():
-            raise ValueError(f"Relay pin number for the relay board at 0x{self.i2c_address_7bit:02X} must be betwween"
+            raise ValueError(f"Relay pin number for the {str(self)} must be between "
                              f"1 and {max(RelayBoard4Relay4GPIO.relay_dict.keys())}. You selected {relay_n}")
 
     def __validate_gpio_pin(self, gpio_n: int):
         if gpio_n not in RelayBoard4Relay4GPIO.gpio_dict.keys():
-            raise ValueError(f"GPIO pin number for the relay board at 0x{self.i2c_address_7bit:02X} must be betwween"
+            raise ValueError(f"GPIO pin number for {str(self)} must be between "
                              f"1 and {max(RelayBoard4Relay4GPIO.gpio_dict.keys())}. You selected {gpio_n}")
 
 #--------------------------------------------------------------------------------------------------

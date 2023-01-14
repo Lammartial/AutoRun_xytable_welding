@@ -50,11 +50,17 @@ class BusMaster:
             ValueError: If there is an invalid value for retry_limit or verify_rounds
             OSError/Exception: If there are exceptions occured and no verified result, the last exception caught will be forwarded.
         """
-        self.i2c = i2c
 
+        self.i2c = i2c
         self.pause_us = int(pause_us)  # in micro seconds
         self.retry_limit = int(retry_limit)  # number of read repetitions, must be integer in range 1 .. 10
         self.verify_rounds = int(verify_rounds)  # number of read repetitions, must be 1,3,5,7,9, etc. (odd numbers > 0)
+
+    def __str__(self) -> str:
+        return f"SMBus Master on {str(self.i2c)}"
+
+    def __repr__(self) -> str:
+        return f"BusMaster({repr(self.i2c)}, retry_limit={self.retry_limit},verify_rounds={self.verify_rounds},pause_us={self.pause_us})"
 
     # ----------------------------------------------------------------------------------------------
     @property

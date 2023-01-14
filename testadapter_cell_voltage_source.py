@@ -21,16 +21,24 @@ class CellVoltageSource:
                  5: cell5_dac_channel, 6: cell6_dac_channel, 7: cell7_dac_channel}
     aux_dac_channel = 8
 
-    def __init__(self, i2c_port: I2CMuxedBus, i2c_address_7bit: int = 0x48):
+    def __init__(self, i2c: I2CMuxedBus, i2c_address_7bit: int = 0x48):
         """Initialize the object with an I2CPort object and the 7-bit I2C address.
 
         Args:
-            i2c_port: The I2CPort instance this board is connected to
+            i2c: The I2CPort instance this board is connected to
             i2c_address_7bit: The board's 7-bit I2C address
         """
-        self.i2c_address_7bit = int(i2c_address_7bit)
-        self.dac = DAC53608(i2c_port, self.i2c_address_7bit)
+
+        self.dac = DAC53608(i2c, int(i2c_address_7bit))
         self.aux_dac_channel_gain = 2.0
+
+    def __str__(self) -> str:
+        return f"Cell voltage simulator board using {self.dac}"
+
+    def __repr__(self) -> str:
+        return f"CellVoltageSource({repr(self.dac.i2c)}, i2c_address_7bit={self.dac.i2c_address_7bit})"
+
+    #----------------------------------------------------------------------------------------------
 
     def initialize(self):
         """Bring the device into a defined state.
@@ -130,14 +138,14 @@ class CellVoltageSource:
             ValueError: If the cell index is invalid. (< 1 or > 7)
         """
         if cell_n not in CellVoltageSource.cell_dict.keys():
-            raise ValueError(f"Cell number for the Cell Voltage Source (0x{self.i2c_address_7bit:02X}) must be "
-                             f"between 1 to {max(CellVoltageSource.cell_dict.keys())}. You selected {cell_n}.")
+            raise ValueError(f"Cell number for the {str(self)} must be between "
+                             f"1 to {max(CellVoltageSource.cell_dict.keys())}. You selected {cell_n}.")
 
 
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
-    from ncd_eth_i2c_interface import I2CPort
+    from rrc.eth2i2c import I2CPort
 
     I2C_BRIDGE_IP = "192.168.1.60"
     I2C_BRIDGE_PORT = 2101

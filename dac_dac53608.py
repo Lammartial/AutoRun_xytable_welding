@@ -26,6 +26,14 @@ class DAC53608:
         self.i2c_address_7bit = int(i2c_address_7bit)
         self.v_ref_V = 5.0
 
+    def __str__(self) -> str:
+        return f"DAC53608 DAC device with address {self.i2c_address_7bit:02x} on {self.i2c}"
+
+    def __repr__(self) -> str:
+        return f"DAC53608({repr(self.i2c)}, i2c_address_7bit={self.i2c_address_7bit})"
+
+    #----------------------------------------------------------------------------------------------
+
     def set_v_ref(self, new_v_ref_V: float):
         """Change the reference voltage for calculating the output voltage of the DAC.
 

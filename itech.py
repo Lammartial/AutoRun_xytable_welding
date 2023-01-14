@@ -24,7 +24,7 @@ except Exception as e:
     print("Logging is not supported on this system")
 
 #--------------------------------------------------------------------------------------------------
-class M3400_DEV(Eth2SerialVisaDevice):
+class M3400(Eth2SerialVisaDevice):
     #
     # Currently there are two backends available: The one included in pyvisa,
     # which uses the IVI library (include NI-VISA, Keysight VISA, R&S VISA, tekVISA etc.),
@@ -62,24 +62,32 @@ class M3400_DEV(Eth2SerialVisaDevice):
 	# + [SOURce:]VOLTage[:OVER]:PROTection[:LEVel] <NRf+>
 	# + [SOURce:]VOLTage:UNDer:PROTection[:LEVel] <NRf+>
 
-    def __init__(self, name_ip: str, channel: int):
+    def __init__(self, resource_str: str, channel: int):
         """
-        Initialize the object with visa IP name.
+        Initialize the object with visa resource string (IP name).
         Example "TCPIP0::192.168.1.101::inst0::INSTR"
 
         Args:
-            host (str): visa IP name
+            resource_str (str): visa resource string
         """
-        super().__init__(name_ip, channel)
-        pass    
+        super().__init__(resource_str, channel)
+        pass
+
+    def __str__(self) -> str:
+        return f"M3400 VISA device on {self.super().__str__()}"
+
+    def __repr__(self) -> str:
+        return f"M3400({self.resource_str}, {self.channel})"
+
+    #----------------------------------------------------------------------------------------------
 
     def set_remote_control(self) -> None:
         """
-        This command clears the system status register. 
+        This command clears the system status register.
         IT M3400 and M3900 devices
-        """  
+        """
         cmd = "SYST:REM"
-        self.send(cmd)             
+        self.send(cmd)
 
     def set_raw_command(self, cmd: str) -> None:
         """
@@ -104,7 +112,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
 
     def get_ADC(self) -> float:
         """
-        This command queries the present current measurement. 
+        This command queries the present current measurement.
         IT M3400 and M3900 devices
 
         Returns:
@@ -115,7 +123,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
 
     def get_VDC(self) -> float:
         """
-        This command queries the present measured voltage. 
+        This command queries the present measured voltage.
         IT M3400 and M3900 devices
 
         Returns:
@@ -126,7 +134,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
 
     def get_temp(self) -> float:
         """
-        This command queries the measured UUT temperature. 
+        This command queries the measured UUT temperature.
         IT M3400 devices
 
         Returns:
@@ -138,7 +146,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
     def get_all_meas(self) -> list:
         """
         This command queries the present voltage measurement, current
-        measurement and power measurement. 
+        measurement and power measurement.
         IT M3400 and M3900 devices
 
         Returns:
@@ -166,12 +174,12 @@ class M3400_DEV(Eth2SerialVisaDevice):
         IT M3400 and M3900 devices.
 
         Args:
-            state (int):  1 - On, 0 - Off 
+            state (int):  1 - On, 0 - Off
         """
         # trick to use function in NI Teststand
-        state = int(state) 
+        state = int(state)
         cmd = f'OUTP {state}'
-        self.send(cmd) 
+        self.send(cmd)
 
     def get_output_state(self) -> int:
         """
@@ -181,12 +189,12 @@ class M3400_DEV(Eth2SerialVisaDevice):
         Returns:
             int: state, 1 - On, 0 - Off
         """
-        cmd = "OUTP?"    
+        cmd = "OUTP?"
         return int(self.request(cmd, 2000))
 
     def set_sense_state(self, state: int):
         """
-        This command enables or disables the sense function. 
+        This command enables or disables the sense function.
         IT M3400 devices.
 
         Args:
@@ -196,14 +204,14 @@ class M3400_DEV(Eth2SerialVisaDevice):
             ValueError: invalid parameters
         """
         # trick to use function in NI Teststand
-        state = int(state)        
+        state = int(state)
         assert((state == 0) or (state == 1)), ValueError('Error, set_output_state: only 1 or 0 allowed')
         cmd = f'SENS {state}'
         self.send(cmd)
 
     def get_sense_state(self) -> int:
         """
-        This command sets the output state of the power supply 
+        This command sets the output state of the power supply
         IT M3400 devices.
 
         Returns:
@@ -211,10 +219,10 @@ class M3400_DEV(Eth2SerialVisaDevice):
         """
         cmd = "SENS?"
         return int(self.request(cmd, 2000))
-   
+
     def get_output_reverse_state(self) -> int:
         """
-        This command is used to query the connection of output terminals. 
+        This command is used to query the connection of output terminals.
         IT M3400 devices
 
         Returns:
@@ -226,7 +234,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
     #[SOURce:]CURRent[:LEVel][:IMMediate][:AMPLitude] <NRf+>
     def set_current(self, curr: float) -> None:
         """
-        This command sets the current value of the power supply. 
+        This command sets the current value of the power supply.
         The query form of this command gets the set current value of the power supply.
         IT M3400 and M3900 devices
 
@@ -236,7 +244,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
         try:
             param_str =  f"{curr:06.3f}"
             cmd = 'CURR ' + param_str
-            self.send(cmd)   
+            self.send(cmd)
         except Exception as ex:
             _log.exception(ex)
             raise
@@ -244,7 +252,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
     #[SOURce:]CURRent[:LEVel][:IMMediate][:AMPLitude] <NRf+>
     def get_current(self) -> float:
         """
-        This command gets the current value of the power supply. 
+        This command gets the current value of the power supply.
         IT M3400 and M3900 devices.
 
         Returns:
@@ -256,7 +264,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
     #[SOURce:]CURRent[:LEVel]:LIMit:POSitive <NRf+>
     def set_current_limit_positive(self, curr: float) -> None:
         """
-        This command sets the positive current limit value of the power supply. 
+        This command sets the positive current limit value of the power supply.
         IT M3400 and M3900 devices.
 
         Args:
@@ -265,7 +273,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
         try:
             param_str =  f"{curr:06.3f}"
             cmd = 'CURR:LIM:POS ' + param_str
-            self.send(cmd, 2000)    
+            self.send(cmd, 2000)
         except Exception as ex:
             _log.exception(ex)
             raise
@@ -273,7 +281,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
     #[SOURce:]CURRent[:LEVel]:LIMit:POSitive <NRf+>
     def get_current_limit_positive(self) -> float:
         """
-        This command gets the positive current limit value of the power supply. 
+        This command gets the positive current limit value of the power supply.
         IT M3400 and M3900 devices.
 
         Returns:
@@ -284,7 +292,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
             return float(self.request(cmd, 2000))
         except Exception as ex:
             _log.exception(ex)
-            raise   
+            raise
 
     #[SOURce:]CURRent[:LEVel]:LIMit:NEGative <NRf+>
     def set_current_limit_negative(self, curr: float) -> None:
@@ -298,7 +306,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
         try:
             param_str =  f"{curr:07.3f}"
             cmd = 'CURR:LIM:NEG ' + param_str
-            self.send(cmd)    
+            self.send(cmd)
         except Exception as ex:
             _log.exception(ex)
             raise
@@ -306,7 +314,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
     #[SOURce:]CURRent[:LEVel]:LIMit:NEGative <NRf+>
     def get_current_limit_negative(self) -> float:
         """
-        This command gets the negative current limit value of the power supply. 
+        This command gets the negative current limit value of the power supply.
         IT M3400 and M3900 devices.
 
         Returns:
@@ -314,7 +322,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
         """
         try:
             cmd = "CURR:LIM:NEG?"
-            return float(self.request(cmd, 2000))    
+            return float(self.request(cmd, 2000))
         except Exception as ex:
             _log.exception(ex)
             raise
@@ -322,7 +330,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
     #[SOURce:]CURRent[:OVER]:PROTection[:LEVel] <NRf+>
     def set_current_protection(self, curr: float) -> None:
         """
-        This command sets the over current limit of the power supply. 
+        This command sets the over current limit of the power supply.
         IT M3400 and M3900 devices.
 
         Args:
@@ -331,15 +339,15 @@ class M3400_DEV(Eth2SerialVisaDevice):
         try:
             param_str =  f"{curr:06.3f}"
             cmd = 'CURR:PROT ' + param_str
-            self.send(cmd)    
+            self.send(cmd)
         except Exception as ex:
             _log.exception(ex)
             raise
 
-    #[SOURce:]CURRent[:OVER]:PROTection[:LEVel] <NRf+>  
+    #[SOURce:]CURRent[:OVER]:PROTection[:LEVel] <NRf+>
     def get_current_protection(self) -> float:
         """
-        This command gets the over current limit of the power supply. 
+        This command gets the over current limit of the power supply.
         IT M3400 and M3900 devices.
 
         Returns:
@@ -364,15 +372,15 @@ class M3400_DEV(Eth2SerialVisaDevice):
         try:
             param_str =  f"{curr:06.3f}"
             cmd = 'CURR:UND:PROT ' + param_str
-            self.send(cmd)    
+            self.send(cmd)
         except Exception as ex:
             _log.exception(ex)
             raise
 
-    #[SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+> 
+    #[SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+>
     def set_voltage(self, volt: float) -> None:
         """
-        This command sets the voltage value of the power supply.  
+        This command sets the voltage value of the power supply.
         IT M3400 and M3900 devices.
         Args:
             volt (float): voltage 'XX.XX' Volts
@@ -380,15 +388,15 @@ class M3400_DEV(Eth2SerialVisaDevice):
         try:
             param_str =  f"{volt:05.2f}"
             cmd = 'VOLT ' + param_str
-            self.send(cmd)    
+            self.send(cmd)
         except Exception as ex:
             _log.exception(ex)
             raise
 
-    #[SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+>  
+    #[SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+>
     def get_voltage(self) -> float:
         """
-        The query form of this command gets the set voltage value of the power supply. 
+        The query form of this command gets the set voltage value of the power supply.
         IT M3400 and M3900 devices.
 
         Returns:
@@ -396,7 +404,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
         """
         try:
             cmd = 'VOLT?'
-            return float(self.request(cmd, 2000))    
+            return float(self.request(cmd, 2000))
         except Exception as ex:
             _log.exception(ex)
             raise
@@ -404,7 +412,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
     #[SOURce:]VOLTage[:LEVel]:LIMit[:HIGH] <NRf+>
     def set_voltage_limit(self, volt: float) -> None:
         """
-        This command sets voltage upper limit under CC priority mode. 
+        This command sets voltage upper limit under CC priority mode.
         IT M3400 and M3900 devices.
 
         Args:
@@ -412,8 +420,8 @@ class M3400_DEV(Eth2SerialVisaDevice):
         """
         try:
             param_str =  f"{volt:05.2f}"
-            cmd = 'VOLT:LIM ' + param_str 
-            self.send(cmd)    
+            cmd = 'VOLT:LIM ' + param_str
+            self.send(cmd)
         except Exception as ex:
             _log.exception(ex)
             raise
@@ -421,7 +429,7 @@ class M3400_DEV(Eth2SerialVisaDevice):
     #[SOURce:]VOLTage[:LEVel]:LIMit:LOW <NRf+>
     def set_voltage_limit_low(self, volt: float) -> None:
         """
-        This command sets voltage lower limit under CC priority mode. 
+        This command sets voltage lower limit under CC priority mode.
         IT M3400 devices.
 
         Args:
@@ -430,15 +438,15 @@ class M3400_DEV(Eth2SerialVisaDevice):
         try:
             param_str =  f"{volt:05.2f}"
             cmd = 'VOLT:LIM:LOW ' + param_str
-            self.send(cmd)    
+            self.send(cmd)
         except Exception as ex:
             _log.exception(ex)
             raise
 
-    #[SOURce:]VOLTage[:OVER]:PROTection[:LEVel] <NRf+>   
+    #[SOURce:]VOLTage[:OVER]:PROTection[:LEVel] <NRf+>
     def set_voltage_protection(self, volt: float) -> None:
         """
-        This command sets the over voltage limit of the power supply. 
+        This command sets the over voltage limit of the power supply.
         IT M3400 and M3900 devices.
 
         Args:
@@ -446,16 +454,16 @@ class M3400_DEV(Eth2SerialVisaDevice):
         """
         try:
             param_str =  f"{volt:05.2f}"
-            cmd = 'VOLT:PROT ' + param_str 
-            self.send(cmd)    
+            cmd = 'VOLT:PROT ' + param_str
+            self.send(cmd)
         except Exception as ex:
             _log.exception(ex)
             raise
 
-    #[SOURce:]VOLTage:UNDer:PROTection[:LEVel] <NRf+>   
+    #[SOURce:]VOLTage:UNDer:PROTection[:LEVel] <NRf+>
     def set_voltage_under_protection(self, volt: float) -> None:
         """
-        This command sets the under voltage limit of the power supply. 
+        This command sets the under voltage limit of the power supply.
         IT M3400 and M3900 devices.
 
         Args:
@@ -464,10 +472,10 @@ class M3400_DEV(Eth2SerialVisaDevice):
         try:
             param_str =  f"{volt:05.2f}"
             cmd = 'VOLT:UND:PROT ' + param_str
-            self.send(cmd)    
+            self.send(cmd)
         except Exception as ex:
             _log.exception(ex)
-            raise   
+            raise
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
@@ -480,16 +488,16 @@ if __name__ == "__main__":
 
     # 1. Create an instance of ITECH_DEV class
     # using multi-channel communication
-    it_m3412_1 = M3400_DEV(M3412_IP_STR, 1)
-    it_m3412_2 = M3400_DEV(M3412_IP_STR, 2)
-    it_m3412_3 = M3400_DEV(M3412_IP_STR, 3)
-    it_m3412_4 = M3400_DEV(M3412_IP_STR, 4)
-    it_m3412_5 = M3400_DEV(M3412_IP_STR, 5)
-    it_m3412_6 = M3400_DEV(M3412_IP_STR, 6)
+    it_m3412_1 = M3400(M3412_IP_STR, 1)
+    it_m3412_2 = M3400(M3412_IP_STR, 2)
+    it_m3412_3 = M3400(M3412_IP_STR, 3)
+    it_m3412_4 = M3400(M3412_IP_STR, 4)
+    it_m3412_5 = M3400(M3412_IP_STR, 5)
+    it_m3412_6 = M3400(M3412_IP_STR, 6)
 
     # 2. IMPORTANT! Set remote control mode.
     it_m3412_1.set_remote_control()
-    it_m3412_2.set_remote_control()                  
+    it_m3412_2.set_remote_control()
 
     # 3. Do some stuff
 
@@ -596,7 +604,7 @@ if __name__ == "__main__":
 
     sleep(1)
 
-    # Get OUTPUT state 
+    # Get OUTPUT state
     print(it_m3412_1.get_output_state())
     print(it_m3412_2.get_output_state())
     print(it_m3412_3.get_output_state())
@@ -618,7 +626,7 @@ if __name__ == "__main__":
     it_m3412_4.set_output_state(0)                    # No return value
     it_m3412_5.set_output_state(0)                    # No return value
     it_m3412_6.set_output_state(0)                    # No return value
-    
+
     print("DONE.")
-    
+
 # END OF FILE

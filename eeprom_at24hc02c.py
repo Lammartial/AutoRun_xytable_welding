@@ -21,6 +21,14 @@ class AT24HC02C:
         self.i2c = i2c
         self.i2c_address_7bit = int(i2c_address_7_bit)
 
+    def __str__(self) -> str:
+        return f"AT24HC02C EEPROM device with address {self.i2c_address_7bit:02x} on {self.i2c}"
+
+    def __repr__(self) -> str:
+        return f"AT24HC02C({repr(self.i2c)}, i2c_address_7bit={self.i2c_address_7bit})"
+
+    #----------------------------------------------------------------------------------------------
+
     def read_bytes(self, word_address: int, number_of_bytes: int) -> bytearray:
         """Read number_of_bytes starting at word_address and return them.
 
