@@ -1,4 +1,5 @@
 from time import sleep
+from rrc.i2cbus import I2CBase
 
 
 class AT24HC02C:
@@ -16,8 +17,8 @@ class AT24HC02C:
     number_of_pages = 32
     bytes_per_page = 8
 
-    def __init__(self, i2c_port, i2c_address_7_bit: int = 0x50):
-        self.i2c_port = i2c_port
+    def __init__(self, i2c: I2CBase, i2c_address_7_bit: int = 0x50):
+        self.i2c = i2c
         self.i2c_address_7bit = int(i2c_address_7_bit)
 
     def read_bytes(self, word_address: int, number_of_bytes: int) -> bytearray:
@@ -42,8 +43,8 @@ class AT24HC02C:
 
         # We are splitting up write and read because the NCD ETH-I2C converter can only read up to 16 bytes in a
         # write-read operation, but can read up to 100 bytes in a read-only operation.
-        self.i2c_port.writeto(self.i2c_address_7bit, bytearray([word_address]))
-        return self.i2c_port.readfrom(self.i2c_address_7bit, number_of_bytes)
+        self.i2c.writeto(self.i2c_address_7bit, bytearray([word_address]))
+        return self.i2c.readfrom(self.i2c_address_7bit, number_of_bytes)
 
     def read_page(self, page) -> bytearray:
         """Read 8 bytes from the specified page and return them.
@@ -81,7 +82,7 @@ class AT24HC02C:
             raise ValueError(f"Data does not fit into page for I2C EEPROM at address 0x{self.i2c_address_7bit:02X}. "
                              f"Data start address: {word_address}, data length: {len(data)}.")
 
-        self.i2c_port.writeto(self.i2c_address_7bit, (bytearray([word_address]) + data))
+        self.i2c.writeto(self.i2c_address_7bit, (bytearray([word_address]) + data))
         self.wait_after_write()
 
         read_back = self.read_bytes(word_address, len(data))

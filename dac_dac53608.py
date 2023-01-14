@@ -1,3 +1,4 @@
+from rrc.i2cbus import I2CBase
 
 
 class DAC53608:
@@ -12,14 +13,16 @@ class DAC53608:
     device_config_register_addr = 0x01  # R/W
     dac0_data_register_addr = 0x08      # W
 
-    def __init__(self, i2c_port, i2c_address_7bit: int = 0x48):
-        """Initialize the object with an I2CPort object and the 7-bit I2C address.
+    def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x48):
+        """Initialize the object with an I2C object and the 7-bit I2C address.
 
         Args:
-            i2c_port: The I2CPort instance this board is connected to
+            i2c: The I2CPort instance this board is connected to
             i2c_address_7bit: The board's 7-bit I2C address
+            bus_channel: connected on bus channel (1..n)
         """
-        self.i2c_port = i2c_port
+
+        self.i2c = i2c
         self.i2c_address_7bit = int(i2c_address_7bit)
         self.v_ref_V = 5.0
 
@@ -122,20 +125,20 @@ class DAC53608:
             self.__set_device_config_register(config_register)
 
     def __get_device_config_register(self) -> int:
-        register = self.i2c_port.readfrom_mem(self.i2c_address_7bit, bytearray([DAC53608.device_config_register_addr]), 2)
+        register = self.i2c.readfrom_mem(self.i2c_address_7bit, bytearray([DAC53608.device_config_register_addr]), 2)
         return int.from_bytes(register, "big", signed=False)
 
     def __set_device_config_register(self, value: int):
         msb = (value & 0xFF00) >> 8
         lsb = value & 0xFF
-        self.i2c_port.writeto(self.i2c_address_7bit, bytearray([DAC53608.device_config_register_addr, msb, lsb]))
+        self.i2c.writeto(self.i2c_address_7bit, bytearray([DAC53608.device_config_register_addr, msb, lsb]))
 
     def __set_dac_data_n_register(self, channel: int, value: int):
         register_address = DAC53608.dac0_data_register_addr + channel - 1  # -1 because numbering starts at 1
         value = value << 2  # Offset in the data register
         msb = (value & 0xFF00) >> 8
         lsb = value & 0xFF
-        self.i2c_port.writeto(self.i2c_address_7bit, bytearray([register_address, msb, lsb]))
+        self.i2c.writeto(self.i2c_address_7bit, bytearray([register_address, msb, lsb]))
 
     def __validate_channel_number(self, channel: int):
         if channel < 1 or channel > DAC53608.number_of_channels:
@@ -144,7 +147,7 @@ class DAC53608:
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    from ncd_eth_i2c_interface import I2CPort
+    from rrc.eth2i2c import I2CPort
     I2C_BRIDGE_IP = "192.168.1.60"
     I2C_BRIDGE_PORT = 2101
     port = I2CPort(I2C_BRIDGE_IP, I2C_BRIDGE_PORT)

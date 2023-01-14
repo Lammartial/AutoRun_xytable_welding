@@ -1,5 +1,6 @@
 import socket
-from ncd_errors import *
+from rrc.eth2i2c.base import I2CBase
+from rrc.eth2i2c.ncd_errors import *
 
 
 NCD_DEFAULT_TIMEOUT_S = 5
@@ -29,14 +30,15 @@ I2C_BRIDGE_PORT = 2101
 DEBUG = 0
 
 
-class I2CPort:
+class I2CPort(I2CBase):
     """A class to control the NCD Ethernet to I2C converter"""
-    def __init__(self, host: str, port: int = 2101, timeout_s: float = NCD_DEFAULT_TIMEOUT_S):
+
+    def __init__(self, host: str, port: int = 2101, timeout_s: float = NCD_DEFAULT_TIMEOUT_S, open_connection: bool = True):
         """Initialize the object, establish the network connection and perform the selftest of the converter.
 
         Args:
             host (str): hostname IP address of the converter
-            port (int): port used for the communication. Default setting is 2101
+            port (int): port used for the communication. Default setting is 2101.
             timeout_s (float): Timeout for network communication in seconds
 
         Raises:
@@ -46,12 +48,28 @@ class I2CPort:
         self.host_port = (host, int(port))
         self.timeout_s = timeout_s
         self.ncd_interface_address = f"{host}:{int(port)}"  # This the ip address ("192.168.1.61:2101"). Used in error messages.
-
-        if self.__connect_socket():
-            self.__data_exchange = self.__ethernet_exchange_wrapper
-            self.self_test()
-
         self.last_i2c_address = -1  # Used to remember which i2c_address_7bit was last spoken to if an error occurs.
+        if open_connection:
+            self.open()
+
+    def open(self):
+        self.__connect_socket()
+        self.__data_exchange = self.__ethernet_exchange_wrapper
+        self.self_test()  # raises if anything wrong
+
+    def close(self):
+        try:
+            self.socket.close()
+        except AttributeError:
+            # self.socket could be None
+            pass
+
+    def __enter__(self):
+        self.open()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 
     def __connect_socket(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -60,8 +78,6 @@ class I2CPort:
             self.socket.connect(self.host_port)
         except TimeoutError:
             raise CantFindNCDInterface(self.ncd_interface_address)
-        else:
-            return True
 
     def self_test(self):
         """Perform the self test of the converter.
@@ -73,12 +89,6 @@ class I2CPort:
         if self.__data_exchange(bytes([0xFE, 0x21])) != bytes([0x55]):
             raise SelfTestFailedError(self.ncd_interface_address)
 
-    def close(self):
-        try:
-            self.socket.close()
-        except AttributeError:
-            # self.socket could be None
-            pass
 
     def writeto(self, i2c_address_7bit: int, data: bytearray) -> int:
         """Send a bytearray (up to 100 bytes) to the specified I2C address and return the number of sent bytes.
@@ -96,10 +106,10 @@ class I2CPort:
         """
         i2c_address_7bit = int(i2c_address_7bit)
         if not self.is_valid_7bit_address(i2c_address_7bit):
-            raise InvalidI2CAddressError(i2c_address_7bit, self.ncd_interface_address)
+            raise NCD_I2CInvalidAddressError(i2c_address_7bit, self.ncd_interface_address)
 
         if len(data) > 100:
-            raise InvalidParametersError(i2c_address_7bit, self.ncd_interface_address)
+            raise NCD_I2CInvalidParametersError(i2c_address_7bit, self.ncd_interface_address)
 
         self.last_i2c_address = i2c_address_7bit
 
@@ -128,9 +138,9 @@ class I2CPort:
         """
         i2c_address_7bit = int(i2c_address_7bit)
         if not self.is_valid_7bit_address(i2c_address_7bit):
-            raise InvalidI2CAddressError(i2c_address_7bit, self.ncd_interface_address)
+            raise NCD_I2CInvalidAddressError(i2c_address_7bit, self.ncd_interface_address)
         if size <= 0 or size > 100:
-            raise InvalidParametersError(i2c_address_7bit, self.ncd_interface_address)
+            raise NCD_I2CInvalidParametersError(i2c_address_7bit, self.ncd_interface_address)
 
         self.last_i2c_address = i2c_address_7bit
         tx_payload = bytes([NCD_I2C_READ, i2c_address_7bit, size])
@@ -156,13 +166,13 @@ class I2CPort:
         """
         i2c_address_7bit = int(i2c_address_7bit)
         if not self.is_valid_7bit_address(i2c_address_7bit):
-            raise InvalidI2CAddressError(i2c_address_7bit, self.ncd_interface_address)
+            raise NCD_I2CInvalidAddressError(i2c_address_7bit, self.ncd_interface_address)
 
         if isinstance(data, int):
             data = bytearray([data])
 
         if size < 0 or size > 16 or len(data) > 16:
-            raise InvalidParametersError(i2c_address_7bit, self.ncd_interface_address)
+            raise NCD_I2CInvalidParametersError(i2c_address_7bit, self.ncd_interface_address)
 
         self.last_i2c_address = i2c_address_7bit
         tx_payload = bytes([NCD_I2C_WRITE_READ, i2c_address_7bit, size, delay_ms]) + data
@@ -203,26 +213,28 @@ class I2CPort:
 
     def __handle_error_message(self, error_code):
         #
-        # the OSError is to be SMBUS compliant
+        # This function should convert to I2C error exceptions.
+        #
+        # But using OSError instead is to be SMBUS compliant!
         #
         if error_code == NCD_I2C_READ_ERROR:
             raise OSError(NCD_I2C_READ_ERROR, f"Slave: {self.last_i2c_address}, IP: {self.ncd_interface_address}")
-            #raise I2CReadError(self.last_i2c_address, self.ncd_interface_address)
+            #raise NCD_I2CReadError(self.last_i2c_address, self.ncd_interface_address)
 
         elif error_code == NCD_I2C_WRITE_ERROR:
             raise OSError(NCD_I2C_READ_ERROR, f"Slave: {self.last_i2c_address}, IP: {self.ncd_interface_address}")
-            #raise I2CWriteError1(self.last_i2c_address, self.ncd_interface_address)
+            #raise NCD_I2CWriteError1(self.last_i2c_address, self.ncd_interface_address)
 
         elif error_code == NCD_I2C_WRITE_ERROR2:
             raise OSError(NCD_I2C_READ_ERROR, f"Slave: {self.last_i2c_address}, IP: {self.ncd_interface_address}")
-            #raise I2CWriteError2(self.last_i2c_address, self.ncd_interface_address)
+            #raise NCD_I2CWriteError2(self.last_i2c_address, self.ncd_interface_address)
 
-        elif error_code == NCD_NOT_IMPLEMENTED_ERROR:            
+        elif error_code == NCD_NOT_IMPLEMENTED_ERROR:
             raise Exception("Not implemented function used")
 
         elif error_code == NCD_I2C_ACK_ERROR:
-            raise OSError(NCD_I2C_READ_ERROR, f"Slave: {self.last_i2c_address}, IP: {self.ncd_interface_address}")           
-            #raise I2CAckError(self.last_i2c_address, self.ncd_interface_address)
+            raise OSError(NCD_I2C_READ_ERROR, f"Slave: {self.last_i2c_address}, IP: {self.ncd_interface_address}")
+            #raise NCD_I2CAckError(self.last_i2c_address, self.ncd_interface_address)
 
         else:
             raise UnknownNCDError(self.ncd_interface_address, error_code)

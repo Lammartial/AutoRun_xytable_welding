@@ -1,3 +1,5 @@
+from rrc.i2cbus import I2CBase
+
 class MCP23008:
     """A class to control the MCP23008 8-bit I2C I/O Expander.
 
@@ -16,14 +18,14 @@ class MCP23008:
     GPIO = 0x09
     OLAT = 0x0A
 
-    def __init__(self, i2c_port, i2c_address_7bit: int = 0x20):
+    def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x20):
         """Initialize the object with an I2CPort object and the 7-bit I2C address.
 
         Args:
-            i2c_port: The I2CPort instance this IC is connected to
+            i2c: The I2CPort instance this IC is connected to
             i2c_address_7bit: The IC's 7-bit I2C address
         """
-        self.i2c_port = i2c_port
+        self.i2c = i2c
         self.i2c_address_7bit = int(i2c_address_7bit)
 
     def set_pin(self, pin_n: int):
@@ -155,10 +157,10 @@ class MCP23008:
         return self.__read_register(MCP23008.GPPU)
 
     def __write_register(self, register: int, value: int):
-        self.i2c_port.writeto(self.i2c_address_7bit, bytearray([register, value]))
+        self.i2c.writeto(self.i2c_address_7bit, bytearray([register, value]))
 
     def __read_register(self, register: int):
-        value = self.i2c_port.readfrom_mem(self.i2c_address_7bit, bytearray([register]), 1)
+        value = self.i2c.readfrom_mem(self.i2c_address_7bit, bytearray([register]), 1)
         return value[0]
 
     def __validate_pin_number(self, pin_n: int):

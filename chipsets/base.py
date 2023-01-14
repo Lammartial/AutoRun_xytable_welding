@@ -16,8 +16,10 @@ from rrc.smartbattery import Battery
 class Chipset(Battery):
     """Abstract chipset type containing all common functions.
 
-       Do NOT instantiate direcctly.
+    Do NOT instantiate directly.
+
     """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 

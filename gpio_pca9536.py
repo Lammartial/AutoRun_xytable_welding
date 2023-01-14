@@ -1,3 +1,5 @@
+from rrc.i2cbus import I2CBase
+
 class PCA9536:
     """
     A class to control the PCA9536 4-bit I2C I/O Expander.
@@ -11,21 +13,21 @@ class PCA9536:
     reg_list = [reg_input_port, reg_output_port, reg_polarity_inversion, reg_configuration]
     gpio_list = [0, 1, 2, 3]
 
-    def __init__(self, i2c_port, i2c_address_7bit: int = 0x41):
+    def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x41):
         """Initialize the object with an I2CPort object and the 7-bit I2C address.
 
         Args:
-            i2c_port: The I2CPort instance this IC is connected to
+            i2c: The I2CPort instance this IC is connected to
             i2c_address_7bit: The IC's 7-bit I2C address
         """
-        self.i2c_port = i2c_port
-        self.i2c_address_7bit = i2c_address_7bit
+        self.i2c = i2c
+        self.i2c_address_7bit = int(i2c_address_7bit)
 
-    @property
-    def device_description(self) -> str:
+    def __repr__(self) -> str:
         """Returns a string that contains the device type, ip address of the ETH-I2C converter and the i2c address.
-        Used for error messages."""
-        return f"PCA9536 GPIO board at {self.i2c_port.description_string(self.i2c_address_7bit)}"
+        Used ALSO for error messages."""
+
+        return f"PCA9536 GPIO board at {self.i2c.__repr__()} having address 0x{self.i2c_address_7bit:02x}"
 
     def set_gpio_n_as_input(self, gpio_n: int):
         """Configure the GPIO with the index n (starts at 0) as an input with a 100k pullup.
@@ -97,22 +99,22 @@ class PCA9536:
         value = int(value)
         if not (0 <= value <= 15):
             raise ValueError(f"Invalid register value for GPIO board. Must be between 0 and 15. You sent {value}. "
-                             f"({self.device_description})")
+                             f"({self.__repr__()})")
 
         data = bytearray([register, value])
-        self.i2c_port.writeto(self.i2c_address_7bit, data)
+        self.i2c.writeto(self.i2c_address_7bit, data)
 
     def __get_register(self, register: int) -> int:
         # Read a register from the IC.
         register = self.__validate_control_register(register)
 
         data = bytearray([register])
-        value = self.i2c_port.readfrom_mem(self.i2c_address_7bit, data, 1)
+        value = self.i2c.readfrom_mem(self.i2c_address_7bit, data, 1)
 
         try:
             value = value[0]
         except IndexError:
-            raise IndexError(f"Didn't receive enough bytes for __get_register function from {self.device_description}.")
+            raise IndexError(f"Didn't receive enough bytes for __get_register function from {self.__repr__()}.")
 
         return value
 
@@ -121,7 +123,7 @@ class PCA9536:
         register = int(register)
         if register not in PCA9536.reg_list:
             raise ValueError(f"The register 0x{register:02X} is not in the list of available registers of the GPIO board"
-                             f" ({PCA9536.reg_list}). ({self.device_description})")
+                             f" ({PCA9536.reg_list}). ({self.__repr__()})")
         else:
             return register
 
@@ -130,7 +132,7 @@ class PCA9536:
         gpio_n = int(gpio_n)
         if gpio_n not in PCA9536.gpio_list:
             raise ValueError(f"Pin {gpio_n} is not in the list of available pins of the GPIO board ({PCA9536.gpio_list}). "
-                             f"({self.device_description})")
+                             f"({self.__repr__()})")
         else:
             return gpio_n
 
