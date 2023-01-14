@@ -156,7 +156,8 @@ class ModbusClient:
     def __repr__(self) -> str:
         return f"ModbusClient({self._connection_str}, unit_address={self.unit_address},\
                  group_by_gateway={self.group_by_gateway}, byte_order={self.byte_order}, word_order={self.word_order})"
-    # ---------------------------------------------
+
+    # ---------------------------------------------------------------------------------------------
 
     # to provide the with ... statement protector
     def __enter__(self):

@@ -6,7 +6,6 @@ from typing import Tuple
 import errno
 from struct import pack, unpack
 from time import sleep
-from i2cbus import I2C, I2CMuxedBus
 from rrc.smbus_pec import calc as pec_calc
 from rrc.eth2i2c import I2CBase, I2CError, NCDError
 

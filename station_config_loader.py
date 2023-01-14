@@ -14,7 +14,16 @@ class StationConfiguration:
 
     def __init__(self, filename: str | Path = CONF_FILENAME_PROD) -> None:
         self._CONFIG = None
-        self._read_yaml_file(Path(filename))
+        self._filename = Path(filename)
+        self._read_yaml_file(self._filename)
+
+    def __str__(self) -> str:
+        return f"Test station configuration by YAML file {self._filename}"
+
+    def __repr__(self) -> str:
+        return f"StationConfiguration(filename={self._filename})"
+
+    #----------------------------------------------------------------------------------------------
 
     def _read_yaml_file(self, filepath: str | Path) -> OrderedDict:
         with open(Path(filepath), "rt") as file:
