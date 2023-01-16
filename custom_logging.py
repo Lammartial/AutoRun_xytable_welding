@@ -23,7 +23,7 @@ def logger_init(debug: int) -> None:
     #logfilename = datetime.now().strftime("%Y%m%d_%H%M%S") + f"_{filename}"
     logfilename = datetime.utcnow().strftime("%Y%m%d") + f"_{filename}"
     file = logging.handlers.TimedRotatingFileHandler(f"{path}{logfilename}", when="midnight", interval=1)
-    fileformat = logging.Formatter("%(asctime)s [%(levelname)s]: %(process)d %(threadName)s %(module)s %(name)s %(lineno)d: %(message)s")
+    fileformat = logging.Formatter("%(asctime)s [%(levelname)s]: %(process)d %(module)s %(name)s %(lineno)d: %(message)s")
     file.setLevel(logging.DEBUG if debug>0 else logging.INFO)
     file.setFormatter(fileformat)
 
