@@ -12,12 +12,12 @@ DEBUG = 1
 # Logging
 # --------------------------------------------------------------------------- #
 
-# Initialize the logging
+## Initialize the logging
 import logging
-## init ROOT logger from my_logger.logger_init()
-from rrc.logging import logger_init
+## init ROOT logger from custom_logging.logger_init()
+from rrc.custom_logging import logger_init
 logger_init() ## init root logger
-# get module level logging
+## get module level logging
 _log = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------- #
