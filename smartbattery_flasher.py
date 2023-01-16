@@ -16,7 +16,7 @@ DEBUG = 1
 import logging
 ## init ROOT logger from custom_logging.logger_init()
 from rrc.custom_logging import logger_init
-logger_init() ## init root logger
+logger_init(DEBUG) ## init root logger
 ## get module level logging
 _log = logging.getLogger(__name__)
 

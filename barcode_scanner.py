@@ -10,21 +10,20 @@ barcode scanned UDI or human typed UDI or for whatever reason it is being used e
 import asyncio
 from rrc.eth2serial.base import Eth2SerialDevice
 
-DEBUG = 0
+DEBUG = 1
 
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
 import logging
 
+## Initialize the logging
+import logging
+## init ROOT logger from custom_logging.logger_init()
+from rrc.custom_logging import logger_init
+logger_init(DEBUG) ## init root logger
+## get module level logging
 _log = logging.getLogger(__name__)
-_log.setLevel(logging.DEBUG if DEBUG else logging.INFO)
-
-# Initialize the logging
-try:
-    logging.basicConfig()
-except Exception as e:
-    print("Logging is not supported on this system")
 
 # --------------------------------------------------------------------------- #
 
@@ -113,10 +112,12 @@ if __name__ == "__main__":
     DEBUG = 1
     tic = perf_counter()
 
+    _log.info("Hallo Welt!")
+
     cfg = StationConfiguration(filename=CONF_FILENAME_DEV)
     #_IP = cfg._CONFIG["test_sockets"]["1"]["resource_strings"]["scanner"]
     _IP, _PORT = cfg.get_resource_strings_for_socket(1)[0].split(":")
-    _IP, _PORT = "169.254.36.1:2000".split(":")
+    #_IP, _PORT = "169.254.36.1:2000".split(":")
     print(_IP, _PORT)
 
     # test the client send and receive:

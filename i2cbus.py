@@ -6,6 +6,23 @@ from typing import Tuple, List
 import errno
 from eth2i2c import I2CBase
 
+DEBUG = 1
+
+# --------------------------------------------------------------------------- #
+# Logging
+# --------------------------------------------------------------------------- #
+import logging
+
+## Initialize the logging
+import logging
+## init ROOT logger from custom_logging.logger_init()
+from rrc.custom_logging import logger_init
+logger_init(DEBUG) ## init root logger
+## get module level logging
+_log = logging.getLogger(__name__)
+
+# --------------------------------------------------------------------------- #
+
 class BusMux:
 
     def __init__(self, i2c: I2CBase, address: int = 0x70):
@@ -266,18 +283,19 @@ class I2CMuxedBus(I2CBase):
 if __name__ == "__main__":
     from eth2i2c.ncd_eth_i2c_interface import I2CPort
     from smbus import BusMaster as SMBusMaster
-    ncd = I2CPort("192.168.1.149", 2101)
-    bus = SMBusMaster(ncd)
-    print(bus.isReady(0x77))
-    mux = BusMux(ncd, address=0x77)
-    mux.setChannel(1)
-    print(mux.getChannels())
-    print(bus.readWord(0x0b,0x09))
-    mux.reset()
-    # check if the mux-automatic works also
-    muxbus = I2CMuxedBus(ncd, bus, 1)
-    smbus = SMBusMaster(muxbus)
-    print(smbus.readWord(0x0b,0x09))
+
+    with I2CPort("192.168.1.56", 2101) as ncd:
+        bus = SMBusMaster(ncd)
+        _log.info(bus.isReady(0x77))
+        mux = BusMux(ncd, address=0x77)
+        mux.setChannel(1)
+        _log.info(mux.getChannels())
+        _log.info(bus.readWord(0x0b,0x09))
+        mux.reset()
+        # check if the mux-automatic works also
+        muxbus = I2CMuxedBus(ncd, bus, 1)
+        smbus = SMBusMaster(muxbus)
+        _log.info(smbus.readWord(0x0b,0x09))
     pass
 
 # END OF FILE
