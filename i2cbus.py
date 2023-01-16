@@ -64,7 +64,7 @@ class BusMux:
         return ok
 
     def getChannelMask(self) -> int:
-        return self.current_mask  # work with shadow only
+        return int(self.current_mask)  # work with shadow only
 
     def reset(self) -> bool:
         """Disable ALL channels"""
@@ -221,7 +221,7 @@ class I2CMuxedBus(I2CBase):
 
         """
         self.mux.setChannel(self.channel)
-        return self.i2c.writeto(self, int(i2c_address), data)
+        return self.i2c.writeto(int(i2c_address), data)
 
     def readfrom(self, i2c_address: int, size: int) -> bytearray:
         """Read the specified amount of bytes (up to 100) from the device.

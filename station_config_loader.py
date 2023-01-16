@@ -57,7 +57,7 @@ class StationConfiguration:
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    cfg = StationConfiguration()
+    cfg = StationConfiguration(CONF_FILENAME_DEV)
     #pprint(cfg._CONFIG)
     pprint(cfg.get_station_configuration())
     #pprint(cfg.get_resource_strings_for_socket(2))

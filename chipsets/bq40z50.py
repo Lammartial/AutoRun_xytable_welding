@@ -8,6 +8,7 @@ __version__ = "1.0.0"
 __author__ = "Markus Ruth"
 
 # pylint: disable=line-too-long,C0103,C0321,C0413,W0703,W0107,R1702,R0904
+from typing import Tuple
 import errno
 #from battery.smartbattery import Battery
 from time import sleep, monotonic_ns
@@ -797,8 +798,14 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self.read_ccadc_cal()  # update calibration reading
             sleep(pause)
 
-    def measure_cell_voltage_raw_adcs_for_calibration(self, num_cells: int, samples: int = 8, shorted: bool = False, timeout: float = 5.0) -> tuple:
-        """_summary_
+    def calib_read_adc_cell_voltage(self, num_cells: int, samples: int = 8, shorted: bool = False, timeout: float = 5.0) -> tuple:
+        """Enables the calibration mode of the battery if not set already and then
+        measures the voltages for 1 up to num_cells taking "samples" number of measurements
+        returning the mean value for each cell as tuple.
+
+        The next step for the caller is to calculate the gain correction for each voltage
+        and calling the closing function end_calibration_xxxx() with the values to store into
+        calibration flash for each cell.
 
         Args:
             num_cells (int): 1 .. 4
@@ -828,33 +835,41 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self._wait_for_adc_update(2, timeout, t0_ns=t0)
         # now get the ADCs from the last block read with corrected signs
         voltages = [_get_adc_reading(v) for v in range(0, num_cells)]
-        n = 8  # take 8 measurements
-        for _ in range(0, n):
+        n = 8  # take 8 measurements, including the base
+        for _ in range(0, n-1):
             self._wait_for_adc_update(1, timeout, t0_ns=t0)
             voltages = [voltages[i] + _get_adc_reading(i) for i in range(0, num_cells)]
         # calc mean values
         voltages = [voltages[i]/n for i in range(0, num_cells)]
         return tuple(voltages)
 
-    def end_adc_calibration(self):
-        self.manufacturer_access = 0xf080
+    def calib_write_cell_voltage_gain(self, cell_voltages: Tuple[int], shorted: bool = False):
+        #self.manufacturer_access = 0xf080
         self._ms_toggle_helper("cal_test", False, 0x002d)
+        # ...
+
 
     #def write_cell_voltage_gain(self, gain_values: tuple):
     #    # len of tuple is number of cells
     #    self._ms_toggle_helper("cal_test", False, 0x002d)
 
 
-    def bat_voltage_calibration(self):
+    def calib_read_adc_bat_voltage(self, shorted: bool = False):
         pass
 
-    def pack_voltage_calibration(self):
+    def calib_write_bat_voltage_gain(self, voltage: int, shorted: bool = False):
         pass
 
-    def current_voltage_calibration(self):
+    def calib_read_adc_pack_voltage(self, shorted: bool = False):
         pass
 
-    def temperature_voltage_calibration(self):
+    def calib_write_pack_voltage_gain(self, voltage: int, shorted: bool = False):
+        pass
+
+    def calib_read_adc_current(self):
+        pass
+
+    def calib_read_adc_temperature(self):
         pass
 
     def _ms_toggle_helper(self, ms_key: str, enable: bool, ma_cmd: int, retries: int = 1) -> bool:
@@ -988,6 +1003,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     def toggle_led_display_enable(self):
         self.manufacturer_access = 0x0027
+
+    def set_led_display_enable(self, enable: bool) -> bool:
+        return self._ms_toggle_helper("led_en", enable, 0x0027)
+
 
 
     def get_afe_register(self, hexi: bool | str | None = None) -> tuple:
