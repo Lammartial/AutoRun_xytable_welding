@@ -175,6 +175,13 @@ class RelayBoard4Relay4GPIO:
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    from eth2i2c import I2CPort
+    from i2cbus import BusMux, I2CMuxedBus
+    i2c = I2CPort("192.168.1.56")
+    mux = BusMux(i2c, 0x77)
+    bus = I2CMuxedBus(i2c, mux, 3)
+    rb = RelayBoard4Relay4GPIO(bus, 32)
+    i2c.close()
     pass
 
 # END OF FILE
