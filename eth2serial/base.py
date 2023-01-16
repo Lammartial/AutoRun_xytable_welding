@@ -88,19 +88,13 @@ class Eth2Serial_SockSingleConnection_Device(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.socket.close()
 
-
-
     def send(self, msg: str, timeout: float = 3.0) -> None:
         """_summary_
 
         Args:
             msg (str): _description_
             timeout (float, optional): _description_. Defaults to 1.0.
-
-        Returns:
-            bool: _description_
         """
-
         try:
             self.socket.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
         except TimeoutError as ex:
