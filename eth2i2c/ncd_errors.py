@@ -62,7 +62,7 @@ class CantFindNCDInterface(NCDError):
         self.ncd_interface_address = ncd_interface_address
 
     def __str__(self):
-        return f"Can't connect to the NCD interface at: {self.ncd_interface_address}."
+        return f"Can't connect to the NCD interface at {self.ncd_interface_address}."
 
 #
 # Implemeting the I2CError classes for NCD

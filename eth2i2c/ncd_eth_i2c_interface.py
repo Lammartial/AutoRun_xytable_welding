@@ -60,33 +60,33 @@ class I2CPort(I2CBase):
         The string has the format "<ip address>:<port>:<i2c address>"
         Example: "192.168.1.56:2101:0x40"
         """
-        return f"NCD ETH-to-I²C bridge at {self._host}:{self._port}:0x{self.last_i2c_address:02X}"
+        return f"NCD ETH-to-I2C bridge at {self._host}:{self._port}:0x{self.last_i2c_address:02X}"
 
     def __repr__(self) -> str:
         return f"I2CPort({self._host}, {self._port}, timeout_s={self.timeout_s}, open_connection={self._open_connection})"
 
     #----------------------------------------------------------------------------------------------
 
-    def open(self):
+    def open(self) -> None:
         self.__connect_socket()
         self.__data_exchange = self.__ethernet_exchange_wrapper
         self.self_test()  # raises if anything wrong
 
-    def close(self):
+    def close(self) -> None:
         try:
             self.socket.close()
         except AttributeError:
             # self.socket could be None
             pass
 
-    def __enter__(self):
+    def __enter__(self) -> object:
         self.open()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
 
-    def __connect_socket(self):
+    def __connect_socket(self) -> None:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.settimeout(self.timeout_s)
         try:
@@ -94,7 +94,7 @@ class I2CPort(I2CBase):
         except TimeoutError:
             raise CantFindNCDInterface(self.ncd_interface_address)
 
-    def self_test(self):
+    def self_test(self) -> None:
         """Perform the self test of the converter.
 
         Raises:
@@ -220,22 +220,22 @@ class I2CPort(I2CBase):
         # But using OSError instead is to be SMBUS compliant!
         #
         if error_code == NCD_I2C_READ_ERROR:
-            raise OSError(NCD_I2C_READ_ERROR, f"Slave: {self.last_i2c_address}, IP: {self.ncd_interface_address}")
+            raise OSError(NCD_I2C_READ_ERROR, f"I2C Read Error on {self}")
             #raise NCD_I2CReadError(self.last_i2c_address, self.ncd_interface_address)
 
         elif error_code == NCD_I2C_WRITE_ERROR:
-            raise OSError(NCD_I2C_READ_ERROR, f"Slave: {self.last_i2c_address}, IP: {self.ncd_interface_address}")
+            raise OSError(NCD_I2C_READ_ERROR, f"I2C Write Error1 on {self}")
             #raise NCD_I2CWriteError1(self.last_i2c_address, self.ncd_interface_address)
 
         elif error_code == NCD_I2C_WRITE_ERROR2:
-            raise OSError(NCD_I2C_READ_ERROR, f"Slave: {self.last_i2c_address}, IP: {self.ncd_interface_address}")
+            raise OSError(NCD_I2C_READ_ERROR, f"I2C Write Error2 on {self}")
             #raise NCD_I2CWriteError2(self.last_i2c_address, self.ncd_interface_address)
 
         elif error_code == NCD_NOT_IMPLEMENTED_ERROR:
-            raise Exception("Not implemented function used")
+            raise Exception("Not implemented NCD function used")
 
         elif error_code == NCD_I2C_ACK_ERROR:
-            raise OSError(NCD_I2C_READ_ERROR, f"Slave: {self.last_i2c_address}, IP: {self.ncd_interface_address}")
+            raise OSError(NCD_I2C_READ_ERROR, f"I2C ACK Error on {self}")
             #raise NCD_I2CAckError(self.last_i2c_address, self.ncd_interface_address)
 
         else:
