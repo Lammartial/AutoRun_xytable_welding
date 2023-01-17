@@ -101,7 +101,6 @@ class FEASA_CH9121(Eth2SerialDevice):
         Returns:
             bool: False - failed, True - success
         """
-        timeout = float(timeout)
         response = self.request("capturepwm", 5)
         if (self.RESPONSE_OK in response):
             return True 
@@ -122,7 +121,6 @@ class FEASA_CH9121(Eth2SerialDevice):
         Returns:
             bool: False - failed, True - success
         """
-        timeout = float(timeout)
         cmd = "capture" + str(int(range)) + "PWM" + f"{(int(factor)):02d}"
         response = self.request(cmd, 5)
         if (self.RESPONSE_OK in response):
