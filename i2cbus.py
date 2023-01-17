@@ -22,6 +22,7 @@ logger_init(DEBUG) ## init root logger
 _log = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
 
 class BusMux:
 
@@ -125,6 +126,9 @@ class BusMux:
         return self.setChannelMask(mask)
 
 
+# --------------------------------------------------------------------------- #
+
+
 class MultiBusMux:
 
     def __init__(self, i2c: I2CBase, base_address: int = 0x70, number_of_busses: int = 1):
@@ -208,11 +212,28 @@ class MultiBusMux:
 # --------------------------------------------------------------------------------------------------
 
 class I2CBus(I2CBase):
+    """Plain bus - either it is a built in or you should use interface specific."""
     pass
 
-class I2CMuxedBus(I2CBase):
 
+# --------------------------------------------------------------------------------------------------
+
+class I2CMuxedBus(I2CBase):
+    """
+    Class that handles a bus connected I2C bus mux to select a channel 
+    before executing a read or write.
+    You can use either a BusMux() or MultiBusMux() class as handler.
+    """
+    
     def __init__(self, i2c: I2CBase, mux: BusMux, channel: int):
+        """Class that handles a bus connected I2C bus mux to select a channel 
+        before executing a read or write.
+    
+        Args:
+            i2c (I2CBase): plain I2C bus
+            mux (BusMux): BusMux device instance which has interface and slave address set. 
+            channel (int): the channel 1..n to select this bus 
+        """
         super().__init__()  # I just need the interface functions here
         self.i2c = i2c  # we use a separate i2c bus instance for real execution
         self.mux = mux

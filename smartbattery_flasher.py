@@ -396,23 +396,24 @@ if __name__ == "__main__":
     from datetime import datetime as dt
     from pathlib import Path
     from rrc.eth2i2c import I2CPort
-    from smbus import BusMaster, BusMux_PCA9548A
+    from rrc.i2cbus import BusMux, I2CMuxedBus
+    from rrc.smbus import Battery, BusMaster
 
-    i2c_port = I2CPort("192.168.1.83", 2101)
+    i2c_port = I2CPort("192.168.1.56", 2101)
+    busmux = BusMux(i2c_port, address=0x77)
+    
     busmaster = BusMaster(i2c_port)
-    busmux = BusMux_PCA9548A(i2c_port, address=0x77)
-    busmux.setChannel(1)
     bat = Battery(busmaster)
-    #print(i2c_port.i2c_bus_scan())
+    busmux.setChannel(1)    
+    print(i2c_port.i2c_bus_scan())
     busmux.setChannel(2)
-    # print(i2c_port.i2c_bus_scan())
-
+    print(i2c_port.i2c_bus_scan())
+    auto_muxed_busmaster = BusMaster(I2CMuxedBus(i2c_port, busmux, 3))
+        
     t1 = dt.now()
     flasher = FlashStreamFlasher(bat)
-    #log_file_path = Path("fsf-log-file-{}.log".format(dt.now().strftime("%Y-%m-%dT%H-%M-%S")))
-    #flasher.setup_logger(log_file_path)
-    # fs_file = Path(r"C:\Users\mschmitt\Desktop\SCD_3412036-02_B_Tansanit_B_RRC2040B.bq.fs")
-    fs_file = Path(r"C:\Users\mschmitt\Desktop\SCD_3410758-08_bq40z50-R4_A-draft1_Adamite_RRC2140_BMS_Files.bq.fs")
+    #fs_file = Path(".\testfiles\SCD_3410758-08_bq40z50-R4_A-draft1_Adamite_RRC2140_BMS_Files.bq.fs")
+    fs_file = Path("..\..\Battery-PCBA-Test\filestore\SCD_3412031-04_A_Rubin-B_RRC2020B.srec")    
     flasher.set_firmware_file(fs_file)
     validation_result = flasher.validate_file()
     print(f"Validation result: {validation_result}")
