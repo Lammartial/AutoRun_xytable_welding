@@ -42,7 +42,7 @@ class I2CPort(I2CBase):
             timeout_s (float): Timeout for network communication in seconds
 
         Raises:
-            SelfTestFailedError: Raised if the selftest of the converter fails.
+            NCDSelfTestFailedError: Raised if the selftest of the converter fails.
         """
         self.socket = None
         self._host = str(host)
@@ -92,17 +92,17 @@ class I2CPort(I2CBase):
         try:
             self.socket.connect((self._host, self._port))
         except TimeoutError:
-            raise CantFindNCDInterface(self.ncd_interface_address)
+            raise NCDCantFindInterface(self.ncd_interface_address)
 
     def self_test(self) -> None:
         """Perform the self test of the converter.
 
         Raises:
-            SelfTestFailedError: Raised if the selftest of the converter fails.
+            NCDSelfTestFailedError: Raised if the selftest of the converter fails.
         """
         # Test command has the payload 0xFE 0x21. Response should be 0x55
         if self.__data_exchange(bytes([0xFE, 0x21])) != bytes([0x55]):
-            raise SelfTestFailedError(self.ncd_interface_address)
+            raise NCDSelfTestFailedError(self)
 
 
     def writeto(self, i2c_address_7bit: int, data: bytearray) -> int:
@@ -121,10 +121,10 @@ class I2CPort(I2CBase):
         """
         i2c_address_7bit = int(i2c_address_7bit)
         if not self.is_valid_7bit_address(i2c_address_7bit):
-            raise NCD_I2CInvalidAddressError(i2c_address_7bit, self.ncd_interface_address)
+            raise NCD_I2CInvalidAddressError(i2c_address_7bit, self)
 
         if len(data) > 100:
-            raise NCD_I2CInvalidParametersError(i2c_address_7bit, self.ncd_interface_address)
+            raise NCD_I2CInvalidParametersError(i2c_address_7bit, self)
 
         self.last_i2c_address = i2c_address_7bit
 
@@ -153,9 +153,9 @@ class I2CPort(I2CBase):
         """
         i2c_address_7bit = int(i2c_address_7bit)
         if not self.is_valid_7bit_address(i2c_address_7bit):
-            raise NCD_I2CInvalidAddressError(i2c_address_7bit, self.ncd_interface_address)
+            raise NCD_I2CInvalidAddressError(i2c_address_7bit, self)
         if size <= 0 or size > 100:
-            raise NCD_I2CInvalidParametersError(i2c_address_7bit, self.ncd_interface_address)
+            raise NCD_I2CInvalidParametersError(i2c_address_7bit, self)
 
         self.last_i2c_address = i2c_address_7bit
         tx_payload = bytes([NCD_I2C_READ, i2c_address_7bit, size])
@@ -181,13 +181,13 @@ class I2CPort(I2CBase):
         """
         i2c_address_7bit = int(i2c_address_7bit)
         if not self.is_valid_7bit_address(i2c_address_7bit):
-            raise NCD_I2CInvalidAddressError(i2c_address_7bit, self.ncd_interface_address)
+            raise NCD_I2CInvalidAddressError(i2c_address_7bit, self)
 
         if isinstance(data, int):
             data = bytearray([data])
 
         if size < 0 or size > 16 or len(data) > 16:
-            raise NCD_I2CInvalidParametersError(i2c_address_7bit, self.ncd_interface_address)
+            raise NCD_I2CInvalidParametersError(i2c_address_7bit, self)
 
         self.last_i2c_address = i2c_address_7bit
         tx_payload = bytes([NCD_I2C_WRITE_READ, i2c_address_7bit, size, delay_ms]) + data
@@ -239,7 +239,7 @@ class I2CPort(I2CBase):
             #raise NCD_I2CAckError(self.last_i2c_address, self.ncd_interface_address)
 
         else:
-            raise UnknownNCDError(self.ncd_interface_address, error_code)
+            raise NCDUnknownErrorCodeError(self, error_code)
 
     def __wrap_payload_in_packet(self, payload: bytes) -> bytes:
         """Wraps the payload in an NCD packet."""
@@ -278,9 +278,9 @@ class I2CPort(I2CBase):
         try:
             self.socket.sendall(tx_packet)
         except TimeoutError:  # find out which errors to add
-            raise NCDTimeoutError(self.ncd_interface_address)
+            raise NCDTimeoutError(self)
         except OSError:
-            raise ConnectionToNCDInterfaceBroken(self.ncd_interface_address)
+            raise NCDConnectionToInterfaceBroken(self)
 
         # Receive data
         chunks = []
@@ -292,12 +292,12 @@ class I2CPort(I2CBase):
             try:
                 chunk = self.socket.recv(min(expected_rx_cnt - bytes_recd, 2048))
             except TimeoutError:  # find out which errors to add
-                raise NCDTimeoutError(self.ncd_interface_address)
+                raise NCDTimeoutError(self)
             except OSError:
-                raise ConnectionToNCDInterfaceBroken(self.ncd_interface_address)
+                raise NCDConnectionToInterfaceBroken(self)
             else:
                 if chunk == b'':
-                    raise ConnectionToNCDInterfaceBroken(self.ncd_interface_address)
+                    raise NCDConnectionToInterfaceBroken(self)
 
             chunks.append(chunk)
             bytes_recd = bytes_recd + len(chunk)
@@ -306,7 +306,7 @@ class I2CPort(I2CBase):
         if rx_packet[NCD_PACKET_HEADER_INDEX] == NCD_HEADER:
             expected_rx_cnt = rx_packet[NCD_PACKET_LENGTH_INDEX] + 1  # +1 for checksum
         else:
-            raise UnknownResponseError(self.ncd_interface_address, rx_packet)
+            raise NCDUnknownResponseError(self, rx_packet)
 
         # read the rest of the packet
         chunks = []
@@ -315,12 +315,12 @@ class I2CPort(I2CBase):
             try:
                 chunk = self.socket.recv(min(expected_rx_cnt - bytes_recd, 2048))
             except TimeoutError:  # find out which errors to add
-                raise NCDTimeoutError(self.ncd_interface_address)
+                raise NCDTimeoutError(self)
             except OSError:
-                raise ConnectionToNCDInterfaceBroken(self.ncd_interface_address)
+                raise NCDConnectionToInterfaceBroken(self)
             else:
                 if chunk == b'':
-                    raise ConnectionToNCDInterfaceBroken(self.ncd_interface_address)
+                    raise NCDConnectionToInterfaceBroken(self.ncd_interface_address)
 
             chunks.append(chunk)
             bytes_recd = bytes_recd + len(chunk)
@@ -331,13 +331,13 @@ class I2CPort(I2CBase):
 
     def __check_and_decode_packet(self, packet: bytes) -> bytes:
         if packet[NCD_PACKET_HEADER_INDEX] != NCD_HEADER:
-            raise UnknownResponseError(self.ncd_interface_address, packet)
+            raise NCDUnknownResponseError(self, packet)
         if packet[NCD_PACKET_LENGTH_INDEX] != (len(packet) - NCD_PACKET_OVERHEAD):
-            raise UnknownResponseError(self.ncd_interface_address, packet)
+            raise NCDUnknownResponseError(self, packet)
         received_checksum = packet[NCD_PACKET_CHECKSUM_INDEX]
         calculated_checksum = self.calculate_checksum(packet[:NCD_PACKET_CHECKSUM_INDEX])
         if received_checksum != calculated_checksum:
-            raise ChecksumError(self.ncd_interface_address)
+            raise NCDChecksumError(self)
 
         return packet[NCD_PACKET_DATA0_INDEX:NCD_PACKET_CHECKSUM_INDEX]
 

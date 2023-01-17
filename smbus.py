@@ -96,7 +96,8 @@ class BusMaster:
         # return self.i2c.is_ready(slvAddress)
         isready = False
         try:
-            _ = self.i2c.readfrom(slvAddress, 0, stop=True)
+            #_ = self.i2c.readfrom(slvAddress, 0, stop=True)
+            _ = self.i2c.readfrom(slvAddress, 0)
             isready = True
         except OSError as ex:
             if (ex.args[0] == errno.ENODEV) or (ex.args[0] == errno.ETIMEDOUT):

@@ -1,13 +1,51 @@
-import logging
-import pathlib
-import sys
-from time import sleep
 from typing import Union, Tuple, List
+import sys
+from pathlib import Path
+from time import sleep
 from rrc.smartbattery import Battery
 from rrc.chipsets import ChipsetTexasInstruments
 
-class FlashStreamFlasher:
-    """A class that can update the firmware on a TI BMS with a flash-stream file.
+
+DEBUG = 1
+
+# --------------------------------------------------------------------------- #
+# Logging
+# --------------------------------------------------------------------------- #
+
+## Initialize the logging
+import logging
+## init ROOT logger from custom_logging.logger_init()
+from rrc.custom_logging import logger_init
+logger_init(DEBUG) ## init root logger
+## get module level logging
+_log = logging.getLogger(__name__)
+
+# --------------------------------------------------------------------------- #
+
+
+class FlashStreamError(Exception):
+    def __init__(self, parent_class):
+        self.parent_class = parent_class
+
+
+class CantUnsealBatteryError(FlashStreamError):    
+
+    def __str__(self):
+        return f"Battery {self.battery} could not be unsealed/full accessed."
+
+
+class InvalidFlashStreamFileError(FlashStreamError):
+   
+    def __str__(self):
+        return f"There is an error in the flashstream file {self.firmware_file}. Check the log for more infos."
+
+
+#--------------------------------------------------------------------------------------------------
+
+
+class BQStudioFileFlasher:
+    """
+    A class that can update the firmware on a TI BMS with a flash-stream file.
     Flash-stream files can be generated in BQ-Studio from an srec file.
     Flash-stream files contain all the necessary commands to update the firmware:
     X:   Wait for x ms
@@ -25,13 +63,64 @@ class FlashStreamFlasher:
     flasher.set_firmware_file(file_path)
     flasher.validate_and_program_fw_file()
     """
-    def __init__(self, battery: ChipsetTexasInstruments, logger: logging.Logger = None):
+
+    def __init__(self, battery: ChipsetTexasInstruments, firmware_file: Path | str = None, show_progressbar: bool = False):
         """Initialize a class instance."""
         self.battery = battery
-        self.logger = logger
-        self.firmware_file = None
+        if firmware_file:
+            self.set_firmware_file(firmware_file)        
+        else:
+            self.firmware_file = None
+        self.show_progressbar = show_progressbar  # must be set from caller separately
+        
+    def __str__(self) -> str:
+        return f"BQ Studio File flasher {self.battery} using file {self.firmware_file}{', showing progress bar' if self.show_progressbar else ''}"
 
-    def set_firmware_file(self, firmware_file: Union[str, pathlib.Path]):
+    def __repr__(self) -> str:
+        return f"BQStudioFileFlasher({self.battery}, {self.firmware_file}, {self.show_progressbar})"
+
+    #----------------------------------------------------------------------------------------------
+
+    def _print_progress_bar(self, value, max_value, label):
+        n_bar = 40  # size of progress bar
+        j = value / max_value
+        sys.stdout.write('\r')
+        bar = '█' * int(n_bar * j)
+        bar = bar + '-' * int(n_bar * (1 - j))
+        sys.stdout.write(f"{label.ljust(10)} | [{bar:{n_bar}s}] {int(100 * j)}% ")
+        sys.stdout.flush()
+
+
+    def _handle_line(self, line: str, line_number: int) -> Tuple[bool, List[int]]:
+        """Split a line that contains a list of bytes into a list of integers.
+
+        Args:
+            line (str): the line from the flashstream file that should be decoded
+            line_number (int): Current line number in the file. Only a reference for error messages
+            fs_logger: Logger object for logging error messages
+
+        Returns:
+            Tuple: Success as bool and list of integers
+        """
+
+        _log = logging.getLogger(__name__)
+        line_split = [i.strip() for i in line.strip().split(" ")]
+        if len(line_split) < 2:
+            _log.error(f"Error in line: {line_number}: Less than 2 items. (Line: \"{line}\"")
+            return False, [0]
+        output = []
+        for s in line_split:
+            try:
+                s_int = int(s, 16)
+            except ValueError:
+                _log.error(f"Error in line: {line_number}: \"{s}\" is not a hexadecimal number")
+                return False, [0]
+            else:
+                output.append(s_int)
+        return True, output[1:]  # Leave out the first byte. That is just the battery's I2C address.
+
+
+    def set_firmware_file(self, _firmware_file: str | Path):
         """Store the path of the flash-stream file internally if it exists.
 
         Args:
@@ -40,66 +129,48 @@ class FlashStreamFlasher:
         Raises:
             CantOpenFlashStreamFile: If the file doesn't exist or cannot be accessed.
         """
-        if isinstance(firmware_file, str):
-            firmware_file = (pathlib.Path(firmware_file)).resolve()
 
+        _log = logging.getLogger(__name__)
+        _firmware_file = Path(_firmware_file).resolve()
         try:
-            file = open(firmware_file, "r")
+            file = open(_firmware_file, "r")
             file.close()
-        except (OSError, WindowsError):
-            self.logger.error(f"Can't open file: \"{firmware_file}\".")
-            raise CantOpenFlashStreamFile()
-        except FileNotFoundError:
-            self.logger.error(f"File \"{firmware_file}\" does not exist.")
-            raise CantOpenFlashStreamFile()
+        except (OSError, WindowsError, FileNotFoundError):
+            _log.error(f"Can't open file: \"{_firmware_file}\".")
+            raise        
+        _log.info(f"Using file: \"{_firmware_file}\"")
+        self.firmware_file = _firmware_file
 
-        self.logger.info(f"Using file: \"{firmware_file}\"")
-        self.firmware_file = firmware_file
-
-    def setup_logger(self, log_file_path: Union[str, pathlib.Path]):
-        """Set up a logger that stores a log at log_file_path. If the path is None, the log will be console-only.
-
-        Args:
-            log_file_path (str or Path): path where the log file should be stored. If None, no file will be created.
-        """
-        self.logger = logging.getLogger("fs-flasher")
-        self.logger.setLevel(logging.DEBUG)
-        ch = logging.StreamHandler(sys.stdout)
-        ch.setLevel(logging.INFO)
-        formatter = logging.Formatter("%(asctime)s %(name)s %(funcName)s %(levelname)-8s %(message)s")
-        ch.setFormatter(formatter)
-        self.logger.addHandler(ch)
-
-        if log_file_path is not None and log_file_path != "":
-            fh = logging.FileHandler(log_file_path, encoding="utf-8")
-            fh.setLevel(logging.DEBUG)
-            formatter = logging.Formatter("%(asctime)s %(name)s %(funcName)s %(levelname)-8s %(message)s")
-            fh.setFormatter(formatter)
-            self.logger.addHandler(fh)
 
     def prepare_battery(self):
-        """Set the battery to full access mode and log its name.
+        """
+        Set the battery to full access mode and log its name.
 
         Raises:
             CantUnsealBatteryError: If the battery cannot be unsealed.
         """
-        if not self.battery.enable_full_access():        
-            self.logger.error("Could not set battery to full access mode.")
-            raise CantUnsealBatteryError()
-        self.logger.info(f"Battery name: {self.battery.device_name()[0]}")
 
-    #@profile
+        _log = logging.getLogger(__name__)
+        if not self.battery.enable_full_access():
+            self._log.error("Could not set battery to full access mode.")
+            raise CantUnsealBatteryError(self)
+        _log.info(f"Battery name: {self.battery.device_name()[0]} is unsealed and in full access mode.")
+
+
+
     def __process_file(self, is_file_validation: bool):
+        _log = logging.getLogger(__name__)
         validation_result = True
         with open(self.firmware_file, "r") as file:
             line_count = len(file.readlines())  # Get the number of line in the file. Only needed for the progress bar
             file.seek(0)
             line_number = 0
-            self.logger.info(f"Line count: {line_count}")
+            _log.info(f"Line count: {line_count}")
             for current_line in file:
                 current_line = current_line.strip()
                 line_number += 1
-                _printProgressBar(line_number, line_count, "Progress")
+                if self.show_progressbar:
+                    self._print_progress_bar(line_number, line_count, "Progress")
                 if current_line.startswith(";"):
                     # Line is a comment
                     continue
@@ -108,14 +179,14 @@ class FlashStreamFlasher:
                     # Wait for x ms
                     current_line_split = current_line.split(" ")
                     if len(current_line_split) != 2:
-                        self.logger.error(
+                        _log.error(
                             f"Error in line: {line_number}. Wrong number of arguments. Should be 2 but is {len(current_line_split)}. Line is \"{current_line}\"")
                         validation_result = False
                         continue
                     try:
                         time_ms = int(current_line_split[1])
                     except (ValueError, TypeError):
-                        self.logger.error(
+                        _log.error(
                             f"Error in line: {line_number}. Could not parse waiting time. Line is: \"{current_line}\"")
                         validation_result = False
                     if not is_file_validation:
@@ -126,62 +197,62 @@ class FlashStreamFlasher:
 
                 elif current_line.startswith("SWB:"):
                     # Write block
-                    result, data = handle_line(current_line[4:], line_number, self.logger)
+                    result, data = self._handle_line(current_line[4:], line_number)
                     if not result:
                         if is_file_validation:
                             validation_result = False
                             continue
                         else:
                             break
-                    self.logger.debug(f"WB: {data}")
+                    _log.debug(f"WB: {data}")
                     if not is_file_validation:
                         if self.battery.writeBlock(data[0], bytearray(data[1:])):
                             continue
                         else:
-                            self.logger.error(
+                            _log.error(
                                 f"Error in SMBus communication during \"write block\" command in line {line_number}!")
                             break
 
                 elif current_line.startswith("SWW:"):
                     # Write word
-                    result, data = handle_line(current_line[4:], line_number, self.logger)
+                    result, data = self._handle_line(current_line[4:], line_number)
                     if not result:
                         if is_file_validation:
                             validation_result = False
                             continue
                         else:
                             break
-                    self.logger.debug(f"WW: {data}")
+                    _log.debug(f"WW: {data}")
                     word = data[1] | (data[2] << 8)
                     if not is_file_validation:
                         if self.battery.writeWord(data[0], word):
                             continue
                         else:
-                            self.logger.error(
+                            _log.error(
                                 f"Error in SMBus communication during \"write word\" command in line {line_number}!")
                             break
 
                 elif current_line.startswith("SWC:"):
                     # Write command
-                    address, data = handle_line(current_line[4:], line_number, self.logger)
+                    address, data = self._handle_line(current_line[4:], line_number)
                     if not result:
                         if is_file_validation:
                             validation_result = False
                             continue
                         else:
                             break
-                    self.logger.debug(f"WC: {data}")
+                    _log.debug(f"WC: {data}")
                     if not is_file_validation:
                         if self.battery.writeBytes(data[0], bytes()):
                             continue
                         else:
-                            self.logger.error(
+                            _log.error(
                                 f"Error in SMBus communication during \"write command\" command in line {line_number}!")
                             break
 
                 elif current_line.startswith("SCL:"):
                     # Read and compare block
-                    address, data = handle_line(current_line[4:], line_number, self.logger)
+                    address, data = self._handle_line(current_line[4:], line_number)
                     if not result:
                         if is_file_validation:
                             validation_result = False
@@ -192,27 +263,27 @@ class FlashStreamFlasher:
                     length = data[1]
                     expected_data = data[2:]
 
-                    self.logger.debug(f"RB: {register}, {length}")
+                    _log.debug(f"RB: {register}, {length}")
                     if not is_file_validation:
                         response = self.battery.readBlock(register, 33)
                         if response[1]:
                             received_data = list(response[0])
                         else:
-                            self.logger.error(
+                            _log.error(
                                 f"Error in SMBus communication during \"compare block\" command in line {line_number}!")
                             break
                         if received_data == expected_data:
                             continue
                         else:
-                            self.logger.error(
+                            _log.error(
                                 f"Error while comparing data. Expected and received data don't match. (Line: {line_number})")
-                            self.logger.error(f"Expected data: {expected_data}")
-                            self.logger.error(f"Received data: {received_data}")
+                            _log.error(f"Expected data: {expected_data}")
+                            _log.error(f"Received data: {received_data}")
                             break
 
                 elif current_line.startswith("SCW:"):
                     # Read and compare word
-                    address, data = handle_line(current_line[4:], line_number, self.logger)
+                    address, data = self._handle_line(current_line[4:], line_number)
                     if not result:
                         if is_file_validation:
                             validation_result = False
@@ -221,31 +292,31 @@ class FlashStreamFlasher:
                             break
                     register = data[0]
                     expected_data = int.from_bytes(bytes(data[1:]), "little")
-                    self.logger.debug(f"RW: {register}")
+                    _log.debug(f"RW: {register}")
                     if not is_file_validation:
                         response = self.battery.readWord(register)
                         if response[1]:
                             received_data = response[0]
                         else:
-                            self.logger.error(
+                            _log.error(
                                 f"Error in SMBus communication during \"compare word\" command in line {line_number}!")
                             break
                         if received_data == expected_data:
                             continue
                         else:
-                            self.logger.error(
+                            _log.error(
                                 f"Error while comparing data. Expected and received data don't match. (Line: {line_number})")
-                            self.logger.error(f"Line: \"{current_line}\"")
-                            self.logger.error(f"Expected data: {expected_data}")
-                            self.logger.error(f"Received data: {received_data}")
+                            _log.error(f"Line: \"{current_line}\"")
+                            _log.error(f"Expected data: {expected_data}")
+                            _log.error(f"Received data: {received_data}")
                             break
                 else:
-                    self.logger.error(f"Unknown command in line {line_number}: \"{current_line}\"")
+                    _log.error(f"Unknown command in line {line_number}: \"{current_line}\"")
                     validation_result = False
                     if not is_file_validation:
                         return 1
-        print("")
         return validation_result
+
 
     def validate_file(self):
         """Validate the fw file return if no errors were found.
@@ -258,21 +329,19 @@ class FlashStreamFlasher:
         Returns:
             bool: Result of the validation.
         """
-        if self.logger is None:
-            self.setup_logger(log_file_path=None)
-        elif not self.logger:
-            self.logger = logging.getLogger("dummy")
 
-        if self.firmware_file is not None:
-            result = self.__process_file(is_file_validation=True)
-            if result:
-                self.logger.info(f"No errors detected in file: \"{self.firmware_file}\".")
-            else:
-                raise InvalidFlashStreamFile()
-            return result
-        else:
-            self.logger.error("No firmware file specified. Use the set_firmware_file() method to select a firmware file.")
+        _log = logging.getLogger(__name__)
+        if not self.firmware_file:
+            _log.error("No firmware file specified. Use the set_firmware_file() method to select a firmware file.")
             return False
+
+        result = self.__process_file(is_file_validation=True)
+        if result:
+            _log.info(f"No errors detected in file: \"{self.firmware_file}\".")
+        else:
+            raise InvalidFlashStreamFileError(self)
+        return result            
+
 
     def program_fw_file(self):
         """Prepare the battery and program it with the given fw file.
@@ -282,17 +351,16 @@ class FlashStreamFlasher:
         Returns:
             bool: Result of the fw programming.
         """
-        if self.logger is None:
-            self.setup_logger(log_file_path=None)
-        elif not self.logger:
-            self.logger = logging.getLogger("dummy")
+
+        _log = logging.getLogger(__name__)
         if self.firmware_file is not None:
             self.prepare_battery()
             result = self.__process_file(is_file_validation=False)
             return result
         else:
-            self.logger.error("No firmware file specified. Use the set_firmware_file() method to select a firmware file.")
+            _log.error("No firmware file specified. Use the set_firmware_file() method to select a firmware file.")
             return False
+
 
     def validate_and_program_fw_file(self):
         """Validate the fw file and then program the battery if the validation was successful.
@@ -308,101 +376,41 @@ class FlashStreamFlasher:
             return False
 
 
-def _printProgressBar(value, max_value, label):
-    n_bar = 40  # size of progress bar
-    j = value / max_value
-    sys.stdout.write('\r')
-    bar = '█' * int(n_bar * j)
-    bar = bar + '-' * int(n_bar * (1 - j))
-
-    sys.stdout.write(f"{label.ljust(10)} | [{bar:{n_bar}s}] {int(100 * j)}% ")
-    sys.stdout.flush()
-
-
-def handle_line(line: str, line_number: int, fs_logger) -> Tuple[bool, List[int]]:
-    """Split a line that contains a list of bytes into a list of integers.
-
-    Args:
-        line (str): the line from the flashstream file that should be decoded
-        line_number (int): Current line number in the file. Only a reference for error messages
-        fs_logger: Logger object for logging error messages
-
-    Returns:
-        Tuple: Success as bool and list of integers
-    """
-    line_split = [i.strip() for i in line.strip().split(" ")]
-    if len(line_split) < 2:
-        fs_logger.error(f"Error in line: {line_number}: Less than 2 items. (Line: \"{line}\"")
-        return False, [0]
-    output = []
-    for s in line_split:
-        try:
-            s_int = int(s, 16)
-        except ValueError:
-            fs_logger.error(f"Error in line: {line_number}: \"{s}\" is not a hexadecimal number")
-            return False, [0]
-        else:
-            output.append(s_int)
-    return True, output[1:]  # Leave out the first byte. That is just the battery's I2C address.
-
-
-class FlashStreamError(Exception):
-    pass
-
-
-class CantUnsealBatteryError(FlashStreamError):
-    def __init__(self):
-        pass
-
-    def __str__(self):
-        return "Battery could not be unsealed/full accessed."
-
-
-class InvalidFlashStreamFile(FlashStreamError):
-    def __init__(self):
-        pass
-
-    def __str__(self):
-        return "There is an error in the flashstream file. Check the log for more infos."
-
-
-class CantOpenFlashStreamFile(FlashStreamError):
-    def __init__(self):
-        pass
-
-    def __str__(self):
-        return "The flashtream file could not be found or opened. Check the log for more infos."
-
-
 #--------------------------------------------------------------------------------------------------
+
 if __name__ == "__main__":
     from datetime import datetime as dt
-    from pathlib import Path
-    from ncd_eth_i2c_interface import I2CPort
-    from smbus import BusMaster, BusMux_PCA9548A
+    from rrc.eth2i2c import I2CPort
+    from rrc.i2cbus import BusMux, I2CMuxedBus
+    from rrc.smbus import BusMaster
+    from rrc.chipsets.bq40z50 import BQ40Z50R2
 
-    i2c_port = I2CPort("192.168.1.83", 2101)
-    busmaster = BusMaster(i2c_port)
-    busmux = BusMux_PCA9548A(i2c_port, address=0x77)
-    busmux.setChannel(1)
-    bat = Battery(busmaster)
-    #print(i2c_port.i2c_bus_scan())
-    busmux.setChannel(2)
-    # print(i2c_port.i2c_bus_scan())
+    i2c_port = I2CPort("192.168.1.56", 2101)
+    busmux = BusMux(i2c_port, address=0x77)    
+    for i in range(1,9):
+        busmux.setChannel(i)
+        print(i2c_port.i2c_bus_scan())
+    #busmux.setChannel(2)
+    #busmaster = BusMaster(i2c_port) 
+    auto_muxed_i2cbus = I2CMuxedBus(i2c_port, busmux, 2)
+    busmaster = BusMaster(auto_muxed_i2cbus)
+    bat = BQ40Z50R2(busmaster)    
+    print("BatteryStatus:", bat.battery_status())
 
     t1 = dt.now()
-    flasher = FlashStreamFlasher(bat)
-    log_file_path = Path("fsf-log-file-{}.log".format(dt.now().strftime("%Y-%m-%dT%H-%M-%S")))
-    flasher.setup_logger(log_file_path)
-    # fs_file = Path(r"C:\Users\mschmitt\Desktop\SCD_3412036-02_B_Tansanit_B_RRC2040B.bq.fs")
-    fs_file = Path(r"C:\Users\mschmitt\Desktop\SCD_3410758-08_bq40z50-R4_A-draft1_Adamite_RRC2140_BMS_Files.bq.fs")
-    flasher.set_firmware_file(fs_file)
-    validation_result = flasher.validate_file()
-    print(f"Validation result: {validation_result}")
-    if validation_result:
-        pass
-        programming_result = flasher.program_fw_file()
-        print(f"Programming result: {programming_result}")
+    #fs_file = Path("./testfiles/SCD_3410758-08_bq40z50-R4_A-draft1_Adamite_RRC2140_BMS_Files.bq.fs")
+    fs_file = Path("../../../Battery-PCBA-Test/filestore/SCD_3412031-04_A_Rubin-B_RRC2020B.srec")
+    flasher = BQStudioFileFlasher(bat, firmware_file=fs_file)
+    #flasher.set_firmware_file(fs_file)
+
+    flasher.prepare_battery()
+        
+    # validation_result = flasher.validate_file()
+    # print(f"Validation result: {validation_result}")
+    # if validation_result:
+    #     pass
+    #     programming_result = flasher.program_fw_file()
+    #     print(f"Programming result: {programming_result}")
 
     t2 = dt.now()
     print(f"Programmierzeit: {(t2-t1).seconds}")
