@@ -26,7 +26,7 @@ def logger_init(debug: int, filename_base: str = "C:/Production/station_test") -
     print("print in logging.logger_init()")
     print("print logging.py __name__: " +__name__)
     print(f"Set logger to DEBUG={debug}")    
-    logger.setLevel(logging.INFO) # if debug>0 else logging.INFO)
+    logger.setLevel(logging.DEBUG) # if debug>0 else logging.INFO)
      
     # File handler
     logfilepath = f"{filename_base}_{datetime.utcnow().strftime('%Y%m%d')}.log"

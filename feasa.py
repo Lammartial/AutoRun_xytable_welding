@@ -162,7 +162,7 @@ class FEASA_CH9121(Eth2SerialDevice):
                 response = self.request(cmd)                
                 #_log.debug(response)
                 lst = response.split(' ')
-                nplist.append([np.float64(n) for n in lst])
+                nplist.append(np.array([np.float64(n) for n in lst]))
             except Exception:
                 _log.error("LED analyzer error, get_rgbi_num")
                 raise

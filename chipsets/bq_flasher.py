@@ -66,17 +66,14 @@ class BQStudioFileFlasher:
     flasher.validate_and_program_fw_file()
     """
 
-    def __init__(self, battery: ChipsetTexasInstruments, firmware_file: Path | str = None, show_progressbar: bool = False):
+    def __init__(self, battery: ChipsetTexasInstruments, firmware_file: Path | str = None, show_progressbar: bool = False, color: str = None):
         """Initialize a class instance."""
         self.battery = battery
+        self._progress = None
         if firmware_file:
-            self.set_firmware_file(firmware_file)
+            self.set_firmware_file(firmware_file, show_progressbar=show_progressbar, color=color)
         else:
-            self.firmware_file = None
-        if show_progressbar:
-            self._progress = ProgressWindow()
-        else:
-            self._progress = None
+            self.firmware_file = None        
 
     def __str__(self) -> str:
         return f"BQ Studio File flasher {self.battery} using file {self.firmware_file}{', showing progress bar' if self._progress else ''}"
@@ -88,6 +85,7 @@ class BQStudioFileFlasher:
 
     def _print_progress_bar(self, value, max_value, label):
         j = value / max_value
+        
         def console():
             n_bar = 40  # size of progress bar
             j = value / max_value
@@ -96,6 +94,7 @@ class BQStudioFileFlasher:
             bar = bar + '-' * int(n_bar * (1 - j))
             sys.stdout.write(f"{label.ljust(10)} | [{bar:{n_bar}s}] {int(100 * j)}% ")
             sys.stdout.flush()
+        
         self._progress.set_value(j*100)
         self._progress.show()
         self._progress.update()
@@ -113,7 +112,7 @@ class BQStudioFileFlasher:
             Tuple: Success as bool and list of integers
         """
 
-        _log = logging.getLogger(__name__)
+        #_log = logging.getLogger(__name__)
         line_split = [i.strip() for i in line.strip().split(" ")]
         if len(line_split) < 2:
             _log.error(f"Error in line: {line_number}: Less than 2 items. (Line: \"{line}\"")
@@ -130,7 +129,7 @@ class BQStudioFileFlasher:
         return True, output[1:]  # Leave out the first byte. That is just the battery's I2C address.
 
 
-    def set_firmware_file(self, _firmware_file: str | Path) -> None:
+    def set_firmware_file(self, _firmware_file: str | Path, show_progressbar: bool = False, color: str = None) -> None:
         """Store the path of the flash-stream file internally if it exists.
 
         Args:
@@ -140,7 +139,7 @@ class BQStudioFileFlasher:
             CantOpenFlashStreamFile: If the file doesn't exist or cannot be accessed.
         """
 
-        _log = logging.getLogger(__name__)
+        #_log = logging.getLogger(__name__)
         _firmware_file = Path(_firmware_file).resolve()
         try:
             file = open(_firmware_file, "r")
@@ -150,10 +149,12 @@ class BQStudioFileFlasher:
             raise
         _log.info(f"Using file: \"{_firmware_file}\"")
         self.firmware_file = _firmware_file
+        if show_progressbar:
+            self._progress = ProgressWindow(title=f"Program {_firmware_file}", color=color)
 
 
     def __process_file(self, is_file_validation: bool) -> bool:
-        _log = logging.getLogger(__name__)
+        #_log = logging.getLogger(__name__)
         validation_result = True
         with open(self.firmware_file, "r") as file:
             line_count = len(file.readlines())  # Get the number of line in the file. Only needed for the progress bar
@@ -329,7 +330,7 @@ class BQStudioFileFlasher:
             bool: Result of the validation.
         """
 
-        _log = logging.getLogger(__name__)
+        #_log = logging.getLogger(__name__)
         if not self.firmware_file:
             _log.error("No firmware file specified. Use the set_firmware_file() method to select a firmware file.")
             return False

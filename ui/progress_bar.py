@@ -63,6 +63,9 @@ class ProgressWindow:
         # #                    [('Horizontal.Progressbar.trough',
         # #                    {'sticky': 'nswe',
         # #                    'children': [('Horizontal.Progressbar.color.pbar', {'side': 'left', 'sticky': 'ns'})]})])
+        
+        if color and color == "":
+            color = None  # TestStand cannot transfer "None"
         if color:
             global style
             style.configure("ColorProgress.Horizontal.TProgressbar", background=color)
