@@ -27,9 +27,27 @@ class ProgressWindow:
 
     def __init__(self, title: str = "Programming Flash") -> None:
         self.hidden = None
+
         # create root tkinter window to hold progress bar
         self.root = tk.Tk()
 
+        # Simply set the theme
+        #self.root.tk.call("source", Path(__file__).resolve().parent / "theme_sv.tcl")
+        #self.root.tk.call("set_theme", "light")
+        style = ttk.Style()
+        #print(style.theme_names())
+        style.theme_use('winnative')
+        try:
+            style.element_create("color.pbar", "from", "winnative")
+        except Exception as ex:
+            print(ex)
+            pass
+        #style.layout("ColorProgress.Horizontal.TProgressbar",
+        #                    [('Horizontal.Progressbar.trough',
+        #                    {'sticky': 'nswe',
+        #                    'children': [('Horizontal.Progressbar.color.pbar', {'side': 'left', 'sticky': 'ns'})]})])
+        style.configure("ColorProgress.Horizontal.TProgressbar", background="blue")
+       
         #mainframe = ttk.Frame(root, padding="15 15 15 15")
         #mainframe.pack(fill="both")
 
@@ -44,24 +62,7 @@ class ProgressWindow:
         # set App icon
         # if we have an ICO file we can simply use this:
         self.root.iconbitmap(Path(__file__).resolve().parent / "app-icon.ico")
-        # Simply set the theme
-        #self.root.tk.call("source", Path(__file__).resolve().parent / "theme_sv.tcl")
-        #self.root.tk.call("set_theme", "light")
-        
-        style = ttk.Style()
-        #print(style.theme_names())
-        style.theme_use('winnative')
-        try:
-            style.element_create("color.pbar", "from", "winnative")
-        except Exception as ex:
-            print(ex)
-            pass
-        style.layout("ColorProgress.Horizontal.TProgressbar",
-                            [('Horizontal.Progressbar.trough',
-                            {'sticky': 'nswe',
-                            'children': [('Horizontal.Progressbar.color.pbar', {'side': 'left', 'sticky': 'ns'})]})])
-        style.configure("ColorProgress.Horizontal.TProgressbar", background="blue")
-
+                
         # create the Widgets and keep them inside our App object
         # #self.root.minsize(100, 50)
         x_size = int(self.root.winfo_screenwidth() * 0.60)
@@ -111,26 +112,27 @@ class ProgressWindow:
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
-    win1 = ProgressWindow()
-    win = ProgressWindow()
-    i = 0
-    mx = 10
-    win.show()
-    LOOP_ACTIVE = True
-    while LOOP_ACTIVE:
-        print(i)
-        #progress.step(10)
-        #progress.value = 100
-        win.set_value(10*i)
-        #win.update()
-        time.sleep(0.4)
-        i = i + 1
-        if (i > mx):
-            win.quit()
-            LOOP_ACTIVE = False
-        else:
-            #value_progress = i
-            pass
+    #win1 = ProgressWindow()
+    for z in range(2):
+        win = ProgressWindow()
+        i = 0
+        mx = 10
+        win.show()
+        LOOP_ACTIVE = True
+        while LOOP_ACTIVE:
+            print(i)
+            #progress.step(10)
+            #progress.value = 100
+            win.set_value(10*i)
+            #win.update()
+            time.sleep(0.4)
+            i = i + 1
+            if (i > mx):
+                win.quit()
+                LOOP_ACTIVE = False
+            else:
+                #value_progress = i
+                pass
 
 # END OF FILE
 

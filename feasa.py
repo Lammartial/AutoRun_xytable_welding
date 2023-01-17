@@ -7,6 +7,7 @@
 
 """
 from eth2serial.base import Eth2SerialDevice
+import numpy as np
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
@@ -132,7 +133,7 @@ class FEASA_CH9121(Eth2SerialDevice):
     # Get Functions ----------------------------------------------------------------------------------
      
     # getRGBI##
-    def get_rgbi_num(self, num: int):
+    def get_rgbi_num(self, num: int) -> np.array:
         """
         This command instructs the LED Analyser to return RGB and Intensity data for fiber ## (01-
         20) in format rrr ggg bbb iiiii where rrr, ggg and bbb are the red, green and blue
@@ -140,23 +141,33 @@ class FEASA_CH9121(Eth2SerialDevice):
 
         Args:
             num (int): fiber ## (01 - 20)
+                       num=0 means measure all 4 fibers; if >0 the selected LED is measured
 
         Returns:
-            list (int): rrr, ggg, bbb, iiiii
+            numpy array (np.float64): [[rrr, ggg, bbb, iiiii], [], [], []]
         """
-        cmd = "getrgbi" + f"{(int(num)):02d}"
-        response = self.request(cmd)
-        try:
-            result = []
-            lst = response.split(' ')
-            result.append(int(lst[0]))
-            result.append(int(lst[1]))
-            result.append(int(lst[2]))
-            result.append(int(lst[3]))
-        except Exception:
-            _log.error("LED analyzer error, get_rgbi_num")
-            raise 
-        return result 
+
+        result = np.array([])
+        nplist = []
+        num = int(num)
+        if num > 0:
+            b = num 
+            e = num + 1
+        else:
+            b = 0
+            e = 4
+        for k in range(b, e):
+            cmd = "getrgbi" + f"{(int(k+1)):02d}"
+            try:
+                response = self.request(cmd)                
+                #_log.debug(response)
+                lst = response.split(' ')
+                nplist.append([np.float64(n) for n in lst])
+            except Exception:
+                _log.error("LED analyzer error, get_rgbi_num")
+                raise
+        result = np.array(nplist)
+        return result
 
     # getINTENSITY##
     def get_intensity_num(self, num: int) -> int:
@@ -233,29 +244,30 @@ if __name__ == "__main__":
 
     # 2. Get some data
 
-    # "CAPTURE" command
-    print(feasa.capture())
+    # # "CAPTURE" command
+    # print(feasa.capture())
 
-    # "CAPTURE#" command
-    print(feasa.capture_range(1))
+    # # "CAPTURE#" command
+    # print(feasa.capture_range(1))
 
     # "CAPTUREPWM" command
     print(feasa.capture_pwm())
 
-    # "CAPTURE#PWM@@" command
-    print(feasa.capture_pwm_range(1, 7))
+    # # "CAPTURE#PWM@@" command
+    # print(feasa.capture_pwm_range(1, 7))
 
     # "getRGBI##" command
-    print(feasa.get_rgbi_num(1))
+    print(feasa.get_rgbi_num(0))
+    print(feasa.get_rgbi_num(3))
+    
+    # # "getINTENSITY##" command
+    # print(feasa.get_intensity_num(1))
 
-    # "getINTENSITY##" command
-    print(feasa.get_intensity_num(1))
+    # # "SetIntGain##xxx" command
+    # print(feasa.set_intgain_num(1, 100))
 
-    # "SetIntGain##xxx" command
-    print(feasa.set_intgain_num(1, 100))
-
-    # SetFactor## command
-    print(feasa.set_factor(1))
+    # # SetFactor## command
+    # print(feasa.set_factor(1))
 
     print("DONE.")
 

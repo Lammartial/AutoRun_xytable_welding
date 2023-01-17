@@ -929,17 +929,17 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         while (retries >= 0):
             self.manufacturing_status()  # => update the self._manufacturing_status attribute
             if enable:
-                if not self.manufacturing_status[ms_key]:
+                if not self._manufacturing_status[ms_key]:
                     self.manufacturer_access = ma_cmd  # need to toggle
                 else:
                     pass  # already on the target state
             else:
-                if self.manufacturing_status[ms_key]:
+                if self._manufacturing_status[ms_key]:
                     self.manufacturer_access = ma_cmd  # need to toggle
                 else:
                     pass  # already on the target state
             retries -= 1
-        return (bool(self.manufacturing_status[ms_key]) == enable)
+        return (bool(self._manufacturing_status[ms_key]) == enable)
 
     def toggle_fuse(self) -> None:
         """This command manually activates/deactivates the FUSE output to ease testing during manufacturing.
@@ -1042,10 +1042,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.manufacturer_access = 0x0026
 
     def toggle_led_display_enable(self):
-        self.manufacturer_access = 0x0027
+        self.manufacturer_access = 0x002b
 
     def set_led_display_enable(self, enable: bool) -> bool:
-        return self._ms_toggle_helper("led_en", enable, 0x0027)
+        return self._ms_toggle_helper("led", enable, 0x002b)
 
 
 
