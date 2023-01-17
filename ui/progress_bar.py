@@ -7,9 +7,25 @@ import tkinter.ttk as ttk
 def disable_event():
    pass
 
+def center(win: tk.Tk):
+    """
+    centers a tkinter window
+    :param win: the main window or Toplevel window to center
+    """
+    width = win.winfo_width()
+    frm_width = win.winfo_rootx() - win.winfo_x()
+    win_width = width + 2 * frm_width
+    height = win.winfo_height()
+    titlebar_height = win.winfo_rooty() - win.winfo_y()
+    win_height = height + titlebar_height + frm_width
+    x = win.winfo_screenwidth() // 2 - win_width // 2
+    y = win.winfo_screenheight() // 2 - win_height // 2
+    win.geometry(f"{width}x{height}+{x}+{y}")
+
+
 class ProgressWindow:
 
-    def __init__(self) -> None:
+    def __init__(self, title: str = "Programming Flash") -> None:
         self.hidden = None
         # create root tkinter window to hold progress bar
         self.root = tk.Tk()
@@ -24,7 +40,7 @@ class ProgressWindow:
         self.hide()
 
         #self.root.attributes('-alpha', 0)  # this hides the root window until we have arranged all the wigets
-        self.root.title("Programming")
+        self.root.title(title)
         # set App icon
         # if we have an ICO file we can simply use this:
         self.root.iconbitmap(Path(__file__).resolve().parent / "app-icon.ico")
@@ -33,26 +49,28 @@ class ProgressWindow:
         #self.root.tk.call("set_theme", "light")
 
         style = ttk.Style()
-        style.element_create("color.pbar", "from", "clam")
+        #style.element_create("color.pbar", "from", "clam")
         style.layout("ColorProgress.Horizontal.TProgressbar",
                             [('Horizontal.Progressbar.trough',
                             {'sticky': 'nswe',
-                            'children': [('Horizontal.Progressbar.color.pbar',
-                                {'side': 'left', 'sticky': 'ns'})]})])
+                            'children': [('Horizontal.Progressbar.color.pbar', {'side': 'left', 'sticky': 'ns'})]})])
         style.configure("ColorProgress.Horizontal.TProgressbar", background="blue")
 
         # create the Widgets and keep them inside our App object
-        #self.root.minsize(100, 50)
+        # #self.root.minsize(100, 50)
         x_size = int(self.root.winfo_screenwidth() * 0.60)
         y_size = int(self.root.winfo_screenheight() * 0.2)
-        self.root.geometry(f"{x_size}x{y_size}")
+        x = int((self.root.winfo_screenwidth() - x_size) / 2)
+        y = int((self.root.winfo_screenheight() - y_size) / 2)
+        self.root.geometry(f"{x_size}x{y_size}+{x}+{y}")
+        #center(self.root)
         #Define the geometry for the window or frame
         #self.root.attributes('-alpha', 1.0)  # now make the main window visible again
         self.root.columnconfigure(0, weight=1)
         # create progress bar
         self.progress = ttk.Progressbar(self.root,
                     orient=tk.HORIZONTAL,mode="determinate", maximum=100, value=0,
-                    length=x_size,
+                    #length=x_size,
                     style='ColorProgress.Horizontal.TProgressbar')
         #progress.grid(row=0, column=1, padx=(10, 10), pady=(10, 10), sticky="ew")
         # pack progress bar into root
