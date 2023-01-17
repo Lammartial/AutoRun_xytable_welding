@@ -425,6 +425,7 @@ class Battery:
         self.table = None
 
     # --------------------------------------------
+    
     def __str__(self) -> str:
         return f"SmartBattery at 0x{self.address} on {self.smbus}"
 
