@@ -1,13 +1,21 @@
 from pathlib import Path
 import time
-import tkinter as tk
-import tkinter.ttk as ttk
+import tkinter
+from tkinter import ttk
+
+ROOT = tkinter.Tk()
+ROOT.withdraw()  # hide window
+style = ttk.Style()
+#print(style.theme_names())
+style.theme_use('winnative')
+
 
 
 def disable_event():
    pass
 
-def center(win: tk.Tk):
+
+def center(win: tkinter.Tk):
     """
     centers a tkinter window
     :param win: the main window or Toplevel window to center
@@ -25,38 +33,47 @@ def center(win: tk.Tk):
 
 class ProgressWindow:
 
-    def __init__(self, title: str = "Programming Flash") -> None:
+    def __init__(self, title: str = "Programming Flash", color: str = None) -> None:
+        global ROOT
+
+        self.root = ROOT
         self.hidden = None
 
-        # create root tkinter window to hold progress bar
-        self.root = tk.Tk()
+        # # create root tkinter window to hold progress bar
+        # self.root = tkinter.Tk()
+        # self.hide()
 
-        # Simply set the theme
-        #self.root.tk.call("source", Path(__file__).resolve().parent / "theme_sv.tcl")
-        #self.root.tk.call("set_theme", "light")
-        style = ttk.Style()
-        #print(style.theme_names())
-        style.theme_use('winnative')
-        try:
-            style.element_create("color.pbar", "from", "winnative")
-        except Exception as ex:
-            print(ex)
-            pass
-        #style.layout("ColorProgress.Horizontal.TProgressbar",
-        #                    [('Horizontal.Progressbar.trough',
-        #                    {'sticky': 'nswe',
-        #                    'children': [('Horizontal.Progressbar.color.pbar', {'side': 'left', 'sticky': 'ns'})]})])
-        style.configure("ColorProgress.Horizontal.TProgressbar", background="blue")
-       
+        # # Simply set the theme
+        # #self.root.tk.call("source", Path(__file__).resolve().parent / "theme_sv.tcl")
+        # #self.root.tk.call("set_theme", "light")
+
+        # style = ttk.Style()
+        # #print(style.theme_names())
+        # style.theme_use('winnative')
+      
+        # #style = ttk.Style()
+        # #print(style.theme_names())
+        # #style.theme_use('winnative')
+        # #try:
+        # #    style.element_create("color.pbar", "from", "winnative")
+        # #except Exception as ex:
+        # #    print(ex)
+        # #    pass
+        # #style.layout("ColorProgress.Horizontal.TProgressbar",
+        # #                    [('Horizontal.Progressbar.trough',
+        # #                    {'sticky': 'nswe',
+        # #                    'children': [('Horizontal.Progressbar.color.pbar', {'side': 'left', 'sticky': 'ns'})]})])
+        if color:
+            global style
+            style.configure("ColorProgress.Horizontal.TProgressbar", background=color)
+
+        
         #mainframe = ttk.Frame(root, padding="15 15 15 15")
         #mainframe.pack(fill="both")
 
         # Disable the Close Window Control Icon
         self.root.protocol("WM_DELETE_WINDOW", disable_event)
-
-        #self.root.withdraw()  # hide window
-        self.hide()
-
+       
         #self.root.attributes('-alpha', 0)  # this hides the root window until we have arranged all the wigets
         self.root.title(title)
         # set App icon
@@ -66,7 +83,7 @@ class ProgressWindow:
         # create the Widgets and keep them inside our App object
         # #self.root.minsize(100, 50)
         x_size = int(self.root.winfo_screenwidth() * 0.60)
-        y_size = int(self.root.winfo_screenheight() * 0.2)
+        y_size = int(self.root.winfo_screenheight() * 0.1)
         x = int((self.root.winfo_screenwidth() - x_size) / 2)
         y = int((self.root.winfo_screenheight() - y_size) / 2)
         self.root.geometry(f"{x_size}x{y_size}+{x}+{y}")
@@ -76,18 +93,14 @@ class ProgressWindow:
         self.root.columnconfigure(0, weight=1)
         # create progress bar
         self.progress = ttk.Progressbar(self.root,
-                    orient=tk.HORIZONTAL,mode="determinate", maximum=100, value=0,
-                    #length=x_size,
-                    style="ColorProgress.Horizontal.TProgressbar")
-        #progress.grid(row=0, column=1, padx=(10, 10), pady=(10, 10), sticky="ew")
+                    orient=tkinter.HORIZONTAL, mode="determinate", maximum=100, value=0,
+                    style="ColorProgress.Horizontal.TProgressbar" if color else None)
         # pack progress bar into root
-        self.progress.pack(fill=tk.BOTH, expand=1)
-        print("STYLE:", self.progress["style"])
-
-        # to step progress bar up
-        #progress.config(mode="determinate", length=1000, maximum=100, value=0)
-
+        self.progress.pack(fill=tkinter.BOTH, expand=1)
+        print("STYLE:", self.progress["style"])        
+        #
         # leave window hidden
+        #
 
     def hide(self):
         self.root.withdraw()  # hide window
@@ -107,14 +120,17 @@ class ProgressWindow:
 
     def quit(self):
         self.root.quit()
+        for widget in self.root.winfo_children():
+            widget.destroy()
 
 
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
-    #win1 = ProgressWindow()
+    _title = "PROGRAM"
+    colors = [None, "darkblue", "red"]
     for z in range(2):
-        win = ProgressWindow()
+        win = ProgressWindow(title=_title + f" {z}", color=colors[z])
         i = 0
         mx = 10
         win.show()
@@ -133,6 +149,7 @@ if __name__ == '__main__':
             else:
                 #value_progress = i
                 pass
+        win.quit()
 
 # END OF FILE
 
