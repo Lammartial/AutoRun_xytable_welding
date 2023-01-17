@@ -4,7 +4,7 @@ __version__ = "1.0.0"
 
 from typing import Tuple, List
 import errno
-from eth2i2c import I2CBase
+from rrc.eth2i2c import I2CBase
 
 DEBUG = 1
 
