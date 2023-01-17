@@ -310,24 +310,16 @@ class Hioki_BT3561A(Eth2SerialDevice):
         self.send(f':INIT:CONT {state}')
         return self.get_esr()
 
-    def read(self) -> float:
+    def read(self) -> str:
         """
         Execute a Measurement and Read the Measured Values.
 
         Returns:
-            float: Measured Values
+            str: Measured Values
         """
         try:
             resp = self.request(':READ?').strip()
-            func = self.get_function().strip()
-            if (func == 'RV'):
-                lst = resp.split(',')
-                result = []
-                result.append(float(lst[0]))
-                result.append(float(lst[1]))
-            else:
-                result = float(resp)
-            return result
+            return resp
         except Exception:
             raise
 
@@ -644,7 +636,6 @@ class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
         except ConnectionRefusedError as ex:
             _log.error(ex)
 
-
 #--------------------------------------------------------------------------------------------------
 #  Combined Device
 #--------------------------------------------------------------------------------------------------
@@ -655,6 +646,7 @@ class Hioki_Cell_Tester(object):
     def __init__(self, BT_HOST, BT_PORT, SW_HOST, SW_PORT):
         self.bt = Hioki_BT3561A(BT_HOST, BT_PORT)
         self.sw = Hioki_SW1001(SW_HOST, SW_PORT, termination="\r\n")
+        self.bt_function_type = "RV"
 
     def BT3561A_self_test(self) -> bool:
         """
@@ -677,7 +669,7 @@ class Hioki_Cell_Tester(object):
 
     def init(self) -> bool:
         """
-        Some presets for the correct operation of devices (BT3561A and SW1001)
+        Some presets for the correct operation of the devices (BT3561A and SW1001)
 
         Returns:
             bool: True - no errors, otherwise False
@@ -714,7 +706,20 @@ class Hioki_Cell_Tester(object):
         # Autorange = ON
         #result &= self.bt.set_autorange(1)        
         # Set measurement = RV (BT3561A)
-        result &= hioki.bt.set_function('RV')
+        result &= hioki.bt.set_function(self.bt_function_type)
+        return result
+
+    def measurement_finished(self) -> bool:
+        """
+        Returns the devices to init state.
+
+        Returns:
+            bool : True - success, False - failed
+        """
+        result = True
+        result &= self.bt.set_continous_measurement(1)
+        with self.sw as sw_dev:
+            result &= sw_dev.open()
         return result
 
     def measure_channnel(self, channel: int) -> list:
@@ -732,25 +737,31 @@ class Hioki_Cell_Tester(object):
                   array[1]: float, voltage, V mode
         """
         resp = True
+        result = []
         channel = int(channel)
         assert((channel >= 1) and (channel <= 22)), ValueError('Error, measure_channnel: Only channels 1 .. 22 are allowed')
-        # IMPORTANT! Set continuous measurement OFF.
-        #self.bt.set_continous_measurement(0)
         with self.sw as sw_dev:
             # SW1001 operations ==================
             if (channel <= 11):
                 #SLOT 1
-                #sw_dev.set_wire_mode(1, 4)
                 resp &= sw_dev.close(1, channel)
             else:
                 #SLOT 2
                 channel = channel - 11
-                #sw_dev.set_wire_mode(2, 4)
                 resp &= sw_dev.close(2, channel)
         # BT3561A operations =================
         #[BT3561A] :READ? Execute single measurement using BT3561A.
-        result = self.bt.read()
-        #self.bt.set_continous_measurement(1)
+        val = self.bt.read()
+        try:
+            if (self.bt_function_type == "RV"):
+                lst = val.split(',')
+                result.append(float(lst[0]))
+                result.append(float(lst[1]))
+            else:
+                result.append(float(resp))
+                result.append(float(0))
+        except Exception:
+            raise
         return result
 
     def measure_all_channels(self) -> list:
@@ -760,19 +771,10 @@ class Hioki_Cell_Tester(object):
         Returns:
             list: array[0..43]: float, Ch1.Impedance, Ch1.Voltage, Ch2.Impedance, Ch2.Voltage, ...
         """
-        # IMPORTANT! Set continuous measurement OFF.
-        #self.bt.set_continous_measurement(0)
         resp = True
         result = []
-        # bt_sock should be closed before invoking BT_get_function!
-        bt_function_type = self.bt.get_function().strip()
         with self.sw as sw_dev:
             for i in range(22):
-                # Channel 1/Slot1 or Channel 1/Slot 2. Needs to switch shield mode and wire mode
-                #if (i == 0):
-                    #sw_dev.set_wire_mode(1, 4)
-                #if (i == 11):
-                    #sw_dev.set_wire_mode(2, 4)
                 if (i < 11):
                     #SLOT 1
                     resp &= sw_dev.close(1, i+1)
@@ -780,16 +782,18 @@ class Hioki_Cell_Tester(object):
                     #SLOT 2
                     resp &= sw_dev.close(2, (i-11)+1)
                 #[BT3561A] :READ? Execute single measurement using BT3561A.
-                sleep(0.2)
-                val = self.bt.request(':READ?').strip()
-                if (bt_function_type == 'RV'):
-                    lst = val.split(',')
-                    result.append(float(lst[0]))
-                    result.append(float(lst[1]))
-                else:
-                    result.append(float(resp))
-                    result.append(float(0))
-            #self.bt.set_continous_measurement(1)
+                sleep(0.1)
+                val = self.bt.read()
+                try:
+                    if (self.bt_function_type == "RV"):
+                        lst = val.split(',')
+                        result.append(float(lst[0]))
+                        result.append(float(lst[1]))
+                    else:
+                        result.append(float(resp))
+                        result.append(float(0))
+                except Exception:
+                    raise
         return result
 #--------------------------------------------------------------------------------------------------
 
@@ -825,6 +829,7 @@ if __name__ == "__main__":
     # Device initialization
     # *IDN?
     #print('BT3561A ID: ', hioki.bt.get_idn())
+
     # *CLR
     #hioki.clear_status()
 
@@ -1041,6 +1046,8 @@ if __name__ == "__main__":
     print(hioki.measure_channnel(16))
     print(hioki.measure_channnel(18))
     print(hioki.measure_channnel(19))
+
+    print("Mesurement finished:", hioki.measurement_finished())
 
     # measure all 22 4-wire channels (Could be useful for Zero-adjustment procedure)
     #print(hioki.measure_all_channels())
