@@ -92,7 +92,7 @@ class FEASA_CH9121(Eth2SerialDevice):
             return False  
 
     # CAPTUREPWM
-    def capture_pwm(self, timeout: float) -> bool:
+    def capture_pwm(self) -> bool:
         """
         Pulse-Width-Modulated(PWM) LED's are switched on and off rapidly to save power and to
         control Intensity. The Analyser automatically determines the correct settings required to
@@ -102,7 +102,7 @@ class FEASA_CH9121(Eth2SerialDevice):
             bool: False - failed, True - success
         """
         timeout = float(timeout)
-        response = self.request("capturepwm", timeout)
+        response = self.request("capturepwm", 5)
         if (self.RESPONSE_OK in response):
             return True 
         else:
@@ -110,7 +110,7 @@ class FEASA_CH9121(Eth2SerialDevice):
             return False 
 
     # CAPTURE#PWM@@
-    def capture_pwm_range(self, range: int, factor: int, timeout) -> bool:
+    def capture_pwm_range(self, range: int, factor: int) -> bool:
         """
         This command allows the User to specify the exposure range # and an averaging factor @@
         when testing PWM LED's.
@@ -124,7 +124,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         """
         timeout = float(timeout)
         cmd = "capture" + str(int(range)) + "PWM" + f"{(int(factor)):02d}"
-        response = self.request(cmd, timeout)
+        response = self.request(cmd, 5)
         if (self.RESPONSE_OK in response):
             return True 
         else:
