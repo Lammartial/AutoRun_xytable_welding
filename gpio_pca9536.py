@@ -138,6 +138,7 @@ class PCA9536:
         else:
             return gpio_n
 
+#--------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
     from rrc.eth2i2c import I2CPort
@@ -155,3 +156,5 @@ if __name__ == '__main__':
     gpio.set_gpio_n_low(1)
 
     print(gpio.read_gpio_n(0))
+
+# END OF FILE

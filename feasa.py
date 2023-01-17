@@ -17,23 +17,16 @@ VERSION = "0.0.1"
 __version__ = VERSION
 
 
-DEBUG = 0
-
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-import logging
 
-_log = logging.getLogger(__name__)
-_log.setLevel(logging.DEBUG)
+DEBUG = 0
 
-# Initialize the logging
-try:
-    logging.basicConfig()
-except Exception as e:
-    print("Logging is not supported on this system")
+from rrc.custom_logging import getLogger, logger_init
 
-#--------------------------------------------------------------------------------------------------
+# --------------------------------------------------------------------------- #
+
 
 class FEASA_CH9121(Eth2SerialDevice):
 
@@ -58,7 +51,7 @@ class FEASA_CH9121(Eth2SerialDevice):
 
     # CAPTURE
     def capture(self) -> bool:
-        """ 
+        """
         This Auto Range Capture instructs the LED Analyser to capture and store the data of all the
         LED's positioned under the fibers.
 
@@ -67,10 +60,10 @@ class FEASA_CH9121(Eth2SerialDevice):
         """
         response = self.request("capture")
         if (self.RESPONSE_OK in response):
-            return True 
+            return True
         else:
-            _log.error("LED analyzer error, capture, %s", response, exc_info=1) 
-            return False 
+            _log.error("LED analyzer error, capture, %s", response, exc_info=1)
+            return False
 
     # CAPTURE#
     def capture_range(self, range: int) -> bool:
@@ -87,10 +80,10 @@ class FEASA_CH9121(Eth2SerialDevice):
         cmd = "capture" + str(int(range))
         response = self.request(cmd)
         if (self.RESPONSE_OK in response):
-            return True 
+            return True
         else:
-            _log.error("LED analyzer error, capture_range, %s", response, exc_info=1) 
-            return False  
+            _log.error("LED analyzer error, capture_range, %s", response, exc_info=1)
+            return False
 
     # CAPTUREPWM
     def capture_pwm(self) -> bool:
@@ -104,10 +97,10 @@ class FEASA_CH9121(Eth2SerialDevice):
         """
         response = self.request("capturepwm", 5)
         if (self.RESPONSE_OK in response):
-            return True 
+            return True
         else:
-            _log.error("LED analyzer error, capture_pwm, %s", response, exc_info=1) 
-            return False 
+            _log.error("LED analyzer error, capture_pwm, %s", response, exc_info=1)
+            return False
 
     # CAPTURE#PWM@@
     def capture_pwm_range(self, range: int, factor: int) -> bool:
@@ -125,13 +118,13 @@ class FEASA_CH9121(Eth2SerialDevice):
         cmd = "capture" + str(int(range)) + "PWM" + f"{(int(factor)):02d}"
         response = self.request(cmd, 5)
         if (self.RESPONSE_OK in response):
-            return True 
+            return True
         else:
-            _log.error("LED analyzer error, capture_pwm_range, %s", response, exc_info=1) 
-            return False 
- 
+            _log.error("LED analyzer error, capture_pwm_range, %s", response, exc_info=1)
+            return False
+
     # Get Functions ----------------------------------------------------------------------------------
-     
+
     # getRGBI##
     def get_rgbi_num(self, num: int) -> np.array:
         """
@@ -151,7 +144,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         nplist = []
         num = int(num)
         if num > 0:
-            b = num 
+            b = num
             e = num + 1
         else:
             b = 0
@@ -159,7 +152,7 @@ class FEASA_CH9121(Eth2SerialDevice):
         for k in range(b, e):
             cmd = "getrgbi" + f"{(int(k+1)):02d}"
             try:
-                response = self.request(cmd)                
+                response = self.request(cmd)
                 #_log.debug(response)
                 lst = response.split(' ')
                 nplist.append(np.array([np.float64(n) for n in lst]))
@@ -184,14 +177,14 @@ class FEASA_CH9121(Eth2SerialDevice):
         """
         try:
             cmd = "getintensity" + f"{(int(num)):02d}"
-            response = int(self.request(cmd))  
+            response = int(self.request(cmd))
         except Exception:
             _log.error("LED analyzer error, get_intensity_num")
             raise
         return response
 
     # Set Functions------------------------------------------------------------------------------------
- 
+
     # SetIntGain##xxx
     def set_intgain_num(self, num: int, factor: int) -> bool:
         """
@@ -207,10 +200,10 @@ class FEASA_CH9121(Eth2SerialDevice):
         cmd = "setintgain" + f"{(int(num)):02d}" + f"{(int(factor)):03d}"
         response = self.request(cmd)
         if (self.RESPONSE_OK in response):
-            return True 
+            return True
         else:
-            _log.error("LED analyzer error, set_intgain_num, %s", response, exc_info=1) 
-            return False 
+            _log.error("LED analyzer error, set_intgain_num, %s", response, exc_info=1)
+            return False
 
     # SetFactor##
     def set_factor(self, factor: int) -> bool:
@@ -222,19 +215,23 @@ class FEASA_CH9121(Eth2SerialDevice):
 
         Returns:
             bool: False - failed, True - success
-        """ 
+        """
         cmd = "setfactor" + f"{(int(factor)):02d}"
         response = self.request(cmd)
         if (self.RESPONSE_OK in response):
-            return True 
+            return True
         else:
-            _log.error("LED analyzer error, set_factor, %s", response, exc_info=1) 
-            return False   
+            _log.error("LED analyzer error, set_factor, %s", response, exc_info=1)
+            return False
 #-----------------------------------------------------------------------------------------------------
 
 #-----------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     from time import sleep
+
+    ## Initialize the logging
+    logger_init(filename_base=None)  ## init root logger without filelogging
+    _log = getLogger(__name__, DEBUG)
 
     HOST = "192.168.1.120"
     PORT = 3000
@@ -259,7 +256,7 @@ if __name__ == "__main__":
     # "getRGBI##" command
     print(feasa.get_rgbi_num(0))
     print(feasa.get_rgbi_num(3))
-    
+
     # # "getINTENSITY##" command
     # print(feasa.get_intensity_num(1))
 

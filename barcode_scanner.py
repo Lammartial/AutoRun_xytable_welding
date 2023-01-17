@@ -10,20 +10,13 @@ barcode scanned UDI or human typed UDI or for whatever reason it is being used e
 import asyncio
 from rrc.eth2serial.base import Eth2SerialDevice
 
-DEBUG = 1
-
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-import logging
 
-## Initialize the logging
-import logging
-## init ROOT logger from custom_logging.logger_init()
-from rrc.custom_logging import logger_init
-logger_init(DEBUG) ## init root logger
-## get module level logging
-_log = logging.getLogger(__name__)
+DEBUG = 1
+
+from rrc.custom_logging import getLogger, logger_init
 
 # --------------------------------------------------------------------------- #
 
@@ -109,10 +102,11 @@ if __name__ == "__main__":
     from time import perf_counter
     from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
 
-    DEBUG = 1
-    tic = perf_counter()
+    ## Initialize the logging
+    logger_init(filename_base="local_log")  ## init root logger with different filename
+    _log = getLogger(__name__, DEBUG)
 
-    _log.info("Hallo Welt!")
+    tic = perf_counter()
 
     cfg = StationConfiguration(filename=CONF_FILENAME_DEV)
     #_IP = cfg._CONFIG["test_sockets"]["1"]["resource_strings"]["scanner"]

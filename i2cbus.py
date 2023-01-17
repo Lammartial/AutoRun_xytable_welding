@@ -6,23 +6,17 @@ from typing import Tuple, List
 import errno
 from rrc.eth2i2c import I2CBase
 
-DEBUG = 1
 
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-import logging
 
-## Initialize the logging
-import logging
-## init ROOT logger from custom_logging.logger_init()
-from rrc.custom_logging import logger_init
-logger_init(DEBUG) ## init root logger
-## get module level logging
-_log = logging.getLogger(__name__)
+DEBUG = 0
 
-# --------------------------------------------------------------------------- #
-# --------------------------------------------------------------------------- #
+from rrc.custom_logging import getLogger, logger_init
+
+# --------------------------------------------------------------------------- ##
+
 
 class BusMux:
 
@@ -220,19 +214,19 @@ class I2CBus(I2CBase):
 
 class I2CMuxedBus(I2CBase):
     """
-    Class that handles a bus connected I2C bus mux to select a channel 
+    Class that handles a bus connected I2C bus mux to select a channel
     before executing a read or write.
     You can use either a BusMux() or MultiBusMux() class as handler.
     """
-    
+
     def __init__(self, i2c: I2CBase, mux: BusMux, channel: int):
-        """Class that handles a bus connected I2C bus mux to select a channel 
+        """Class that handles a bus connected I2C bus mux to select a channel
         before executing a read or write.
-    
+
         Args:
             i2c (I2CBase): plain I2C bus
-            mux (BusMux): BusMux device instance which has interface and slave address set. 
-            channel (int): the channel 1..n to select this bus 
+            mux (BusMux): BusMux device instance which has interface and slave address set.
+            channel (int): the channel 1..n to select this bus
         """
         super().__init__()  # I just need the interface functions here
         self.i2c = i2c  # we use a separate i2c bus instance for real execution
@@ -304,6 +298,10 @@ class I2CMuxedBus(I2CBase):
 if __name__ == "__main__":
     from eth2i2c.ncd_eth_i2c_interface import I2CPort
     from smbus import BusMaster as SMBusMaster
+
+    ## Initialize the logging
+    logger_init(filename_base="local_log")  ## init root logger
+    _log = getLogger(__name__, DEBUG)
 
     with I2CPort("192.168.1.56", 2101) as ncd:
         bus = SMBusMaster(ncd)

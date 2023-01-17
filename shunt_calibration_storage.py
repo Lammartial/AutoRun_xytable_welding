@@ -182,6 +182,7 @@ class ShuntCalibrationStorage:
 if __name__ == "__main__":
     from rrc.eth2i2c import I2CPort
     from i2cbus import BusMux
+
     i2c_port = I2CPort("192.168.1.119")
     # print(i2c_port.i2c_bus_scan())
     mux = BusMux(i2c_port)

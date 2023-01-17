@@ -425,7 +425,7 @@ class Battery:
         self.table = None
 
     # --------------------------------------------
-    
+
     def __str__(self) -> str:
         return f"SmartBattery at 0x{self.address} on {self.smbus}"
 
@@ -903,15 +903,15 @@ class Battery:
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    from rrc.ncd_eth_i2c_interface import I2CPort
-    from rrc.smbus import BusMaster, BusMux_PCA9548A
+    from rrc.eth2i2c import I2CPort, BusMux
+    from rrc.smbus import BusMaster
 
     ncd = I2CPort("192.168.1.56", 2101)
     #print(ncd.i2c_bus_scan())
 
     bus = BusMaster(ncd)
     bat = Battery(bus)
-    mux = BusMux_PCA9548A(ncd, address=0x77)
+    mux = BusMux(ncd, address=0x77)
     if not mux.setChannel(1): raise Exception("Bullshit")
 
     # print(bat.voltage())
