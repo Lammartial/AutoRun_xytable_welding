@@ -700,13 +700,13 @@ class Hioki_Cell_Tester(object):
         # Comparator: OFF (BT3561A) (':CALC:LIM:STAT OFF')
         result &= self.bt.set_raw_command(":CALC:LIM:STAT OFF")
         # Set resistance range 0.1 Ohm
-        result &= hioki.bt.set_resistance_range(0.1)
+        result &= self.bt.set_resistance_range(0.1)
         # Set voltage range 6 V
-        result &= hioki.bt.set_voltage_range(6)
+        result &= self.bt.set_voltage_range(6)
         # Autorange = ON
         #result &= self.bt.set_autorange(1)        
         # Set measurement = RV (BT3561A)
-        result &= hioki.bt.set_function(self.bt_function_type)
+        result &= self.bt.set_function(self.bt_function_type)
         return result
 
     def measurement_finished(self) -> bool:

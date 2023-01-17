@@ -18,13 +18,31 @@ from struct import pack, unpack, unpack_from
 #from uhashlib import sha1
 from collections import OrderedDict
 from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
+from humanfriendly import format_size
+from rrc.bincopy import BinFile
 from rrc.battery_errors import BatteryError, BatterySecurityError
 from rrc.smbus import BusMaster
 from rrc.smartbattery import Cmd
 from rrc.chipsets.bq import ChipsetTexasInstruments
 
 
-#--------------------------------------------------------------------------------------------------
+DEBUG = 1
+
+# --------------------------------------------------------------------------- #
+# Logging
+# --------------------------------------------------------------------------- #
+
+## Initialize the logging
+import logging
+## init ROOT logger from custom_logging.logger_init()
+from rrc.custom_logging import logger_init
+logger_init(DEBUG) ## init root logger
+## get module level logging
+_log = logging.getLogger(__name__)
+
+# --------------------------------------------------------------------------- #
+
+
 
 def _od2t(d: OrderedDict) -> tuple:
     """To convert an ordered dict to a tuple of values for TestStand Container.
@@ -658,6 +676,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             (bool): False if writing has failed or the verification readback data differ from the data to write.
         """
+
+        _log = logging.getLogger(__name__)
         block_data = self._validate_buffer(block_data, name="block_data")
         length = len(block_data)
         if (flash_address < 0x4000) or (flash_address+length > 0x6000):
@@ -669,9 +689,11 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         while address < flash_address+length:
             page = min(32, length-a)
             data = pack("<H", address) + block_data[a:a+page] # pack address in front of the data
+            _log.debug(f"Write Block 0x{address:08x}:{page}")
             self.writeBlock(0x44, data) # NOT verified
             # now poll for battery is finished with flash writing
             self.waitForReady(timeout_ms=300, throw=True)
+            _log.debug(f"Read back 0x{address:08x}:{page}")            
             readback = self.read_flash_block(address, length=page, hexi=None) # we get only the data, not the address back here!
             if (readback is None) or (len(readback) < page):
                 raise BatteryError("Readback length of data too less. Read {} to compare {}".format(len(readback), page))
@@ -680,6 +702,24 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             address = address + page
             a = a + page
         return True
+
+
+    def write_flash_from_file(self, filename: str) -> None:
+        """Programming the firmware is chipset specific.
+
+        Args:
+            filename (str): name to a data file like .srec, .hex which has to provide target addresses. 
+
+        """
+
+        _log = logging.getLogger(__name__)
+        binfile = BinFile(filenames=str(filename))
+        print(binfile.info())
+        _info = f"From file '{filename}' loaded segments = " + ",".join([f"0x{s.address:08x}:{format_size(len(s.data), binary=True)}" for s in binfile.segments])
+        _log.info(_info)
+        # for segment in binfile.segments:
+        #     _log.info(f"Write flash at 0x{segment.address:08x}, {len(segment.data)} bytes.")
+        #     self.write_flash_block(segment.address, segment.data)
 
 
     def read_authentication_key(self) -> None:
@@ -1091,5 +1131,35 @@ class BQ40Z50R2(BQ40Z50R1):
                 # -> forward this exception
                 raise ex
         return yesno
+
+
+#--------------------------------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    from datetime import datetime as dt
+    from pathlib import Path
+    from rrc.eth2i2c import I2CPort
+    from rrc.i2cbus import BusMux, I2CMuxedBus
+    from rrc.smbus import BusMaster
+    from rrc.chipsets.bq40z50 import BQ40Z50R2
+
+    i2c_port = I2CPort("192.168.1.56", 2101)
+    busmux = BusMux(i2c_port, address=0x77)    
+    for i in range(1,9):
+        busmux.setChannel(i)
+        print(i2c_port.i2c_bus_scan())
+    auto_muxed_i2cbus = I2CMuxedBus(i2c_port, busmux, 2)
+    busmaster = BusMaster(auto_muxed_i2cbus)
+    bat = BQ40Z50R2(busmaster)    
+    print("BatteryStatus:", bat.battery_status())
+
+    t1 = dt.now()
+    
+    fw_file = Path("../../../Battery-PCBA-Test/filestore/SCD_3412031-04_A_Rubin-B_RRC2020B.srec")
+    bat.write_flash_from_file(fw_file)
+
+    t2 = dt.now()
+    print(f"Programmierzeit: {(t2-t1).seconds}")
+
 
 # END OF FILE

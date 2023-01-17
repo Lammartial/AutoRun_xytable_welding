@@ -5,8 +5,7 @@ from time import sleep
 from rrc.smartbattery import Battery
 from rrc.chipsets import ChipsetTexasInstruments
 
-
-DEBUG = 1
+DEBUG = 0
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -17,8 +16,10 @@ import logging
 ## init ROOT logger from custom_logging.logger_init()
 from rrc.custom_logging import logger_init
 logger_init(DEBUG) ## init root logger
+#logging.getLogger().setLevel(logging.DEBUG if DEBUG>0 else logging.INFO)
 ## get module level logging
 _log = logging.getLogger(__name__)
+
 
 # --------------------------------------------------------------------------- #
 
@@ -71,7 +72,7 @@ class BQStudioFileFlasher:
             self.set_firmware_file(firmware_file)        
         else:
             self.firmware_file = None
-        self.show_progressbar = show_progressbar  # must be set from caller separately
+        self.show_progressbar = show_progressbar
         
     def __str__(self) -> str:
         return f"BQ Studio File flasher {self.battery} using file {self.firmware_file}{', showing progress bar' if self.show_progressbar else ''}"
@@ -120,7 +121,7 @@ class BQStudioFileFlasher:
         return True, output[1:]  # Leave out the first byte. That is just the battery's I2C address.
 
 
-    def set_firmware_file(self, _firmware_file: str | Path):
+    def set_firmware_file(self, _firmware_file: str | Path) -> None:
         """Store the path of the flash-stream file internally if it exists.
 
         Args:
@@ -142,23 +143,7 @@ class BQStudioFileFlasher:
         self.firmware_file = _firmware_file
 
 
-    def prepare_battery(self):
-        """
-        Set the battery to full access mode and log its name.
-
-        Raises:
-            CantUnsealBatteryError: If the battery cannot be unsealed.
-        """
-
-        _log = logging.getLogger(__name__)
-        if not self.battery.enable_full_access():
-            self._log.error("Could not set battery to full access mode.")
-            raise CantUnsealBatteryError(self)
-        _log.info(f"Battery name: {self.battery.device_name()[0]} is unsealed and in full access mode.")
-
-
-
-    def __process_file(self, is_file_validation: bool):
+    def __process_file(self, is_file_validation: bool) -> bool:
         _log = logging.getLogger(__name__)
         validation_result = True
         with open(self.firmware_file, "r") as file:
@@ -318,7 +303,7 @@ class BQStudioFileFlasher:
         return validation_result
 
 
-    def validate_file(self):
+    def validate_file(self) -> bool:
         """Validate the fw file return if no errors were found.
 
         This runs the same file parser as the programming function, but it doesn't send any commands to the battery.
@@ -343,7 +328,7 @@ class BQStudioFileFlasher:
         return result            
 
 
-    def program_fw_file(self):
+    def program_fw_file(self) -> bool:
         """Prepare the battery and program it with the given fw file.
 
         Does NOT perform file validation.
@@ -354,7 +339,10 @@ class BQStudioFileFlasher:
 
         _log = logging.getLogger(__name__)
         if self.firmware_file is not None:
-            self.prepare_battery()
+            if not self.battery.enable_full_access():
+                _log.error("Could not set battery to full access mode.")
+                raise CantUnsealBatteryError(self)
+            _log.info(f"Battery name: {self.battery.device_name()[0]} is unsealed and in full access mode.")
             result = self.__process_file(is_file_validation=False)
             return result
         else:
@@ -362,7 +350,7 @@ class BQStudioFileFlasher:
             return False
 
 
-    def validate_and_program_fw_file(self):
+    def validate_and_program_fw_file(self) -> bool:
         """Validate the fw file and then program the battery if the validation was successful.
 
         This should be your main programming function. Don't use program_fw_file() just by itself.
@@ -374,8 +362,7 @@ class BQStudioFileFlasher:
             return self.program_fw_file()
         else:
             return False
-
-
+    
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -398,20 +385,17 @@ if __name__ == "__main__":
     print("BatteryStatus:", bat.battery_status())
 
     t1 = dt.now()
-    #fs_file = Path("./testfiles/SCD_3410758-08_bq40z50-R4_A-draft1_Adamite_RRC2140_BMS_Files.bq.fs")
-    fs_file = Path("../../../Battery-PCBA-Test/filestore/SCD_3412031-04_A_Rubin-B_RRC2020B.srec")
+    
+    fs_file = Path("../../../Battery-PCBA-Test/filestore/SCD_3412031-04_A_Rubin-B_RRC2020B.bq.fs")
     flasher = BQStudioFileFlasher(bat, firmware_file=fs_file)
     #flasher.set_firmware_file(fs_file)
 
-    flasher.prepare_battery()
-        
-    # validation_result = flasher.validate_file()
-    # print(f"Validation result: {validation_result}")
-    # if validation_result:
-    #     pass
-    #     programming_result = flasher.program_fw_file()
-    #     print(f"Programming result: {programming_result}")
-
+    validation_result = flasher.validate_file()
+    print(f"Validation result: {validation_result}")
+    if validation_result:
+        programming_result = flasher.program_fw_file()
+        print(f"Programming result: {programming_result}")
+  
     t2 = dt.now()
     print(f"Programmierzeit: {(t2-t1).seconds}")
 
