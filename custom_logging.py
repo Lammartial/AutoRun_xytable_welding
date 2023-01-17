@@ -8,15 +8,20 @@ import sys
 import logging
 import logging.handlers
 
-def logger_init(debug: int) -> None:
+def logger_init(debug: int) -> None:   
+    ## get logger
+    # Do NOT use logger = logging.getLogger(__name__) here
+    logger = logging.getLogger() ## root logger
+    # check if we have already handlers set
+    if len(logger.handlers)>0:
+        print("logger already set")
+        return
+
     print("print in logging.logger_init()")
     print("print logging.py __name__: " +__name__)
     path = "C:/Production/"
     filename = "station_test.log"
 
-    ## get logger
-    # Do NOT use logger = logging.getLogger(__name__) here
-    logger = logging.getLogger() ## root logger
     logger.setLevel(logging.DEBUG if debug>0 else logging.INFO)
 
     # File handler

@@ -154,7 +154,8 @@ class BQStudioFileFlasher:
         if not self.battery.enable_full_access():
             self._log.error("Could not set battery to full access mode.")
             raise CantUnsealBatteryError(self)
-        _log.info(f"Battery name: {self.battery.device_name()[0]}")
+        _log.info(f"Battery name: {self.battery.device_name()[0]} is unsealed and in full access mode.")
+
 
 
     def __process_file(self, is_file_validation: bool):
@@ -382,30 +383,34 @@ if __name__ == "__main__":
     from rrc.eth2i2c import I2CPort
     from rrc.i2cbus import BusMux, I2CMuxedBus
     from rrc.smbus import BusMaster
-    from rrc.smartbattery import Battery
+    from rrc.chipsets.bq40z50 import BQ40Z50R2
 
     i2c_port = I2CPort("192.168.1.56", 2101)
-    busmux = BusMux(i2c_port, address=0x77)
-    
-    busmaster = BusMaster(i2c_port)
-    bat = Battery(busmaster)
-    busmux.setChannel(1)    
-    print(i2c_port.i2c_bus_scan())
-    busmux.setChannel(2)
-    print(i2c_port.i2c_bus_scan())
-    auto_muxed_busmaster = BusMaster(I2CMuxedBus(i2c_port, busmux, 3))
-        
+    busmux = BusMux(i2c_port, address=0x77)    
+    for i in range(1,9):
+        busmux.setChannel(i)
+        print(i2c_port.i2c_bus_scan())
+    #busmux.setChannel(2)
+    #busmaster = BusMaster(i2c_port) 
+    auto_muxed_i2cbus = I2CMuxedBus(i2c_port, busmux, 2)
+    busmaster = BusMaster(auto_muxed_i2cbus)
+    bat = BQ40Z50R2(busmaster)    
+    print("BatteryStatus:", bat.battery_status())
+
     t1 = dt.now()
     #fs_file = Path("./testfiles/SCD_3410758-08_bq40z50-R4_A-draft1_Adamite_RRC2140_BMS_Files.bq.fs")
     fs_file = Path("../../../Battery-PCBA-Test/filestore/SCD_3412031-04_A_Rubin-B_RRC2020B.srec")
-    flasher = BQStudioFileFlasher(bat, firmware_file=fs_file)    
+    flasher = BQStudioFileFlasher(bat, firmware_file=fs_file)
     #flasher.set_firmware_file(fs_file)
-    validation_result = flasher.validate_file()
-    print(f"Validation result: {validation_result}")
-    if validation_result:
-        pass
-        programming_result = flasher.program_fw_file()
-        print(f"Programming result: {programming_result}")
+
+    flasher.prepare_battery()
+        
+    # validation_result = flasher.validate_file()
+    # print(f"Validation result: {validation_result}")
+    # if validation_result:
+    #     pass
+    #     programming_result = flasher.program_fw_file()
+    #     print(f"Programming result: {programming_result}")
 
     t2 = dt.now()
     print(f"Programmierzeit: {(t2-t1).seconds}")
