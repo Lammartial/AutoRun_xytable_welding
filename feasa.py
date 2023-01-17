@@ -92,7 +92,7 @@ class FEASA_CH9121(Eth2SerialDevice):
             return False  
 
     # CAPTUREPWM
-    def capture_pwm(self) -> bool:
+    def capture_pwm(self, timeout: float) -> bool:
         """
         Pulse-Width-Modulated(PWM) LED's are switched on and off rapidly to save power and to
         control Intensity. The Analyser automatically determines the correct settings required to
@@ -101,7 +101,8 @@ class FEASA_CH9121(Eth2SerialDevice):
         Returns:
             bool: False - failed, True - success
         """
-        response = self.request("capturepwm")
+        timeout = float(timeout)
+        response = self.request("capturepwm", 5)
         if (self.RESPONSE_OK in response):
             return True 
         else:
@@ -109,7 +110,7 @@ class FEASA_CH9121(Eth2SerialDevice):
             return False 
 
     # CAPTURE#PWM@@
-    def capture_pwm_range(self, range: int, factor: int) -> bool:
+    def capture_pwm_range(self, range: int, factor: int, timeout) -> bool:
         """
         This command allows the User to specify the exposure range # and an averaging factor @@
         when testing PWM LED's.
@@ -121,8 +122,9 @@ class FEASA_CH9121(Eth2SerialDevice):
         Returns:
             bool: False - failed, True - success
         """
+        timeout = float(timeout)
         cmd = "capture" + str(int(range)) + "PWM" + f"{(int(factor)):02d}"
-        response = self.request(cmd)
+        response = self.request(cmd, 5)
         if (self.RESPONSE_OK in response):
             return True 
         else:
@@ -225,7 +227,7 @@ class FEASA_CH9121(Eth2SerialDevice):
 if __name__ == "__main__":
     from time import sleep
 
-    HOST = "192.168.1.162"
+    HOST = "192.168.1.120"
     PORT = 3000
 
     # 1. Create an instance of class as device controller
@@ -240,10 +242,10 @@ if __name__ == "__main__":
     print(feasa.capture_range(1))
 
     # "CAPTUREPWM" command
-    #print(feasa.capture_pwm())
+    print(feasa.capture_pwm())
 
     # "CAPTURE#PWM@@" command
-    #print(feasa.capture_pwm_range(1, 7))
+    print(feasa.capture_pwm_range(1, 7))
 
     # "getRGBI##" command
     print(feasa.get_rgbi_num(1))
