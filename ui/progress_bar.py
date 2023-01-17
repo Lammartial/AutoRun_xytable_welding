@@ -7,12 +7,16 @@ ROOT = tkinter.Tk()
 ROOT.withdraw()  # hide window
 style = ttk.Style()
 #print(style.theme_names())
-style.theme_use('winnative')
-
-
+style.theme_use("winnative")
 
 def disable_event():
    pass
+
+# Disable the Close Window Control Icon
+ROOT.protocol("WM_DELETE_WINDOW", disable_event)
+# set App icon
+ROOT.iconbitmap(Path(__file__).resolve().parent / "chip-icon.ico")
+
 
 
 def center(win: tkinter.Tk):
@@ -50,7 +54,7 @@ class ProgressWindow:
         # style = ttk.Style()
         # #print(style.theme_names())
         # style.theme_use('winnative')
-      
+
         # #style = ttk.Style()
         # #print(style.theme_names())
         # #style.theme_use('winnative')
@@ -63,26 +67,20 @@ class ProgressWindow:
         # #                    [('Horizontal.Progressbar.trough',
         # #                    {'sticky': 'nswe',
         # #                    'children': [('Horizontal.Progressbar.color.pbar', {'side': 'left', 'sticky': 'ns'})]})])
-        
+
         if color and color == "":
             color = None  # TestStand cannot transfer "None"
         if color:
             global style
             style.configure("ColorProgress.Horizontal.TProgressbar", background=color)
 
-        
+
         #mainframe = ttk.Frame(root, padding="15 15 15 15")
         #mainframe.pack(fill="both")
 
-        # Disable the Close Window Control Icon
-        self.root.protocol("WM_DELETE_WINDOW", disable_event)
-       
         #self.root.attributes('-alpha', 0)  # this hides the root window until we have arranged all the wigets
         self.root.title(title)
-        # set App icon
-        # if we have an ICO file we can simply use this:
-        self.root.iconbitmap(Path(__file__).resolve().parent / "app-icon.ico")
-                
+
         # create the Widgets and keep them inside our App object
         # #self.root.minsize(100, 50)
         x_size = int(self.root.winfo_screenwidth() * 0.60)
@@ -100,7 +98,7 @@ class ProgressWindow:
                     style="ColorProgress.Horizontal.TProgressbar" if color else None)
         # pack progress bar into root
         self.progress.pack(fill=tkinter.BOTH, expand=1)
-        print("STYLE:", self.progress["style"])        
+        print("STYLE:", self.progress["style"])
         #
         # leave window hidden
         #
@@ -152,6 +150,8 @@ if __name__ == '__main__':
             else:
                 #value_progress = i
                 pass
+
+        win.hide()
         win.quit()
 
 # END OF FILE
