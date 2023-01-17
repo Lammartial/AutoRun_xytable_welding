@@ -47,9 +47,15 @@ class ProgressWindow:
         # Simply set the theme
         #self.root.tk.call("source", Path(__file__).resolve().parent / "theme_sv.tcl")
         #self.root.tk.call("set_theme", "light")
-
+        
         style = ttk.Style()
-        #style.element_create("color.pbar", "from", "clam")
+        #print(style.theme_names())
+        style.theme_use('winnative')
+        try:
+            style.element_create("color.pbar", "from", "winnative")
+        except Exception as ex:
+            print(ex)
+            pass
         style.layout("ColorProgress.Horizontal.TProgressbar",
                             [('Horizontal.Progressbar.trough',
                             {'sticky': 'nswe',
@@ -71,10 +77,11 @@ class ProgressWindow:
         self.progress = ttk.Progressbar(self.root,
                     orient=tk.HORIZONTAL,mode="determinate", maximum=100, value=0,
                     #length=x_size,
-                    style='ColorProgress.Horizontal.TProgressbar')
+                    style="ColorProgress.Horizontal.TProgressbar")
         #progress.grid(row=0, column=1, padx=(10, 10), pady=(10, 10), sticky="ew")
         # pack progress bar into root
         self.progress.pack(fill=tk.BOTH, expand=1)
+        print("STYLE:", self.progress["style"])
 
         # to step progress bar up
         #progress.config(mode="determinate", length=1000, maximum=100, value=0)
@@ -104,6 +111,7 @@ class ProgressWindow:
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
+    win1 = ProgressWindow()
     win = ProgressWindow()
     i = 0
     mx = 10
