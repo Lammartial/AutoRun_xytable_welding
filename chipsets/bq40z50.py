@@ -1036,16 +1036,25 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def toggle_permanent_black_box_recorder(self):
         self.manufacturer_access = 0x0025
 
+
     def toggle_fuse(self):
         self.manufacturer_access = 0x0026
+
+    def set_fuse_control(self, enable: bool) -> bool:
+        return self._ms_toggle_helper("fuse_en", enable, 0x0026)
+
 
     def toggle_led_display_enable(self):
         self.manufacturer_access = 0x002b
 
-    def set_led_display_enable(self, enable: bool) -> bool:
-        return self._ms_toggle_helper("led", enable, 0x002b)
+    #def set_led_display_enable(self, enable: bool) -> bool:
+    #    return self._ms_toggle_helper("led", enable, 0x002b)
 
-
+    def reset_device(self):
+        self.manufacturer_access = 0x0041
+    
+    #def reset_device_0x0012(self):  # backward compatibility command
+    #    self.manufacturer_access = 0x0012
 
     def get_afe_register(self, hexi: bool | str | None = None) -> tuple:
         self.manufacturer_access = 0x0058
