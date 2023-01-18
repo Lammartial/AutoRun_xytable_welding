@@ -38,14 +38,11 @@ class FEASA_CH9121(Eth2SerialDevice):
 
     RESPONSE_OK = "OK"
 
-    def __init__(self, host: str, port: int, termination: str = "\r\n"):
-        """Initialize the object with IP address and port number.
+    #def __init__(self, host: str, port: int, termination: str = "\r\n"):
+    #    super().__init__(host, port, termination)
 
-        Args:
-            host (str): hostname or IPv4 address
-            port (int): port to use for communication
-        """
-        super().__init__(host, port, termination)
+    def __init__(self, resource_str: str, termination: str = "\r\n"):
+        super().__init__(resource_str, termination)
 
     def test_int(self):
         return int(1)
@@ -225,11 +222,13 @@ class FEASA_CH9121(Eth2SerialDevice):
 if __name__ == "__main__":
     from time import sleep
 
-    HOST = "192.168.1.120"
-    PORT = 3000
+    #HOST = "192.168.1.120"
+    #PORT = 3000
+
+    Feasa_resource_string = "192.168.1.120:3000"
 
     # 1. Create an instance of class as device controller
-    feasa = FEASA_CH9121(HOST, PORT)
+    feasa = FEASA_CH9121(Feasa_resource_string)
 
     # 2. Get some data
 
