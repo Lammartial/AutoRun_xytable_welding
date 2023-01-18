@@ -10,7 +10,8 @@ parser.add_argument("-g", "--gateway", type=str, default="0.0.0.0", help="Option
 args = parser.parse_args()
 
 # create a SW1001 device with factory default address
-dev = Hioki_SW1001("192.168.0.254", 23)
+SW_default_resource_string = "192.168.0.254:23"
+dev = Hioki_SW1001(SW_default_resource_string)
 
 # now set the new IP
 dev.set_new_ip_address(args.ipv4, new_port=args.port, new_default_gateway=args.gateway)

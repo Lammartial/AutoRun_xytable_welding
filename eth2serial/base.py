@@ -51,19 +51,19 @@ class Eth2Serial_SockSingleConnection_Device(object):
     # !!!!! IMPORTANT !!!!!!
     # For normal operation HIOKI SW1001 must stay connected via socket
 
-    def __init__(self, host: str, port: int, termination: str = "\r\n"):
+    #def __init__(self, host: str, port: int, termination: str = "\r\n"):
+    def __init__(self, resource_str: str, termination: str = "\r\n"):
         """Initialize the object with IP address and port number.
 
         Args:
             host (str): hostname or IPv4 address
             port (int): port to use for communication
         """
-
         self.termination = termination
         self._termination_as_bytes = bytes(termination, "utf-8")  # need them also as bytes
-        # !!! IMPORTANT. Type casting !!!
-        self.host = str(host)
-        self.port = int(port)
+        lst = resource_str.split(":")
+        self.host = lst[0]          # string
+        self.port = int(lst[1])     # int
 
     def __str__(self) -> str:
         return f"ETH to UART bridge (single con) at {self.host}:{self.port}"
@@ -145,22 +145,19 @@ class Eth2Serial_SockSingleConnection_Device(object):
 
 class Eth2SerialDevice(object):
 
-    def __init__(self, host: str, port: int, termination: str = "\r\n"):
+    #def __init__(self, host: str, port: int, termination: str = "\r\n"):
+    def __init__(self, resource_str: str, termination: str = "\r\n"):
         """Initialize the object with IP address and port number.
 
         Args:
             host (str): hostname or IPv4 address
             port (int): port to use for communication
         """
-
         self.termination = termination
         self._termination_as_bytes = bytes(termination, "utf-8")  # need them also as bytes
-        # !!! IMPORTANT. Type casting !!!
-        self.host = str(host)
-        self.port = int(port)
-        #self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #self.socket.settimeout(3.0)
-        #self.socket.connect((self.host, self.port))
+        lst = resource_str.split(":")
+        self.host = lst[0]          # string
+        self.port = int(lst[1])     # int
 
     def __str__(self) -> str:
         return f"ETH to UART bridge at {self.host}:{self.port}"

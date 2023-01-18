@@ -25,8 +25,10 @@ from rrc.custom_logging import getLogger, logger_init
 
 class Hioki_BT3561A(Eth2SerialDevice):
 
-    def __init__(self, host: str, port: int, termination: str = "\r\n"):
-         super().__init__(host, port, termination)
+    #def __init__(self, host: str, port: int, termination: str = "\r\n"):
+    #     super().__init__(host, port, termination)
+    def __init__(self, resource_str: str, termination: str = "\r\n"):
+        super().__init__(resource_str, termination)
 
     def __str__(self) -> str:
         return f"Hioki BT3561A device on {self.super().__str__()}"
@@ -359,8 +361,10 @@ class Hioki_BT3561A(Eth2SerialDevice):
 
 class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
 
-    def __init__(self, host: str, port: int, termination: str = "\r\n"):
-        super().__init__(host, port, termination)
+    #def __init__(self, host: str, port: int, termination: str = "\r\n"):
+    #    super().__init__(host, port, termination)
+    def __init__(self, resource_str: str, termination: str = "\r\n"):
+        super().__init__(resource_str, termination)
 
     def __repr__(self) -> str:
         return super().__repr__()
@@ -638,9 +642,13 @@ class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
 class Hioki_Cell_Tester(object):
     """This is a class that holds a BT3561A and a SW1001 device providing convenience functions."""
 
-    def __init__(self, BT_HOST, BT_PORT, SW_HOST, SW_PORT):
-        self.bt = Hioki_BT3561A(BT_HOST, BT_PORT)
-        self.sw = Hioki_SW1001(SW_HOST, SW_PORT, termination="\r\n")
+    #def __init__(self, BT_HOST, BT_PORT, SW_HOST, SW_PORT):
+    #    self.bt = Hioki_BT3561A(BT_HOST, BT_PORT)
+    #    self.sw = Hioki_SW1001(SW_HOST, SW_PORT, termination="\r\n")
+    #    self.bt_function_type = "RV"
+    def __init__(self, BT_resource_str, SW_resource_str):
+        self.bt = Hioki_BT3561A(BT_resource_str)
+        self.sw = Hioki_SW1001(SW_resource_str)
         self.bt_function_type = "RV"
 
     def BT3561A_self_test(self) -> bool:
@@ -816,13 +824,15 @@ if __name__ == "__main__":
     #======================================================================================================
 
     # predefined resource ID
-    BT_IP_STR = "192.168.1.202"     # BT3561A IP addr
-    BT_PORT = 23                    # BT3561A port
-    SW_IP_STR = "192.168.1.201"     # SW1001 IP addr
-    SW_PORT = 23                    # SW1001 port
+    #BT_IP_STR = "192.168.1.202"     # BT3561A IP addr
+    #BT_PORT = 23                    # BT3561A port
+    #SW_IP_STR = "192.168.1.201"     # SW1001 IP addr
+    #SW_PORT = 23                    # SW1001 port
+    BT_resource_string = "192.168.1.202:23"
+    SW_resource_string = "192.168.1.201:23"
 
     # 1. Create an instance of 20 channel MUXER with HIOKI ACIR measurement device class
-    hioki = Hioki_Cell_Tester(BT_IP_STR, BT_PORT, SW_IP_STR, SW_PORT)
+    hioki = Hioki_Cell_Tester(BT_resource_string, SW_resource_string)
 
     # # 2. ==== BT3561A functions ==========================================================================
 
