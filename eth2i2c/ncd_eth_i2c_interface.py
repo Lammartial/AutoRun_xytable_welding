@@ -2,6 +2,14 @@ import socket
 from rrc.eth2i2c.base import I2CBase
 from rrc.eth2i2c.ncd_errors import *
 
+# From internet:
+# 100KHz: AA 06 BC 32 01 01 00 00 A0
+# 38KHz:  AA 06 BC 32 01 01 00 01 A1
+# 200KHz: AA 06 BC 32 01 01 00 02 A2
+# 300KHz: AA 06 BC 32 01 01 00 03 A3
+# 400KHz: AA 06 BC 32 01 01 00 04 A4
+#         [AA bytecount][c1, c2, u1, u2, u3, u4][checksum]
+#              API       payload
 
 NCD_DEFAULT_TIMEOUT_S = 5
 
@@ -25,8 +33,7 @@ NCD_PACKET_DATA0_INDEX = 2
 NCD_PACKET_CHECKSUM_INDEX = -1
 NCD_PACKET_OVERHEAD = 3
 
-I2C_BRIDGE_IP = "192.168.1.60"
-I2C_BRIDGE_PORT = 2101
+
 DEBUG = 0
 
 
@@ -203,6 +210,20 @@ class I2CPort(I2CBase):
         return list(rx_payload)
 
 
+    def i2c_change_speed(self):
+        # From internet:
+        # 100KHz: AA 06 BC 32 01 01 00 00 A0
+        # 38KHz:  AA 06 BC 32 01 01 00 01 A1
+        # 200KHz: AA 06 BC 32 01 01 00 02 A2
+        # 300KHz: AA 06 BC 32 01 01 00 03 A3
+        # 400KHz: AA 06 BC 32 01 01 00 04 A4
+        #         [AA bytecount][c1, c2, u1, u2, u3, u4][checksum]
+        #              API       payload
+        tx_payload = bytes([0xBC,0x32,0x01,0x01,0x00,0x02])
+        rx_payload = self.__data_exchange(tx_payload)
+        return list(rx_payload)
+
+
     def __check_for_errors(self, payload):
         """Check if the response contains an error message"""
         if len(payload) == 4:  # Error messages are always 4 bytes long
@@ -361,8 +382,10 @@ class I2CPort(I2CBase):
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    i2c_port = I2CPort(I2C_BRIDGE_IP, I2C_BRIDGE_PORT)
-    i2c_port.writeto(0x77, bytearray([0x01]))
-    print(i2c_port.i2c_bus_scan())
+    I2C_BRIDGE_RESOURCE_STR = "192.168.1.56"
+    dev = I2CPort(I2C_BRIDGE_RESOURCE_STR)
+    #i2c_port.writeto(0x77, bytearray([0x01]))
+    print(dev.i2c_bus_scan())
+    #print(dev.i2c_change_speed())
 
 # END OF FILE
