@@ -118,11 +118,12 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     def firmware_version(self, hexi: bool | str | None = None) -> tuple:
         """Returns the chip firmware version."""
+        _log = getLogger(__name__, 2)
         self.manufacturer_access = 0x0002
         buf = self.manufacturer_data
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 11):
             raise BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
-        return _od2t(OrderedDict({
+        _v = OrderedDict({
             "value": self._maybe_hexlify(buf, hexi),
             # data come big endian - they SUCK!
             "device_number": unpack_from(">H", buf, 0)[0],
@@ -132,7 +133,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "impedance_track_version": unpack_from(">H", buf, 7)[0],
             "reserved1":     unpack_from(">B", buf, 9)[0],
             "reserved2":     unpack_from(">B", buf, 10)[0],
-        }))
+        })
+        _log.debug(f"FIRMWARE_VERSION: {_v}")
+        return _od2t(_v)
 
     def hardware_version(self) -> int:
         """Returns the chip hardware version."""
