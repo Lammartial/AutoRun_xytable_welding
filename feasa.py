@@ -225,20 +225,12 @@ class FEASA_CH9121(Eth2SerialDevice):
 #-----------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     from time import sleep
-
-<<<<<<< HEAD
-    #HOST = "192.168.1.120"
-    #PORT = 3000
-
-    Feasa_resource_string = "192.168.1.120:3000"
-=======
+    
     ## Initialize the logging
     logger_init(filename_base=None)  ## init root logger without filelogging
     _log = getLogger(__name__, DEBUG)
 
-    HOST = "192.168.1.120"
-    PORT = 3000
->>>>>>> 2dbcf0dd983a8d13928a525be56182a20935a228
+    Feasa_resource_string = "192.168.1.120:3000"
 
     # 1. Create an instance of class as device controller
     feasa = FEASA_CH9121(Feasa_resource_string)
