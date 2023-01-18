@@ -4,22 +4,16 @@ from pathlib import Path
 from time import sleep
 from rrc.smartbattery import Battery
 from rrc.chipsets import ChipsetTexasInstruments
+from rrc.ui.progress_bar import ProgressWindow
 
-DEBUG = 0
 
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
 
-## Initialize the logging
-import logging
-## init ROOT logger from custom_logging.logger_init()
-from rrc.custom_logging import logger_init
-logger_init(DEBUG) ## init root logger
-#logging.getLogger().setLevel(logging.DEBUG if DEBUG>0 else logging.INFO)
-## get module level logging
-_log = logging.getLogger(__name__)
+DEBUG = 1
 
+from rrc.custom_logging import getLogger, logger_init
 
 # --------------------------------------------------------------------------- #
 
@@ -29,14 +23,14 @@ class FlashStreamError(Exception):
         self.parent_class = parent_class
 
 
-class CantUnsealBatteryError(FlashStreamError):    
+class CantUnsealBatteryError(FlashStreamError):
 
     def __str__(self):
         return f"Battery {self.battery} could not be unsealed/full accessed."
 
 
 class InvalidFlashStreamFileError(FlashStreamError):
-   
+
     def __str__(self):
         return f"There is an error in the flashstream file {self.firmware_file}. Check the log for more infos."
 
@@ -65,31 +59,38 @@ class BQStudioFileFlasher:
     flasher.validate_and_program_fw_file()
     """
 
-    def __init__(self, battery: ChipsetTexasInstruments, firmware_file: Path | str = None, show_progressbar: bool = False):
+    def __init__(self, battery: ChipsetTexasInstruments, firmware_file: Path | str = None, show_progressbar: bool = False, color: str = None):
         """Initialize a class instance."""
         self.battery = battery
+        self._progress = None
         if firmware_file:
-            self.set_firmware_file(firmware_file)        
+            self.set_firmware_file(firmware_file, show_progressbar=show_progressbar, color=color)
         else:
             self.firmware_file = None
-        self.show_progressbar = show_progressbar
-        
+
     def __str__(self) -> str:
-        return f"BQ Studio File flasher {self.battery} using file {self.firmware_file}{', showing progress bar' if self.show_progressbar else ''}"
+        return f"BQ Studio File flasher {self.battery} using file {self.firmware_file}{', showing progress bar' if self._progress else ''}"
 
     def __repr__(self) -> str:
-        return f"BQStudioFileFlasher({self.battery}, {self.firmware_file}, {self.show_progressbar})"
+        return f"BQStudioFileFlasher({self.battery}, {self.firmware_file}, {True if self._progress else False})"
 
     #----------------------------------------------------------------------------------------------
 
     def _print_progress_bar(self, value, max_value, label):
-        n_bar = 40  # size of progress bar
         j = value / max_value
-        sys.stdout.write('\r')
-        bar = '█' * int(n_bar * j)
-        bar = bar + '-' * int(n_bar * (1 - j))
-        sys.stdout.write(f"{label.ljust(10)} | [{bar:{n_bar}s}] {int(100 * j)}% ")
-        sys.stdout.flush()
+
+        def console():
+            n_bar = 40  # size of progress bar
+            j = value / max_value
+            sys.stdout.write('\r')
+            bar = '█' * int(n_bar * j)
+            bar = bar + '-' * int(n_bar * (1 - j))
+            sys.stdout.write(f"{label.ljust(10)} | [{bar:{n_bar}s}] {int(100 * j)}% ")
+            sys.stdout.flush()
+
+        self._progress.set_value(j*100)
+        self._progress.show()
+        self._progress.update()
 
 
     def _handle_line(self, line: str, line_number: int) -> Tuple[bool, List[int]]:
@@ -104,7 +105,7 @@ class BQStudioFileFlasher:
             Tuple: Success as bool and list of integers
         """
 
-        _log = logging.getLogger(__name__)
+        _log = getLogger(__name__, DEBUG)
         line_split = [i.strip() for i in line.strip().split(" ")]
         if len(line_split) < 2:
             _log.error(f"Error in line: {line_number}: Less than 2 items. (Line: \"{line}\"")
@@ -121,7 +122,7 @@ class BQStudioFileFlasher:
         return True, output[1:]  # Leave out the first byte. That is just the battery's I2C address.
 
 
-    def set_firmware_file(self, _firmware_file: str | Path) -> None:
+    def set_firmware_file(self, _firmware_file: str | Path, show_progressbar: bool = False, color: str = None) -> None:
         """Store the path of the flash-stream file internally if it exists.
 
         Args:
@@ -131,20 +132,22 @@ class BQStudioFileFlasher:
             CantOpenFlashStreamFile: If the file doesn't exist or cannot be accessed.
         """
 
-        _log = logging.getLogger(__name__)
+        _log = getLogger(__name__, DEBUG)
         _firmware_file = Path(_firmware_file).resolve()
         try:
             file = open(_firmware_file, "r")
             file.close()
         except (OSError, WindowsError, FileNotFoundError):
             _log.error(f"Can't open file: \"{_firmware_file}\".")
-            raise        
+            raise
         _log.info(f"Using file: \"{_firmware_file}\"")
         self.firmware_file = _firmware_file
+        if show_progressbar:
+            self._progress = ProgressWindow(title=f"Program {_firmware_file}", color=color)
 
 
     def __process_file(self, is_file_validation: bool) -> bool:
-        _log = logging.getLogger(__name__)
+        _log = getLogger(__name__, DEBUG)
         validation_result = True
         with open(self.firmware_file, "r") as file:
             line_count = len(file.readlines())  # Get the number of line in the file. Only needed for the progress bar
@@ -154,8 +157,10 @@ class BQStudioFileFlasher:
             for current_line in file:
                 current_line = current_line.strip()
                 line_number += 1
-                if self.show_progressbar:
+
+                if self._progress:
                     self._print_progress_bar(line_number, line_count, "Progress")
+
                 if current_line.startswith(";"):
                     # Line is a comment
                     continue
@@ -299,7 +304,10 @@ class BQStudioFileFlasher:
                     _log.error(f"Unknown command in line {line_number}: \"{current_line}\"")
                     validation_result = False
                     if not is_file_validation:
-                        return 1
+                        validation_result = int(1)  # ???
+                        break
+        if self._progress:
+            self._progress.hide()
         return validation_result
 
 
@@ -315,7 +323,7 @@ class BQStudioFileFlasher:
             bool: Result of the validation.
         """
 
-        _log = logging.getLogger(__name__)
+        _log = getLogger(__name__, DEBUG)
         if not self.firmware_file:
             _log.error("No firmware file specified. Use the set_firmware_file() method to select a firmware file.")
             return False
@@ -325,7 +333,7 @@ class BQStudioFileFlasher:
             _log.info(f"No errors detected in file: \"{self.firmware_file}\".")
         else:
             raise InvalidFlashStreamFileError(self)
-        return result            
+        return result
 
 
     def program_fw_file(self) -> bool:
@@ -337,7 +345,7 @@ class BQStudioFileFlasher:
             bool: Result of the fw programming.
         """
 
-        _log = logging.getLogger(__name__)
+        _log = getLogger(__name__, DEBUG)
         if self.firmware_file is not None:
             if not self.battery.enable_full_access():
                 _log.error("Could not set battery to full access mode.")
@@ -362,7 +370,7 @@ class BQStudioFileFlasher:
             return self.program_fw_file()
         else:
             return False
-    
+
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -372,30 +380,36 @@ if __name__ == "__main__":
     from rrc.smbus import BusMaster
     from rrc.chipsets.bq40z50 import BQ40Z50R2
 
-    i2c_port = I2CPort("192.168.1.56", 2101)
-    busmux = BusMux(i2c_port, address=0x77)    
-    for i in range(1,9):
-        busmux.setChannel(i)
-        print(i2c_port.i2c_bus_scan())
-    #busmux.setChannel(2)
-    #busmaster = BusMaster(i2c_port) 
-    auto_muxed_i2cbus = I2CMuxedBus(i2c_port, busmux, 2)
-    busmaster = BusMaster(auto_muxed_i2cbus)
-    bat = BQ40Z50R2(busmaster)    
-    print("BatteryStatus:", bat.battery_status())
+    ## Initialize the logging
+    #logger_init(filename_base="local_log")  ## init root logger
+    logger_init(filename_base=None)  ## init root logger
+    _log = getLogger(__name__, DEBUG)
+
+    # i2c_port = I2CPort("192.168.1.56", 2101)
+    # busmux = BusMux(i2c_port, address=0x77)
+    # for i in range(1,9):
+    #     busmux.setChannel(i)
+    #     print(i2c_port.i2c_bus_scan())
+    # #busmux.setChannel(2)
+    # #busmaster = BusMaster(i2c_port)
+    # auto_muxed_i2cbus = I2CMuxedBus(i2c_port, busmux, 2)
+    # busmaster = BusMaster(auto_muxed_i2cbus)
+    # bat = BQ40Z50R2(busmaster)
+    # #print("BatteryStatus:", bat.battery_status())
 
     t1 = dt.now()
-    
-    fs_file = Path("../../../Battery-PCBA-Test/filestore/SCD_3412031-04_A_Rubin-B_RRC2020B.bq.fs")
-    flasher = BQStudioFileFlasher(bat, firmware_file=fs_file)
+
+    bat = None
+    fs_file = Path("C:/Projekte/V-Kong/Battery-PCBA-Test/filestore/SCD_3412031-04_A_Rubin-B_RRC2020B.bq.fs")
+    flasher = BQStudioFileFlasher(bat, firmware_file=fs_file, show_progressbar=True)
     #flasher.set_firmware_file(fs_file)
 
     validation_result = flasher.validate_file()
     print(f"Validation result: {validation_result}")
-    if validation_result:
-        programming_result = flasher.program_fw_file()
-        print(f"Programming result: {programming_result}")
-  
+    #if validation_result:
+    #    programming_result = flasher.program_fw_file()
+    #    print(f"Programming result: {programming_result}")
+
     t2 = dt.now()
     print(f"Programmierzeit: {(t2-t1).seconds}")
 

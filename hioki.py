@@ -8,21 +8,16 @@ VERSION = "0.0.1"
 
 __version__ = VERSION
 
-DEBUG = 0
-
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-import logging
 
-_log = logging.getLogger(__name__)
-_log.setLevel(logging.DEBUG if DEBUG else logging.INFO)
+DEBUG = 0
 
-# Initialize the logging
-try:
-    logging.basicConfig()
-except Exception as e:
-    print("Logging is not supported on this system")
+from rrc.custom_logging import getLogger, logger_init
+
+# --------------------------------------------------------------------------- #
+
 
 #--------------------------------------------------------------------------------------------------
 #  BT3561A Device
@@ -47,7 +42,7 @@ class Hioki_BT3561A(Eth2SerialDevice):
         Queries the Standard Event Status Register (SESR).
 
         Returns:
-            bool: True when SESR = 0, otherwise False 
+            bool: True when SESR = 0, otherwise False
         """
         return True if (self.request('*ESR?').strip() == "0") else False
 
@@ -173,8 +168,8 @@ class Hioki_BT3561A(Eth2SerialDevice):
         return self.request(':AUT?')
 
     def set_adjustment_clear(self) -> bool:
-        """ 
-        Cancel Zero-Adjustment. 
+        """
+        Cancel Zero-Adjustment.
 
         Returns:
             bool : True - success, False - failed
@@ -193,9 +188,9 @@ class Hioki_BT3561A(Eth2SerialDevice):
         return self.request(':ADJ?')
 
     def set_syst_calibration(self) -> bool:
-        """ 
-        Execute Self-Calibration. 
-        
+        """
+        Execute Self-Calibration.
+
         Returns:
             bool : True - success, False - failed
         """
@@ -257,8 +252,8 @@ class Hioki_BT3561A(Eth2SerialDevice):
         return self.request(':SYST:KLOC?')
 
     def set_local_control(self) -> bool:
-        """ 
-        Set Local Control. 
+        """
+        Set Local Control.
 
         Returns:
             bool : True - success, False - failed
@@ -351,9 +346,9 @@ class Hioki_BT3561A(Eth2SerialDevice):
         return self.request(msg)
 
     def clear_status(self) -> bool:
-        """ 
-        Resets the Status byte and Event status registers. 
-        
+        """
+        Resets the Status byte and Event status registers.
+
         Returns:
             bool : True - success, False - failed
         """
@@ -392,7 +387,7 @@ class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
         Queries the device OPC
 
         Returns:
-            bool: True - present operation is complete.    
+            bool: True - present operation is complete.
         """
         return True if (self.request('*OPC?').strip() == "1") else False
 
@@ -401,14 +396,14 @@ class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
         Queries the Standard Event Status Register (SESR).
 
         Returns:
-            bool: True when SESR = 0, otherwise False 
+            bool: True when SESR = 0, otherwise False
         """
         return True if (self.request('*ESR?').strip() == "0") else False
 
     def set_reset(self) -> bool:
-        """ 
-        Initializes the device. 
-        
+        """
+        Initializes the device.
+
         Returns:
             bool : True - success, False - failed
         """
@@ -416,9 +411,9 @@ class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
         return self.get_esr()
 
     def clear_status(self) -> bool:
-        """ 
-        Resets the Status byte and Event status registers. 
-        
+        """
+        Resets the Status byte and Event status registers.
+
         Returns:
             bool : True - success, False - failed
         """
@@ -489,7 +484,7 @@ class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
 
         Raises:
             ValueError: mode OFF/GND/TERM1/TERM2/TERM3/T1T3/SNS2L
-    
+
         Returns:
             bool : True - success, False - failed
         """
@@ -562,9 +557,9 @@ class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
         return result
 
     def open(self) -> bool:
-        """ 
-        Opens all channels. 
-        
+        """
+        Opens all channels.
+
         Returns:
             bool : True - success, False - failed
         """
@@ -577,7 +572,7 @@ class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
 
         Args:
             msg (str): command
-        
+
         Returns:
             bool : True - success, False - failed
         """
@@ -704,7 +699,7 @@ class Hioki_Cell_Tester(object):
         # continuous measurement off (BT3561A)
         result &= self.bt.set_continous_measurement(0)
         # Trigger source: IMMEDIATE (BT3561A)
-        result &= self.bt.set_trigger_source('IMM') 
+        result &= self.bt.set_trigger_source('IMM')
         # Comparator: OFF (BT3561A) (':CALC:LIM:STAT OFF')
         result &= self.bt.set_raw_command(":CALC:LIM:STAT OFF")
         # Set resistance range 0.1 Ohm
@@ -712,7 +707,7 @@ class Hioki_Cell_Tester(object):
         # Set voltage range 6 V
         result &= self.bt.set_voltage_range(6)
         # Autorange = ON
-        #result &= self.bt.set_autorange(1)        
+        #result &= self.bt.set_autorange(1)
         # Set measurement = RV (BT3561A)
         result &= self.bt.set_function(self.bt_function_type)
         return result
@@ -807,6 +802,11 @@ class Hioki_Cell_Tester(object):
 
 if __name__ == "__main__":
     from time import sleep
+
+    ## Initialize the logging
+    logger_init(filename_base="local_log")  ## init root logger with different filename
+    _log = getLogger(__name__, DEBUG)
+
 
     res : float = 0
 

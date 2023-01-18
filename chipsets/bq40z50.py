@@ -26,21 +26,16 @@ from rrc.smartbattery import Cmd
 from rrc.chipsets.bq import ChipsetTexasInstruments
 
 
-DEBUG = 1
-
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
 
-## Initialize the logging
-import logging
-## init ROOT logger from custom_logging.logger_init()
-from rrc.custom_logging import logger_init
-logger_init(DEBUG) ## init root logger
-## get module level logging
-_log = logging.getLogger(__name__)
+DEBUG = 1
+
+from rrc.custom_logging import getLogger, logger_init
 
 # --------------------------------------------------------------------------- #
+
 
 
 
@@ -693,7 +688,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self.writeBlock(0x44, data) # NOT verified
             # now poll for battery is finished with flash writing
             self.waitForReady(timeout_ms=300, throw=True)
-            _log.debug(f"Read back 0x{address:08x}:{page}")            
+            _log.debug(f"Read back 0x{address:08x}:{page}")
             readback = self.read_flash_block(address, length=page, hexi=None) # we get only the data, not the address back here!
             if (readback is None) or (len(readback) < page):
                 raise BatteryError("Readback length of data too less. Read {} to compare {}".format(len(readback), page))
@@ -708,7 +703,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """Programming the firmware is chipset specific.
 
         Args:
-            filename (str): name to a data file like .srec, .hex which has to provide target addresses. 
+            filename (str): name to a data file like .srec, .hex which has to provide target addresses.
 
         """
 
@@ -929,17 +924,17 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         while (retries >= 0):
             self.manufacturing_status()  # => update the self._manufacturing_status attribute
             if enable:
-                if not self.manufacturing_status[ms_key]:
+                if not self._manufacturing_status[ms_key]:
                     self.manufacturer_access = ma_cmd  # need to toggle
                 else:
                     pass  # already on the target state
             else:
-                if self.manufacturing_status[ms_key]:
+                if self._manufacturing_status[ms_key]:
                     self.manufacturer_access = ma_cmd  # need to toggle
                 else:
                     pass  # already on the target state
             retries -= 1
-        return (bool(self.manufacturing_status[ms_key]) == enable)
+        return (bool(self._manufacturing_status[ms_key]) == enable)
 
     def toggle_fuse(self) -> None:
         """This command manually activates/deactivates the FUSE output to ease testing during manufacturing.
@@ -1042,10 +1037,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.manufacturer_access = 0x0026
 
     def toggle_led_display_enable(self):
-        self.manufacturer_access = 0x0027
+        self.manufacturer_access = 0x002b
 
     def set_led_display_enable(self, enable: bool) -> bool:
-        return self._ms_toggle_helper("led_en", enable, 0x0027)
+        return self._ms_toggle_helper("led", enable, 0x002b)
 
 
 
@@ -1143,18 +1138,22 @@ if __name__ == "__main__":
     from rrc.smbus import BusMaster
     from rrc.chipsets.bq40z50 import BQ40Z50R2
 
+    ## Initialize the logging
+    logger_init(filename_base="local_log")  ## init root logger
+    _log = getLogger(__name__, DEBUG)
+
     i2c_port = I2CPort("192.168.1.56", 2101)
-    busmux = BusMux(i2c_port, address=0x77)    
+    busmux = BusMux(i2c_port, address=0x77)
     for i in range(1,9):
         busmux.setChannel(i)
         print(i2c_port.i2c_bus_scan())
     auto_muxed_i2cbus = I2CMuxedBus(i2c_port, busmux, 2)
     busmaster = BusMaster(auto_muxed_i2cbus)
-    bat = BQ40Z50R2(busmaster)    
+    bat = BQ40Z50R2(busmaster)
     print("BatteryStatus:", bat.battery_status())
 
     t1 = dt.now()
-    
+
     fw_file = Path("../../../Battery-PCBA-Test/filestore/SCD_3412031-04_A_Rubin-B_RRC2020B.srec")
     bat.write_flash_from_file(fw_file)
 
