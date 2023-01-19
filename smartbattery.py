@@ -152,7 +152,8 @@ class StringData:
 
     def update(self) -> bool:
         v, ok = self._battery.readStringVerified(self._cmd)  # try to update the value
-        getLogger(__name__, DEBUG).debug(f"StringData.update {(v, ok)}")
+        #_log = getLogger(__name__, 2) 
+        #_log.debug(f"StringData.update {(v, ok)}")
         if ok: self.read = v  # update
         return ok
 
@@ -959,7 +960,8 @@ class Battery:
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    from rrc.eth2i2c import I2CPort, BusMux
+    from rrc.eth2i2c import I2CPort
+    from rrc.i2cbus import BusMux
     from rrc.smbus import BusMaster
 
     ## Initialize the logging
