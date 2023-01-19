@@ -1,4 +1,5 @@
 import socket
+from time import sleep
 from rrc.eth2i2c.base import I2CBase
 from rrc.eth2i2c.ncd_errors import *
 
@@ -296,13 +297,15 @@ class I2CPort(I2CBase):
         while retries > 0:
             try:
                 return self.__ethernet_exchange(tx_payload)
-            except Exception as e:
-                retries -= 1
+            except Exception as e:                
+                #_log = getLogger(__name__, 2)
+                #_log.debug(f"NCD Retries {retries}")                
+                #sleep(0.05)
                 self.__connect_socket()
-                print(retries)
+                retries -= 1
                 if retries == 0:
                     raise e
-
+                
     def __ethernet_exchange(self, tx_payload: bytes) -> bytes:
         # Send data
         tx_packet = self.__wrap_payload_in_packet(tx_payload)
