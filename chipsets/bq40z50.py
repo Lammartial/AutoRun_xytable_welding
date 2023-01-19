@@ -24,7 +24,7 @@ from rrc.battery_errors import BatteryError, BatterySecurityError
 from rrc.smbus import BusMaster
 from rrc.smartbattery import Cmd
 from rrc.chipsets.bq import ChipsetTexasInstruments
-
+import struct, numpy
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -870,42 +870,290 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self._wait_for_adc_update(2, timeout, t0_ns=t0)
         # now get the ADCs from the last block read with corrected signs
         voltages = [_get_adc_reading(v) for v in range(0, num_cells)]
-        n = 8  # take 8 measurements, including the base
-        for _ in range(0, n-1):
+        #n = 8  # take 8 measurements, including the base
+        for _ in range(0, samples-1):
             self._wait_for_adc_update(1, timeout, t0_ns=t0)
             voltages = [voltages[i] + _get_adc_reading(i) for i in range(0, num_cells)]
         # calc mean values
-        voltages = [voltages[i]/n for i in range(0, num_cells)]
+        voltages = [voltages[i]/samples for i in range(0, num_cells)]
         return tuple(voltages)
 
-    def calib_write_cell_voltage_gain(self, cell_voltages: Tuple[int], shorted: bool = False):
-        #self.manufacturer_access = 0xf080
-        self._ms_toggle_helper("cal_test", False, 0x002d)
-        # ...
+    def calib_write_cell_voltage_gain(self, cell_voltages: Tuple[int], shorted: bool = False) -> Tuple[int]:
+        """_summary_
 
+        Args:
+            cell_voltages (Tuple[int]): _description_
+            shorted (bool, optional): _description_. Defaults to False.
 
-    #def write_cell_voltage_gain(self, gain_values: tuple):
-    #    # len of tuple is number of cells
-    #    self._ms_toggle_helper("cal_test", False, 0x002d)
+        Returns:
+            Tuple[int]: _description_
+        """
+        try:
+            cell_voltages = int(cell_voltages)
+            #self.manufacturer_access = 0xf080
+            #n_cells = cell_voltages.count()
+            n_cells = numpy.count_nonzero(cell_voltages)
+            # 1. average adc cell[i] voltage 
+            adc_cell_voltages = self.calib_read_adc_cell_voltage(num_cells=n_cells, shorted=shorted)
+            # 2. calculate voltage_gain[i]
+            cells_gain = [(cell_voltages[i]/adc_cell_voltages[i]*65536) for i in range(0, n_cells)]
+            # calculate average cell_gain if there are more than 1 cell
+            cell_gain: int = 0
+            if (n_cells == 1):
+                cell_gain = int(cells_gain[0])  
+            else: 
+                cell_gain = int([cell_gain + cells_gain[i] for i in range(0, n_cells)]/n_cells)
+            # 3. write cell_gain[i]
+            block = self.read_flash_block(0x4000, 32, True)
+            bytes_cell_gain = cell_gain.to_bytes(2, byteorder='big', signed=True)
+            # needs to be tested
+            block[0:2] = bytes_cell_gain
+            #block[0] = bytes_cell_gain[0]
+            #block[1] = bytes_cell_gain[1]
+            self.write_flash_block(0x4000, block)
+            # 4. Re-check voltage readings (+/- 3 mV)
 
+            # 5. Return calibrated cell_voltages
+            self._ms_toggle_helper("cal_test", False, 0x002d)
+            sleep(0.1)
+            res = self.calib_read_adc_cell_voltage(n_cells, shorted=shorted)
+        except Exception:
+            raise
+        return res
 
-    def calib_read_adc_bat_voltage(self, shorted: bool = False):
-        pass
+    def calib_read_adc_bat_voltage(self,  samples: int = 8, shorted: bool = False,  timeout: float = 5.0) -> int:
+        """_summary_
 
-    def calib_write_bat_voltage_gain(self, voltage: int, shorted: bool = False):
-        pass
+        Args:
+            samples (int, optional): _description_. Defaults to 8.
+            shorted (bool, optional): _description_. Defaults to False.
+            timeout (float, optional): _description_. Defaults to 5.0.
 
-    def calib_read_adc_pack_voltage(self, shorted: bool = False):
-        pass
+        Returns:
+            int: _description_
+        """
 
-    def calib_write_pack_voltage_gain(self, voltage: int, shorted: bool = False):
-        pass
+        t0 = monotonic_ns()  # common timout over the whole function
+        # make sure that calibration test is enabled
+        self._ms_toggle_helper("cal_test", True, 0x002d)
+        sleep(0.05)
+        # enable selected raw cell voltage output on ManufacturerData()
+        if shorted:
+            self.manufacturer_access = 0xf082  # output shorted CCADC Cal
+        else:
+            self.manufacturer_access = 0xf081  # output CCADC Cal
+        # wait the 8-bit counter changed by 2 -> overflow need to be respected!
+        self._wait_for_adc_update(2, timeout, t0_ns=t0)
+        # now get the ADCs from the last block read with corrected signs
+        adc_bat_voltage = self._read_ccadc_cal[f"bat_voltage"]
+        #n = 8  # take 8 measurements, including the base
+        for _ in range(0, samples-1):
+            self._wait_for_adc_update(1, timeout, t0_ns=t0)
+            adc_bat_voltage = self._read_ccadc_cal[f"bat_voltage"]/samples 
+        return int(adc_bat_voltage)
 
-    def calib_read_adc_current(self):
-        pass
+    def calib_write_bat_voltage_gain(self, bat_voltage: int, shorted: bool = False) -> int:
+        """_summary_
 
-    def calib_read_adc_temperature(self):
-        pass
+        Args:
+            bat_voltage (int): _description_
+            shorted (bool, optional): _description_. Defaults to False.
+
+        Returns:
+            int: _description_
+        """
+        try:
+            bat_voltage = int(bat_voltage)
+            # 1. average adc bat voltage 
+            adc_bat_voltage = self.calib_read_adc_bat_voltage(shorted=shorted)
+            # 2. calculate bat_gain
+            bat_gain: int = int(bat_voltage/adc_bat_voltage*65536)
+            # 3. write bat_gain
+            block = self.read_flash_block(0x4004, 32, True)
+            bytes_bat_gain = bat_gain.to_bytes(2, byteorder='big', signed=True)
+            block[0] = bytes_bat_gain[0]
+            block[1] = bytes_bat_gain[1]
+            self.write_flash_block(0x4004, block)
+            # 4. Re-check bat voltage (+/- 3 mV)
+
+            # 5. Return calibrated bat_voltage
+            self._ms_toggle_helper("cal_test", False, 0x002d)
+            sleep(0.1)
+            res = self.calib_read_adc_bat_voltage(shorted=shorted)
+        except Exception:
+            raise
+        return res
+
+    def calib_read_adc_pack_voltage(self,  samples: int = 8, shorted: bool = False,  timeout: float = 5.0) -> int:
+        """_summary_
+
+        Args:
+            samples (int, optional): _description_. Defaults to 8.
+            shorted (bool, optional): _description_. Defaults to False.
+            timeout (float, optional): _description_. Defaults to 5.0.
+
+        Returns:
+            int: _description_
+        """
+        t0 = monotonic_ns()  # common timout over the whole function
+        # make sure that calibration test is enabled
+        self._ms_toggle_helper("cal_test", True, 0x002d)
+        sleep(0.05)
+        # enable selected raw cell voltage output on ManufacturerData()
+        if shorted:
+            self.manufacturer_access = 0xf082  # output shorted CCADC Cal
+        else:
+            self.manufacturer_access = 0xf081  # output CCADC Cal
+        # wait the 8-bit counter changed by 2 -> overflow need to be respected!
+        self._wait_for_adc_update(2, timeout, t0_ns=t0)
+        # now get the ADCs from the last block read with corrected signs
+        adc_pack_voltage = self._read_ccadc_cal[f"pack_voltage"]
+        #n = 8  # take 8 measurements, including the base
+        for _ in range(0, samples-1):
+            self._wait_for_adc_update(1, timeout, t0_ns=t0)
+            adc_pack_voltage = self._read_ccadc_cal[f"pack_voltage"]/samples 
+        return int(adc_pack_voltage)
+
+    def calib_write_pack_voltage_gain(self, pack_voltage: int, shorted: bool = False) -> int:
+        """_summary_
+
+        Args:
+            pack_voltage (int): _description_
+            shorted (bool, optional): _description_. Defaults to False.
+
+        Returns:
+            int: _description_
+        """
+        try:
+            pack_voltage = int(pack_voltage)
+            # 1. average adc pack voltage 
+            adc_pack_voltage = self.calib_read_adc_pack_voltage(shorted=shorted)
+            # 2. calculate pack_gain
+            pack_gain: int = int(pack_voltage/adc_pack_voltage*65536)
+            # 3. write pack_gain
+            block = self.read_flash_block(0x4002, 32, True)
+            bytes_bat_gain = pack_gain.to_bytes(2, byteorder='big', signed=True)
+            block[0] = bytes_bat_gain[0]
+            block[1] = bytes_bat_gain[1]
+            self.write_flash_block(0x4002, block)
+            # 4. Re-check pack_voltage (+/- 3 mV)
+
+            # 5. Return calibrated pack_voltage
+            self._ms_toggle_helper("cal_test", False, 0x002d)
+            sleep(0.1)
+            res = self.calib_read_adc_pack_voltage(shorted=shorted)
+        except Exception:
+            raise
+        return res
+
+    def calib_read_adc_current(self,  samples: int = 8, shorted: bool = False,  timeout: float = 5.0) -> int:
+        """_summary_
+
+        Args:
+            samples (int, optional): _description_. Defaults to 8.
+            shorted (bool, optional): _description_. Defaults to False.
+            timeout (float, optional): _description_. Defaults to 5.0.
+
+        Returns:
+            int: _description_
+        """
+        def _get_adc_reading() -> int:
+            _v = self._read_ccadc_cal[f"current_cc"]
+            # correct the sign of value
+            return _v if _v < 0x8000 else -(0xFFFF - _v + 0x0001)
+        t0 = monotonic_ns()  # common timout over the whole function
+        # make sure that calibration test is enabled
+        self._ms_toggle_helper("cal_test", True, 0x002d)
+        sleep(0.05)
+        # enable selected raw cell voltage output on ManufacturerData()
+        if shorted:
+            self.manufacturer_access = 0xf082  # output shorted CCADC Cal
+        else:
+            self.manufacturer_access = 0xf081  # output CCADC Cal
+        # wait the 8-bit counter changed by 2 -> overflow need to be respected!
+        self._wait_for_adc_update(2, timeout, t0_ns=t0)
+        # now get the ADCs from the last block read with corrected signs
+        adc_current = self._get_adc_reading()
+        #n = 8  # take 8 measurements, including the base
+        for _ in range(0, samples-1):
+            self._wait_for_adc_update(1, timeout, t0_ns=t0)
+            adc_current = self._get_adc_reading()/samples 
+        return int(adc_current)
+
+    def calib_write_current_gain(self, current: int, shorted: bool = False) -> int:
+        """_summary_
+
+        Args:
+            bat_voltage (int): _description_
+            shorted (bool, optional): _description_. Defaults to False.
+
+        Returns:
+            int: _description_
+        """
+        try: 
+            current = int(current)
+            # 1. average adc current 
+            adc_current = self.calib_read_adc_current(shorted=shorted)
+            # 2. calculate current_gain, capacity_gain. 
+            # if cc_offset != 0 => Read Coulomb Counter Offset Samples (addr = 0x4010)
+            #cc_offset_samples = int((block[12] >> 8) + block[11])
+            cc_gain = float(current/adc_current)
+            capacity_gain = float(cc_gain*298261.6178)
+            # 3. write bat_gain
+            block = self.read_flash_block(0x4006, 32, True)
+            bytes_cc_gain = bytearray(struct.pack("f", cc_gain))
+            bytes_cap_gain = bytearray(struct.pack("f", capacity_gain))
+            block[0] = bytes_cc_gain[0]
+            block[1] = bytes_cc_gain[1]
+            block[2] = bytes_cc_gain[2]
+            block[3] = bytes_cc_gain[3]
+            block[4] = bytes_cap_gain[0]
+            block[5] = bytes_cap_gain[1]
+            block[6] = bytes_cap_gain[2]
+            block[7] = bytes_cap_gain[3]
+            self.write_flash_block(0x4006, block)
+            # 4. Re-check current
+
+            # 5. Return calibrated current
+            self._ms_toggle_helper("cal_test", False, 0x002d)
+            sleep(0.1)
+            res = self.calib_read_adc_current(shorted=shorted)
+        except Exception:
+            raise
+        return res
+
+    def calib_write_temp(self, temp: Tuple[float], shorted: bool = False) -> Tuple[float]:
+        """_summary_
+
+        Args:
+            cell_voltages (Tuple[int]): _description_
+            shorted (bool, optional): _description_. Defaults to False.
+
+        Returns:
+            Tuple[int]: _description_
+        """
+        try:
+            temp = float(temp)
+            # 1. Read TS1...TS4 offset
+            block = self.read_flash_block(0x4015, 32, True)
+            ts_offset = block[0 : 4]
+            # 2. Read appropriate temperature from the DAStatus2()
+            # use manufacturing_dastatus2()
+            dastatus2 = self.manufacturing_dastatus2()
+            int_temp = []
+            # 3. Calculate new TS1...TS4 offset
+            for i in range(0, 3):
+                if (temp[i] != 0):
+                    block[i] = temp[i] - int_temp[i] + ts_offset[i]
+            # 4. Write new TS1...TS4 offset
+            self.write_flash_block(0x4015, block)
+            # 4. Re-check temperature TS1...TS4
+            sleep(0.1)
+            dastatus2 = self.manufacturing_dastatus2()
+            res = []
+        except Exception:
+            raise
+        return res
 
     def _ms_toggle_helper(self, ms_key: str, enable: bool, ma_cmd: int, retries: int = 1) -> bool:
         """Internal function to set a defined state using toggle and manufacturing_status() reads for control.
