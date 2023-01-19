@@ -26,13 +26,13 @@ class FlashStreamError(Exception):
 class CantUnsealBatteryError(FlashStreamError):
 
     def __str__(self):
-        return f"Battery {self.battery} could not be unsealed/full accessed."
+        return f"Battery {self.parent_class.battery} could not be unsealed/full accessed."
 
 
 class InvalidFlashStreamFileError(FlashStreamError):
 
     def __str__(self):
-        return f"There is an error in the flashstream file {self.firmware_file}. Check the log for more infos."
+        return f"There is an error in the flashstream file {self.parent_class.firmware_file}. Check the log for more infos."
 
 
 #--------------------------------------------------------------------------------------------------
@@ -405,13 +405,13 @@ if __name__ == "__main__":
     #flasher.set_firmware_file(fs_file)
 
     validation_result = flasher.validate_file()
-    print(f"Validation result: {validation_result}")
+    _log.info(f"Validation result: {validation_result}")
     #if validation_result:
     #    programming_result = flasher.program_fw_file()
-    #    print(f"Programming result: {programming_result}")
+    #    _log.info(f"Programming result: {programming_result}")
 
     t2 = dt.now()
-    print(f"Programmierzeit: {(t2-t1).seconds}")
+    _log.info(f"Programmierzeit: {(t2-t1).seconds}")
 
 
 # END OF FILE
