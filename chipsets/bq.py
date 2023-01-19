@@ -58,7 +58,7 @@ class ChipsetTexasInstruments(Chipset):
             self.readWordVerified(Cmd.CELL4_VOLTAGE)[0]
         )
 
-    def is_sealed(self, refresh=True):
+    def is_sealed(self, refresh=True) -> bool:
         """Returns true of the device is sealed.
 
         Args:
@@ -66,7 +66,7 @@ class ChipsetTexasInstruments(Chipset):
         """
         pass
 
-    def is_unsealed(self, check_fullaccess=False, refresh=False):
+    def is_unsealed(self, check_fullaccess=False, refresh=False) -> bool:
         """Checks if the battery is sealed.
 
         Args:

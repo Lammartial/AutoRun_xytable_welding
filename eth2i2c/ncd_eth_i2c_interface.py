@@ -1,7 +1,27 @@
 import socket
+from time import sleep
 from rrc.eth2i2c.base import I2CBase
 from rrc.eth2i2c.ncd_errors import *
 
+
+# --------------------------------------------------------------------------- #
+# Logging
+# --------------------------------------------------------------------------- #
+
+DEBUG = 2
+
+from rrc.custom_logging import getLogger, logger_init
+
+# --------------------------------------------------------------------------- #
+
+# From internet:
+# 100KHz: AA 06 BC 32 01 01 00 00 A0
+# 38KHz:  AA 06 BC 32 01 01 00 01 A1
+# 200KHz: AA 06 BC 32 01 01 00 02 A2
+# 300KHz: AA 06 BC 32 01 01 00 03 A3
+# 400KHz: AA 06 BC 32 01 01 00 04 A4
+#         [AA bytecount][c1, c2, u1, u2, u3, u4][checksum]
+#              API       payload
 
 NCD_DEFAULT_TIMEOUT_S = 5
 
@@ -25,9 +45,6 @@ NCD_PACKET_DATA0_INDEX = 2
 NCD_PACKET_CHECKSUM_INDEX = -1
 NCD_PACKET_OVERHEAD = 3
 
-I2C_BRIDGE_IP = "192.168.1.60"
-I2C_BRIDGE_PORT = 2101
-DEBUG = 0
 
 
 class I2CPort(I2CBase):
@@ -203,6 +220,22 @@ class I2CPort(I2CBase):
         return list(rx_payload)
 
 
+    def i2c_change_speed(self):
+        # From internet:
+        # 100KHz: AA 06 BC 32 01 01 00 00 A0
+        # 38KHz:  AA 06 BC 32 01 01 00 01 A1
+        # 200KHz: AA 06 BC 32 01 01 00 02 A2
+        # 300KHz: AA 06 BC 32 01 01 00 03 A3
+        # 400KHz: AA 06 BC 32 01 01 00 04 A4
+        #         [AA bytecount][c1, c2, u1, u2, u3, u4][checksum]
+        #              API       payload
+        tx_payload = bytes([0xBC,0x32,0x01,0x01,0x00,0x02])
+        rx_payload = self.__data_exchange(tx_payload)
+        _log = getLogger(__name__, DEBUG)
+        _log.info(rx_payload)
+        return list(rx_payload)
+
+
     def __check_for_errors(self, payload):
         """Check if the response contains an error message"""
         if len(payload) == 4:  # Error messages are always 4 bytes long
@@ -264,13 +297,15 @@ class I2CPort(I2CBase):
         while retries > 0:
             try:
                 return self.__ethernet_exchange(tx_payload)
-            except Exception as e:
-                retries -= 1
+            except Exception as e:                
+                #_log = getLogger(__name__, 2)
+                #_log.debug(f"NCD Retries {retries}")                
+                #sleep(0.05)
                 self.__connect_socket()
-                print(retries)
+                retries -= 1
                 if retries == 0:
                     raise e
-
+                
     def __ethernet_exchange(self, tx_payload: bytes) -> bytes:
         # Send data
         tx_packet = self.__wrap_payload_in_packet(tx_payload)
@@ -361,8 +396,14 @@ class I2CPort(I2CBase):
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    i2c_port = I2CPort(I2C_BRIDGE_IP, I2C_BRIDGE_PORT)
-    i2c_port.writeto(0x77, bytearray([0x01]))
-    print(i2c_port.i2c_bus_scan())
+    ## Initialize the logging
+    logger_init(filename_base=None)  ## init root logger with different filename
+    _log = getLogger(__name__, DEBUG)
+
+    I2C_BRIDGE_RESOURCE_STR = "192.168.1.56"
+    dev = I2CPort(I2C_BRIDGE_RESOURCE_STR)
+    dev.writeto(0x77, bytearray([0x02]))
+    _log.info(str(dev.i2c_bus_scan()))
+    #_log.info(str(dev.i2c_change_speed()))
 
 # END OF FILE

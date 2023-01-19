@@ -43,12 +43,14 @@ class CellVoltageSource:
     def initialize(self):
         """Bring the device into a defined state.
 
-        Sets all voltages to 0 V and enables the voltage outputs.
+        Sets all voltages to 0 V and DISABLE the voltage outputs.
         """
         self.dac.set_v_ref(5.0)
         for i in range(1, DAC53608.number_of_channels+1):
             self.dac.set_channel_n_voltage(i, 0.0)
-        self.dac.enable_all_channels()
+        #self.dac.enable_all_channels()
+        self.dac.disable_all_channels()
+        
 
     def set_aux_voltage(self, aux_pin_voltage_V: float) -> float:
         """Set the voltage on the auxillary pin.

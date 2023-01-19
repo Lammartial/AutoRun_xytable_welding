@@ -15,6 +15,17 @@ from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
 from rrc.battery_errors import BatteryError
 from rrc.smbus import BusMaster
 
+# --------------------------------------------------------------------------- #
+# Logging
+# --------------------------------------------------------------------------- #
+
+DEBUG = 2
+
+from rrc.custom_logging import getLogger, logger_init
+
+# --------------------------------------------------------------------------- #
+
+
 # allowed command set for the battery
 class Cmd:
     MANUFACTURER_ACCESS = 0x00
@@ -74,6 +85,12 @@ class SpecSOHData:
         self._cmd = command
         self.read = value
 
+    def __str__(self) -> str:
+        return f"{f'{self.read:04x}' if self.read else None}"
+
+    def __repr__(self) -> str:
+        return f"SpecSOHData({repr(self._battery)},0x{self._cmd:02x},{f'0x{self.read:04x}' if self.read else None})"
+
     def update(self) -> bool:
         dsc = self._battery.design_capacity()[0]
         fcc = self._battery.full_charge_capacity()[0]
@@ -94,6 +111,12 @@ class WordData:
         self._battery = battery
         self._cmd = command
         self.read = value
+
+    def __str__(self) -> str:
+        return f"{f'{self.read:04x}' if self.read else None}"
+
+    def __repr__(self) -> str:
+        return f"WordData({repr(self._battery)},0x{self._cmd:02x},{f'0x{self.read:04x}' if self.read else None})"
 
     def update(self):
         v, ok = self._battery.readWordVerified(self._cmd)  # try to update the value
@@ -121,8 +144,16 @@ class StringData:
         self._cmd = command
         self.read = value
 
+    def __str__(self) -> str:
+        return f"{self.read}"
+
+    def __repr__(self) -> str:
+        return f"StringData({repr(self._battery)},0x{self._cmd:02x},{self.read})"
+
     def update(self) -> bool:
         v, ok = self._battery.readStringVerified(self._cmd)  # try to update the value
+        #_log = getLogger(__name__, 2) 
+        #_log.debug(f"StringData.update {(v, ok)}")
         if ok: self.read = v  # update
         return ok
 
@@ -138,6 +169,12 @@ class BlockData:
         self._cmd = command
         self.read = value
         self.written = None
+
+    def __str__(self) -> str:
+        return f"{self.read},{self.written}"
+
+    def __repr__(self) -> str:
+        return f"BlockData({repr(self._battery)},0x{self._cmd:02x},{self.read})"
 
     def update(self) -> bool:
         v, ok = self._battery.readBlockVerified(self._cmd)  # try to update the value(s)
@@ -160,7 +197,7 @@ class BlockData:
                 value = pack("<H", value)  # unsigned short, 2 bytes
         elif not isinstance(value, bytes) and not isinstance(value, bytearray):
             raise ValueError(
-                "Write block-data accepts only integer, bytes or byte arrays. Given was {}".format(type(value)))
+                f"Write block-data accepts only integer, bytes or byte arrays. Given was {type(value)}")
         else:
             pass
         ok = self._battery.writeBlock(self._cmd, value)  # NO verification!
@@ -175,7 +212,13 @@ class BatteryStatus:
     def __init__(self, battery, command: int, value: int = None):
         self._battery = battery
         self._cmd = command
-        self._set_v(value)
+        self._set_v(value)  # init self._v
+
+    def __str__(self) -> str:
+        return f"{f'{self._v:04x}' if self._v else None}"
+
+    def __repr__(self) -> str:
+        return f"BatteryStatus({repr(self._battery)},0x{self._cmd:02x},{f'0x{self._v:04x}' if self._v else None})"
 
     def _set_v(self, v: int):
         self._v = v
@@ -249,7 +292,14 @@ class BatteryMode:
     def __init__(self, battery, command: int, value: int = None):
         self._battery = battery
         self._cmd = command
+        self._last_written = None
         self._set_v(value)
+
+    def __str__(self) -> str:
+        return f"{f'{self._v:04x}' if self._v else None},{f'{self._last_written:04x}' if self._last_written else None}"
+
+    def __repr__(self) -> str:
+        return f"BatteryMode({repr(self._battery)},0x{self._cmd:02x},{f'0x{self._v:04x}' if self._v else None})"
 
     def _set_v(self, value):
         self._v = value
@@ -292,10 +342,17 @@ class BatteryMode:
 
 # -------------------------------------------------------------------------------------------
 class BatterySpecification:
+
     def __init__(self, battery, command: int, value: int = None):
         self._battery = battery
         self._cmd = command
         self._set_v(value)
+
+    def __str__(self) -> str:
+        return f"{f'{self._v:04x}' if self._v else None}"
+
+    def __repr__(self) -> str:
+        return f"BatterySpecification({repr(self._battery)},0x{self._cmd:02x},0x{f'{self._v:04x}' if self._v else None})"
 
     def _set_v(self, value):
         self._v = value
@@ -326,14 +383,14 @@ class ManufacturerAccess:
     def __init__(self, battery, command: int , value: int = None):
         self._battery = battery
         self._cmd = command
-        self.read = value
+        self.read = value  # not a privat member -> can be used to check last value without update
         self.written = None
 
     def __str__(self) -> str:
-        return f"READ:{self.read:04x},WRITE:{self.read:04x}"
+        return f"{f'{self.read:04x}' if self.read else None},{f'{self.written:04x}' if self.written else None}"
 
     def __repr__(self) -> str:
-        return f"ManufacturerAccess({repr(self._battery)},0x{self.command:02x},0x{self.value:04x})"
+        return f"ManufacturerAccess({repr(self._battery)},0x{self._cmd:02x},0x{f'{self.read:04x}' if self.read else None})"
 
     def update(self):
         v, ok = self._battery.readWord(self._cmd)  # includes use of multiple read+compare strategy
@@ -903,8 +960,13 @@ class Battery:
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    from rrc.eth2i2c import I2CPort, BusMux
+    from rrc.eth2i2c import I2CPort
+    from rrc.i2cbus import BusMux
     from rrc.smbus import BusMaster
+
+    ## Initialize the logging
+    logger_init(filename_base=None)  ## init root logger with different filename
+    _log = getLogger(__name__, DEBUG)
 
     ncd = I2CPort("192.168.1.56", 2101)
     #print(ncd.i2c_bus_scan())
@@ -916,7 +978,7 @@ if __name__ == "__main__":
 
     # print(bat.voltage())
     #print(bat.readBlock(6))
-    print(bat.device_name()[0])
+    _log.debug(bat.device_name())
     # print(bat.voltage())
     # print(f"S: {bat.is_sealed()}")
     # print(f"FA: {bat.is_full_access()}")

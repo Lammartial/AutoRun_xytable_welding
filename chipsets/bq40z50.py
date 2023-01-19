@@ -118,11 +118,12 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     def firmware_version(self, hexi: bool | str | None = None) -> tuple:
         """Returns the chip firmware version."""
+        _log = getLogger(__name__, 2)
         self.manufacturer_access = 0x0002
         buf = self.manufacturer_data
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 11):
-            raise BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
-        return _od2t(OrderedDict({
+            raise BatteryError(f"Readings implausible: Unexpected return value {type(buf)}, {len(buf)}")
+        _v = OrderedDict({
             "value": self._maybe_hexlify(buf, hexi),
             # data come big endian - they SUCK!
             "device_number": unpack_from(">H", buf, 0)[0],
@@ -132,7 +133,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "impedance_track_version": unpack_from(">H", buf, 7)[0],
             "reserved1":     unpack_from(">B", buf, 9)[0],
             "reserved2":     unpack_from(">B", buf, 10)[0],
-        }))
+        })
+        _log.debug(f"FIRMWARE_VERSION: {_v}")
+        return _od2t(_v)
 
     def hardware_version(self) -> int:
         """Returns the chip hardware version."""
@@ -182,7 +185,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.manufacturer_access = 0x0054
         buf = self.manufacturer_data
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 4):
-            BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
+            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
         os = int.from_bytes(buf, "little")
         self._operation_status = OrderedDict({
             "block"     : self._maybe_hexlify(buf, hexi),
@@ -237,7 +240,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.manufacturer_access = 0x0057
         buf = self.manufacturer_data
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 2):
-            BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
+            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
         os = int.from_bytes(buf, "little")
         self._manufacturing_status = OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
@@ -277,7 +280,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return self._operation_status["sec"] == 0x03 # using shadow copy to avoid bus access
 
 
-    def is_unsealed(self, check_fullaccess: bool = False, refresh: bool = False):
+    def is_unsealed(self, check_fullaccess: bool = False, refresh: bool = False) -> bool:
         """Checks if the battery is sealed.
 
         NOTE: Something is wrong in the manual.
@@ -572,7 +575,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         sleep(0.5) # was 5s !!!
         return True
 
-    def change_keys(self, new_unseal_key: bytes | bytearray, new_fullaccess_key: bytes | bytearray):
+    def change_keys(self, new_unseal_key: bytes | bytearray, new_fullaccess_key: bytes | bytearray) -> None:
         """Change unseal and fullaccess keys.
 
         To be compatible with newer chipsets like the bq40z50, we need to write both keys together.
@@ -755,7 +758,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.manufacturer_access = 0x0071
         buf = self.manufacturer_data
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 32):
-            BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
+            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
         return _od2t(OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
@@ -782,7 +785,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         buf = self.manufacturer_data
         #buf = b"0123456789012345"
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 16):
-            raise BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
+            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
         return _od2t(OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
@@ -801,7 +804,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.manufacturer_access = 0xf081  # output CCADC Cal
         buf = self.manufacturer_block_access
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 24):
-            raise BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
+            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
         self._ccadc_cal = OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),  # all blocks of bytes as they are - but hexlified as it looks better in JSON files later ...
             "counter":        unpack_from("<b", buf, 0)[0],
@@ -1281,22 +1284,31 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def toggle_permanent_black_box_recorder(self):
         self.manufacturer_access = 0x0025
 
+
     def toggle_fuse(self):
         self.manufacturer_access = 0x0026
+
+    def set_fuse_control(self, enable: bool) -> bool:
+        return self._ms_toggle_helper("fuse_en", enable, 0x0026)
+
 
     def toggle_led_display_enable(self):
         self.manufacturer_access = 0x002b
 
-    def set_led_display_enable(self, enable: bool) -> bool:
-        return self._ms_toggle_helper("led", enable, 0x002b)
+    #def set_led_display_enable(self, enable: bool) -> bool:
+    #    return self._ms_toggle_helper("led", enable, 0x002b)
 
-
+    def reset_device(self):
+        self.manufacturer_access = 0x0041
+    
+    #def reset_device_0x0012(self):  # backward compatibility command
+    #    self.manufacturer_access = 0x0012
 
     def get_afe_register(self, hexi: bool | str | None = None) -> tuple:
         self.manufacturer_access = 0x0058
         buf = self.manufacturer_block_access
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 32):
-            BatteryError("Readings implausible: Unexpected return value %s,%s.", type(buf), len(buf))
+            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
         return _od2t(OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
@@ -1322,6 +1334,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "scd1":  unpack_from("<b", buf, 0)[0],
             "scd2":  unpack_from("<b", buf, 0)[0],
         }))
+
+    def ts_DeviceName(self) -> str:
+        pass
+    
 
 
 #--------------------------------------------------------------------------------------------------
