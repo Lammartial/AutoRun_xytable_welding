@@ -417,6 +417,7 @@ class Battery:
     ds = {}
 
     def __init__(self, smbus: BusMaster, slvAddress: int = 0x0b, pec: bool = False):
+    #def __init__(self, smbus: BusMaster, slvAddress: int = 0x16, pec: bool = False):
         self.bus = smbus
         self.address = int(slvAddress)
         self.pec = bool(pec)
@@ -974,7 +975,7 @@ if __name__ == "__main__":
     bus = BusMaster(ncd)
     bat = Battery(bus)
     mux = BusMux(ncd, address=0x77)
-    if not mux.setChannel(1): raise Exception("Bullshit")
+    if not mux.setChannel(2): raise Exception("Bullshit")
 
     # print(bat.voltage())
     #print(bat.readBlock(6))

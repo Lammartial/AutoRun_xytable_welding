@@ -1046,17 +1046,35 @@ if __name__ == "__main__":
     # Devices presets
     print("Cell tester presets:", hioki.init())
 
-    # measure single channel (1 ... 22)
-    print(hioki.measure_channnel(1))
-    print(hioki.measure_channnel(4))
-    print(hioki.measure_channnel(7))
-    print(hioki.measure_channnel(10))
-    print(hioki.measure_channnel(13))
-    print(hioki.measure_channnel(15))
-    print(hioki.measure_channnel(16))
-    print(hioki.measure_channnel(18))
-    print(hioki.measure_channnel(19))
+    def check_meas(arr: list, ch: int) -> bool:
+        print("Ch ", ch, " ", arr)
+        if ((arr[0] >= 1 or arr[0] <= 0) or (arr[1] >= 4)):
+            return False
+        else:
+            return True
 
+    # measure single channel (1 ... 22)
+    err = 0   
+    for i in range(100):
+        if (check_meas(hioki.measure_channnel(1), 1) == False):
+            err += 1
+        if (check_meas(hioki.measure_channnel(4), 4) == False):
+            err += 1
+        if (check_meas(hioki.measure_channnel(7), 7)== False):
+            err += 1
+        if (check_meas(hioki.measure_channnel(10), 10)== False):
+            err += 1
+        if (check_meas(hioki.measure_channnel(13), 13)== False):
+            err += 1
+        if (check_meas(hioki.measure_channnel(15), 15)== False):
+            err += 1
+        if (check_meas(hioki.measure_channnel(16), 16)== False):
+            err += 1
+        if (check_meas(hioki.measure_channnel(18), 18)== False):
+            err += 1
+        if (check_meas(hioki.measure_channnel(19), 19)== False):
+            err += 1
+    print("Errors count:", err)
     print("Mesurement finished:", hioki.measurement_finished())
 
     # measure all 22 4-wire channels (Could be useful for Zero-adjustment procedure)

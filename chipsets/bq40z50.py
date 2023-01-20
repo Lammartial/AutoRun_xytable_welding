@@ -675,7 +675,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             (bool): False if writing has failed or the verification readback data differ from the data to write.
         """
 
-        _log = logging.getLogger(__name__)
+        _log = getLogger(__name__, DEBUG)
         block_data = self._validate_buffer(block_data, name="block_data")
         length = len(block_data)
         if (flash_address < 0x4000) or (flash_address+length > 0x6000):
@@ -710,7 +710,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
         """
 
-        _log = logging.getLogger(__name__)
+        _log = getLogger(__name__, DEBUG)
         binfile = BinFile(filenames=str(filename))
         print(binfile.info())
         _info = f"From file '{filename}' loaded segments = " + ",".join([f"0x{s.address:08x}:{format_size(len(s.data), binary=True)}" for s in binfile.segments])
@@ -800,14 +800,16 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         }))
 
 
-    def read_ccadc_cal(self, hexi: bool | str | None = None) -> tuple:
-        self.manufacturer_access = 0xf081  # output CCADC Cal
+    def _read_ccadc_cal(self, hexi: bool | str | None = None) -> tuple:
+        #self.manufacturer_access = 0xf081  # output CCADC Cal
         buf = self.manufacturer_block_access
-        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 24):
+        buf = buf[2:]
+        #print(buf)
+        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 24): 
             raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
         self._ccadc_cal = OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),  # all blocks of bytes as they are - but hexlified as it looks better in JSON files later ...
-            "counter":        unpack_from("<b", buf, 0)[0],
+            "counter":        unpack_from("<B", buf, 0)[0],
             "status":         unpack_from("<b", buf, 1)[0],
             "current_cc":     unpack_from(">h", buf, 2)[0]*1e-3,  # mA, signed short, big endian, current (coulomb counter)
             "cell_voltage_1": unpack_from(">H", buf, 4)[0]*1e-3,  # mV, unsigned short, big endian,
@@ -825,16 +827,20 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     def _wait_for_adc_update(self, num_of_changes: int, timeout :int, t0_ns: int = None):
         # wait the 8-bit counter changed by "num_of_changes" -> overflow need to be respected!
-        self.read_ccadc_cal()
+        self._read_ccadc_cal()
         c0 = self._ccadc_cal["counter"]  # get the current counter
         if t0_ns is None:
             t0_ns = monotonic_ns()
         pause = timeout / 10   # do 10 times access maximum
-        while ((c0 - self._read_ccadc_cal["counter"]) & 0xff) < num_of_changes + 1:
-            if (monotonic_ns() - t0_ns) > timeout * 1000000:
+        c1 = c0
+        while (abs(c1-c0) < (num_of_changes + 1)):
+            t1_ns = monotonic_ns()
+            if (t1_ns - t0_ns) > timeout * 1000000000:
                 raise TimeoutError("While wait for calibration counter")
-            self.read_ccadc_cal()  # update calibration reading
+            #self._read_ccadc_cal()  # update calibration reading
             sleep(pause)
+            self._read_ccadc_cal()
+            c1 = self._ccadc_cal["counter"]
 
     def calib_read_adc_cell_voltage(self, num_cells: int, samples: int = 8, shorted: bool = False, timeout: float = 5.0) -> tuple:
         """Enables the calibration mode of the battery if not set already and then
@@ -856,7 +862,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             tuple: num_cell values of averaged ADC measurements
         """
         def _get_adc_reading(i: int) -> int:
-            _v = self._read_ccadc_cal[f"cell_voltage_{i + 1}"]
+            self._read_ccadc_cal()
+            _v = self._ccadc_cal[f"cell_voltage_{i + 1}"]
             # correct the sign of value
             return _v if _v < 0x8000 else -(0xFFFF - _v + 0x0001)
 
@@ -892,7 +899,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             Tuple[int]: _description_
         """
         try:
-            cell_voltages = int(cell_voltages)
+            cell_voltages[0] = int(cell_voltages[0])
+            cell_voltages[1] = int(cell_voltages[1])
+            cell_voltages[2] = int(cell_voltages[2])
+            cell_voltages[3] = int(cell_voltages[3])
             #self.manufacturer_access = 0xf080
             #n_cells = cell_voltages.count()
             n_cells = numpy.count_nonzero(cell_voltages)
@@ -907,13 +917,14 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             else: 
                 cell_gain = int([cell_gain + cells_gain[i] for i in range(0, n_cells)]/n_cells)
             # 3. write cell_gain[i]
-            block = self.read_flash_block(0x4000, 32, True)
+            block = self.read_flash_block(0x4000, 32, hexi=False)
+            print(block)
             bytes_cell_gain = cell_gain.to_bytes(2, byteorder='big', signed=True)
             # needs to be tested
             block[0:2] = bytes_cell_gain
             #block[0] = bytes_cell_gain[0]
             #block[1] = bytes_cell_gain[1]
-            self.write_flash_block(0x4000, block)
+            #self.write_flash_block(0x4000, block)
             # 4. Re-check voltage readings (+/- 3 mV)
 
             # 5. Return calibrated cell_voltages
@@ -1355,7 +1366,7 @@ class BQ40Z50R2(BQ40Z50R1):
     # no need to overwrite __str__()
 
     def __repr__(self) -> str:
-        return f"BQ40Z50R2({repr(self.smbus)}, slvAddress={self.slvAddress}, pec={self.pec})"
+        return f"BQ40Z50R2({repr(self.bus)}, slvAddress={self.address}, pec={self.pec})"
 
     #----------------------------------------------------------------------------------------------
 
@@ -1414,15 +1425,31 @@ if __name__ == "__main__":
     auto_muxed_i2cbus = I2CMuxedBus(i2c_port, busmux, 2)
     busmaster = BusMaster(auto_muxed_i2cbus)
     bat = BQ40Z50R2(busmaster)
-    print("BatteryStatus:", bat.battery_status())
+    buf = bat.battery_status()
+    print("BatteryStatus:", buf)
 
-    t1 = dt.now()
+    #t1 = dt.now()
 
-    fw_file = Path("../../../Battery-PCBA-Test/filestore/SCD_3412031-04_A_Rubin-B_RRC2020B.srec")
-    bat.write_flash_from_file(fw_file)
+    #fw_file = Path("../../../Battery-PCBA-Test/filestore/SCD_3412031-04_A_Rubin-B_RRC2020B.srec")
+    #bat.write_flash_from_file(fw_file)
 
-    t2 = dt.now()
-    print(f"Programmierzeit: {(t2-t1).seconds}")
+    #t2 = dt.now()
+    #print(f"Programmierzeit: {(t2-t1).seconds}")
+
+    # Testing bq40z50 parameters calibration
+    bat._ms_toggle_helper("cal_test", False, 0x002d)
+    # Cell voltage calibration
+    cell_volt: Tuple = [1000, 0, 0, 0]
+    bat.calib_write_cell_voltage_gain(cell_volt, shorted=False)
+    # Bat voltage calibration
+    bat_volt: int = 4000
+    #bat.calib_write_bat_voltage_gain(bat_volt, shorted=False)
+    # Pack voltage calibration
+    pack_volt = 4000
+    #bat.calib_write_pack_voltage_gain(pack_volt, shorted=False)
+    # Temp calibration
+    temp: Tuple = [200, 200, 200, 200]
+    #bat.calib_write_temp(temp, shorted=False)
 
 
 # END OF FILE
