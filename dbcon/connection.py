@@ -6,6 +6,16 @@ from pathlib import Path
 import sqlalchemy as sa
 from sqlalchemy.orm import sessionmaker
 
+# --------------------------------------------------------------------------- #
+# Logging
+# --------------------------------------------------------------------------- #
+
+DEBUG = 2
+
+from rrc.custom_logging import getLogger, logger_init
+
+# --------------------------------------------------------------------------- #
+
 # need to be known
 CONFIG = {}
 
@@ -57,10 +67,20 @@ def createInternalSession(config, echo=False):
 
 #-------------------------------------------------------------------------------------------------
 # load the default config file (please set the filename for needed connection)
-CONFIG = load_config_yaml_file("config_postgres")
+#CONFIG = load_config_yaml_file("config_postgres")
+CONFIG = load_config_yaml_file("config_mysql")
 
 # global engine and session generator to share access in the callbacks later
-srcEngine, SSession = createInternalSession(CONFIG, echo=True)
+srcEngine, SSession = createInternalSession(CONFIG, echo=True if DEBUG else False)
+
+
+#--------------------------------------------------------------------------------------------------
+if __name__ == "__main__":
+    ## Initialize the logging
+    logger_init(filename_base=None)  ## init root logger with different filename
+    _log = getLogger(__name__, DEBUG)
+
+    _log.info(srcEngine.table_names())
 
 # END OF FILE
 

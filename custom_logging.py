@@ -31,7 +31,6 @@ import sys
 import logging
 import logging.handlers
 
-
 def logger_init(filename_base: str | None = "C:/Production/station_test") -> None:
     """Initializes the root logger with two handlers for file and stdout logging
 
@@ -49,8 +48,8 @@ def logger_init(filename_base: str | None = "C:/Production/station_test") -> Non
         logger.debug(f"Logger already set.")
         return
 
-    print("print in logging.logger_init()")
-    print("print logging.py __name__: " +__name__)
+    #print("print in logging.logger_init()")
+    #print("print logging.py __name__: " +__name__)
     logger.setLevel(logging.NOTSET)
 
     # File handler
@@ -58,14 +57,14 @@ def logger_init(filename_base: str | None = "C:/Production/station_test") -> Non
         logfilepath = f"{filename_base}_{datetime.utcnow().strftime('%Y%m%d')}.log"
         file = logging.handlers.TimedRotatingFileHandler(f"{logfilepath}", when="midnight", interval=1)
         fileformat = logging.Formatter("%(asctime)s [%(levelname)s]: %(process)d %(module)s %(name)s %(lineno)d: %(message)s")
-        file.setLevel(logging.NOTSET) # if debug>0 else logging.INFO)
+        file.setLevel(logging.NOTSET)
         file.setFormatter(fileformat)
         logger.addHandler(file)  # activate file handler
 
     # Stream handler
     stream = logging.StreamHandler()
     streamformat = logging.Formatter("%(asctime)s [%(levelname)s]: %(name)s: %(message)s")
-    stream.setLevel(logging.NOTSET) # if debug>0 else logging.INFO)
+    stream.setLevel(logging.NOTSET)
     stream.setFormatter(streamformat)
     logger.addHandler(stream)  # activate handler
 
