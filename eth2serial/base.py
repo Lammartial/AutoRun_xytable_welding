@@ -4,21 +4,18 @@ Provides basic ETH to SERIAL conversion handling the socket communication.
 import socket
 import asyncio
 
-DEBUG = 0
 
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-import logging
 
-_log = logging.getLogger(__name__)
-_log.setLevel(logging.DEBUG if DEBUG else logging.INFO)
+DEBUG = 1
 
-# Initialize the logging
-try:
-    logging.basicConfig()
-except Exception as e:
-    print("Logging is not supported on this system")
+from rrc.custom_logging import getLogger, logger_init
+
+# --------------------------------------------------------------------------- #
+
+
 
 #--------------------------------------------------------------------------------------------------
 
@@ -101,8 +98,9 @@ class Eth2Serial_SockSingleConnection_Device(object):
             # do NOT log, we need this exception being quiet when polling
             raise
         except Exception as ex:
-            _log.exception(ex)
-            raise
+            #_log.exception(ex)
+            # we have exception handler to log this install in custom_logging
+            raise ex
 
     def request(self, msg: str | None, timeout: float = 3.0, limit: int = 0, encoding: str = "utf-8") -> str:
         """_summary_
@@ -115,6 +113,7 @@ class Eth2Serial_SockSingleConnection_Device(object):
         Returns:
             str: _description_
         """
+        _log = getLogger(__name__, DEBUG)
         try:
             if msg:
                 self.socket.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
@@ -135,9 +134,11 @@ class Eth2Serial_SockSingleConnection_Device(object):
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling
             raise
-        except Exception as ex:
-            _log.exception(ex)
-            raise
+        # we have exception handler to log this install in custom_logging
+        # except Exception as ex:
+        #     #_log.exception(ex)
+
+        #     raise ex
         return result
 
 #--------------------------------------------------------------------------------------------------
@@ -187,9 +188,10 @@ class Eth2SerialDevice(object):
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling
             raise
-        except Exception as ex:
-            _log.exception(ex)
-            raise
+        # we have exception handler to log this install in custom_logging
+        # except Exception as ex:
+        #     _log.exception(ex)
+        #     raise
         finally:
             _s.close()
 
@@ -204,6 +206,7 @@ class Eth2SerialDevice(object):
         Returns:
             str: _description_
         """
+        _log = getLogger(__name__, DEBUG)
         try:
             _s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             _s.settimeout(timeout)
@@ -227,9 +230,10 @@ class Eth2SerialDevice(object):
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling
             raise
-        except Exception as ex:
-            _log.exception(ex)
-            raise
+        # we have exception handler to log this install in custom_logging
+        # except Exception as ex:
+        #     _log.exception(ex)
+        #     raise
         finally:
             _s.close()
         return result
@@ -237,6 +241,7 @@ class Eth2SerialDevice(object):
     async def request_async(self,  message: str | None, limit: str | bytes | int = b'\n', encoding: str = "utf-8") -> str:
 
         async def xchange(reader, writer):
+            _log = getLogger(__name__, DEBUG)
             if message:
                 _log.debug(f'Send: {message!r}')
                 writer.write(message.encode())
@@ -351,7 +356,9 @@ async def tcp_send_and_receive_from_server(resource_string: str, message: str | 
 if __name__ == "__main__":
     from time import perf_counter
 
-    DEBUG = 1
+    ## Initialize the logging
+    logger_init(filename_base="local_log")  ## init root logger with different filename
+    _log = getLogger(__name__, DEBUG)
 
     tic = perf_counter()
     _log.info("Own IP: %s", OWN_PRIMARY_IP)

@@ -3,21 +3,17 @@ Provides basic ETH to SERIAL conversion handling the visa communication.
 """
 from pyvisa import ResourceManager
 
-DEBUG = 0
-
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-import logging
 
-_log = logging.getLogger(__name__)
-_log.setLevel(logging.DEBUG if DEBUG else logging.INFO)
+DEBUG = 0
 
-# Initialize the logging
-try:
-    logging.basicConfig()
-except Exception as e:
-    print("Logging is not supported on this system")
+from rrc.custom_logging import getLogger, logger_init
+
+# --------------------------------------------------------------------------- #
+
+
 
 #--------------------------------------------------------------------------------------------------
 class Eth2SerialVisaDevice(object):
@@ -66,9 +62,10 @@ class Eth2SerialVisaDevice(object):
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling
             raise
-        except Exception as ex:
-            _log.exception(ex)
-            raise
+        # we have exception handler to log this install in custom_logging
+        # except Exception as ex:
+        #     _log.exception(ex)
+        #     raise
         finally:
             self.session.close()
 
@@ -82,6 +79,8 @@ class Eth2SerialVisaDevice(object):
         Returns:
             str: result
         """
+
+        _log = getLogger(__name__, DEBUG)
         try:
             self.session = self.rm.open_resource(self.resource_str)
             # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
@@ -97,9 +96,10 @@ class Eth2SerialVisaDevice(object):
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling
             raise
-        except Exception as ex:
-            _log.exception(ex)
-            raise
+        # we have exception handler to log this install in custom_logging
+        # except Exception as ex:
+        #     _log.exception(ex)
+        #     raise
         finally:
             self.session.close()
         return result
@@ -108,7 +108,9 @@ class Eth2SerialVisaDevice(object):
 if __name__ == "__main__":
     from time import perf_counter
 
-    DEBUG = 1
+    ## Initialize the logging
+    logger_init(filename_base="local_log")  ## init root logger with different filename
+    _log = getLogger(__name__, DEBUG)
 
     tic = perf_counter()
     #_log.info("Own IP: %s", OWN_PRIMARY_IP)
