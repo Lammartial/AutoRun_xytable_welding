@@ -70,10 +70,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self._ccadc_cal = None  # shadow copy
 
     def __str__(self) -> str:
-        return f"SmartBattery with BQ40Z50 chipset at 0x{self.address} on {str(self.smbus)}"
+        return f"SmartBattery with BQ40Z50 chipset at 0x{self.address} on {str(self.bus)}"
 
     def __repr__(self) -> str:
-        return f"BQ40Z50R1({repr(self.smbus)}, slvAddress={self.slvAddress}, pec={self.pec})"
+        return f"BQ40Z50R1({repr(self.bus)}, slvAddress={self.address}, pec={self.pec})"
 
     #----------------------------------------------------------------------------------------------
 
@@ -1363,8 +1363,10 @@ class BQ40Z50R2(BQ40Z50R1):
         super().__init__(smbus, slvAddress=slvAddress, pec=pec)
         self._operation_status = None # shadow copy of operation_status() read to avoid redundant reads for seal/unseal checks
 
-    # no need to overwrite __str__()
-
+    #
+    # !! NO NEED to overwrite __str__() !!
+    #
+    
     def __repr__(self) -> str:
         return f"BQ40Z50R2({repr(self.bus)}, slvAddress={self.address}, pec={self.pec})"
 
