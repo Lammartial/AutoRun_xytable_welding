@@ -18,7 +18,7 @@ class MCP23008:
     GPIO = 0x09
     OLAT = 0x0A
 
-    def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x20):
+    def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x20, init_shadow_from_ic: bool = False):
         """Initialize the object with an I2CPort object and the 7-bit I2C address.
 
         Args:
@@ -26,7 +26,11 @@ class MCP23008:
             i2c_address_7bit: The IC's 7-bit I2C address
         """
         self.i2c = i2c
-        self.i2c_address_7bit = int(i2c_address_7bit)
+        self.i2c_address_7bit = int(i2c_address_7bit)        
+        self._shadow_output = self.get_gpio_register() if init_shadow_from_ic else 0x00
+        self._shadow_gppu = self.get_gppu_register() if init_shadow_from_ic else 0x00
+        self._shadow_iodir = self.get_iodir_register() if init_shadow_from_ic else 0xFF # power-up all pins input
+        self._shadow_ipol = self.get_ipol_register() if init_shadow_from_ic else 0x00
 
     def __str__(self) -> str:
         return f"MCP23008 device with address {self.i2c_address_7bit:02x} on {self.i2c}"
@@ -47,8 +51,9 @@ class MCP23008:
         """
         pin_n = int(pin_n)
         self.__validate_pin_number(pin_n)
-        value = self.get_gpio_register()
-        value |= (1 << pin_n)
+        #value = self.get_gpio_register()
+        #value |= (1 << pin_n)
+        value = self._shadow_output | (1 << pin_n)
         self.set_gpio_register(value)
 
     def reset_pin(self, pin_n: int):
@@ -62,8 +67,9 @@ class MCP23008:
         """
         pin_n = int(pin_n)
         self.__validate_pin_number(pin_n)
-        value = self.get_gpio_register()
-        value &= ~(1 << pin_n)
+        #value = self.get_gpio_register()
+        #value &= ~(1 << pin_n)
+        value = self._shadow_output & ~(1 << pin_n)
         self.set_gpio_register(value)
 
     def get_pin(self, pin_n: int) -> bool:
@@ -94,8 +100,9 @@ class MCP23008:
         """
         pin_n = int(pin_n)
         self.__validate_pin_number(pin_n)
-        value = self.get_gppu_register()
-        value |= (1 << pin_n)
+        #value = self.get_gppu_register()
+        #value |= (1 << pin_n)
+        value = self._shadow_gppu | (1 << pin_n)
         self.set_gppu_register(value)
 
     def disable_pullup(self, pin_n: int):
@@ -109,8 +116,9 @@ class MCP23008:
         """
         pin_n = int(pin_n)
         self.__validate_pin_number(pin_n)
-        value = self.get_gppu_register()
-        value &= ~(1 << pin_n)
+        #value = self.get_gppu_register()
+        #value &= ~(1 << pin_n)
+        value = self._shadow_gppu & ~(1 << pin_n)
         self.set_gppu_register(value)
 
     def set_pin_as_output(self, pin_n: int):
@@ -124,8 +132,9 @@ class MCP23008:
         """
         pin_n = int(pin_n)
         self.__validate_pin_number(pin_n)
-        value = self.get_iodir_register()
-        value &= ~(1 << pin_n)
+        #value = self.get_iodir_register()
+        #value &= ~(1 << pin_n)
+        value = self._shadow_iodir & ~(1 << pin_n)
         self.set_iodir_register(value)
 
     def set_pin_as_input(self, pin_n: int):
@@ -139,30 +148,46 @@ class MCP23008:
         """
         pin_n = int(pin_n)
         self.__validate_pin_number(pin_n)
-        value = self.get_iodir_register()
-        value |= (1 << pin_n)
+        #value = self.get_iodir_register()
+        #value |= (1 << pin_n)
+        value = self._shadow_iodir | (1 << pin_n)
         self.set_iodir_register(value)
 
     def set_iodir_register(self, value: int):
         value = int(value)
         self.__write_register(MCP23008.IODIR, value)
+        self._shadow_iodir = value
 
     def get_iodir_register(self) -> int:
         return self.__read_register(MCP23008.IODIR)
-
+        
     def set_gpio_register(self, value: int):
         value = int(value)
         self.__write_register(MCP23008.GPIO, value)
+        self._shadow_output = value
 
     def get_gpio_register(self) -> int:
-        return self.__read_register(MCP23008.GPIO)
+        return self.__read_register(MCP23008.GPIO)        
+    
 
     def set_gppu_register(self, value: int):
         value = int(value)
         self.__write_register(MCP23008.GPPU, value)
+        self._shadow_gppu = value
 
     def get_gppu_register(self) -> int:
         return self.__read_register(MCP23008.GPPU)
+        
+
+    def set_ipol_register(self, value: int):
+        value = int(value)
+        self.__write_register(MCP23008.IPOL, value)
+        self._shadow_ipol = value
+
+    def get_ipol_register(self) -> int:
+        return self.__read_register(MCP23008.IPOL)
+
+    #-----------------------------
 
     def __write_register(self, register: int, value: int):
         self.i2c.writeto(self.i2c_address_7bit, bytearray([register, value]))
@@ -170,6 +195,7 @@ class MCP23008:
     def __read_register(self, register: int):
         value = self.i2c.readfrom_mem(self.i2c_address_7bit, bytearray([register]), 1)
         return value[0]
+
 
     def __validate_pin_number(self, pin_n: int):
         if pin_n < 0 or pin_n >= MCP23008.number_of_pins:
