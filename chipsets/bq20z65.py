@@ -42,10 +42,10 @@ class BQ20Z65R1(ChipsetTexasInstruments):
         self._operation_status = None # shadow copy of operation_status() read to avoid redundant reads for seal/unseal checks
 
     def __str__(self) -> str:
-        return f"SmartBattery with BQ20Z65 chipset at 0x{self.address} on {str(self.smbus)}"
+        return f"SmartBattery with BQ20Z65 chipset at 0x{self.address} on {str(self.bus)}"
 
     def __repr__(self) -> str:
-        return f"BQ20Z65R1({repr(self.smbus)}, slvAddress={self.slvAddress}, pec={self.pec})"
+        return f"BQ20Z65R1({repr(self.bus)}, slvAddress={self.address}, pec={self.pec})"
 
     #--------------------------------------------------------------------------------------------------
 
@@ -554,10 +554,13 @@ class BQ20Z65R2(BQ20Z65R1):
         # option in teststand to change them on call
         super().__init__(smbus, slvAddress=slvAddress, pec=pec)
 
-    # no need to overwrite __str__()
+    #
+    # !! NO NEED to overwrite __str__() !!
+    #
+    
 
     def __repr__(self) -> str:
-        return f"BQ20Z65R2({repr(self.smbus)}, slvAddress={self.slvAddress}, pec={self.pec})"
+        return f"BQ20Z65R2({repr(self.bus)}, slvAddress={self.address}, pec={self.pec})"
 
     #--------------------------------------------------------------------------------------------------
     @property
