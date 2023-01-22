@@ -6,8 +6,8 @@
      Check FEASA LED ANALYSER RS232 settings. Default: baudrate 57600, Data bits 8, Stop bit 1
 
 """
-from eth2serial.base import Eth2SerialDevice
 import numpy as np
+from rrc.eth2serial import Eth2SerialDevice
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
