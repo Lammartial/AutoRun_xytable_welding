@@ -263,15 +263,15 @@ class DAQ970A(Eth2SerialVisaDevice):
                 case 'TC' | 'DEF':
                     assert (tc_type in ["B", "E", "J", "K", "N", "R", "S", "T"]), ValueError('Error, get_temp: incorrect tc_type parameter')
                     cmd = "MEAS:TEMP:TC?" + " " + tc_type + ",(@" + slot_str + channel_str + ")"
-                    return float(self.request(cmd, 5000))
+                    return float(self.request(cmd, 5000).strip())
                 case 'FTH' | 'THER':
                     assert ((fth_type == 2252) or (fth_type == 5000) or (fth_type == 10000)), ValueError('Error, get_temp: incorrect fth_type parameter')
                     cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(fth_type) + ",(@" + slot_str + channel_str + ")"
-                    return float(self.request(cmd, 5000))
+                    return float(self.request(cmd, 5000).strip())
                 case 'FRTD' | 'RTD':
                     assert((rtd_resist == 100) or (rtd_resist == 1000)), ValueError('Error, get_temp: incorrect rtd_resist parameters')
                     cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(rtd_resist) + ",(@" + slot_str + channel_str + ")"
-                    return float(self.request(cmd, 5000))
+                    return float(self.request(cmd, 5000).strip())
                 case _:
                     raise ValueError('Error, get_temp: unknown parameter')
         except Exception as ex:
