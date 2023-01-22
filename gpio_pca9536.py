@@ -47,7 +47,7 @@ class PCA9536:
 
     WRITABLE_REGS = (REG_OUTPUT, REG_POLARITY_INVERSE, REG_CONFIGURATION)
 
-    def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x41):
+    def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x41, init_shadow_from_ic: bool = False):
         """Initialize the object with an I2CPort object and the 7-bit I2C address.
 
         Args:
@@ -59,11 +59,11 @@ class PCA9536:
         # prepare shadow registers
         self._shadow_regs = [
             None,
-            self.__get_register(PCA9536.REG_OUTPUT),
-            self.__get_register(PCA9536.REG_POLARITY_INVERSE),
-            self.__get_register(PCA9536.REG_CONFIGURATION)
-            ]
-
+            self.__get_register(PCA9536.REG_OUTPUT) if init_shadow_from_ic else 0x00,
+            self.__get_register(PCA9536.REG_POLARITY_INVERSE) if init_shadow_from_ic else 0x00,
+            self.__get_register(PCA9536.REG_CONFIGURATION) if init_shadow_from_ic else 0xFF,  # power-up all pins input
+        ]
+    
     def __str__(self) -> str:
         return f"PCA9536 GPIO device with address {self.i2c_address_7bit:02x} on {self.i2c}"
 
