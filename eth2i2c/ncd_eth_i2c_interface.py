@@ -33,10 +33,11 @@ NCD_I2C_BUS_SCAN = [0xC1, 0x00]
 NCD_COMMAND_SUCCESSFULL = 0x55
 NCD_ERROR_CODE_HEADER = 0xBC
 NCD_ERROR_CODE_FOOTER = 0x43
+
 NCD_I2C_READ_ERROR = 0x5B
-NCD_I2C_WRITE_ERROR = 0x5A
+NCD_I2C_WRITE_ERROR1 = 0x5A
 NCD_I2C_WRITE_ERROR2 = 0x5C
-NCD_NOT_IMPLEMENTED_ERROR = 0x5D
+NCD_I2C_NOT_IMPLEMENTED_ERROR = 0x5D
 NCD_I2C_ACK_ERROR = 0x5E
 
 NCD_PACKET_HEADER_INDEX = 0
@@ -111,8 +112,27 @@ class I2CPort(I2CBase):
         except TimeoutError:
             raise NCDCantFindInterface(self.ncd_interface_address)
 
+    def soft_reset(self) -> None:
+        # from AlphaStation sources
+        if self.__data_exchange(bytes([0xFE, 0x21, 0xBC])) != bytes([0x55]):
+            raise NCDError(self)
+
+    def hard_reset(self) -> None:
+        # from AlphaStation sources
+        if self.__data_exchange(bytes([0xFE, 0x21, 0xBD])) != bytes([0x55]):
+            raise NCDError(self)
+
+    # def set_i2c_port(self, port: int) -> None:
+    #     if self.__data_exchange(bytes([0xBD, (port & 0xff)])) != bytes([0x55]):
+    #         raise NCDError(self)
+
+    # def get_i2c_port(self) -> None:
+    #     rx_payload = self.__data_exchange(bytes([0xBC, 0xFF]))
+    #     self.__check_for_errors(rx_payload)
+    #     return bytearray(rx_payload)
+    
     def self_test(self) -> None:
-        """Perform the self test of the converter.
+        """Perform the 2-way self test of the converter.
 
         Raises:
             NCDSelfTestFailedError: Raised if the selftest of the converter fails.
@@ -217,23 +237,27 @@ class I2CPort(I2CBase):
         """Scan the bus for devices and return a list of their addresses."""
         tx_payload = bytes(NCD_I2C_BUS_SCAN)
         rx_payload = self.__data_exchange(tx_payload)
+        self.__check_for_errors(rx_payload)
         return list(rx_payload)
 
 
-    def i2c_change_speed(self):
-        # From internet:
-        # 100KHz: AA 06 BC 32 01 01 00 00 A0
-        # 38KHz:  AA 06 BC 32 01 01 00 01 A1
-        # 200KHz: AA 06 BC 32 01 01 00 02 A2
-        # 300KHz: AA 06 BC 32 01 01 00 03 A3
-        # 400KHz: AA 06 BC 32 01 01 00 04 A4
-        #         [AA bytecount][c1, c2, u1, u2, u3, u4][checksum]
-        #              API       payload
-        tx_payload = bytes([0xBC,0x32,0x01,0x01,0x00,0x02])
-        rx_payload = self.__data_exchange(tx_payload)
-        _log = getLogger(__name__, DEBUG)
-        _log.info(rx_payload)
-        return list(rx_payload)
+    # def i2c_change_speed(self, channel: int, speed: int) -> list:
+    #     # From internet:
+    #     # 100KHz: AA 06 BC 32 01 01 00 00 A0
+    #     # 38KHz:  AA 06 BC 32 01 01 00 01 A1
+    #     # 200KHz: AA 06 BC 32 01 01 00 02 A2
+    #     # 300KHz: AA 06 BC 32 01 01 00 03 A3
+    #     # 400KHz: AA 06 BC 32 01 01 00 04 A4
+    #     #         [AA bytecount][c1, c2, u1, u2, u3, u4][checksum]
+    #     #              API       payload
+    #     # AA=170, BC=188
+    #     #tx_payload = bytes([0xBC,0x32,0x01,0x01,0x00,0x02])
+    #     tx_payload = bytes([0xBC, 0x01, 0x01, 0x00, speed & 0xff])        
+    #     rx_payload = self.__data_exchange(tx_payload)
+    #     _log = getLogger(__name__, DEBUG)
+    #     _log.info(rx_payload)
+    #     self.__check_for_errors(rx_payload)
+    #     return list(rx_payload)
 
 
     def __check_for_errors(self, payload):
@@ -252,27 +276,20 @@ class I2CPort(I2CBase):
         #
         # But using OSError instead is to be SMBUS compliant!
         #
+        # NOTE: 
+        #   error messages taken from AlphaStation source code write/read I2C functions
+        #
         if error_code == NCD_I2C_READ_ERROR:
-            raise OSError(NCD_I2C_READ_ERROR, f"I2C Read Error on {self}")
-            #raise NCD_I2CReadError(self.last_i2c_address, self.ncd_interface_address)
-
-        elif error_code == NCD_I2C_WRITE_ERROR:
-            raise OSError(NCD_I2C_READ_ERROR, f"I2C Write Error1 on {self}")
-            #raise NCD_I2CWriteError1(self.last_i2c_address, self.ncd_interface_address)
-
-        elif error_code == NCD_I2C_WRITE_ERROR2:
-            raise OSError(NCD_I2C_READ_ERROR, f"I2C Write Error2 on {self}")
-            #raise NCD_I2CWriteError2(self.last_i2c_address, self.ncd_interface_address)
-
-        elif error_code == NCD_NOT_IMPLEMENTED_ERROR:
-            raise Exception("Not implemented NCD function used")
-
+            raise OSError(error_code, f"I2C timeout error while read on {self}, slave-IC did Not Respond, check I2C address.")
+        elif error_code in [NCD_I2C_WRITE_ERROR1, NCD_I2C_WRITE_ERROR1]:
+            raise OSError(error_code, f"I2C timeout error while write on {self}, slave-IC did Not Respond, check I2C address.")
         elif error_code == NCD_I2C_ACK_ERROR:
-            raise OSError(NCD_I2C_READ_ERROR, f"I2C ACK Error on {self}")
-            #raise NCD_I2CAckError(self.last_i2c_address, self.ncd_interface_address)
-
+            raise OSError(error_code, f"I2C ACK Error on {self}")
+        elif error_code == NCD_I2C_NOT_IMPLEMENTED_ERROR:
+            raise Exception("Not implemented I2C function used")
         else:
             raise NCDUnknownErrorCodeError(self, error_code)
+                         
 
     def __wrap_payload_in_packet(self, payload: bytes) -> bytes:
         """Wraps the payload in an NCD packet."""
@@ -396,14 +413,24 @@ class I2CPort(I2CBase):
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    from rrc.i2cbus import BusMux
+    from rrc.smbus import BusMaster
+    from rrc.chipsets.bq40z50 import BQ40Z50R1
+
     ## Initialize the logging
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
     I2C_BRIDGE_RESOURCE_STR = "192.168.1.56"
     dev = I2CPort(I2C_BRIDGE_RESOURCE_STR)
-    dev.writeto(0x77, bytearray([0x02]))
+    mux = BusMux(dev, 0x77)
+    bus = BusMaster(dev)
+    bat = BQ40Z50R1(bus)
+    #dev.writeto(0x77, bytearray([0x02]))
+    mux.setChannel(2)
     _log.info(str(dev.i2c_bus_scan()))
-    #_log.info(str(dev.i2c_change_speed()))
+    #print("CHANGE SPEED: ", str(dev.i2c_change_speed(1, 5)))
+    #print(str(dev.get_i2c_port()))
+    print(bat.device_name())
 
 # END OF FILE
