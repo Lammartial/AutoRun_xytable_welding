@@ -1,17 +1,51 @@
 from rrc.i2cbus import I2CBase
 
+
+# helper to get a bit pattern from a bitlist of integers
+def shifting_plus(bitlist: tuple | list) -> int:
+    out = 0
+    for bit in bitlist:
+        out = out * 2 + (int(bit) & 0x01)
+    return out
+
+
 class PCA9536:
     """
     A class to control the PCA9536 4-bit I2C I/O Expander.
 
     https://www.ti.com/product/PCA9536
+
+    The PCA9536 features 4-bit Configuration (input or
+    output selection), Input Port, Output Port, and Polarity
+    Inversion (active high or active low) registers. At
+    power on, the I/Os are configured as inputs with a
+    weak pullup to VCC. However, the system controller
+    can enable the I/Os as either inputs or outputs by
+    writing to the I/O configuration bits.
+
+    If no signals are applied externally to the PCA9536,
+    the voltage level is 1, or high, because of the internal
+    pullup resistors.
+
+    The data for each input or output is stored in the
+    corresponding Input Port or Output Port register. The
+    polarity of the Input Port register can be inverted
+    with the Polarity Inversion register and the system
+    controller reads all registers.
+
+    The system controller resets the PCA9536 in the
+    event of a timeout or other improper operation by
+    utilizing the power-on reset feature, which puts the
+    registers in their default state and initializes the I2C/
+    SMBus state machine.
+
     """
-    reg_input_port = 0x00
-    reg_output_port = 0x01
-    reg_polarity_inversion = 0x02
-    reg_configuration = 0x03
-    reg_list = [reg_input_port, reg_output_port, reg_polarity_inversion, reg_configuration]
-    gpio_list = [0, 1, 2, 3]
+    REG_INPUT_PORT = 0x00
+    REG_OUTPUT = 0x01
+    REG_POLARITY_INVERSE = 0x02
+    REG_CONFIGURATION = 0x03
+
+    WRITABLE_REGS = (REG_OUTPUT, REG_POLARITY_INVERSE, REG_CONFIGURATION)
 
     def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x41):
         """Initialize the object with an I2CPort object and the 7-bit I2C address.
@@ -22,6 +56,13 @@ class PCA9536:
         """
         self.i2c = i2c
         self.i2c_address_7bit = int(i2c_address_7bit)
+        # prepare shadow registers
+        self._shadow_regs = [
+            None,
+            self.__get_register(PCA9536.REG_OUTPUT),
+            self.__get_register(PCA9536.REG_POLARITY_INVERSE),
+            self.__get_register(PCA9536.REG_CONFIGURATION)
+            ]
 
     def __str__(self) -> str:
         return f"PCA9536 GPIO device with address {self.i2c_address_7bit:02x} on {self.i2c}"
@@ -31,14 +72,39 @@ class PCA9536:
 
     #----------------------------------------------------------------------------------------------
 
+    def configure_gpio_pins(self, pin_as_output: tuple | str, invert_input: tuple | str, preset_output: None | tuple | str = None):
+        """The Configuration register (register 3) configures the directions of the I/O pins.
+        If a bit in this register is set to 1, the corresponding port pin is enabled as an input
+        with high-impedance output driver. If a bit in this register is cleared to 0,
+        the corresponding port pin is enabled as an output.
+
+        Args:
+            pin_as_output (tuple):  4-tuple of 0 | 1, 0=pin is output, 1=pin is input
+            invert_input (tuple):   4-tuple of 0 | 1, 0=pin is read normal, 1=pin is read inverted
+
+        """
+        if len(pin_as_output) != 4:
+            raise ValueError("Parameter 'pin_as_output' must be tuple if 4 integers or a string of length 4.")
+        if len(invert_input) != 4:
+            raise ValueError("Parameter 'invert_input' must be tuple if 4 integers or a string of length 4.")
+        if preset_output is not None:
+            if len(preset_output) != 4:
+                raise ValueError("Parameter 'output' must be tuple if 4 integers or a string of length 4.")
+            _output = shifting_plus(preset_output)
+            self._write_register(PCA9536.REG_OUTPUT, _output)
+        _polarity = shifting_plus(invert_input)
+        _config = shifting_plus(pin_as_output)
+        self._write_register(PCA9536.REG_POLARITY_INVERSE, _polarity)
+        self._write_register(PCA9536.REG_CONFIGURATION, _config)
+
     def set_gpio_n_as_input(self, gpio_n: int):
         """Configure the GPIO with the index n (starts at 0) as an input with a 100k pullup.
 
         Args:
             gpio_n int: Index of the GPIO to configure [0, 3]
         """
-        gpio_n = self.__validate_gpio_number(gpio_n)
-        self.__set_bit_high(PCA9536.reg_configuration, gpio_n)
+        _config = self._shadow_regs[PCA9536.REG_CONFIGURATION] | (1 << (gpio_n & 0x03))  # set corresponding bit in configuration
+        self._write_register(PCA9536.REG_CONFIGURATION, _config)
 
     def set_gpio_n_as_output(self, gpio_n: int):
         """Configure the GPIO with the index n (starts at 0) as an output.
@@ -46,30 +112,11 @@ class PCA9536:
         Args:
             gpio_n int: Index of the GPIO to configure [0, 3]
         """
-        gpio_n = self.__validate_gpio_number(gpio_n)
-        self.__set_bit_low(PCA9536.reg_configuration, gpio_n)
+        _config = self._shadow_regs[PCA9536.REG_CONFIGURATION] & ~(1 << (gpio_n & 0x03))  # clear corresponding bit in configuration
+        self._write_register(PCA9536.REG_CONFIGURATION, _config)
 
-    def set_gpio_n_high(self, gpio_n: int):
-        """Set the specified GPIO to a logic high level (5 V).
-        Has now effect if the GPIO is configured as an input.
 
-        Args:
-            gpio_n int: Index of the GPIO [0, 3]
-        """
-        gpio_n = self.__validate_gpio_number(gpio_n)
-        self.__set_bit_high(PCA9536.reg_output_port, gpio_n)
-
-    def set_gpio_n_low(self, gpio_n):
-        """Set the specified GPIO to a logic low level (Gnd).
-        Has now effect if the GPIO is configured as an input.
-
-        Args:
-            gpio_n int: Index of the GPIO [0, 3]
-        """
-        gpio_n = self.__validate_gpio_number(gpio_n)
-        self.__set_bit_low(PCA9536.reg_output_port, gpio_n)
-
-    def read_gpio_n(self, gpio_n) -> bool:
+    def get_input_n(self, gpio_n: int) -> bool:
         """Read the logic level of the specified GPIO.
 
         Args:
@@ -78,65 +125,77 @@ class PCA9536:
         Returns:
             bool: The logic level of the GPIO.
         """
-        gpio_n = self.__validate_gpio_number(gpio_n)
-        reg_value = self.__get_register(PCA9536.reg_input_port)
-        return bool(reg_value & (1 << gpio_n))
+        reg_value = self._read_input_register()
+        self._shadow_regs[PCA9536.REG_INPUT_PORT] = reg_value  # keep also track of last reading of input
+        return bool(reg_value & (1 << (gpio_n & 0x03)))
 
-    def __set_bit_high(self, register: int, bit_n: int):
-        # Do a read-modify-write to set bit_n of the register to 1.
-        reg_value = self.__get_register(register)
-        reg_value |= (1 << bit_n)
-        self.__set_register(register, reg_value)
 
-    def __set_bit_low(self, register: int, bit_n: int):
-        # Do a read-modify-write to set bit_n of the register to 0.
-        reg_value = self.__get_register(register)
-        reg_value &= ~(1 << bit_n)
-        self.__set_register(register, reg_value)
+    def set_output_n_high(self, gpio_n: int):
+        """Set the specified GPIO to a logic high level (5 V).
+        Has now effect if the GPIO is configured as an input.
 
-    def __set_register(self, register: int, value: int):
-        # Set the register in the IC to a certain value.
-        register = self.__validate_control_register(register)
+        Args:
+            gpio_n int: Index of the GPIO [0, 3]
+        """
+        _value = self._shadow_regs[PCA9536.REG_OUTPUT] | (1 << (gpio_n & 0x03))  # set corresponding bit
+        self._write_register(PCA9536.REG_OUTPUT, _value)
 
+    def set_output_n_low(self, gpio_n: int) -> None:
+        """Set the specified GPIO to a logic low level (Gnd).
+        Has now effect if the GPIO is configured as an input.
+
+        Args:
+            gpio_n int: Index of the GPIO [0, 3]
+        """
+        _value = self._shadow_regs[PCA9536.REG_OUTPUT] & ~(1 << (gpio_n & 0x03))  # clear corresponding bit
+        self._write_register(PCA9536.REG_OUTPUT, _value)
+
+    # private functions
+    def _write_register(self, register, value: int) -> bool:
+        """Write any of the r/w registers and keeps track of shadow registers for all but input.
+
+        Args:
+            register (_type_): _description_
+            value (int): _description_
+
+        Raises:
+            ValueError: _description_
+            ValueError: _description_
+
+        Returns:
+            bool: _description_
+        """
+        if register not in PCA9536.WRITABLE_REGS:
+            raise ValueError(f"Register '{register}' of {self} not writable.")
         value = int(value)
         if not (0 <= value <= 15):
-            raise ValueError(f"Invalid register value for GPIO board. Must be between 0 and 15. You sent {value}. "
-                             f"({self.__repr__()})")
+            raise ValueError(f"Invalid output register value for {self}. Must be between 0 and 15."
+                             f"You sent {value}")
 
         data = bytearray([register, value])
-        self.i2c.writeto(self.i2c_address_7bit, data)
+        if 1 == self.i2c.writeto(self.i2c_address_7bit, data):
+            self._shadow_regs[register] = value
+            return True
+        else:
+            return False
 
-    def __get_register(self, register: int) -> int:
-        # Read a register from the IC.
-        register = self.__validate_control_register(register)
+    def _read_input_register(self) -> int:
+        """Read the input register.
 
-        data = bytearray([register])
+        Raises:
+            IndexError: _description_
+
+        Returns:
+            int: _description_
+        """
+        data = bytearray([PCA9536.REG_INPUT_PORT])
         value = self.i2c.readfrom_mem(self.i2c_address_7bit, data, 1)
-
         try:
             value = value[0]
         except IndexError:
-            raise IndexError(f"Didn't receive enough bytes for __get_register function from {self.__repr__()}.")
-
+            raise IndexError(f"Didn't receive correct number of bytes from {self}.")
         return value
 
-    def __validate_control_register(self, register: int):
-        # Make sure register is an int and it's a valid register index.
-        register = int(register)
-        if register not in PCA9536.reg_list:
-            raise ValueError(f"The register 0x{register:02X} is not in the list of available registers of the GPIO board"
-                             f" ({PCA9536.reg_list}). ({self.__repr__()})")
-        else:
-            return register
-
-    def __validate_gpio_number(self, gpio_n: int) -> int:
-        # Make sure gpio_n is an int and it's a valid gpio index.
-        gpio_n = int(gpio_n)
-        if gpio_n not in PCA9536.gpio_list:
-            raise ValueError(f"Pin {gpio_n} is not in the list of available pins of the GPIO board ({PCA9536.gpio_list}). "
-                             f"({self.__repr__()})")
-        else:
-            return gpio_n
 
 #--------------------------------------------------------------------------------------------------
 
@@ -149,12 +208,12 @@ if __name__ == '__main__':
     mux.setChannelMask(0xff)
 
     gpio = PCA9536(i2c_p)
+    gpio.configure_gpio_pins("1111", "0000", "0000")
 
     gpio.set_gpio_n_as_input(0)
-
     gpio.set_gpio_n_as_output(1)
-    gpio.set_gpio_n_low(1)
+    gpio.set_output_n_low(1)
 
-    print(gpio.read_gpio_n(0))
+    print(gpio.get_input_n(0))
 
 # END OF FILE
