@@ -3,6 +3,7 @@
 Created with Python 3.10
 """
 
+from typing import Callable
 import asyncio
 import concurrent.futures
 import itertools
@@ -33,22 +34,27 @@ from rrc.custom_logging import getLogger
 aio_loop: Optional[asyncio.AbstractEventLoop] = None
 tk_q: queue.Queue = None
 ok_button = None
-var_udi = None
-scanned_udi: str = None
+
+class UDIScanCtrlItem:
+    var: tk.StringVar      # tkinter variable to hold the scanned UDI
+    name: str              # title to show for that UDI
+    validate: Callable   # None or function that checks UDI to accept
+    scanned_udi: str       # None or the scan
+
+    def __init__(self, name: str | None, validate: Callable | None) -> None:
+        self.var=None
+        self.name=name
+        self.validate=validate
+        self.scanned_udi=None
+
+udi_to_scan = [UDIScanCtrlItem(None, None)]
 
 
-def popup_bonus():
-    win = tk.Toplevel()
-    win.wm_title("Window")
-
-    l = tk.Label(win, text="Input")
-    l.grid(row=0, column=0)
-
-    b = ttk.Button(win, text="Okay", command=win.destroy)
-    b.grid(row=1, column=0)
-
-def popup_showinfo():
-    showinfo("Window", "Hello World!")
+def validate_udi_by_string_at_position_1(udi: str, v_str: str) -> bool:
+    if len(udi) > 1+len(v_str):
+        if udi[1:1+len(v_str)] in v_str:  # positions given by RRC team
+            return True
+    return False
 
 
 async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> None:
@@ -68,7 +74,7 @@ async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> 
     _log = getLogger(__name__, DEBUG)
     #safeprint(f'aio_blocker starting. {resource_string}s.')
     #await asyncio.sleep(block)
-    
+
     dev = Eth2SerialDevice(resource_string)
     while True:
         #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = 30)
@@ -77,7 +83,7 @@ async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> 
         _response = await dev.request_async(None)
         if _response:
             _wp = f"RESPONSE={_response}"
-            #safeprint(_wp)            
+            #safeprint(_wp)
             _log.info(_wp)
             work_package = _wp
         else:
@@ -171,20 +177,22 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
         #label = ttk.Label(mainframe, text=work_package)
         #label.grid(column=0, row=(next(row_itr)), sticky='w', padx=10)
         if "RESPONSE" in work_package:
-            global var_udi            
+            global udi_to_scan
 
             _udi = work_package.split("=")[1]
             # validate UDI
-            if len(_udi)>5:
-                if _udi[1:5] in ["PCBA"]:
-                    var_udi.set(_udi)
-                    _stop = True
-                else:
-                    showinfo("Window", f"Wrong UDI code type {_udi}")
-                    #popup_bonus()
-                    _log.warning(f"Wrong UDI code type {_udi}")
-                    pass
-
+            _valid_udi = False
+            for item in udi_to_scan:
+                if item.validate is not None:
+                    if item.validate(_udi, item.name):  # execute the validation function
+                        item.var.set(_udi)   # set the UDI
+                        _valid_udi = True    # avoid pop-up
+            if not _valid_udi:
+                showinfo("Window", f"Wrong UDI code type {_udi}")
+                _log.warning(f"Wrong UDI code type {_udi}")
+            else:
+                # check if we are complete:
+                _stop = all([(item.var.get() not in [None, ""]) for item in udi_to_scan])
     finally:
         if _stop:
             #mainframe.master.withdraw()
@@ -242,7 +250,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
 
     This runs in the Main Thread.
     """
-    global scanned_udi, var_udi, ok_button
+    global udi_to_scan, ok_button
 
     _log = getLogger(__name__, DEBUG)
     _log.debug('tk_main starting\n')
@@ -251,18 +259,29 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     # Create the Tk root and mainframe.
     root = tk.Tk()
 
-     # Create control variables
-    var_udi = tk.StringVar(value="")
-
     def _accept_udi(parent):
-        global scanned_udi, var_udi
-        scanned_udi = var_udi.get()
+        global udi_to_scan
+        for item in udi_to_scan:
+            item.scanned_udi = item.var.get()  # transfer from each tkinter widget into the result space
         root.destroy()
 
     def _cancel(parent):
-        global scanned_udi
-        scanned_udi = None
+        global udi_to_scan
+        for item in udi_to_scan:
+            item.scanned_udi = None
         root.destroy()
+
+    #---for test only---
+    def validate_entry(entry, newstr, oldstr):
+        print(f"{entry},{newstr},{oldstr}")
+        return False
+
+    def invalidate_entry(wname, newstr, oldstr):
+        #print(f"{wname},{newstr},{oldstr}")
+        entry = root.nametowidget(wname)
+        entry.delete(0, tk.END)
+        return
+    #-------------------
 
     root.withdraw()  # hide window
     #root.attributes('-alpha', 0)  # this hides the root window until we have arranged all the wigets
@@ -306,31 +325,51 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     label.grid(row=next(row_itr), column=0, columnspan=2 , pady=10)
 
     # Entry
-    entry = ttk.Entry(
-        mainframe,
-        textvariable=var_udi,
-        font=("-size", 15),
-    )
-    entry.insert(0, "")
-    entry.bind("<Return>", _accept_udi )
-    entry.bind("<Key-Escape>", _cancel)
-    entry.grid(row=next(row_itr), column=0, padx=5, pady=(0, 10), sticky="ew")
+    entry_lst = []
+    for item in udi_to_scan:
+        # Create control variables
+        item.var = tk.StringVar(value="")
+        _row = next(row_itr)
+        _col = 0
+        _label = None
+        if item.name:
+            _label = ttk.Label(mainframe, text=item.name)
+            _label.grid(row=_row, column=_col, padx=5, pady=(0, 10), sticky="ew")
+            _col += 1
+
+        #validate_udi_handle = root.register(validate_entry)
+        #invalidate_udi_hanlde = root.register(invalidate_entry)
+
+        entry = ttk.Entry(
+            mainframe,
+            #state=tk.DISABLED,
+            textvariable=item.var,
+            #validate='focusout',
+            #validatecommand=(validate_udi_handle, '%W', '%s', '%S'),
+            #invalidcommand=(invalidate_udi_hanlde, '%W', '%s', '%S'),
+            font=("-size", 15),
+        )
+        entry.insert(0, "")
+        entry.bind("<Return>", _accept_udi )
+        entry.bind("<Key-Escape>", _cancel)
+        entry.grid(row=_row, column=_col, padx=5, pady=(0, 10), sticky="ew")
+        entry_lst.append((_label, entry))
 
     # Button
     ok_button = ttk.Button(mainframe, text="Start Test", style="Accent.TButton", command=lambda: _accept_udi(None))
     ok_button.bind("<Return>", _accept_udi)
     ok_button.bind("<Key-Escape>", _cancel)
-    ok_button.grid(row=next(row_itr), column=0, ipady=50, padx=5, pady=10, sticky="nsew")
+    ok_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, padx=5, pady=10, sticky="nsew")
 
     # Separator
     separator = ttk.Separator(mainframe)
-    separator.grid(row=next(row_itr), column=0, padx=(20, 10), pady=10, sticky="ew")
+    separator.grid(row=next(row_itr), column=0, columnspan=2, padx=(20, 10), pady=10, sticky="ew")
 
     # Button
     cancel_button = ttk.Button(mainframe, text="Cancel", command=lambda: _cancel(None))
     cancel_button.bind("<Return>", _cancel )
     cancel_button.bind("<Key-Escape>", _cancel)
-    cancel_button.grid(row=next(row_itr), column=0, ipady=50, padx=5, pady=10, sticky="nsew")
+    cancel_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, padx=5, pady=10, sticky="nsew")
 
     # # Sizegrip
     # sizegrip = ttk.Sizegrip(self)
@@ -363,7 +402,9 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     root.deiconify()
 
     root.focus_force()  # this is to activate the window again (important after programmatically closed)
-    entry.focus_set()   # now set the focus to the dialog element
+    #entry_lst[0][1].focus_set()   # now set the focus to the first dialog element
+    ok_button.focus_set()
+
 
     # The asyncio loop must start before the tkinter event loop.
     while not aio_loop:
@@ -371,14 +412,14 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
 
     root.mainloop()
 
-
     # kill the potentially active schedules for 2 after() callbacks
     for k,v in mainframe._id_after.items():
         mainframe.after_cancel(v)
 
     _log.debug('tk_callback_consumer ending')
     _log.debug('tk_main ending')
-    _log.debug(f"UDI={scanned_udi}")
+    for item in udi_to_scan:
+        _log.debug(f"UDI({item.name})={item.scanned_udi}")
 
 
 async def manage_aio_loop(aio_initiate_shutdown: threading.Event):
@@ -389,7 +430,7 @@ async def manage_aio_loop(aio_initiate_shutdown: threading.Event):
 
     This runs in Asyncio's thread and in asyncio's loop.
     """
-    
+
     # Communicate the asyncio loop status to tkinter via a global variable.
     global aio_loop
 
@@ -421,6 +462,7 @@ def main(resource_str: str, title: str = "ENTER UDI"):
 
     This runs in the Main Thread.
     """
+
     #_log.debug('main starting')
 
     # Start the permanent asyncio loop in a new thread.
@@ -447,19 +489,26 @@ def identify_uut(seq_context) -> Tuple[bool, str]:
     Returns:
         Tuple[bool, str]: return values to a TestStand container that expects two types in this order.
     """
-    global scanned_udi
+    global udi_to_scan
 
-    scanned_udi = None  # clear the last UDI
     # this is just to demonstrate the parameter passing from TestStand
     context_id = seq_context.Id
     executing_sequence_name = seq_context.Sequence.Name
     executing_step_name = seq_context.Step.Name
     _scanner = str(seq_context.Locals.TestSocketResources.scanner)
+    # clear the UDIs to scan from TestStand context:
+    udi_to_scan = [
+        UDIScanCtrlItem("PCBA", validate_udi_by_string_at_position_1)
+    ]
     main(_scanner)
-    if scanned_udi is not None:
-        return (True, scanned_udi)
+    res = tuple()
+    for item in udi_to_scan:
+        _log.debug(f"UDI({item.name})={item.scanned_udi}")
+        res += item.scanned_udi
+    if all(res):
+        return (True,) + res
     else:
-        return (False, "")
+        return (False,) + res
 
 #--------------------------------------------------------------------------------------------------
 
@@ -468,12 +517,25 @@ if __name__ == '__main__':
     from rrc.custom_logging import logger_init
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
-    #with SafePrinter() as safeprint:
-    #     #sys.exit(main())
-    #     for i in range(0, 2):
-    #         main("169.254.36.1:2000")
-    for i in range(0,1):
-        main("192.168.1.120:2000", title="TEST FROM COMMANDLINE")
-        print(f"IDX:{i} -> {scanned_udi}")
+
+    # set the required UDIs per global
+    udi_to_scan = [
+        UDIScanCtrlItem("PCBA", validate_udi_by_string_at_position_1),
+        UDIScanCtrlItem("CELL", validate_udi_by_string_at_position_1),
+        #UDIScanCtrlItem("HEINZ", validate_udi_by_string_at_position_1),
+    ]
+
+    main("192.168.1.120:2000", title="TEST FROM COMMANDLINE")
+    #print(f"SCANNER -> {scanned_udi}")
+
+    res = tuple()
+    for item in udi_to_scan:
+        _log.debug(f"UDI({item.name})={item.scanned_udi}")
+        res += (item.scanned_udi,)
+    if all(res):
+        print((True,) + res)
+    else:
+        print((False,) + res)
+
 
 # END OF FILE
