@@ -690,6 +690,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             _log.debug(f"Write Block 0x{address:08x}:{page}")
             self.writeBlock(0x44, data) # NOT verified
             # now poll for battery is finished with flash writing
+            sleep(0.3)
             self.waitForReady(timeout_ms=300, throw=True)
             _log.debug(f"Read back 0x{address:08x}:{page}")
             readback = self.read_flash_block(address, length=page, hexi=None) # we get only the data, not the address back here!
@@ -843,7 +844,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         t0_ns = monotonic_ns()
         pause = timeout / 10   # do 10 times access maximum
         c1 = c0
-        while (abs(c1-c0) < (num_of_changes + 1)):
+        while (abs(c1-c0) < num_of_changes):
             t1_ns = monotonic_ns()
             if (t1_ns - t0_ns) > timeout * 1e+9:
                 raise TimeoutError("While wait for calibration counter")
@@ -866,7 +867,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             float: value of averaged ADC measurements
         """
-        def _get_adc_reading(i: int) -> int:
+        def _get_adc_reading(i: int) -> float:
             self._read_ccadc_cal()
             return self._ccadc_cal[f"cell_voltage_{i + 1}"]
 
@@ -879,13 +880,12 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self.manufacturer_access = 0xf082  # output shorted CCADC Cal
         else:
             self.manufacturer_access = 0xf081  # output CCADC Cal
-        # wait the 8-bit counter changed by 2 -> overflow need to be respected!
-        self._wait_for_adc_update(2, timeout, t0_ns=t0)
-        # now get the ADCs from the last block read with corrected signs
-        voltage = _get_adc_reading(1) 
-        #n = 8  # take 8 measurements, including the base
-        for _ in range(0, samples-1):
-            self._wait_for_adc_update(1, timeout, t0_ns=t0)
+        voltage: float = 0
+        #n = 8  # take 8 measurements, including the base   
+        for _ in range(0, samples):
+            # wait the 8-bit counter changed by 2 -> overflow need to be respected!
+            self._wait_for_adc_update(2, timeout, t0_ns=t0)
+            # now get the ADCs from the last block read with corrected signs
             voltage += _get_adc_reading(1)
         # calc mean values
         if (samples != 0): voltage = voltage/samples  
@@ -897,7 +897,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Cells Voltage Calibration. 
 
         Args:
-            cell_voltages (Tuple[int]): measured (known) cells voltage, V
+            cell_voltages (Tuple[int]): measured (known) cells voltage, Volts
             shorted (bool, optional): Decides if shorted CCADC mode or normal. This mode enables an
                 internal short on the coulomb counter inputs (SRP, SRN). Defaults to False.
 
@@ -913,6 +913,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             # Raw ADC data. 3.6 V == 19.45  
             adc_cell_voltage = self.calib_read_adc_cell_voltage(samples=4, shorted=shorted)
             # 2. calculate cell_gain
+            # adc_cell_voltage == 0 => Exception
             cell_gain: int = int(cell_voltages[0]/adc_cell_voltage*65536)
             # 3. write cell_gain
             block = self.read_flash_block(0x4000, 32, hexi=False)
@@ -954,17 +955,16 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self.manufacturer_access = 0xf082  # output shorted CCADC Cal
         else:
             self.manufacturer_access = 0xf081  # output CCADC Cal
-        # wait the 8-bit counter changed by 2 -> overflow need to be respected!
-        self._wait_for_adc_update(2, timeout, t0_ns=t0)
-        # now get the ADCs from the last block read with corrected signs
-        self._read_ccadc_cal()
-        adc_bat_voltage = self._ccadc_cal[f"bat_voltage"]
-        #n = 8  # take 8 measurements, including the base
-        for _ in range(0, samples-1):
-            self._wait_for_adc_update(1, timeout, t0_ns=t0)
+        adc_bat_voltage: float = 0
+        # take "samples" measurements, including the base
+        for _ in range(0, samples):
+            # wait the 8-bit counter changed by 2 -> overflow need to be respected!
+            self._wait_for_adc_update(2, timeout, t0_ns=t0)
+            # now get the ADCs from the last block read with corrected signs
             self._read_ccadc_cal()
             adc_bat_voltage += self._ccadc_cal[f"bat_voltage"] 
-        adc_bat_voltage = adc_bat_voltage/samples
+        if (samples != 0): adc_bat_voltage = adc_bat_voltage/samples
+        else: adc_bat_voltage = 0
         return float(adc_bat_voltage)
 
     def calib_write_bat_voltage_gain(self, bat_voltage: float, shorted: bool = False) -> float:
@@ -972,7 +972,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Battery Voltage Calibration.
 
         Args:
-            bat_voltage (int): measured (known) battery voltage, V
+            bat_voltage (int): measured (known) battery voltage, Volts
             shorted (bool, optional): Decides if shorted CCADC mode or normal. This mode enables an
                 internal short on the coulomb counter inputs (SRP, SRN). Defaults to False.
 
@@ -982,9 +982,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         try:
             bat_voltage = float(bat_voltage) 
             # 1. average adc bat voltage 
-            # Raw ADC data. 3.6 V == 19.45  
+            # Raw ADC data. 10.8 V == ~14.4  
             adc_bat_voltage = self.calib_read_adc_bat_voltage(samples=4, shorted=shorted)
             # 2. calculate bat_gain
+            # adc_bat_voltage == 0 => Exception
             bat_gain: int = int(bat_voltage/adc_bat_voltage*65536)
             # 3. write bat_gain
             block = self.read_flash_block(0x4004, 32, hexi=False)   
@@ -1023,17 +1024,16 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self.manufacturer_access = 0xf082  # output shorted CCADC Cal
         else:
             self.manufacturer_access = 0xf081  # output CCADC Cal
-        # wait the 8-bit counter changed by 2 -> overflow need to be respected!
-        self._wait_for_adc_update(2, timeout, t0_ns=t0)
-        # now get the ADCs from the last block read with corrected signs
-        self._read_ccadc_cal()
-        adc_pack_voltage = self._ccadc_cal[f"pack_voltage"]
-        #n = 8  # take 8 measurements, including the base
-        for _ in range(0, samples-1):
-            self._wait_for_adc_update(1, timeout, t0_ns=t0)
+        adc_pack_voltage: float = 0
+        # take 8 measurements, including the base
+        for _ in range(0, samples):
+            # wait the 8-bit counter changed by 2 -> overflow need to be respected!
+            self._wait_for_adc_update(2, timeout, t0_ns=t0)
+            # now get the ADCs from the last block read with corrected signs
             self._read_ccadc_cal()
             adc_pack_voltage += self._ccadc_cal[f"pack_voltage"] 
-        adc_pack_voltage = adc_pack_voltage/samples
+        if (samples != 0): adc_pack_voltage = adc_pack_voltage/samples
+        else: adc_pack_voltage = 0
         return float(adc_pack_voltage)
 
     def calib_write_pack_voltage_gain(self, pack_voltage: int, shorted: bool = False) -> float:
@@ -1041,23 +1041,24 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Package Voltage Calibration.
 
         Args:
-            pack_voltage (int): measured (known) package voltage, V
+            pack_voltage (int): measured (known) package voltage, Volts
             shorted (bool, optional): Decides if shorted CCADC mode or normal. This mode enables an
                 internal short on the coulomb counter inputs (SRP, SRN). Defaults to False.
 
         Returns:
-            float: calibrated package voltage.
+            float: calibrated package voltage, Volts.
         """
         try:
             pack_voltage = float(pack_voltage) 
             # 1. average adc bat voltage 
-            # Raw ADC data. 3.6 V == 19.45  
+            # Raw ADC data. 10.8 V == ~14.25  
             adc_pack_voltage = self.calib_read_adc_pack_voltage(samples=4, shorted=shorted)
             # 2. calculate bat_gain
+            # adc_pack_voltage == 0 => Exception
             pack_gain: int = int(pack_voltage/adc_pack_voltage*65536)
             # 3. write bat_gain
             block = self.read_flash_block(0x4002, 32, hexi=False)
-            print(block)  
+            #print(block)  
             bytes_pack_gain = pack_gain.to_bytes(2, byteorder='little', signed=False)
             block[0:2] = bytes_pack_gain
             sleep(0.5)
@@ -1071,20 +1072,20 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return float(dasstat[6])
 
     def calib_read_adc_current(self,  samples: int = 8, shorted: bool = False,  timeout: float = 5.0) -> int:
-        """_summary_
+        """
+        Enables the calibration mode of the battery if not set already, then
+        measures current_cc, averages "samples" readings for higher accuracy, 
+        returning the mean value.
 
         Args:
-            samples (int, optional): _description_. Defaults to 8.
-            shorted (bool, optional): _description_. Defaults to False.
-            timeout (float, optional): _description_. Defaults to 5.0.
+            samples (int, optional): number of samples to average. Defaults to 8.
+            shorted (bool, optional): Decides if shorted CCADC mode or normal. This mode enables an
+                    internal short on the coulomb counter inputs (SRP, SRN). Defaults to False.
+            timeout (float, optional): Overall timeout in seconds. Defaults to 5.0.
 
         Returns:
-            int: _description_
+            float: value of averaged ADC measurements
         """
-        def _get_adc_reading() -> int:
-            _v = self._read_ccadc_cal[f"current_cc"]
-            # correct the sign of value
-            return _v if _v < 0x8000 else -(0xFFFF - _v + 0x0001)
         t0 = monotonic_ns()  # common timout over the whole function
         # make sure that calibration test is enabled
         self._ms_toggle_helper("cal_test", True, 0x002d)
@@ -1094,54 +1095,52 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self.manufacturer_access = 0xf082  # output shorted CCADC Cal
         else:
             self.manufacturer_access = 0xf081  # output CCADC Cal
-        # wait the 8-bit counter changed by 2 -> overflow need to be respected!
-        self._wait_for_adc_update(2, timeout, t0_ns=t0)
-        # now get the ADCs from the last block read with corrected signs
-        adc_current = self._get_adc_reading()
-        #n = 8  # take 8 measurements, including the base
-        for _ in range(0, samples-1):
-            self._wait_for_adc_update(1, timeout, t0_ns=t0)
-            adc_current = self._get_adc_reading()/samples 
-        return int(adc_current)
+        adc_curr: float = 0
+        # take "samples" measurements, including the base
+        for _ in range(0, samples):
+            # wait the 8-bit counter changed by 2 -> overflow need to be respected!
+            self._wait_for_adc_update(2, timeout, t0_ns=t0)
+            # now get the ADCs from the last block read with corrected signs
+            self._read_ccadc_cal()
+            adc_curr += self._ccadc_cal[f"current_cc"] 
+        if (samples != 0): adc_curr = adc_curr/samples
+        else: adc_curr = 0
+        return float(adc_curr)
 
-    def calib_write_current_gain(self, current: int, shorted: bool = False) -> int:
-        """_summary_
+    def calib_write_current_gain(self, current: float, shorted: bool = False) -> float:
+        """
+        Current Calibration.
 
         Args:
-            bat_voltage (int): _description_
-            shorted (bool, optional): _description_. Defaults to False.
+            current (int): measured (known) current, Amps
+            shorted (bool, optional): Decides if shorted CCADC mode or normal. This mode enables an
+                internal short on the coulomb counter inputs (SRP, SRN). Defaults to False.
 
         Returns:
-            int: _description_
+            float: calibrated current, Amps.
         """
         try: 
-            current = int(current)
+            current = float(current)
             # 1. average adc current 
-            adc_current = self.calib_read_adc_current(shorted=shorted)
+            adc_current = self.calib_read_adc_current(samples=4, shorted=shorted)
             # 2. calculate current_gain, capacity_gain. 
-            # if cc_offset != 0 => Read Coulomb Counter Offset Samples (addr = 0x4010)
-            #cc_offset_samples = int((block[12] >> 8) + block[11])
+            # adc_current == 0 => Exception
             cc_gain = float(current/adc_current)
             capacity_gain = float(cc_gain*298261.6178)
             # 3. write bat_gain
-            block = self.read_flash_block(0x4006, 32, True)
+            block = self.read_flash_block(0x4006, 32, hexi=False)
+            # old gain
+            #ccg = unpack_from("<f", block, 0)[0]
+            #ccc = unpack_from("<f", block, 4)[0]
             bytes_cc_gain = bytearray(struct.pack("f", cc_gain))
             bytes_cap_gain = bytearray(struct.pack("f", capacity_gain))
-            block[0] = bytes_cc_gain[0]
-            block[1] = bytes_cc_gain[1]
-            block[2] = bytes_cc_gain[2]
-            block[3] = bytes_cc_gain[3]
-            block[4] = bytes_cap_gain[0]
-            block[5] = bytes_cap_gain[1]
-            block[6] = bytes_cap_gain[2]
-            block[7] = bytes_cap_gain[3]
+            block[0:4] = bytes_cc_gain
+            block[4:4] = bytes_cap_gain
             self.write_flash_block(0x4006, block)
-            # 4. Re-check current
-
-            # 5. Return calibrated current
+            # 4. Return calibrated current
             self._ms_toggle_helper("cal_test", False, 0x002d)
             sleep(0.1)
-            res = self.calib_read_adc_current(shorted=shorted)
+            res = self.calib_read_adc_current(samples=1, shorted=shorted)
         except Exception:
             raise
         return res
@@ -1458,7 +1457,10 @@ if __name__ == "__main__":
     #print(bat.calib_write_bat_voltage_gain(bat_volt, shorted=False))
     # Pack voltage calibration
     pack_volt = 10.8
-    print(bat.calib_write_pack_voltage_gain(pack_volt, shorted=False))
+    #print(bat.calib_write_pack_voltage_gain(pack_volt, shorted=False))
+    # Current calibration
+    curr = -0.009
+    print(bat.calib_write_current_gain(curr, shorted=False))
     # Temp calibration
     temp: Tuple = [200, 200, 200, 200]
     #bat.calib_write_temp(temp, shorted=False)
