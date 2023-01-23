@@ -1156,24 +1156,40 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             Tuple[int]: _description_
         """
         try:
-            temp = float(temp)
+            temp[0] = int(temp[0]*10)
+            temp[1] = int(temp[1]*10)
+            temp[2] = int(temp[2]*10)
+            temp[3] = int(temp[3]*10)
             # 1. Read TS1...TS4 offset
-            block = self.read_flash_block(0x4015, 32, True)
-            ts_offset = block[0 : 4]
+            block = self.read_flash_block(0x4015, 32, hexi=False)
+            ts_offset = []
+            ts_offset.append(struct.unpack_from("<b", block, 0)[0])
+            ts_offset.append(struct.unpack_from("<b", block, 1)[0])
+            ts_offset.append(struct.unpack_from("<b", block, 2)[0])
+            ts_offset.append(struct.unpack_from("<b", block, 3)[0])
             # 2. Read appropriate temperature from the DAStatus2()
             # use manufacturing_dastatus2()
             dastatus2 = self.manufacturing_dastatus2()
-            int_temp = []
+            int_temp = [int(dastatus2[2]*10), int(dastatus2[3]*10), int(dastatus2[4]*10), int(dastatus2[5]*10)]
             # 3. Calculate new TS1...TS4 offset
-            for i in range(0, 3):
+            new_offset = bytearray(b'\x00\x00\x00\x00')
+            for i in range(0, 4):
                 if (temp[i] != 0):
-                    block[i] = temp[i] - int_temp[i] + ts_offset[i]
+                    dt = temp[i] - int_temp[i] + ts_offset[i] 
+                    new_offset[i:] = struct.pack("b", dt)
+                else:
+                    new_offset[i:] = struct.pack("b", 0)
+            block[0] = new_offset[0]
+            block[1] = new_offset[1]
+            block[2] = new_offset[2]
+            block[3] = new_offset[3]
+            #print(block)
             # 4. Write new TS1...TS4 offset
             self.write_flash_block(0x4015, block)
             # 4. Re-check temperature TS1...TS4
-            sleep(0.1)
+            sleep(1)
             dastatus2 = self.manufacturing_dastatus2()
-            res = []
+            res = [dastatus2[2], dastatus2[3], dastatus2[4], dastatus2[5]]
         except Exception:
             raise
         return res
@@ -1460,10 +1476,10 @@ if __name__ == "__main__":
     #print(bat.calib_write_pack_voltage_gain(pack_volt, shorted=False))
     # Current calibration
     curr = -0.009
-    print(bat.calib_write_current_gain(curr, shorted=False))
+    #print(bat.calib_write_current_gain(curr, shorted=False))
     # Temp calibration
-    temp: Tuple = [200, 200, 200, 200]
-    #bat.calib_write_temp(temp, shorted=False)
+    temp: Tuple = [22.55, 22.55, 22.65, 0]
+    print(bat.calib_write_temp(temp, shorted=False))
 
 
 # END OF FILE
