@@ -12,27 +12,20 @@ import threading
 import time
 import tkinter as tk
 import tkinter.ttk as ttk
+from tkinter.messagebox import showinfo
 from collections.abc import Iterator
 from typing import Optional, Tuple
 from pathlib import Path
 
 from rrc.eth2serial.base import tcp_send_and_receive_from_server, Eth2SerialDevice
 
-DEBUG = 0   # set to 0 for production
-
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-import logging
 
-_log = logging.getLogger(__name__)
-_log.setLevel(logging.DEBUG if DEBUG else logging.INFO)
+DEBUG = 0   # set to 0 for production
 
-# Initialize the logging
-try:
-    logging.basicConfig()
-except Exception as e:
-    print("Logging is not supported on this system")
+from rrc.custom_logging import getLogger
 
 # --------------------------------------------------------------------------- #
 
@@ -42,6 +35,21 @@ tk_q: queue.Queue = None
 ok_button = None
 var_udi = None
 scanned_udi: str = None
+
+
+def popup_bonus():
+    win = tk.Toplevel()
+    win.wm_title("Window")
+
+    l = tk.Label(win, text="Input")
+    l.grid(row=0, column=0)
+
+    b = ttk.Button(win, text="Okay", command=win.destroy)
+    b.grid(row=1, column=0)
+
+def popup_showinfo():
+    showinfo("Window", "Hello World!")
+
 
 async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> None:
     """ Asynchronously block the thread and put a 'Hello World' work package into Tkinter's work queue.
@@ -57,10 +65,11 @@ async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> 
     Returns:
         Nothing. The work package is returned via the threadsafe tk_q.
     """
+    _log = getLogger(__name__, DEBUG)
     #safeprint(f'aio_blocker starting. {resource_string}s.')
     #await asyncio.sleep(block)
-    _ip, _port = resource_string.split(":")
-    dev = Eth2SerialDevice(_ip, _port)
+    
+    dev = Eth2SerialDevice(resource_string)
     while True:
         #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = 30)
         #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0)  # uses .readuntil()
@@ -68,7 +77,7 @@ async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> 
         _response = await dev.request_async(None)
         if _response:
             _wp = f"RESPONSE={_response}"
-            #safeprint(_wp)
+            #safeprint(_wp)            
             _log.info(_wp)
             work_package = _wp
         else:
@@ -94,7 +103,7 @@ async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> 
             else:
                 # The work package has been placed in the queue so we're done.
                 break
-        break
+        #break
 
     # ends by force only
     #safeprint(f'aio_blocker ending.')
@@ -129,6 +138,7 @@ def aio_exception_handler(mainframe: ttk.Frame, future: concurrent.futures.Futur
 
     # Handle an expected error.
     except IOError as exc:
+        _log = getLogger(__name__, DEBUG)
         #safeprint(f'aio_exception_handler: {exc!r} was handled correctly. ')
         _log.warning(f'aio_exception_handler: {exc!r} was handled correctly. ')
         pass
@@ -143,6 +153,8 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
     This is the consumer for Tkinter's work queue. It runs in the Main Thread. After starting, it runs
     continuously until the GUI is closed by the user.
     """
+
+    _log = getLogger(__name__, DEBUG)
     # Poll continuously while queue has work needing processing.
     poll_interval = 0
     _stop = False
@@ -159,10 +171,20 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
         #label = ttk.Label(mainframe, text=work_package)
         #label.grid(column=0, row=(next(row_itr)), sticky='w', padx=10)
         if "RESPONSE" in work_package:
-            global var_udi
+            global var_udi            
+
             _udi = work_package.split("=")[1]
-            var_udi.set(_udi)
-            _stop = True
+            # validate UDI
+            if len(_udi)>5:
+                if _udi[1:5] in ["PCBA"]:
+                    var_udi.set(_udi)
+                    _stop = True
+                else:
+                    showinfo("Window", f"Wrong UDI code type {_udi}")
+                    #popup_bonus()
+                    _log.warning(f"Wrong UDI code type {_udi}")
+                    pass
+
     finally:
         if _stop:
             #mainframe.master.withdraw()
@@ -188,6 +210,7 @@ def tk_callbacks(mainframe: ttk.Frame, row_itr: Iterator, resource_string: str):
 
     global tk_q
 
+    _log = getLogger(__name__, DEBUG)
     #safeprint('tk_callbacks starting')
     _log.debug('tk_callbacks starting')
     task_id_itr = itertools.count(1)
@@ -221,6 +244,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     """
     global scanned_udi, var_udi, ok_button
 
+    _log = getLogger(__name__, DEBUG)
     _log.debug('tk_main starting\n')
     row_itr = itertools.count()
 
@@ -365,10 +389,13 @@ async def manage_aio_loop(aio_initiate_shutdown: threading.Event):
 
     This runs in Asyncio's thread and in asyncio's loop.
     """
-    #_log.debug('manage_aio_loop starting')
-
+    
     # Communicate the asyncio loop status to tkinter via a global variable.
     global aio_loop
+
+    _log = getLogger(__name__, DEBUG)
+    #_log.debug('manage_aio_loop starting')
+
     aio_loop = asyncio.get_running_loop()
 
     # If there are no awaitables left in the queue asyncio will close.
@@ -435,7 +462,12 @@ def identify_uut(seq_context) -> Tuple[bool, str]:
         return (False, "")
 
 #--------------------------------------------------------------------------------------------------
+
 if __name__ == '__main__':
+    ## Initialize the logging
+    from rrc.custom_logging import logger_init
+    logger_init(filename_base=None)  ## init root logger with different filename
+    _log = getLogger(__name__, DEBUG)
     #with SafePrinter() as safeprint:
     #     #sys.exit(main())
     #     for i in range(0, 2):
@@ -443,4 +475,5 @@ if __name__ == '__main__':
     for i in range(0,1):
         main("192.168.1.120:2000", title="TEST FROM COMMANDLINE")
         print(f"IDX:{i} -> {scanned_udi}")
+
 # END OF FILE
