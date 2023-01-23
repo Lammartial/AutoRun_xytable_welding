@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 # Logging
 # --------------------------------------------------------------------------- #
 
-DEBUG = 2
+DEBUG = 1
 
 from rrc.custom_logging import getLogger, logger_init
 
@@ -21,7 +21,7 @@ CONFIG = {}
 
 #-------------------------------------------------------------------------------------------------
 # import static configuration from YAML file
-def load_config_yaml_file(fname: str):
+def load_config_yaml_file(fname: Path | str):
     """Loads the given filename as YAML while appending the .yaml suffix.
 
     Args:
@@ -30,7 +30,12 @@ def load_config_yaml_file(fname: str):
     Returns:
         dict: configuration dict from yaml
     """
-    with open(Path(__file__).parent.absolute() / f"{fname}.yaml", "r") as stream:
+    if isinstance(fname, str):
+        _filepath = Path(__file__).parent.absolute() / f"{fname}.yaml"
+    else:
+        # full filepath -> don't modify
+        _filepath = Path(fname)
+    with open(_filepath, "r") as stream:
         try:
             CONFIG = yaml.safe_load(stream)
         except yaml.YAMLError as exc:
