@@ -11,6 +11,7 @@ import queue
 import sys
 import threading
 import time
+import numpy as np
 import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter.messagebox import showinfo
@@ -48,7 +49,7 @@ class UDIScanCtrlItem:
         self.scanned_udi=None
 
 udi_to_scan = [UDIScanCtrlItem(None, None)]
-
+allow_manual_edit: bool = False
 
 def validate_udi_by_string_at_position_1(udi: str, v_str: str) -> bool:
     if len(udi) > 1+len(v_str):
@@ -250,7 +251,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
 
     This runs in the Main Thread.
     """
-    global udi_to_scan, ok_button
+    global udi_to_scan, allow_manual_edit, ok_button
 
     _log = getLogger(__name__, DEBUG)
     _log.debug('tk_main starting\n')
@@ -342,7 +343,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
 
         entry = ttk.Entry(
             mainframe,
-            #state=tk.DISABLED,
+            state=tk.NORMAL if allow_manual_edit else tk.DISABLED,
             textvariable=item.var,
             #validate='focusout',
             #validatecommand=(validate_udi_handle, '%W', '%s', '%S'),
@@ -480,7 +481,7 @@ def main(resource_str: str, title: str = "ENTER UDI"):
     #_log.debug('main ending')
 
 #--------------------------------------------------------------------------------------------------
-def identify_uut(seq_context) -> Tuple[bool, str]:
+def identify_uut(requested_udi: list, scanner_resource_str: str, allow_user_edit:bool = False) -> Tuple[bool, str]:
     """Entry function for TestStand using context IDispatch interface (block of data)
 
     Args:
@@ -489,26 +490,31 @@ def identify_uut(seq_context) -> Tuple[bool, str]:
     Returns:
         Tuple[bool, str]: return values to a TestStand container that expects two types in this order.
     """
-    global udi_to_scan
+    global udi_to_scan, allow_manual_edit
 
-    # this is just to demonstrate the parameter passing from TestStand
-    context_id = seq_context.Id
-    executing_sequence_name = seq_context.Sequence.Name
-    executing_step_name = seq_context.Step.Name
-    _scanner = str(seq_context.Locals.TestSocketResources.scanner)
+    _log = getLogger(__name__, DEBUG)
+    allow_manual_edit = allow_user_edit    
+    # # this is just to demonstrate the parameter passing from TestStand
+    # context_id = seq_context.Id
+    # executing_sequence_name = seq_context.Sequence.Name
+    # executing_step_name = seq_context.Step.Name
+    # _scanner = str(seq_context.Locals.TestSocketResources.scanner)
+    _scanner = scanner_resource_str
     # clear the UDIs to scan from TestStand context:
     udi_to_scan = [
-        UDIScanCtrlItem("PCBA", validate_udi_by_string_at_position_1)
+        UDIScanCtrlItem(item, validate_udi_by_string_at_position_1) for item in requested_udi
     ]
     main(_scanner)
     res = tuple()
     for item in udi_to_scan:
         _log.debug(f"UDI({item.name})={item.scanned_udi}")
-        res += item.scanned_udi
+        res += (item.scanned_udi,)
     if all(res):
+        # all elements not None -> no conversion
         return (True,) + res
     else:
-        return (False,) + res
+        # convert None to "" to avoid exception
+        return (False,) + tuple([s if s else "" for s in res])
 
 #--------------------------------------------------------------------------------------------------
 
