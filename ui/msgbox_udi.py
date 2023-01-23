@@ -38,19 +38,19 @@ ok_button = None
 class UDIScanCtrlItem:
     var: tk.StringVar      # tkinter variable to hold the scanned UDI
     name: str              # title to show for that UDI
-    validation: Callable   # None or function that checks UDI to accept
+    validate: Callable   # None or function that checks UDI to accept
     scanned_udi: str       # None or the scan
 
-    def __init__(self, name: str | None, validation: Callable | None) -> None:
+    def __init__(self, name: str | None, validate: Callable | None) -> None:
         self.var=None
         self.name=name
-        self.validation=validation
+        self.validate=validate
         self.scanned_udi=None
 
 udi_to_scan = [UDIScanCtrlItem(None, None)]
 
 
-def validate_udi_by_string_at_position_1(udi, v_str: str) -> bool:
+def validate_udi_by_string_at_position_1(udi: str, v_str: str) -> bool:
     if len(udi) > 1+len(v_str):
         if udi[1:1+len(v_str)] in v_str:  # positions given by RRC team
             return True
@@ -184,7 +184,7 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
             _valid_udi = False
             for item in udi_to_scan:
                 if item.validate is not None:
-                    if item.validate(_udi):  # execute the validation function
+                    if item.validate(_udi, item.name):  # execute the validation function
                         item.var.set(_udi)   # set the UDI
                         _valid_udi = True    # avoid pop-up
             if not _valid_udi:
@@ -192,7 +192,7 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
                 _log.warning(f"Wrong UDI code type {_udi}")
             else:
                 # check if we are complete:
-                _stop = all([(item.var.get() not in [None, ""]) for x in udi_to_scan])
+                _stop = all([(item.var.get() not in [None, ""]) for item in udi_to_scan])
     finally:
         if _stop:
             #mainframe.master.withdraw()
