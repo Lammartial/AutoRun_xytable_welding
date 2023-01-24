@@ -103,23 +103,24 @@ if __name__ == "__main__":
     from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
 
     ## Initialize the logging
-    logger_init(filename_base="local_log")  ## init root logger with different filename
+    logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
     tic = perf_counter()
 
-    cfg = StationConfiguration(filename=CONF_FILENAME_DEV)
-    #_IP = cfg._CONFIG["test_sockets"]["1"]["resource_strings"]["scanner"]
-    _IP, _PORT = cfg.get_resource_strings_for_socket(1)[0].split(":")
-    #_IP, _PORT = "169.254.36.1:2000".split(":")
-    print(_IP, _PORT)
+    # cfg = StationConfiguration(filename=CONF_FILENAME_DEV)
+    # #_IP = cfg._CONFIG["test_sockets"]["1"]["resource_strings"]["scanner"]
+    # _IP, _PORT = cfg.get_resource_strings_for_socket(1)[0].split(":")
+    # #_IP, _PORT = "169.254.36.1:2000".split(":")
+    # print(_IP, _PORT)
 
     # test the client send and receive:
     #asyncio.run(tcp_send_and_receive_from_server(message="Hallo Welt!", timeout=2.0))
     #asyncio.run(tcp_send_and_receive_from_server(None, limit=10, timeout=25.0))
     try:
-        dev = Eth2SerialDevice(_IP, int(_PORT))
-        s = dev.request(None, limit=34, timeout=10.5)
+        dev = Eth2SerialDevice("192.168.1.62:2000")
+        #s = dev.request(None, limit=34, timeout=10.5)
+        s = dev.request(None, limit=5, timeout=5.5)
         print(s)
     except TimeoutError:
         _log.info("Timeout!")
