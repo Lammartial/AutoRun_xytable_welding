@@ -1162,8 +1162,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             n_ts = len(temp)
             if (n_ts > 4):
                 raise IndexError("Temperature list index out of range.")
+            t_temp = []
             for i in range(n_ts):
-                temp[i] = int(temp[i]*10)    
+                t_temp.append(int(temp[i]*10))
             # 1. Read TS1...TS4 offset
             block = self.read_flash_block(0x4015, 32, hexi=False)
             # convert temperature offset to signed byte
@@ -1180,7 +1181,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             new_offset = bytearray(b'\x00\x00\x00\x00')
             for i in range(0, 4):
                 if (i < n_ts):
-                    dt = temp[i] - int_temp[i] + ts_offset[i] 
+                    dt = t_temp[i] - int_temp[i] + ts_offset[i] 
                     new_offset[i:] = struct.pack("b", dt)        
                 else:
                     new_offset[i:] = struct.pack("b", 0)
@@ -1483,7 +1484,7 @@ if __name__ == "__main__":
     curr = -0.009
     #print(bat.calib_write_current_gain(curr, shorted=False))
     # Temp calibration
-    temp: Tuple = [22.55, 22.55, 22.65]
+    temp: Tuple = [21.71213214321, 21.71123213123, 21.7112321321321]
     print(bat.calib_write_temp(temp))
 
 
