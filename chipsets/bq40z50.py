@@ -1074,7 +1074,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             raise
         return float(dasstat[6])
 
-    def calib_read_adc_current(self,  samples: int = 8, shorted: bool = False,  timeout: float = 5.0) -> int:
+    def calib_read_adc_current(self,  samples: int = 8, shorted: bool = False,  timeout: float = 5.0) -> float:
         """
         Enables the calibration mode of the battery if not set already, then
         measures current_cc, averages "samples" readings for higher accuracy, 
@@ -1481,11 +1481,11 @@ if __name__ == "__main__":
     pack_volt = 10.8
     #print(bat.calib_write_pack_voltage_gain(pack_volt, shorted=False))
     # Current calibration
-    curr = -0.009
-    #print(bat.calib_write_current_gain(curr, shorted=False))
+    curr = 0.01
+    print(bat.calib_write_current_gain(curr, shorted=False))
     # Temp calibration
     temp: Tuple = [21.71213214321, 21.71123213123, 21.7112321321321]
-    print(bat.calib_write_temp(temp))
+    #print(bat.calib_write_temp(temp))
 
 
 # END OF FILE
