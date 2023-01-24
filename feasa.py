@@ -230,7 +230,7 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger without filelogging
     _log = getLogger(__name__, DEBUG)
 
-    Feasa_resource_string = "192.168.1.120:3000"
+    Feasa_resource_string = "192.168.1.163:3000"
 
     # 1. Create an instance of class as device controller
     feasa = FEASA_CH9121(Feasa_resource_string)
