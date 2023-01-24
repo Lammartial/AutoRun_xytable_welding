@@ -1,10 +1,50 @@
 %YAML 1.2
 ---
+
+# #
+# # Configures the kind of test station as well as the
+# # hardware of PC and assigned measurement hardware
+# #
+# test_type:  CELL_STACK_TEST  # CORE_TEST, PCBA_TEST, EOL_TEST
+# station_id: PCPD1302         # AD Name of PC
+# line_id:    1                # 1 .. 9
+# test_sockets_count: 3
+
+# dsp_api_base_url:  "http://127.0.0.1:8000"
+
+# # List of TestSocket configurations
+# # Minimum is one (the first) socket.
+# test_sockets:
+#   "1":
+#     resource_strings:
+#       scanner:      "192.168.1.120:2000"
+#       led_analyzer: "192.168.1.120:3000"
+#       daq:          "TCPIP0::192.168.1.53::inst0::INSTR"
+#       ncd_ethi2c:   "192.168.1.56:2101"
+#       m3400:        "TCPIP0::192.168.1.101::inst0::INSTR"
+#   "2":
+#     resource_strings:
+#       scanner:      "192.168.1.84:2000"
+#       led_analyzer: "192.168.1.84:3000"
+#       daq:          "TCPIP0::192.168.1.54::inst0::INSTR"
+#       ncd_ethi2c:   "192.168.1.55:3000"
+#       eeprom:       "1:7"  # "<MUX-Channel>:<7-bit slave addess>"
+#       m3400:        "TCPIP0::192.168.1.102::inst0::INSTR"
+#   "3":
+#     resource_strings:
+#       scanner:      "192.168.1.84:2000"
+#       led_analyzer: "192.168.1.84:3000"
+#       daq:          "TCPIP0::192.168.1.55::inst0::INSTR"
+#       ncd_ethi2c:   "192.168.1.55:3000"
+#       eeprom:       "1:7"  # "<MUX-Channel>:<7-bit slave addess>"
+#       m3400:        "TCPIP0::192.168.1.103::inst0::INSTR"
+
+
 #
 # Configures the kind of test station as well as the
 # hardware of PC and assigned measurement hardware
 #
-test_type:  CELL_STACK_TEST  # CORE_TEST, PCBA_TEST
+test_type:  EOL_TEST         # CORE_TEST, PCBA_TEST, EOL_TEST, CELL_STACK_TEST
 station_id: PCPD1302         # AD Name of PC
 line_id:    1                # 1 .. 9
 test_sockets_count: 3
@@ -16,24 +56,25 @@ dsp_api_base_url:  "http://127.0.0.1:8000"
 test_sockets:
   "1":
     resource_strings:
-      scanner:      "192.168.1.120:2000"
-      led_analyzer: "192.168.1.120:3000"
+      scanner:      "192.168.1.62:2000"
+      led_analyzer: "192.168.1.62:3000"
       daq:          "TCPIP0::192.168.1.53::inst0::INSTR"
       ncd_ethi2c:   "192.168.1.56:2101"
       m3400:        "TCPIP0::192.168.1.101::inst0::INSTR"
   "2":
     resource_strings:
-      scanner:      "192.168.1.84:2000"
-      led_analyzer: "192.168.1.84:3000"
-      daq:          "TCPIP0::192.168.1.54::inst0::INSTR"
-      ncd_ethi2c:   "192.168.1.55:3000"
-      m3400:        "TCPIP0::192.168.1.102::inst0::INSTR"
+      scanner:      "192.168.1.xxx:2000"
+      led_analyzer: "192.168.1.xxx:3000"
+      daq:          "TCPIP0::192.168.1.xxx::inst0::INSTR"
+      ncd_ethi2c:   "192.168.1.xxx:3000"
+      m3400:        "TCPIP0::192.168.1.xxx::inst0::INSTR"
   "3":
     resource_strings:
-      scanner:      "192.168.1.84:2000"
-      led_analyzer: "192.168.1.84:3000"
-      daq:          "TCPIP0::192.168.1.55::inst0::INSTR"
-      ncd_ethi2c:   "192.168.1.55:3000"
-      m3400:        "TCPIP0::192.168.1.103::inst0::INSTR"
+      scanner:      "192.168.1.xxx:2000"
+      led_analyzer: "192.168.1.xxx:3000"
+      daq:          "TCPIP0::192.168.1.xxx::inst0::INSTR"
+      ncd_ethi2c:   "192.168.1.xxx:3000"
+      m3400:        "TCPIP0::192.168.1.xxx::inst0::INSTR"
+
 
 # END OF FILE

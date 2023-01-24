@@ -3,21 +3,13 @@ import requests
 from datetime import datetime
 from pathlib import Path
 
-DEBUG = 0
-
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-import logging
 
-_log = logging.getLogger(__name__)
-_log.setLevel(logging.DEBUG if DEBUG else logging.INFO)
+DEBUG = 0
 
-# Initialize the logging
-try:
-    logging.basicConfig()
-except Exception as e:
-    print("Logging is not supported on this system")
+from rrc.custom_logging import getLogger, logger_init
 
 # --------------------------------------------------------------------------- #
 
@@ -135,8 +127,11 @@ class DspInterface:
 
 #--------------------------------------------------------------------------------------------------
 
-if __name__ == "__main__":
-    
+if __name__ == "__main__":    
+    ## Initialize the logging
+    logger_init(filename_base="local_log")  ## init root logger with different filename
+    _log = getLogger(__name__, DEBUG)
+
     # define the JSON file for storage until data sent to MPI
     LOCAL_RESULT_FILE = Path(".") / ".." / "filestore" / "unsent_results.json"
 
