@@ -892,23 +892,24 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         else: voltage = 0
         return float(voltage)
 
-    def calib_write_cell_voltage_gain(self, cell_voltages: Tuple[int], shorted: bool = False) -> Tuple[int]:
+    def calib_write_cell_voltage_gain(self, cell_voltages: Tuple[float], shorted: bool = False) -> Tuple[float]:
         """
         Cells Voltage Calibration. 
 
         Args:
-            cell_voltages (Tuple[int]): measured (known) cells voltage, Volts
+            cell_voltages (Tuple[float]): measured (known) cells voltage, Volts
             shorted (bool, optional): Decides if shorted CCADC mode or normal. This mode enables an
                 internal short on the coulomb counter inputs (SRP, SRN). Defaults to False.
 
         Returns:
-            Tuple[int]: calibrated cells voltage, V
+            Tuple[float]: calibrated cells voltage, V
         """
         try:
-            cell_voltages[0] = float(cell_voltages[0]) 
-            cell_voltages[1] = float(cell_voltages[1]) 
-            cell_voltages[2] = float(cell_voltages[2])
-            cell_voltages[3] = float(cell_voltages[3]) 
+            n_cell = len(cell_voltages)
+            if (n_cell > 4):
+                raise IndexError("Cells voltage list index out of range.")
+            for i in range(n_cell):
+                cell_voltages[i] = float(cell_voltages[i]) 
             # 1. average adc cell_1 voltage
             # Raw ADC data. 3.6 V == 19.45  
             adc_cell_voltage = self.calib_read_adc_cell_voltage(samples=4, shorted=shorted)
@@ -927,7 +928,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self._ms_toggle_helper("cal_test", False, 0x002d)
             sleep(0.1)
             dasstat = self.manufacturing_dastatus1(True)
-            res = [dasstat[1], dasstat[2], dasstat[3], dasstat[4]]
+            res = []
+            for i in range(n_cell):
+                res.append(dasstat[i+1])
         except Exception:
             raise
         return res
@@ -1036,12 +1039,12 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         else: adc_pack_voltage = 0
         return float(adc_pack_voltage)
 
-    def calib_write_pack_voltage_gain(self, pack_voltage: int, shorted: bool = False) -> float:
+    def calib_write_pack_voltage_gain(self, pack_voltage: float, shorted: bool = False) -> float:
         """
         Package Voltage Calibration.
 
         Args:
-            pack_voltage (int): measured (known) package voltage, Volts
+            pack_voltage (float): measured (known) package voltage, Volts
             shorted (bool, optional): Decides if shorted CCADC mode or normal. This mode enables an
                 internal short on the coulomb counter inputs (SRP, SRN). Defaults to False.
 
@@ -1145,23 +1148,25 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             raise
         return res
 
-    def calib_write_temp(self, temp: Tuple[float], shorted: bool = False) -> Tuple[float]:
-        """_summary_
+    def calib_write_temp(self, temp: Tuple[float]) -> Tuple[float]:
+        """
+        Temperature calibration.
 
         Args:
-            cell_voltages (Tuple[int]): _description_
-            shorted (bool, optional): _description_. Defaults to False.
+            temp (Tuple[int]): temperature TS1 ... TS4, degrees C
 
         Returns:
-            Tuple[int]: _description_
+            Tuple[int]: calibrated temperature, degrees C
         """
         try:
-            temp[0] = int(temp[0]*10)
-            temp[1] = int(temp[1]*10)
-            temp[2] = int(temp[2]*10)
-            temp[3] = int(temp[3]*10)
+            n_ts = len(temp)
+            if (n_ts > 4):
+                raise IndexError("Temperature list index out of range.")
+            for i in range(n_ts):
+                temp[i] = int(temp[i]*10)    
             # 1. Read TS1...TS4 offset
             block = self.read_flash_block(0x4015, 32, hexi=False)
+            # convert temperature offset to signed byte
             ts_offset = []
             ts_offset.append(struct.unpack_from("<b", block, 0)[0])
             ts_offset.append(struct.unpack_from("<b", block, 1)[0])
@@ -1174,22 +1179,22 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             # 3. Calculate new TS1...TS4 offset
             new_offset = bytearray(b'\x00\x00\x00\x00')
             for i in range(0, 4):
-                if (temp[i] != 0):
+                if (i < n_ts):
                     dt = temp[i] - int_temp[i] + ts_offset[i] 
-                    new_offset[i:] = struct.pack("b", dt)
+                    new_offset[i:] = struct.pack("b", dt)        
                 else:
                     new_offset[i:] = struct.pack("b", 0)
-            block[0] = new_offset[0]
-            block[1] = new_offset[1]
-            block[2] = new_offset[2]
-            block[3] = new_offset[3]
+                # copy new temperature offset
+                block[i] = new_offset[i]
             #print(block)
             # 4. Write new TS1...TS4 offset
             self.write_flash_block(0x4015, block)
-            # 4. Re-check temperature TS1...TS4
+            # 5. Re-check temperature TS1...TS4
             sleep(1)
             dastatus2 = self.manufacturing_dastatus2()
-            res = [dastatus2[2], dastatus2[3], dastatus2[4], dastatus2[5]]
+            res = []
+            for i in range(n_ts):
+                res.append(dastatus2[i+2])
         except Exception:
             raise
         return res
@@ -1466,7 +1471,7 @@ if __name__ == "__main__":
     # Testing bq40z50 parameters calibration
     #bat._ms_toggle_helper("cal_test", False, 0x002d)
     # Cell voltage calibration
-    cell_volt: Tuple = [3.6, 3.6, 3.6, 3.6]
+    cell_volt: Tuple = [3.6, 3.6, 3.6]
     #print(bat.calib_write_cell_voltage_gain(cell_volt, shorted=False))
     # Bat voltage calibration
     bat_volt: float = 10.8
@@ -1478,8 +1483,8 @@ if __name__ == "__main__":
     curr = -0.009
     #print(bat.calib_write_current_gain(curr, shorted=False))
     # Temp calibration
-    temp: Tuple = [22.55, 22.55, 22.65, 0]
-    print(bat.calib_write_temp(temp, shorted=False))
+    temp: Tuple = [22.55, 22.55, 22.65]
+    print(bat.calib_write_temp(temp))
 
 
 # END OF FILE
