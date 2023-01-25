@@ -631,6 +631,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             bytearray:  Array of bytes read from given address with length given.
         """
+        flash_address = int(flash_address)
+        length = int(length)
         if (flash_address < 0x4000) or (flash_address+length > 0x6000):
             raise ValueError("Flash block area [{},{}] out of range [{},{}]".format(flash_address, flash_address+length,  0x4000, 0x6000))
         if self.is_sealed(): raise BatterySecurityError("Device is sealed, cannot read flash.")
@@ -1292,6 +1294,29 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     def set_gauging(self, enable: bool) -> bool:
         return self._ms_toggle_helper("gauge_en", enable, 0x0021)
+    
+    def get_gauging(self) -> bool:
+        self.manufacturer_access = 0x0056
+        buf = self.manufacturer_data
+        return bool((buf[1] & 0x10) >> 4)
+    
+    def get_udi(self) -> tuple:
+        str = self.read_flash_block(0x4041, 32, True)
+        return str[0:12]
+    
+    def reset_errors(self) -> None:
+        self.manufacturer_access = 0x002A
+        self.manufacturer_access = 0x0029
+
+    
+    def check_no_errors(self) -> bool:
+        self.manufacturer_access = 0x0051
+        buf = self.manufacturer_data
+        #if ((buf[0] == 0) and (buf[1] == 0) and (buf[2] == 0) and (buf[3] == 0)):
+        #    return True
+        #else:
+        #    return False   
+        return tuple(buf)
 
     def toggle_fet_control(self):
         """This command disables/enables control of the CHG, DSG, and PCHG FET by the firmware.
@@ -1450,12 +1475,12 @@ if __name__ == "__main__":
     logger_init(filename_base="local_log")  ## init root logger
     _log = getLogger(__name__, DEBUG)
 
-    i2c_port = I2CPort("192.168.1.56", 2101)
+    i2c_port = I2CPort("192.168.1.111", 2101)
     busmux = BusMux(i2c_port, address=0x77)
     for i in range(1,9):
         busmux.setChannel(i)
         print(i2c_port.i2c_bus_scan())
-    auto_muxed_i2cbus = I2CMuxedBus(i2c_port, busmux, 2)
+    auto_muxed_i2cbus = I2CMuxedBus(i2c_port, busmux, 6)
     busmaster = BusMaster(auto_muxed_i2cbus)
     bat = BQ40Z50R2(busmaster)
     buf = bat.battery_status()
@@ -1482,10 +1507,18 @@ if __name__ == "__main__":
     #print(bat.calib_write_pack_voltage_gain(pack_volt, shorted=False))
     # Current calibration
     curr = 0.01
-    print(bat.calib_write_current_gain(curr, shorted=False))
+    #print(bat.calib_write_current_gain(curr, shorted=False))
     # Temp calibration
     temp: Tuple = [21.71213214321, 21.71123213123, 21.7112321321321]
     #print(bat.calib_write_temp(temp))
+
+    #print(bat.get_udi())
+
+    #print(bat.is_sealed())
+
+    print(bat.check_no_errors())
+
+    #print(bat.read_flash_block(0x4041, 32, True))
 
 
 # END OF FILE
