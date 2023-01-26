@@ -1303,6 +1303,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def get_udi(self) -> tuple:
         str = self.read_flash_block(0x4041, 32, True)
         return str[0:12]
+
+    def get_rsoc(self) -> int:
+        buf = self.soc()
+        return int(buf[0])
     
     def reset_errors(self) -> None:
         self.manufacturer_access = 0x002A
@@ -1312,11 +1316,16 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def check_no_errors(self) -> bool:
         self.manufacturer_access = 0x0051
         buf = self.manufacturer_data
-        #if ((buf[0] == 0) and (buf[1] == 0) and (buf[2] == 0) and (buf[3] == 0)):
-        #    return True
-        #else:
-        #    return False   
-        return tuple(buf)
+        #for i in range(len(buf)):
+        #    if (buf[i] != 0):
+        #        return False
+        #return True
+        res = []
+        res.append(buf[0])
+        res.append(buf[1])
+        res.append(buf[2])
+        res.append(buf[3])
+        return res
 
     def toggle_fet_control(self):
         """This command disables/enables control of the CHG, DSG, and PCHG FET by the firmware.
@@ -1517,6 +1526,7 @@ if __name__ == "__main__":
     #print(bat.is_sealed())
 
     print(bat.check_no_errors())
+    print(bat.get_rsoc())
 
     #print(bat.read_flash_block(0x4041, 32, True))
 
