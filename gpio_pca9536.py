@@ -72,18 +72,18 @@ class PCA9536:
 
     #----------------------------------------------------------------------------------------------
 
-    def configure_gpio_pins(self, pin_as_output: tuple | str, invert_input: tuple | str, preset_output: None | tuple | str = None):
+    def configure_pins(self, pin_io: tuple | str, invert_input: tuple | str, preset_output: None | tuple | str = None):
         """The Configuration register (register 3) configures the directions of the I/O pins.
         If a bit in this register is set to 1, the corresponding port pin is enabled as an input
         with high-impedance output driver. If a bit in this register is cleared to 0,
         the corresponding port pin is enabled as an output.
 
         Args:
-            pin_as_output (tuple):  4-tuple of 0 | 1, 0=pin is output, 1=pin is input
+            pin_io (tuple):  4-tuple of 0 | 1, 0=pin is output, 1=pin is input
             invert_input (tuple):   4-tuple of 0 | 1, 0=pin is read normal, 1=pin is read inverted
 
         """
-        if len(pin_as_output) != 4:
+        if len(pin_io) != 4:
             raise ValueError("Parameter 'pin_as_output' must be tuple if 4 integers or a string of length 4.")
         if len(invert_input) != 4:
             raise ValueError("Parameter 'invert_input' must be tuple if 4 integers or a string of length 4.")
@@ -93,30 +93,30 @@ class PCA9536:
             _output = shifting_plus(preset_output)
             self._write_register(PCA9536.REG_OUTPUT, _output)
         _polarity = shifting_plus(invert_input)
-        _config = shifting_plus(pin_as_output)
+        _config = shifting_plus(pin_io)
         self._write_register(PCA9536.REG_POLARITY_INVERSE, _polarity)
         self._write_register(PCA9536.REG_CONFIGURATION, _config)
 
-    def set_gpio_n_as_input(self, gpio_n: int):
+    def set_pin_as_input(self, pin_n: int):
         """Configure the GPIO with the index n (starts at 0) as an input with a 100k pullup.
 
         Args:
             gpio_n int: Index of the GPIO to configure [0, 3]
         """
-        _config = self._shadow_regs[PCA9536.REG_CONFIGURATION] | (1 << (gpio_n & 0x03))  # set corresponding bit in configuration
+        _config = self._shadow_regs[PCA9536.REG_CONFIGURATION] | (1 << (pin_n & 0x03))  # set corresponding bit in configuration
         self._write_register(PCA9536.REG_CONFIGURATION, _config)
 
-    def set_gpio_n_as_output(self, gpio_n: int):
+    def set_pin_as_output(self, pin_n: int):
         """Configure the GPIO with the index n (starts at 0) as an output.
 
         Args:
             gpio_n int: Index of the GPIO to configure [0, 3]
         """
-        _config = self._shadow_regs[PCA9536.REG_CONFIGURATION] & ~(1 << (gpio_n & 0x03))  # clear corresponding bit in configuration
+        _config = self._shadow_regs[PCA9536.REG_CONFIGURATION] & ~(1 << (pin_n & 0x03))  # clear corresponding bit in configuration
         self._write_register(PCA9536.REG_CONFIGURATION, _config)
 
 
-    def get_input_n(self, gpio_n: int) -> bool:
+    def get_pin(self, pin_n: int) -> bool:
         """Read the logic level of the specified GPIO.
 
         Args:
@@ -127,27 +127,27 @@ class PCA9536:
         """
         reg_value = self._read_input_register()
         self._shadow_regs[PCA9536.REG_INPUT_PORT] = reg_value  # keep also track of last reading of input
-        return bool(reg_value & (1 << (gpio_n & 0x03)))
+        return bool(reg_value & (1 << (pin_n & 0x03)))
 
 
-    def set_output_n_high(self, gpio_n: int):
+    def set_pin(self, pin_n: int):
         """Set the specified GPIO to a logic high level (5 V).
         Has now effect if the GPIO is configured as an input.
 
         Args:
             gpio_n int: Index of the GPIO [0, 3]
         """
-        _value = self._shadow_regs[PCA9536.REG_OUTPUT] | (1 << (gpio_n & 0x03))  # set corresponding bit
+        _value = self._shadow_regs[PCA9536.REG_OUTPUT] | (1 << (pin_n & 0x03))  # set corresponding bit
         self._write_register(PCA9536.REG_OUTPUT, _value)
 
-    def set_output_n_low(self, gpio_n: int) -> None:
+    def reset_pin(self, pin_n: int) -> None:
         """Set the specified GPIO to a logic low level (Gnd).
         Has now effect if the GPIO is configured as an input.
 
         Args:
             gpio_n int: Index of the GPIO [0, 3]
         """
-        _value = self._shadow_regs[PCA9536.REG_OUTPUT] & ~(1 << (gpio_n & 0x03))  # clear corresponding bit
+        _value = self._shadow_regs[PCA9536.REG_OUTPUT] & ~(1 << (pin_n & 0x03))  # clear corresponding bit
         self._write_register(PCA9536.REG_OUTPUT, _value)
 
     # private functions
@@ -208,12 +208,15 @@ if __name__ == '__main__':
     mux.setChannelMask(0xff)
 
     gpio = PCA9536(i2c_p)
-    gpio.configure_gpio_pins("1111", "0000", "0000")
+    #gpio.configure_pins("1111", "0000", "0000")
 
-    gpio.set_gpio_n_as_input(0)
-    gpio.set_gpio_n_as_output(1)
-    gpio.set_output_n_low(1)
+    #gpio.set_pin_as_input(0)
+    #gpio.set_pin_as_output(1)
+    #gpio.set_pin(1)
 
-    print(gpio.get_input_n(0))
+    print(gpio.get_pin(0))
+    print(gpio.get_pin(1))
+    print(gpio.get_pin(2))
+    print(gpio.get_pin(3))
 
 # END OF FILE

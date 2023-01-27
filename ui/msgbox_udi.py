@@ -531,7 +531,7 @@ if __name__ == '__main__':
         #UDIScanCtrlItem("HEINZ", validate_udi_by_string_at_position_1),
     ]
 
-    main("192.168.1.62:2000", title="TEST FROM COMMANDLINE")
+    main("192.168.1.163:2000", title="TEST FROM COMMANDLINE")
     #print(f"SCANNER -> {scanned_udi}")
 
     res = tuple()

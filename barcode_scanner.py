@@ -118,7 +118,7 @@ if __name__ == "__main__":
     #asyncio.run(tcp_send_and_receive_from_server(message="Hallo Welt!", timeout=2.0))
     #asyncio.run(tcp_send_and_receive_from_server(None, limit=10, timeout=25.0))
     try:
-        dev = Eth2SerialDevice("192.168.1.62:2000")
+        dev = Eth2SerialDevice("192.168.1.163:2000")
         #s = dev.request(None, limit=34, timeout=10.5)
         s = dev.request(None, limit=5, timeout=5.5)
         print(s)
