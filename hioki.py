@@ -37,6 +37,34 @@ class Hioki_BT3561A(Eth2SerialDevice):
         return f"Hioki_BT3561A({self.host}, {self.port}, termination={self.termination})"
 
     #----------------------------------------------------------------------------------------------
+    def init(self):
+        """
+        Some presets for the correct operation of the BT3561A 
+
+        Returns:
+            bool: True - no errors, otherwise False
+        """
+        result = True
+        # CLS (BT3561A)
+        result &= self.clear_status()
+        # HEADER OFF (BT3561A)
+        result &= self.set_raw_command(":SYST:HEAD OFF")
+        # continuous measurement off (BT3561A)
+        result &= self.set_continous_measurement(0)
+        # Trigger source: IMMEDIATE (BT3561A)
+        result &= self.set_trigger_source('IMM')
+        # Comparator: OFF (BT3561A) (':CALC:LIM:STAT OFF')
+        result &= self.set_raw_command(":CALC:LIM:STAT OFF")
+        # Set resistance range 0.1 Ohm
+        #result &= self.set_resistance_range(0.1)
+        # Set voltage range 6 V
+        #result &= self.set_voltage_range(6)
+        # Autorange = ON
+        result &= self.set_autorange(1)
+        # Set measurement = RV (BT3561A)
+        result &= self.set_function("RV")
+        return result
+
     def get_esr(self) -> bool:
         """
         Queries the Standard Event Status Register (SESR).
@@ -853,15 +881,21 @@ if __name__ == "__main__":
     #BT_PORT = 23                    # BT3561A port
     #SW_IP_STR = "192.168.1.201"     # SW1001 IP addr
     #SW_PORT = 23                    # SW1001 port
-    BT_resource_string = "192.168.1.202:23"
+    BT_resource_string = "192.168.1.170:23"
     SW_resource_string = "192.168.1.201:23"
 
     # 1. Create an instance of 20 channel MUXER with HIOKI ACIR measurement device class
-    hioki = Hioki_Cell_Tester(BT_resource_string, SW_resource_string)
+    #hioki = Hioki_Cell_Tester(BT_resource_string, SW_resource_string)
+    hioki = Hioki_BT3561A(BT_resource_string)
 
     # # 2. ==== BT3561A functions ==========================================================================
 
     # Device initialization
+
+    print(hioki.init())
+
+    print(hioki.measure())
+
     # *IDN?
     #print('BT3561A ID: ', hioki.bt.get_idn())
 
@@ -1063,13 +1097,13 @@ if __name__ == "__main__":
     #sleep(0.1)
 
     # BT3561A_self_test
-    print("BT3561A self test:", hioki.BT3561A_self_test())
+    #print("BT3561A self test:", hioki.BT3561A_self_test())
 
     # SW1001_self_test
-    print("SW1001 self test:", hioki.BT3561A_self_test())
+    #print("SW1001 self test:", hioki.BT3561A_self_test())
 
     # Devices presets
-    print("Cell tester presets:", hioki.init())
+    #print("Cell tester presets:", hioki.init())
 
     def check_meas(arr: list, ch: int) -> bool:
         print("Ch ", ch, " ", arr)
@@ -1079,8 +1113,8 @@ if __name__ == "__main__":
             return True
 
     # measure single channel (1 ... 22)
-    err = 0   
-    for i in range(100):
+    #err = 0   
+    #for i in range(100):
         if (check_meas(hioki.measure_channnel(1), 1) == False):
             err += 1
         if (check_meas(hioki.measure_channnel(4), 4) == False):
@@ -1099,8 +1133,8 @@ if __name__ == "__main__":
             err += 1
         if (check_meas(hioki.measure_channnel(19), 19)== False):
             err += 1
-    print("Errors count:", err)
-    print("Mesurement finished:", hioki.measurement_finished())
+    #print("Errors count:", err)
+    #print("Mesurement finished:", hioki.measurement_finished())
 
     # measure all 22 4-wire channels (Could be useful for Zero-adjustment procedure)
     #print(hioki.measure_all_channels())
