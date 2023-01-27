@@ -63,10 +63,6 @@ class PCA9536:
             self.get_polarity_register() if init_shadow_from_ic else 0x00,
             self.get_config_register if init_shadow_from_ic else 0xFF,  # power-up all pins input
         ]
-        #self._shadow_output = self.get_gpio_register() if init_shadow_from_ic else 0x00
-        #self._shadow_gppu = self.get_gppu_register() if init_shadow_from_ic else 0x00
-        #self._shadow_iodir = self.get_iodir_register() if init_shadow_from_ic else 0xFF # power-up all pins input
-        #self._shadow_ipol = self.get_ipol_register() if init_shadow_from_ic else 0x00
     
     def __str__(self) -> str:
         return f"PCA9536 GPIO device with address {self.i2c_address_7bit:02x} on {self.i2c}"
