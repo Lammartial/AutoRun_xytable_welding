@@ -203,8 +203,8 @@ if __name__ == '__main__':
     from rrc.eth2i2c import I2CPort
     from rrc.i2cbus import I2CMuxedBus, BusMux
 
-    i2c_p = I2CPort("192.168.1.119")
-    mux = BusMux(i2c_p)
+    i2c_p = I2CPort("192.168.1.111")
+    mux = BusMux(i2c_p, 0x77)
     mux.setChannelMask(0xff)
 
     gpio = PCA9536(i2c_p)
