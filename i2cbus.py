@@ -296,8 +296,8 @@ class I2CMuxedBus(I2CBase):
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    from eth2i2c.ncd_eth_i2c_interface import I2CPort
-    from smbus import BusMaster as SMBusMaster
+    from rrc.eth2i2c.ncd_eth_i2c_interface import I2CPort
+    from rrc.smbus import BusMaster as SMBusMaster
 
     ## Initialize the logging
     logger_init(filename_base="local_log")  ## init root logger

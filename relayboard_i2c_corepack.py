@@ -2,7 +2,7 @@ from rrc.gpio_pca9536 import PCA9536
 from rrc.i2cbus import I2CBase
 
 
-class CorePackRelayBoard(PCA9536):
+class CorePackRelayBoard():
     """A class for Corepack Tester Adapter controlled by NCD (PR2B-10)
 
     This board has 2 relays that are numbered 1 and 4, and it also has 2 GPIOs that are numbered 2 and 3.
@@ -27,13 +27,13 @@ class CorePackRelayBoard(PCA9536):
             i2c: The I2CPort instance this board is connected to
             i2c_address_7bit: The board's 7-bit I2C address
         """
-        #self.gpio = PCA9536(i2c, int(i2c_address_7bit))
-        super().__init__(i2c, int(i2c_address_7bit))    
+        self.gpio = PCA9536(i2c, int(i2c_address_7bit))
+        #super().__init__(i2c, int(i2c_address_7bit))    
         # Setup PCA9536 GPIO
-        self.set_pin_as_output(self.relay_3570_switch)
-        self.set_pin_as_output(self.relay_meas)
-        self.set_pin_as_input(self.inp_300ohm_detect)
-        self.set_pin_as_input(self.inp_3570_detect)
+        self.gpio.set_pin_as_output(self.relay_3570_switch)
+        self.gpio.set_pin_as_output(self.relay_meas)
+        self.gpio.set_pin_as_input(self.inp_300ohm_detect)
+        self.gpio.set_pin_as_input(self.inp_3570_detect)
 
     def __str__(self) -> str:
         return f"CorePackRelayBoard using {self.gpio}"
@@ -54,7 +54,7 @@ class CorePackRelayBoard(PCA9536):
         """
         relay_n = int(relay_n)
         self.__validate_relay(relay_n)
-        self.set_pin(self.relay_dict[relay_n])
+        self.gpio.set_pin(self.relay_dict[relay_n])
 
     def reset_relay(self, relay_n: int):
         """Reset relay number relay_n.
@@ -67,7 +67,7 @@ class CorePackRelayBoard(PCA9536):
         """
         relay_n = int(relay_n)
         self.__validate_relay(relay_n)
-        self.reset_pin(self.relay_dict[relay_n])
+        self.gpio.reset_pin(self.relay_dict[relay_n])
 
     def read_input(self, input_n: int) -> bool:
         """Read the logic level of the specified GPIO.
@@ -83,7 +83,7 @@ class CorePackRelayBoard(PCA9536):
         """
         input_n = int(input_n)
         self.__validate_gpio_pin(input_n)
-        return self.get_pin(self.input_dict[input_n])
+        return self.gpio.get_pin(self.input_dict[input_n])
 
     def __validate_relay(self, relay_n: int):
         if relay_n not in self.relay_dict.keys():
@@ -96,15 +96,14 @@ class CorePackRelayBoard(PCA9536):
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    from eth2i2c import I2CPort
-    from i2cbus import BusMux, I2CMuxedBus
+    from rrc.eth2i2c import I2CPort
+    from rrc.i2cbus import BusMux, I2CMuxedBus
     i2c = I2CPort("192.168.1.111")
     mux = BusMux(i2c, 0x77)
     bus = I2CMuxedBus(i2c, mux, 7)
-    rb = CorePackRelayBoard(bus, 0x41)
+    rb = CorePackRelayBoard(bus)
     print(rb.read_input(2))
     print(rb.read_input(3))
-    print(rb.read_input(4))
     i2c.close()
     pass
 

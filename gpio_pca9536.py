@@ -61,7 +61,7 @@ class PCA9536:
             None,
             self.get_output_register() if init_shadow_from_ic else 0x00,
             self.get_polarity_register() if init_shadow_from_ic else 0x00,
-            self.get_config_register if init_shadow_from_ic else 0xFF,  # power-up all pins input
+            self.get_config_register if init_shadow_from_ic else 0x0F,      # power-up pins input 0..3, 4..7 not used
         ]
     
     def __str__(self) -> str:
