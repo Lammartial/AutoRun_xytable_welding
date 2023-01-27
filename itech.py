@@ -476,8 +476,8 @@ if __name__ == "__main__":
     from time import sleep
 
     ## Initialize the logging
-    #logger_init(filename_base="local_log")  ## init root logger with different filename
-    #_log = getLogger(__name__, DEBUG)
+    logger_init(filename_base="local_log")  ## init root logger with different filename
+    _log = getLogger(__name__, DEBUG)
 
     res : float = 0
 
