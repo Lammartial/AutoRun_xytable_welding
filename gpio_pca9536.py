@@ -231,4 +231,7 @@ if __name__ == '__main__':
     print(gpio.get_pin(2))
     print(gpio.get_pin(3))
 
+    gpio.set_pin(3)
+    gpio.reset_pin(3)
+
 # END OF FILE
