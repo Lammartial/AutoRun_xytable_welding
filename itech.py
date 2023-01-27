@@ -482,21 +482,21 @@ if __name__ == "__main__":
     res : float = 0
 
     # predefined resource ID
-    #M3412_IP_STR = "TCPIP0::192.168.1.101::inst0::INSTR"
-    M3900_IP_STR = "TCPIP0::192.168.1.172::inst0::INSTR"
+    M3412_IP_STR = "TCPIP0::172.21.101.14::inst0::INSTR"
+    #M3900_IP_STR = "TCPIP0::192.168.1.172::inst0::INSTR"
 
     # 1. Create an instance of ITECH_DEV class
     # using multi-channel communication
-    it_m3902 = M3400(M3900_IP_STR, 0)
+    #it_m3902 = M3400(M3900_IP_STR, 0)
 
     # 2. IMPORTANT! Set remote control mode.
-    print(it_m3902.set_remote_control())
+    #print(it_m3902.set_remote_control())
 
     # 3. Do some stuff
 
-    print(it_m3902.get_ADC())
+    #print(it_m3902.get_ADC())
 
-    print(it_m3902.get_VDC())
+    #print(it_m3902.get_VDC())
 
     # Get current
     #print(it_m3412.get_ADC())
@@ -565,21 +565,25 @@ if __name__ == "__main__":
 
     # 1. Create an instance of ITECH_DEV class
     # using multi-channel communication
-    #it_m3412_1 = M3400(M3412_IP_STR, 1)
-    #it_m3412_2 = M3400(M3412_IP_STR, 2)
-    #it_m3412_3 = M3400(M3412_IP_STR, 3)
-    #it_m3412_4 = M3400(M3412_IP_STR, 4)
-    #t_m3412_5 = M3400(M3412_IP_STR, 5)
-    #t_m3412_6 = M3400(M3412_IP_STR, 6)
+    it_m3412_1 = M3400(M3412_IP_STR, 1)
+    it_m3412_2 = M3400(M3412_IP_STR, 2)
+    it_m3412_3 = M3400(M3412_IP_STR, 3)
+    it_m3412_4 = M3400(M3412_IP_STR, 4)
+    it_m3412_5 = M3400(M3412_IP_STR, 5)
+    it_m3412_6 = M3400(M3412_IP_STR, 6)
 
     # 2. IMPORTANT! Set remote control mode.
-    #it_m3412_1.set_remote_control()
-    #it_m3412_2.set_remote_control()
+    it_m3412_1.set_remote_control()
+    it_m3412_2.set_remote_control()
 
     # 3. Do some stuff
 
-    #print(it_m3412_1.get_ADC())
-    #print(it_m3412_2.get_ADC())
+    print(it_m3412_1.get_ADC())
+    print(it_m3412_2.get_ADC())
+    print(it_m3412_3.get_ADC())
+    print(it_m3412_4.get_ADC())
+    print(it_m3412_5.get_ADC())
+    print(it_m3412_6.get_ADC())
 
     #print(it_m3412_1.get_VDC())
     #print(it_m3412_2.get_VDC())

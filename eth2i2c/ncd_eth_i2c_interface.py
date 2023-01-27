@@ -421,7 +421,7 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    I2C_BRIDGE_RESOURCE_STR = "192.168.1.56"
+    I2C_BRIDGE_RESOURCE_STR = "172.21.101.11:2101"
     dev = I2CPort(I2C_BRIDGE_RESOURCE_STR)
     mux = BusMux(dev, 0x77)
     bus = BusMaster(dev)
