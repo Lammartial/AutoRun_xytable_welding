@@ -62,8 +62,13 @@ Submodule (in a repository base path): (disencouraged!)
     8. New IP has been applied.
 
   ITECH M3400/M3900
+    1. The configuration steps are the same for both devices (MT3400 and MT3900).
+    2. See chapter 2.6.3 LAN Interface, page 27 User manual:
+      W:\260_Production-Engineering\100_Projekte\Vietnam\060_Testsysteme\Datenblätter_Manuals\ITECH IT-M3400
 
   Keysight DAQ970A
+    1. See chapter LAN Settings, page 23 User manual "Benutzerhandbuch_9018-04738":
+      W:\260_Production-Engineering\100_Projekte\Vietnam\060_Testsysteme\Datenblätter_Manuals\Keysight DAQ
 
 
   
