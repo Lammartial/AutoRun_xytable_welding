@@ -320,6 +320,31 @@ class Hioki_BT3561A(Eth2SerialDevice):
         except Exception:
             raise
 
+    def measure(self) -> list:
+        """
+        Measures the voltage or/and impedance.
+
+        Returns:
+            list: array[0]: float, resistance, Ω mode
+                  array[1]: float, voltage, V mode
+        """
+        resp = True
+        result = []
+        function_type = self.get_function()
+        #[BT3561A] :READ? Execute single measurement using BT3561A.
+        val = self.read()
+        try:
+            if (function_type == "RV"):
+                lst = val.split(',')
+                result.append(float(lst[0]))
+                result.append(float(lst[1]))
+            else:
+                result.append(float(resp))
+                result.append(float(0))
+        except Exception:
+            raise
+        return result
+
     def set_raw_command(self, msg: str) -> bool:
         """
         Sets raw command and returns error.
