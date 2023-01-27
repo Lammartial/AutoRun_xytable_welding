@@ -1,152 +1,75 @@
-i2c from rrc.gpio_mcp23008 import MCP23008
+from rrc.gpio_pca9536 import PCA9536
 from rrc.i2cbus import I2CBase
 
 
-class RelayBoard4Relay4GPIO:
-    """A class for 4 relay + 4 GPIO controller by NCD (PR2B-10)
+class CorePackRelayBoard(PCA9536):
+    """A class for Corepack Tester Adapter controlled by NCD (PR2B-10)
 
-    This board has 4 relays that are numbered 1, 2, 3 and 4, and it also has 4 GPIOs that are numbered 4, 5, 6 and 7.
-    The numbering of the GPIOs seems weird, but that's how they are labeled on the board. Use theese numbers to
-    address the right GPIO or relay in this class.
+    This board has 2 relays that are numbered 1 and 4, and it also has 2 GPIOs that are numbered 2 and 3.
+    Use theese numbers to address the right GPIO or relay in this class.
+    Uses PCA9536 Remote 4-Bit I2C and SMBus I/O Expander.
+    Pin 1 (relay) - T-Pin Switch Relay, necessary for RRC3570 (0 - T-Pin Open, 1 - T-Pin shorted to GND)
+    Pin 2 (input) - 300R Detection (0 - battery inserted, 1 - no battery)
+    Pin 3 (input) - RRC3570 Detection (0 - RRC3570 inserted, 1 - no RRC3570 battery)
+    Pin 4 (relay) - PSU/Hioki Relay (0 - Hioki Sense, 1 - PSU Sense)
     """
-    r1 = 0
-    r2 = 1
-    r3 = 2
-    r4 = 3
-    relay_dict = {1: r1, 2: r2, 3: r3, 4: r4}
-    gpio4 = 4
-    gpio5 = 5
-    gpio6 = 6
-    gpio7 = 7
-    gpio_dict = {4: gpio4, 5: gpio5, 6: gpio6, 7: gpio7}
+    relay_3570_switch = 0       
+    inp_300ohm_detect = 1
+    inp_3570_detect   = 2
+    relay_meas        = 3
+    relay_dict = {1: relay_3570_switch, 4: relay_meas}
+    input_dict = {2: inp_300ohm_detect, 3: inp_3570_detect}
 
-    def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x20):
+    def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x41):
         """Initialize the object with an I2CPort object and the 7-bit I2C address.
 
         Args:
             i2c: The I2CPort instance this board is connected to
             i2c_address_7bit: The board's 7-bit I2C address
         """
-
-        self.gpio = MCP23008(i2c, int(i2c_address_7bit))
-
-        # Setup relay outputs
-        for relay_pin in RelayBoard4Relay4GPIO.relay_dict.values():
-            self.gpio.set_pin_as_output(relay_pin)
+        #self.gpio = PCA9536(i2c, int(i2c_address_7bit))
+        super().__init__(i2c, int(i2c_address_7bit))    
+        # Setup PCA9536 GPIO
+        self.set_pin_as_output(self.relay_3570_switch)
+        self.set_pin_as_output(self.relay_meas)
+        self.set_pin_as_input(self.inp_300ohm_detect)
+        self.set_pin_as_input(self.inp_3570_detect)
 
     def __str__(self) -> str:
-        return f"4x relay board using {self.gpio}"
+        return f"CorePackRelayBoard using {self.gpio}"
 
     def __repr__(self) -> str:
-        return f"RelayBoard4Relay4GPIO({repr(self.gpio.i2c)}, i2c_address_7bit={self.gpio.i2c_address_7bit})"
+        return f"CorePackRelayBoard({repr(self.gpio.i2c)}, i2c_address_7bit={self.gpio.i2c_address_7bit})"
 
     #----------------------------------------------------------------------------------------------
 
-    def enable_relay_n(self, relay_n: int):
-        """Enable relay number relay_n.
+    def set_relay(self, relay_n: int):
+        """Set relay number relay_n.
 
         Args:
-            relay_n (int): Index of the relay that should be enabled .
+            relay_n (int): Index of the relay.
 
         Raises:
-            ValueError: If relay_n is invalid (< 1 or > 4)
+            ValueError: If relay_n is invalid (!=1 or !=4)
         """
         relay_n = int(relay_n)
-        self.__validate_relay_pin(relay_n)
-        self.gpio.set_pin(RelayBoard4Relay4GPIO.relay_dict[relay_n])
+        self.__validate_relay(relay_n)
+        self.set_pin(self.relay_dict[relay_n])
 
-    def disable_relay_n(self, relay_n: int):
-        """Disable relay number relay_n.
+    def reset_relay(self, relay_n: int):
+        """Reset relay number relay_n.
 
         Args:
-            relay_n (int): Index of the relay that should be disabled.
+            relay_n (int): Index of the relay.
 
         Raises:
-            ValueError: If relay_n is invalid (< 1 or > 4)
+            ValueError: If If relay_n is invalid (!=1 or !=4)
         """
         relay_n = int(relay_n)
-        self.__validate_relay_pin(relay_n)
-        self.gpio.reset_pin(RelayBoard4Relay4GPIO.relay_dict[relay_n])
+        self.__validate_relay(relay_n)
+        self.reset_pin(self.relay_dict[relay_n])
 
-    def set_gpio_n_as_output(self, gpio_n: int):
-        """Configure the specified GPIO as an output.
-
-        Args:
-            gpio_n (int): Index of the GPIO
-
-        Raises:
-            ValueError: If gpio_n is invalid (< 4 or > 7)
-        """
-        gpio_n = int(gpio_n)
-        self.__validate_gpio_pin(gpio_n)
-        self.gpio.set_pin_as_output(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
-
-    def set_gpio_n_as_input(self, gpio_n: int):
-        """Configure the specified GPIO as an input.
-
-        Args:
-            gpio_n (int): Index of the GPIO
-
-        Raises:
-            ValueError: If gpio_n is invalid (< 4 or > 7)
-        """
-        gpio_n = int(gpio_n)
-        self.__validate_gpio_pin(gpio_n)
-        self.gpio.set_pin_as_input(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
-
-    def enable_pullup_for_gpio_n(self, gpio_n: int):
-        """Enable a 100k pullup for specified GPIO if it is configured as an input.
-
-        Args:
-            gpio_n (int): Index of the GPIO
-
-        Raises:
-            ValueError: If gpio_n is invalid (< 4 or > 7)
-        """
-        gpio_n = int(gpio_n)
-        self.__validate_gpio_pin(gpio_n)
-        self.gpio.enable_pullup(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
-
-    def disable_pullup_for_gpio_n(self, gpio_n: int):
-        """Disable the pullup for specified GPIO.
-
-        Args:
-            gpio_n (int): Index of the GPIO
-
-        Raises:
-            ValueError: If gpio_n is invalid (< 4 or > 7)
-        """
-        gpio_n = int(gpio_n)
-        self.__validate_gpio_pin(gpio_n)
-        self.gpio.disable_pullup(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
-
-    def set_gpio_n_high(self, gpio_n: int):
-        """Set the specified GPIO to a logic high level (5 V).
-
-        Args:
-            gpio_n (int): Index of the GPIO
-
-        Raises:
-            ValueError: If gpio_n is invalid (< 4 or > 7)
-        """
-        gpio_n = int(gpio_n)
-        self.__validate_gpio_pin(gpio_n)
-        self.gpio.set_pin(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
-
-    def set_gpio_n_low(self, gpio_n: int):
-        """Set the specified GPIO to a logic low level (GND).
-
-        Args:
-            gpio_n (int): Index of the GPIO
-
-        Raises:
-            ValueError: If gpio_n is invalid (< 4 or > 7)
-        """
-        gpio_n = int(gpio_n)
-        self.__validate_gpio_pin(gpio_n)
-        self.gpio.reset_pin(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
-
-    def read_gpio_n(self, gpio_n: int) -> bool:
+    def read_input(self, input_n: int) -> bool:
         """Read the logic level of the specified GPIO.
 
         Args:
@@ -158,29 +81,30 @@ class RelayBoard4Relay4GPIO:
         Raises:
             ValueError: If gpio_n is invalid (< 4 or > 7)
         """
-        gpio_n = int(gpio_n)
-        self.__validate_gpio_pin(gpio_n)
-        return self.gpio.get_pin(RelayBoard4Relay4GPIO.gpio_dict[gpio_n])
+        input_n = int(input_n)
+        self.__validate_gpio_pin(input_n)
+        return self.get_pin(self.input_dict[input_n])
 
-    def __validate_relay_pin(self, relay_n: int):
-        if relay_n not in RelayBoard4Relay4GPIO.relay_dict.keys():
-            raise ValueError(f"Relay pin number for the {str(self)} must be between "
-                             f"1 and {max(RelayBoard4Relay4GPIO.relay_dict.keys())}. You selected {relay_n}")
+    def __validate_relay(self, relay_n: int):
+        if relay_n not in self.relay_dict.keys():
+            raise ValueError(f"Relay pin number for the {str(self)} must be 1 or 4. You selected {relay_n}")
 
-    def __validate_gpio_pin(self, gpio_n: int):
-        if gpio_n not in RelayBoard4Relay4GPIO.gpio_dict.keys():
-            raise ValueError(f"GPIO pin number for {str(self)} must be between "
-                             f"1 and {max(RelayBoard4Relay4GPIO.gpio_dict.keys())}. You selected {gpio_n}")
+    def __validate_gpio_pin(self, input_n: int):
+        if input_n not in self.input_dict.keys():
+            raise ValueError(f"Input number for {str(self)} must be 2 or 3. You selected {input_n}")
 
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
     from eth2i2c import I2CPort
     from i2cbus import BusMux, I2CMuxedBus
-    i2c = I2CPort("192.168.1.56")
+    i2c = I2CPort("192.168.1.111")
     mux = BusMux(i2c, 0x77)
-    bus = I2CMuxedBus(i2c, mux, 3)
-    rb = RelayBoard4Relay4GPIO(bus, 32)
+    bus = I2CMuxedBus(i2c, mux, 7)
+    rb = CorePackRelayBoard(bus, 0x41)
+    print(rb.read_input(2))
+    print(rb.read_input(3))
+    print(rb.read_input(4))
     i2c.close()
     pass
 
