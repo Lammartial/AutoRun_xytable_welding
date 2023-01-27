@@ -59,10 +59,14 @@ class PCA9536:
         # prepare shadow registers
         self._shadow_regs = [
             None,
-            self.__get_register(PCA9536.REG_OUTPUT) if init_shadow_from_ic else 0x00,
-            self.__get_register(PCA9536.REG_POLARITY_INVERSE) if init_shadow_from_ic else 0x00,
-            self.__get_register(PCA9536.REG_CONFIGURATION) if init_shadow_from_ic else 0xFF,  # power-up all pins input
+            self.get_output_register() if init_shadow_from_ic else 0x00,
+            self.get_polarity_register() if init_shadow_from_ic else 0x00,
+            self.get_config_register if init_shadow_from_ic else 0xFF,  # power-up all pins input
         ]
+        #self._shadow_output = self.get_gpio_register() if init_shadow_from_ic else 0x00
+        #self._shadow_gppu = self.get_gppu_register() if init_shadow_from_ic else 0x00
+        #self._shadow_iodir = self.get_iodir_register() if init_shadow_from_ic else 0xFF # power-up all pins input
+        #self._shadow_ipol = self.get_ipol_register() if init_shadow_from_ic else 0x00
     
     def __str__(self) -> str:
         return f"PCA9536 GPIO device with address {self.i2c_address_7bit:02x} on {self.i2c}"
@@ -196,7 +200,19 @@ class PCA9536:
             raise IndexError(f"Didn't receive correct number of bytes from {self}.")
         return value
 
+#--------------------------------------------------------------------------------------------------
+    def get_output_register(self) -> int:
+        return self.__read_register(PCA9536.REG_OUTPUT)
 
+    def get_polarity_register(self) -> int:
+        return self.__read_register(PCA9536.REG_POLARITY_INVERSE)        
+
+    def get_config_register(self) -> int:
+        return self.__read_register(PCA9536.REG_CONFIGURATION)
+
+    def __read_register(self, register: int):
+        value = self.i2c.readfrom_mem(self.i2c_address_7bit, bytearray([register]), 1)
+        return value[0]
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
