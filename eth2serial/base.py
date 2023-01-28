@@ -195,6 +195,8 @@ class Eth2SerialDevice(object):
         finally:
             _s.close()
 
+    #----------------------------------------------------------------------------------------------
+
     def request(self, msg: str | None, timeout: float = 3.0, limit: int = 0, encoding: str = "utf-8") -> str:
         """_summary_
 
@@ -238,6 +240,7 @@ class Eth2SerialDevice(object):
             _s.close()
         return result
 
+    #----------------------------------------------------------------------------------------------
 
     async def request_async(self,  message: str | None, limit: None | str | bytes | int = None, encoding: str = "utf-8") -> str:
         """_summary_
@@ -261,6 +264,7 @@ class Eth2SerialDevice(object):
                 await writer.drain()
             if limit is None:
                 rcvdata = await reader.readuntil(separator=self._termination_as_bytes)
+                rcvdata = rcvdata[:-len(self._termination_as_bytes)]
             elif isinstance(limit, int):
                 #rcvdata = await reader.read()  # read until limit bytes or EOF
                 rcvdata = bytes()
@@ -274,6 +278,7 @@ class Eth2SerialDevice(object):
                         break
             elif isinstance(limit, bytes):
                 rcvdata = await reader.readuntil(separator=limit)  # read until function parameter defined termination bytes
+                rcvdata = rcvdata[:-len(limit)]
             else:
                 rcvdata = await reader.readline()  # read until \n or \r\n using library functions
             result = rcvdata.decode(encoding=encoding)
@@ -366,26 +371,33 @@ async def tcp_send_and_receive_from_server(resource_string: str, message: str | 
 
     return data
 
+#--------------------------------------------------------------------------------------------------
+async def test_async_request():
+    _log = getLogger(__name__, DEBUG)
+    c = Eth2SerialDevice("192.168.1.90:23", termination="\r")
+    r = await c.request_async(None)
+    _log.info(r)
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     from time import perf_counter
 
     ## Initialize the logging
-    logger_init(filename_base="local_log")  ## init root logger with different filename
+    logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
     tic = perf_counter()
     _log.info("Own IP: %s", OWN_PRIMARY_IP)
 
-    c = Eth2SerialDevice("192.168.1.90", 23)
-    c.send("Hallo Welt!")
+    _log.info("Test synchronus receive (10s timeout):")
+    c = Eth2SerialDevice("192.168.1.90:23", termination="\n")
+    r = c.request(None, timeout=10)
+    _log.info(r)
 
-    # ...
+    #_log.info("Test asynchronus receive (CRTL-C or scan to stop):")
+    #asyncio.run(test_async_request())
 
     toc = perf_counter()
-    _log.info(f"Send in {toc - tic:0.4f} seconds")
-    _log.info("DONE.")
-
+    _log.info(f"DONE in {toc - tic:0.4f} seconds.")
 
 # END OF FILE

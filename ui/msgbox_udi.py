@@ -521,7 +521,7 @@ if __name__ == '__main__':
 
     # set the required UDIs per global
     udi_to_scan = [
-        #UDIScanCtrlItem("PCBA", validate_udi_by_string_at_position_1),
+        UDIScanCtrlItem("PCBA", validate_udi_by_string_at_position_1),
         UDIScanCtrlItem("CELL", validate_udi_by_string_at_position_1),
         #UDIScanCtrlItem("HEINZ", validate_udi_by_string_at_position_1),
     ]

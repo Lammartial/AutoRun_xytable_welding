@@ -135,6 +135,7 @@ class SerialComportDevice(object):
                 await writer.drain()
             if limit is None:
                 rcvdata = await reader.readuntil(separator=self._termination_as_bytes)
+                rcvdata = rcvdata[:-len(self._termination_as_bytes)]
             elif isinstance(limit, int):
                 #rcvdata = await reader.read()  # read until limit bytes or EOF
                 rcvdata = bytes()
@@ -148,6 +149,7 @@ class SerialComportDevice(object):
                         break
             elif isinstance(limit, (bytes, bytearray)):
                 rcvdata = await reader.readuntil(separator=limit)  # read until function parameter defined termination bytes
+                rcvdata = rcvdata[:-len(limit)]
             else:
                 rcvdata = await reader.readline()  # read until \n or \r\n using library functions
             result = rcvdata.decode(encoding=encoding)
