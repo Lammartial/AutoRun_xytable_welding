@@ -18,8 +18,9 @@ from tkinter.messagebox import showinfo
 from collections.abc import Iterator
 from typing import Optional, Tuple
 from pathlib import Path
-
-from rrc.eth2serial.base import tcp_send_and_receive_from_server, Eth2SerialDevice
+from serial import Serial
+from rrc.eth2serial import Eth2SerialDevice, tcp_send_and_receive_from_server
+from rrc.serialport import SerialComportDevice
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -51,15 +52,20 @@ class UDIScanCtrlItem:
 udi_to_scan = [UDIScanCtrlItem(None, None)]
 allow_manual_edit: bool = False
 
+#--------------------------------------------------------------------------------------------------
+
 def validate_udi_by_string_at_position_1(udi: str, v_str: str) -> bool:
-    if len(udi) > 1+len(v_str):
-        if udi[1:1+len(v_str)] in v_str:  # positions given by RRC team
+    if len(udi) > len(v_str) + 1:
+        #if udi[1:1+len(v_str)] in v_str:  # positions given by RRC team
+        #    return True
+        if v_str in udi:  # position if ID in the codestring doesn't care
             return True
     return False
 
+#--------------------------------------------------------------------------------------------------
 
-async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> None:
-    """ Asynchronously block the thread and put a 'Hello World' work package into Tkinter's work queue.
+async def aio_blocking_communication(task_id: int, tk_q: queue.Queue, resource_string: str) -> None:
+    """ Asynchronously block the thread and put a work package into Tkinter's work queue.
 
     This is a producer for Tkinter's work queue. It will run in the same thread as the asyncio loop. The statement
     `await asyncio.sleep(block)` can be replaced with any awaitable blocking code.
@@ -73,10 +79,11 @@ async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> 
         Nothing. The work package is returned via the threadsafe tk_q.
     """
     _log = getLogger(__name__, DEBUG)
-    #safeprint(f'aio_blocker starting. {resource_string}s.')
-    #await asyncio.sleep(block)
 
-    dev = Eth2SerialDevice(resource_string)
+    if ":" in resource_string:
+        dev = Eth2SerialDevice(resource_string, termination="\n")     # socket port
+    else:
+        dev = SerialComportDevice(resource_string, termination="\r")  # COM port
     while True:
         #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = 30)
         #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0)  # uses .readuntil()
@@ -96,8 +103,6 @@ async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> 
         # raise IOError('Just testing an expected error.')
         # raise ValueError('Just testing an unexpected error.')
 
-        #work_package = f"Task #{task_id} {block}s: 'Hello Asynchronous World'."
-
         # Put the work package into the tkinter's work queue.
         while True:
             try:
@@ -113,11 +118,9 @@ async def aio_blocker(task_id: int, tk_q: queue.Queue, resource_string: str) -> 
         #break
 
     # ends by force only
-    #safeprint(f'aio_blocker ending.')
 
 
-def aio_exception_handler(mainframe: ttk.Frame, future: concurrent.futures.Future, block: float,
-                          first_call: bool = True) -> None:
+def aio_exception_handler(mainframe: ttk.Frame, future: concurrent.futures.Future, first_call: bool = True) -> None:
     """ Exception handler for future coroutine callbacks.
 
     This non-coroutine function uses tkinter's event loop to wait for the future to finish.
@@ -126,11 +129,9 @@ def aio_exception_handler(mainframe: ttk.Frame, future: concurrent.futures.Futur
     Args:
         mainframe: The after method of this object is used to poll this function.
         future: The future running the future coroutine callback.
-        block: The block time parameter used to identify which future coroutine callback is being reported.
         first_call: If True will cause an opening line to be printed on stdout.
     """
-    #if first_call:
-    #    safeprint(f'aio_exception_handler starting. {block=}s')
+
     poll_interval = 100  # milliseconds
     try:
         # Python will not raise exceptions during future execution until `future.result` is called. A zero timeout is
@@ -139,14 +140,11 @@ def aio_exception_handler(mainframe: ttk.Frame, future: concurrent.futures.Futur
 
     # If the future hasn't completed, reschedule this function on tkinter's event loop.
     except concurrent.futures.TimeoutError:
-        #mainframe._id_after["aio_exception_handler"] = mainframe.after(poll_interval, functools.partial(aio_exception_handler, mainframe, future, block,
-        #                                                 first_call=False))
-        mainframe._id_after["aio_exception_handler"] = mainframe.after(poll_interval, lambda: aio_exception_handler(mainframe, future, block, first_call=False))
+        mainframe._id_after["aio_exception_handler"] = mainframe.after(poll_interval, lambda: aio_exception_handler(mainframe, future, first_call=False))
 
     # Handle an expected error.
     except IOError as exc:
         _log = getLogger(__name__, DEBUG)
-        #safeprint(f'aio_exception_handler: {exc!r} was handled correctly. ')
         _log.warning(f'aio_exception_handler: {exc!r} was handled correctly. ')
         pass
 
@@ -155,7 +153,7 @@ def aio_exception_handler(mainframe: ttk.Frame, future: concurrent.futures.Futur
         pass
 
 def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Iterator):
-    """ Display queued 'Hello world' messages in the Tkinter window.
+    """ Display queued messages in the Tkinter window.
 
     This is the consumer for Tkinter's work queue. It runs in the Main Thread. After starting, it runs
     continuously until the GUI is closed by the user.
@@ -220,28 +218,25 @@ def tk_callbacks(mainframe: ttk.Frame, row_itr: Iterator, resource_string: str):
     global tk_q
 
     _log = getLogger(__name__, DEBUG)
-    #safeprint('tk_callbacks starting')
     _log.debug('tk_callbacks starting')
     task_id_itr = itertools.count(1)
 
     # Create the job queue and start its consumer.
     tk_q = queue.Queue()
-    #safeprint('tk_callback_consumer starting')
     _log.debug('tk_callback_consumer starting')
     tk_callback_consumer(tk_q, mainframe, row_itr)
 
-    # Schedule the asyncio blocker.
-    for block in range(0, 1):
-        # This is a concurrent.futures.Future not an asyncio.Future because it isn't threadsafe. Also,
-        # it doesn't have a wait with timeout which we shall need.
-        task_id = next(task_id_itr)
-        future = asyncio.run_coroutine_threadsafe(aio_blocker(task_id, tk_q, resource_string), aio_loop)
+    # Schedule the asyncio blockers.
+    # This is a concurrent.futures.Future not an asyncio.Future because it isn't threadsafe. Also,
+    # it doesn't have a wait with timeout which we shall need.
+    task_id = next(task_id_itr)
+    # check which communication function we need:
+    # socket communication
+    future = asyncio.run_coroutine_threadsafe(aio_blocking_communication(task_id, tk_q, resource_string), aio_loop)
 
-        # Can't use Future.add_done_callback here. It doesn't return until the future is done and that would block
-        # tkinter's event loop.
-        aio_exception_handler(mainframe, future, block)
-
-    #safeprint('tk_callbacks ending - All blocking callbacks have been scheduled.\n')
+    # Can't use Future.add_done_callback here. It doesn't return until the future is done and that would block
+    # tkinter's event loop.
+    aio_exception_handler(mainframe, future)
 
 
 #--------------------------------------------------------------------------------------------------
@@ -493,7 +488,7 @@ def identify_uut(requested_udi: list, scanner_resource_str: str, allow_user_edit
     global udi_to_scan, allow_manual_edit
 
     _log = getLogger(__name__, DEBUG)
-    allow_manual_edit = allow_user_edit    
+    allow_manual_edit = allow_user_edit
     # # this is just to demonstrate the parameter passing from TestStand
     # context_id = seq_context.Id
     # executing_sequence_name = seq_context.Sequence.Name
@@ -526,12 +521,13 @@ if __name__ == '__main__':
 
     # set the required UDIs per global
     udi_to_scan = [
-        UDIScanCtrlItem("PCBA", validate_udi_by_string_at_position_1),
+        #UDIScanCtrlItem("PCBA", validate_udi_by_string_at_position_1),
         UDIScanCtrlItem("CELL", validate_udi_by_string_at_position_1),
         #UDIScanCtrlItem("HEINZ", validate_udi_by_string_at_position_1),
     ]
 
-    main("192.168.1.163:2000", title="TEST FROM COMMANDLINE")
+    #main("192.168.1.163:2000", title="TEST SOCKET SCANNER")
+    main("COM24,9600,8N1", title="TEST HANDHELD SCANNER")
     #print(f"SCANNER -> {scanned_udi}")
 
     res = tuple()

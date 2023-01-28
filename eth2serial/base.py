@@ -50,11 +50,12 @@ class Eth2Serial_SockSingleConnection_Device(object):
 
     #def __init__(self, host: str, port: int, termination: str = "\r\n"):
     def __init__(self, resource_str: str, termination: str = "\r\n"):
-        """Initialize the object with IP address and port number.
+        """Initialize the object with IP address and port number given by URL style resource string.
 
         Args:
-            host (str): hostname or IPv4 address
-            port (int): port to use for communication
+            resource_str (str): String of url form '{hostname or IPv4 address}:{port number}'
+            termination (str, optional): Defines the line termination. Defaults to '\r\n'
+
         """
         self.termination = termination
         self._termination_as_bytes = bytes(termination, "utf-8")  # need them also as bytes
@@ -146,13 +147,13 @@ class Eth2Serial_SockSingleConnection_Device(object):
 
 class Eth2SerialDevice(object):
 
-    #def __init__(self, host: str, port: int, termination: str = "\r\n"):
     def __init__(self, resource_str: str, termination: str = "\r\n"):
-        """Initialize the object with IP address and port number.
+        """Initialize the object with IP address and port number given by URL style resource string.
 
         Args:
-            host (str): hostname or IPv4 address
-            port (int): port to use for communication
+            resource_str (str): String of url form '{hostname or IPv4 address}:{port number}'
+            termination (str, optional): Defines the line termination. Defaults to '\r\n'
+
         """
         self.termination = termination
         self._termination_as_bytes = bytes(termination, "utf-8")  # need them also as bytes
@@ -183,7 +184,6 @@ class Eth2SerialDevice(object):
             _s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             _s.settimeout(timeout)
             _s.connect((self.host, self.port))
-            _s.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
             _s.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling
@@ -238,7 +238,20 @@ class Eth2SerialDevice(object):
             _s.close()
         return result
 
-    async def request_async(self,  message: str | None, limit: str | bytes | int = b'\n', encoding: str = "utf-8") -> str:
+
+    async def request_async(self,  message: str | None, limit: None | str | bytes | int = None, encoding: str = "utf-8") -> str:
+        """_summary_
+
+        Args:
+            message (str | None): _description_
+            limit (None | str | bytes | int, optional): None=use class defined termination bytes,
+                                str=use readline() function, bytes=uses this termination, int=use this number of characters to read.
+                                Defaults to None.
+            encoding (str, optional): _description_. Defaults to "utf-8".
+
+        Returns:
+            str: _description_
+        """
 
         async def xchange(reader, writer):
             _log = getLogger(__name__, DEBUG)
@@ -246,7 +259,9 @@ class Eth2SerialDevice(object):
                 _log.debug(f'Send: {message!r}')
                 writer.write(message.encode())
                 await writer.drain()
-            if isinstance(limit, int):
+            if limit is None:
+                rcvdata = await reader.readuntil(separator=self._termination_as_bytes)
+            elif isinstance(limit, int):
                 #rcvdata = await reader.read()  # read until limit bytes or EOF
                 rcvdata = bytes()
                 while chunk := await reader.read(512):
@@ -258,9 +273,9 @@ class Eth2SerialDevice(object):
                         rcvdata = rcvdata[:limit]
                         break
             elif isinstance(limit, bytes):
-                rcvdata = await reader.readuntil(separator=limit)  # read until \n or \r\n
+                rcvdata = await reader.readuntil(separator=limit)  # read until function parameter defined termination bytes
             else:
-                rcvdata = await reader.readline()  # read until \n or \r\n
+                rcvdata = await reader.readline()  # read until \n or \r\n using library functions
             result = rcvdata.decode(encoding=encoding)
             _log.debug(f"Received: {result!r}")
             return result
