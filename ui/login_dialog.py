@@ -272,19 +272,19 @@ def tk_main(resource_string: str, title: str = "MAIN FUNC TITLE"):
         for item in udi_to_scan:
             _sid = item.var.get()  # transfer from each tkinter widget into the result space
             # check with database if user is allowed
-            res = session.execute(sa.text(f"SELECT username,access FROM `mockup_user_access` AS mu WHERE id='{_sid}'"))
+            res = session.execute(sa.text(f"SELECT username,pwd,access FROM `mockup_user_access` AS mu WHERE id='{_sid}'"))
             rows = res.fetchall()
             if len(rows) == 0:
                 # not found! -> do not login
                 showinfo("WARNING", f"User login not found in database.")
                 return
             else:
-                if rows[0][1] == 0:
+                if rows[0][2] == 0:
                     # has no access!
                     showinfo("WARNING", f"User {rows[0][0]} is not allowed to login.")
                     return
             # login user
-            item.scanned_udi = rows[0][0]
+            item.scanned_udi = (rows[0][0],rows[0][1])
         root.destroy()
 
     def _cancel(parent):
@@ -535,14 +535,13 @@ def identify_user(scanner_resource_str: str, allow_user_edit:bool = False) -> Tu
     res = tuple()
     for item in udi_to_scan:
         _log.debug(f"USER({item.name})={item.scanned_udi}")
-        res += (item.scanned_udi,)
+        res += item.scanned_udi if item.scanned_udi else ("","")
     if all(res):
         # all elements not None -> no conversion
         return (True,) + res
     else:
         # convert None to "" to avoid exception
-        return (False,) + tuple([s if s else "" for s in res])
-
+        return (False,) + res
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
@@ -557,23 +556,8 @@ if __name__ == "__main__":
     # res = session.execute(sa.text("SELECT * FROM `mockup_user_access` AS mu"))
     # print(res.fetchall())
 
-    # set the required User ID per global
-    udi_to_scan = [UDIScanCtrlItem("ID", validate_user_id)]
-
-    allow_manual_edit = True
-    main("COM24,9600,8N1") #, title="TEST LOGIN DIALOG")
-
-    res = tuple()
-    for item in udi_to_scan:
-        _log.debug(f"UDI({item.name})={item.scanned_udi}")
-        res += (item.scanned_udi,)
-    if all(res):
-        print((True,) + res)
-    else:
-        print((False,) + res)
-
-
-
+    res = identify_user("COM24,9600,8N1", allow_user_edit=True)
+    print(res)
 
 
 # END OF FILE
