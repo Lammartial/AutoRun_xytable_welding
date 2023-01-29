@@ -63,7 +63,7 @@ async def read_item(test_type, station_id, line_id, test_socket):
         case "PCBA_TEST":
             _testprogram = "411828_A_RRC2020_PCBA-Test"
         case "CELLSTACK_TEST":
-            _testprogram = "411828_A_RRC2020_Cellstack-Test"
+            _testprogram = "411828_A_RRC2020_Cell-Test"
         case "COREPACK_TEST":
             _testprogram = "411828_A_RRC2020_Corepack-Test"
         case "EOL_TEST":
