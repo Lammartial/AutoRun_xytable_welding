@@ -11,6 +11,111 @@ Submodule (in a repository base path): (disencouraged!)
 `git submodule add http://sv-git.rrc/V-Prod/Python_Libs.git rrc`
 
 
+## Modules to install for Python
+
+### Installation mit PIP Umgebung
+
+Empfohlen ist die Installation von Python in ein Benutzerdefiniertes Verzeichnis unter C:\Python\... und Verwendung von Paketmanager "PIP".
+Um es einfach zu halten, verzichten wir auf virtuelle Umgebungen und installieren bei Bedarf in Zukunft eine neue Python Version (3.11 etc) neben das bereits installierte unter z.B. C:\Python\Python_311 und können dann durch Ändern der Verzeichniseinträge in der Umgebungsvariablen PATH bestimmen, welches Python benutzt werden soll.
+
+### Installation mit Miniconda (conda)
+
+Alternativ zur Installation von Python+PIP mittels download eines Installers von der Website existiert noch die Möglichkeit der Installation von Miniconda3, welche keinerlei Python-Installation auf dem System voraussetzt und beliebige Python Versionen in Umgebungen installieren kann.
+Installiert diese für "current user" und dann wählt "Add Miniconda3 to my PATH environment" sowie "Register Miniconda3 as my default Python". Ignoriert die Warnung bei "Add".
+Nach der Installation von Miniconda3 existiert eine "base" Umgebung, die sollte man in Ruhe lassen, da sie zur Ausführung der conda tasks benötigt wird. Man sollte stattdessen und eine neue, definierte Umgebung mit prägnantem Namen aufsetzen.
+
+Auch sollte sichergestellt sein, daß das Verzeichnis in dem die Umgebungen installiert werden für alle Benutzer verfügbar ist, denn die Vorgabe ist ein Umgebungsverzeichnis .conda im Benutzerhome.
+
+Zuerst mal conda selbst updaten:
+`conda update --name base --channel defaults conda`
+
+- starte Miniconda3 Kommandozeile (am besten gleich in Taskleiste heften)
+- "base" Umgebung muß aktiv sein, falls nicht `conda activate base` tippen.
+- geeignetes Verzeichnis für die Umgebungen anlegen: `conda config --add envs_dirs C:\Python\conda`
+- check `conda config --show envs_dirs` und `conda info`
+- neue Umgebung anlegen: `conda create --name prod python=3.10`
+
+zum Ausprobieren lassen sich dann beliebige weitere Umgebungen anlegen und testen:
+`conda create --name dev_p311 python=3.11`
+(die 3.11 gibts noch nicht (Sep2022))
+
+#### Hinzufügen von conda-forge Kanal für PyVISA
+
+Da PyVISA nicht in den default channels zu finden ist, sondern bei conda-forge, muß man entweder den Kanal explizit angeben:
+`conda install --channel conda-forge pyvisa`
+
+Oder man installiert den channel `conda-forge` und hat dann immer Zugriff:
+`conda config --add channels conda-forge`
+
+check mit:
+`conda config --show channels`
+
+#### Liste der Module
+
+```
+# nicht bei Verwendung der CONDA (Miniconda) Umgebung!
+pip
+wheel
+
+# Alle Umgebungen
+typing
+pandas
+pytz
+pyyaml
+
+# Debugging (required by TestStand)
+debugpy
+
+# Datenübergabe "Context"
+pywin32
+
+# MODBUS Geräte via TCP oder RS485/RS232
+pymodbus
+
+# SCPI Geräte via VISA
+pyvisa
+
+# DATABASE via TCP oder File
+SQLAlchemy
+pyodbc
+pymssql
+psycopg2
+pymysql
+```
+
+### For the lazy guys (copy & paste):
+
+PIP:
+`pip wheel typing debugpy numpy==1.23 scipy pandas pytz pymodbus pyvisa SQLAlchemy pyodbc pymssql psycopg2 pymysql pyyaml pywin32 requests fastapi[all] humanfriendly pyelftools pyserial pyserial-asyncio`
+
+CONDA:
+`typing pyyaml debugpy numpy==1.23 scipy pandas pytz pymodbus pyvisa SQLAlchemy pyodbc pymssql psycopg2 pymysql pywin32 requests fastapi[all] humanfriendly pyelftools pyserial pyserial-asyncio`
+
+
+## Debugging with VSCode
+
+Teststand bietet die Option, die Python-Module zu debuggen.
+
+#### Was NICHT funktioniert:
+Generell funktioniert die "Step into" Methode von Teststand nicht. Es gibt ein Connectuon Error seitens VSCode - Ursache unbekannt.
+
+#### Was funktioniert:
+Attach to Process ID (PID).
+Man muß dazu die Debug-Session in VSCode starten und dann die richtige PID raussuchen: "python" tippen und raten oder man läßt sich die PID beim Test-Start in einer Dialogbox ausgeben (siehe modul `debug_support.py`) und tippt die dann ein. Dann "Connect" drücken und kurz warten bis die Session gestartet ist. Jetzt kann man auf Seiten von Teststand die Dialogbox mit PID schließen und den Testlauf starten.
+Es lassen sich Breakpoints auf VSCode Seite nach Belieben setzen oder ändern, solange der von Teststand gestartete Python Prozess am Leben bleibt.
+
+### Umgebungsvariable setzen
+
+PYTHONPATH = C:\Production\Python_Libs
+
+
+# TestStand Config
+
+- globals nachziehen
+- adapter Python 3.10 (version)
+    per thread
+    enable debug
+
 
 ## Structure
 
@@ -29,7 +134,7 @@ Submodule (in a repository base path): (disencouraged!)
     - customized dialogs like scanner dialog
 
 
-## Network configuration
+## Network device configuration
 
   Waveshare Eth2UART (CH9121)
     1. Connect your PC to the adapter using an Ethernet cable.

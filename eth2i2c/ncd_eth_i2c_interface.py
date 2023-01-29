@@ -51,20 +51,22 @@ NCD_PACKET_OVERHEAD = 3
 class I2CPort(I2CBase):
     """A class to control the NCD Ethernet to I2C converter"""
 
-    def __init__(self, host: str, port: int = 2101, timeout_s: float = NCD_DEFAULT_TIMEOUT_S, open_connection: bool = True):
+    def __init__(self, resource_str: str, timeout_s: float = NCD_DEFAULT_TIMEOUT_S, open_connection: bool = True):
         """Initialize the object, establish the network connection and perform the selftest of the converter.
 
         Args:
             host (str): hostname IP address of the converter
             port (int): port used for the communication. Default setting is 2101.
-            timeout_s (float): Timeout for network communication in seconds
-
+            timeout_s (float, optional): Timeout for network communication in seconds. Defaults to 5s.
+            open_connectuion (bool, optional): If True, the socket connection is opened on init(). Defaults to True.
+            
         Raises:
             NCDSelfTestFailedError: Raised if the selftest of the converter fails.
         """
-        self.socket = None
-        self._host = str(host)
-        self._port = int(port)
+        self.socket = None        
+        _res = resource_str.split(":")
+        self._host = _res[0]
+        self._port = int(_res[1]) if len(_res) > 1 else int(2101)  # use default port 
         self._open_connection = open_connection
         self.timeout_s = timeout_s
         self.ncd_interface_address = f"{self._host}:{self._port}"  # This the ip address ("192.168.1.61:2101"). Used in error messages.
@@ -81,7 +83,7 @@ class I2CPort(I2CBase):
         return f"NCD ETH-to-I2C bridge at {self._host}:{self._port}:0x{self.last_i2c_address:02X}"
 
     def __repr__(self) -> str:
-        return f"I2CPort({self._host}, {self._port}, timeout_s={self.timeout_s}, open_connection={self._open_connection})"
+        return f"I2CPort({self.ncd_interface_address}, timeout_s={self.timeout_s}, open_connection={self._open_connection})"
 
     #----------------------------------------------------------------------------------------------
 

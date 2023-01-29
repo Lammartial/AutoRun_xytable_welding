@@ -59,12 +59,23 @@ async def read_item(test_type, station_id, line_id, test_socket):
         next_serial += 1
         # some other thread-safe code here
         _serial = str(next_serial)
+    match test_type:
+        case "PCBA_TEST":
+            _testprogram = "411828_A_RRC2020_PCBA-Test"
+        case "CELLSTACK_TEST":
+            _testprogram = "411828_A_RRC2020_Cell-Test"
+        case "COREPACK_TEST":
+            _testprogram = "411828_A_RRC2020_Corepack-Test"
+        case "EOL_TEST":
+            _testprogram = "411828_A_RRC2020_EOL-Test"
+        case _:
+            _testprogram = "UNKNOWW"
     return {
         "test_type": test_type,
         "station_id": station_id,
         "line_id": line_id,
         "test_socket": test_socket,
-        "test_program_id": "411828_A_RRC2020_PCBA",
+        "test_program_id": _testprogram,
         "serial_number": _serial,        
     }
 
