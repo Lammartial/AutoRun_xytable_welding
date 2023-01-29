@@ -31,20 +31,40 @@ class StationConfiguration:
 
     # --- TestStand Interfaces --------------------------------------------------------------------
 
+
     def get_resource_strings_for_socket(self, socket: int | str) -> tuple:
         # return the selected socket configuration in a convenient way for teststand
         socket = int(socket)
         if socket == -1: socket = 1  # -1 is the SingleSequential setting
         d = self._CONFIG
-        _ns = len(d["test_sockets"])
+        _test_type = d["test_type"]
+        _ns = len(d[_test_type]["test_sockets"])
         assert (socket > 0 and socket <= _ns), ValueError(f"Socket must be in [1..{_ns}].")
-        r = OrderedDict(self._CONFIG["test_sockets"][str(socket)]["resource_strings"])
+        r = OrderedDict(self._CONFIG[_test_type]["test_sockets"][str(socket)]["resource_strings"])
         return tuple([v for k,v in r.items()])
+
+
+    def get_i2c_mux_configuration(self) -> tuple:
+        # return the i2c mux configuration, if any
+        d = self._CONFIG
+        _test_type = d["test_type"]
+        print(d[_test_type], hasattr(d[_test_type], "i2c_mux"))
+        if "i2c_mux" not in d[_test_type]:
+            raise AttributeError(f"Station for {_test_type } has no I2C mux configuration set.")
+        mux = d[_test_type]["i2c_mux"]
+        if "num_bus" not in mux:
+            raise AttributeError(f"Missing 'i2c_mux.num_bus' attribute.")
+        if "device_to_bus_map" not in mux:
+            raise AttributeError(f"Missing 'i2c_mux.device_to_bus_map' attribute.")        
+        result = mux["num_bus"], tuple([v for k,v in mux["device_to_bus_map"].items()])
+        return result
+
 
     def get_station_configuration(self) -> tuple:
         # return the station's configuration in a convenient way for teststand
         d = self._CONFIG
-        _ns = len(d["test_sockets"])
+        _test_type = d["test_type"]
+        _ns = len(d[_test_type]["test_sockets"])
         result = (
             d["test_type"],         # str
             d["station_id"],        # str
@@ -57,10 +77,11 @@ class StationConfiguration:
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    cfg = StationConfiguration(CONF_FILENAME_DEV)
+    cfg = StationConfiguration(CONF_FILENAME_PROD)
     #pprint(cfg._CONFIG)
     pprint(cfg.get_station_configuration())
-    #pprint(cfg.get_resource_strings_for_socket(2))
+    pprint(cfg.get_resource_strings_for_socket(1))
+    pprint(cfg.get_i2c_mux_configuration())
 
 
 # END OF FILE
