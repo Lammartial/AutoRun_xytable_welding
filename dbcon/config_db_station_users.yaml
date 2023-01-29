@@ -1,0 +1,8 @@
+# configure database which will be expected to be a MySQL/MariaDB type;
+sourceDatabase:
+    servertype: "mysql+pymysql" # pure python
+    serverhost: "172.22.2.99"
+    database:   "station_users"
+    login:      "teststand"
+    password:   "gedoehns!"
+    encoding:   "utf8"

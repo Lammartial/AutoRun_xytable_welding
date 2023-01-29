@@ -1,5 +1,5 @@
 """
-UDI scan dialog for use with Teststand.
+Login dialog for use with Teststand.
 
 Need Python 3.10
 
@@ -24,15 +24,23 @@ from serial import Serial
 from rrc.eth2serial import Eth2SerialDevice, tcp_send_and_receive_from_server
 from rrc.serialport import SerialComportDevice
 
+# # import SQL managing modules
+import sqlalchemy as sa
+from sqlalchemy.orm import sessionmaker
+from rrc.dbcon.connection import get_mockup_useracess_db_connector
+
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
 
-DEBUG = 0   # set to 0 for production
+DEBUG = 1
 
 from rrc.custom_logging import getLogger
 
 # --------------------------------------------------------------------------- #
+
+# global engine and session generator to share access in the callbacks later
+srcEngine, SSession = get_mockup_useracess_db_connector()
 
 # Global reference to loop allows access from different environments.
 aio_loop: Optional[asyncio.AbstractEventLoop] = None
@@ -56,13 +64,13 @@ allow_manual_edit: bool = False
 
 #--------------------------------------------------------------------------------------------------
 
-def validate_udi_by_string_at_position_1(udi: str, v_str: str) -> bool:
-    if len(udi) > len(v_str) + 1:
-        #if udi[1:1+len(v_str)] in v_str:  # positions given by RRC team
-        #    return True
-        if v_str in udi:  # position if ID in the codestring doesn't care
-            return True
-    return False
+def validate_user_id(udi: str, v_str: str) -> bool:
+    # if len(v_str)>0:
+    #     if v_str in udi:
+    #         return True
+    #     else:
+    #         return False
+    return True
 
 #--------------------------------------------------------------------------------------------------
 
@@ -243,7 +251,7 @@ def tk_callbacks(mainframe: ttk.Frame, row_itr: Iterator, resource_string: str):
 
 #--------------------------------------------------------------------------------------------------
 
-def tk_main(resource_string: str, title: str = "ENTER UID"):
+def tk_main(resource_string: str, title: str = "MAIN FUNC TITLE"):
     """ Run tkinter.
 
     This runs in the Main Thread.
@@ -259,8 +267,24 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
 
     def _accept_udi(parent):
         global udi_to_scan
+
+        session = SSession()
         for item in udi_to_scan:
-            item.scanned_udi = item.var.get()  # transfer from each tkinter widget into the result space
+            _sid = item.var.get()  # transfer from each tkinter widget into the result space
+            # check with database if user is allowed
+            res = session.execute(sa.text(f"SELECT username,access FROM `mockup_user_access` AS mu WHERE id='{_sid}'"))
+            rows = res.fetchall()
+            if len(rows) == 0:
+                # not found! -> do not login
+                showinfo("WARNING", f"User login not found in database.")
+                return
+            else:
+                if rows[0][1] == 0:
+                    # has no access!
+                    showinfo("WARNING", f"User {rows[0][0]} is not allowed to login.")
+                    return
+            # login user
+            item.scanned_udi = rows[0][0]
         root.destroy()
 
     def _cancel(parent):
@@ -286,7 +310,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     root.title(title)
     # set App icon
     # if we have an ICO file we can simply use this:
-    root.iconbitmap(Path(__file__).resolve().parent / "app-icon.ico")
+    root.iconbitmap(Path(__file__).resolve().parent / "user-icon.ico")
     # Simply set the theme
     root.tk.call("source", Path(__file__).resolve().parent / "theme_sv.tcl")
     root.tk.call("set_theme", "light")
@@ -316,7 +340,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     # Label
     label = ttk.Label(
         mainframe,
-        text="Scan or Enter the UID of Device under Test",
+        text="Scan your TAG or enter your ID key.",
         justify="center",
         font=("-size", 12, "-weight", "bold"),
     )
@@ -330,10 +354,10 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
         _row = next(row_itr)
         _col = 0
         _label = None
-        if item.name:
-            _label = ttk.Label(mainframe, text=item.name)
-            _label.grid(row=_row, column=_col, padx=5, pady=(0, 10), sticky="ew")
-            _col += 1
+        # if item.name:
+        #     _label = ttk.Label(mainframe, text=item.name)
+        #     _label.grid(row=_row, column=_col, padx=5, pady=(0, 10), sticky="ew")
+        #     _col += 1
 
         #validate_udi_handle = root.register(validate_entry)
         #invalidate_udi_hanlde = root.register(invalidate_entry)
@@ -350,11 +374,11 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
         entry.insert(0, "")
         entry.bind("<Return>", _accept_udi )
         entry.bind("<Key-Escape>", _cancel)
-        entry.grid(row=_row, column=_col, padx=5, pady=(0, 10), sticky="ew")
+        entry.grid(row=_row, column=_col, padx=5, pady=(0, 10), sticky="nsew")
         entry_lst.append((_label, entry))
 
     # Button
-    ok_button = ttk.Button(mainframe, text="Start Test", style="Accent.TButton", command=lambda: _accept_udi(None))
+    ok_button = ttk.Button(mainframe, text="Login", style="Accent.TButton", command=lambda: _accept_udi(None))
     ok_button.bind("<Return>", _accept_udi)
     ok_button.bind("<Key-Escape>", _cancel)
     ok_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, padx=5, pady=10, sticky="nsew")
@@ -391,9 +415,20 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     # Set a minsize for the window, and place it in the middle
     #root.update()
     root.minsize(root.winfo_width(), root.winfo_height())
-    x_cordinate = int((root.winfo_screenwidth() / 2) - (root.winfo_width() / 2))
-    y_cordinate = int((root.winfo_screenheight() / 2) - (root.winfo_height() / 2))
-    root.geometry("+{}+{}".format(x_cordinate-50, y_cordinate-180))
+    #x_cordinate = int((root.winfo_screenwidth() / 2) - (root.winfo_width() / 2))
+    #y_cordinate = int((root.winfo_screenheight() / 2) - (root.winfo_height() / 2))
+    #root.geometry("+{}+{}".format(x_cordinate-50, y_cordinate-180))
+
+    # create the Widgets and keep them inside our App object
+    x_size = int(root.winfo_screenwidth() * 0.60)
+    y_size = int(root.winfo_screenheight() * 0.60)
+    x = int((root.winfo_screenwidth() - x_size) / 2)
+    y = int((root.winfo_screenheight() - y_size) / 2)
+    root.geometry(f"{x_size}x{y_size}+{x}+{y}")
+    # define the geometry for the window or frame
+    root.columnconfigure(0, weight=1)
+    #root.columnconfigure(1, weight=2)
+
     #root.attributes('-alpha', 1.0)  # now make the main window visible again
 
     root.update()
@@ -457,7 +492,7 @@ def aio_main(aio_initiate_shutdown: threading.Event):
     #_log.debug('aio_main ending')
 
 
-def main(resource_str: str, title: str = "ENTER UDI"):
+def main(resource_str: str, title: str = "Teststand User Login"):
     """Set up working environments for asyncio and tkinter.
 
     This runs in the Main Thread.
@@ -480,8 +515,8 @@ def main(resource_str: str, title: str = "ENTER UDI"):
     #_log.debug('main ending')
 
 #--------------------------------------------------------------------------------------------------
-def identify_uut(requested_udi: list, scanner_resource_str: str, allow_user_edit:bool = False) -> Tuple[bool, str]:
-    """Entry function for TestStand using context IDispatch interface (block of data)
+def identify_user(scanner_resource_str: str, allow_user_edit:bool = False) -> Tuple[bool, str]:
+    """Login user to TestStand using context IDispatch interface (block of data)
 
     Args:
         context (dict): TestStand context
@@ -493,20 +528,13 @@ def identify_uut(requested_udi: list, scanner_resource_str: str, allow_user_edit
 
     _log = getLogger(__name__, DEBUG)
     allow_manual_edit = allow_user_edit
-    # # this is just to demonstrate the parameter passing from TestStand
-    # context_id = seq_context.Id
-    # executing_sequence_name = seq_context.Sequence.Name
-    # executing_step_name = seq_context.Step.Name
-    # _scanner = str(seq_context.Locals.TestSocketResources.scanner)
     _scanner = scanner_resource_str
     # clear the UDIs to scan from TestStand context:
-    udi_to_scan = [
-        UDIScanCtrlItem(item, validate_udi_by_string_at_position_1) for item in requested_udi
-    ]
+    udi_to_scan = [UDIScanCtrlItem(None, validate_user_id)]
     main(_scanner)
     res = tuple()
     for item in udi_to_scan:
-        _log.debug(f"UDI({item.name})={item.scanned_udi}")
+        _log.debug(f"USER({item.name})={item.scanned_udi}")
         res += (item.scanned_udi,)
     if all(res):
         # all elements not None -> no conversion
@@ -515,24 +543,25 @@ def identify_uut(requested_udi: list, scanner_resource_str: str, allow_user_edit
         # convert None to "" to avoid exception
         return (False,) + tuple([s if s else "" for s in res])
 
-#--------------------------------------------------------------------------------------------------
 
-if __name__ == '__main__':
+#--------------------------------------------------------------------------------------------------
+if __name__ == "__main__":
     ## Initialize the logging
     from rrc.custom_logging import logger_init
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    # set the required UDIs per global
-    udi_to_scan = [
-        UDIScanCtrlItem("PCBA", validate_udi_by_string_at_position_1),
-        UDIScanCtrlItem("CELL", validate_udi_by_string_at_position_1),
-        #UDIScanCtrlItem("HEINZ", validate_udi_by_string_at_position_1),
-    ]
+    _log.debug(srcEngine.table_names())
 
-    #main("192.168.1.163:2000", title="TEST SOCKET SCANNER")
-    main("COM24,9600,8N1", title="TEST HANDHELD SCANNER")
-    #print(f"SCANNER -> {scanned_udi}")
+    # session = SSession()
+    # res = session.execute(sa.text("SELECT * FROM `mockup_user_access` AS mu"))
+    # print(res.fetchall())
+
+    # set the required User ID per global
+    udi_to_scan = [UDIScanCtrlItem("ID", validate_user_id)]
+
+    allow_manual_edit = True
+    main("COM24,9600,8N1") #, title="TEST LOGIN DIALOG")
 
     res = tuple()
     for item in udi_to_scan:
@@ -542,6 +571,9 @@ if __name__ == '__main__':
         print((True,) + res)
     else:
         print((False,) + res)
+
+
+
 
 
 # END OF FILE

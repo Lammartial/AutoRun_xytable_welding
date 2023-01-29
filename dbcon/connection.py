@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 # Logging
 # --------------------------------------------------------------------------- #
 
-DEBUG = 1
+DEBUG = 0
 
 from rrc.custom_logging import getLogger, logger_init
 
@@ -74,16 +74,22 @@ def createInternalSession(config, echo=False):
 # load the default config file (please set the filename for needed connection)
 #CONFIG = load_config_yaml_file("config_postgres")
 CONFIG = load_config_yaml_file("config_mysql")
+USER_ACCESS = load_config_yaml_file("config_db_station_users")
 
-# global engine and session generator to share access in the callbacks later
-srcEngine, SSession = createInternalSession(CONFIG, echo=True if DEBUG else False)
+def get_teststand_db_connector():
+    return createInternalSession(CONFIG, echo=True if DEBUG else False)
 
+def get_mockup_useracess_db_connector():
+    return createInternalSession(USER_ACCESS, echo=True if DEBUG else False)
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     ## Initialize the logging
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
+
+    # global engine and session generator to share access in the callbacks later
+    srcEngine, SSession = get_teststand_db_connector()
 
     _log.info(srcEngine.table_names())
 
