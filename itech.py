@@ -159,7 +159,7 @@ class M3400(Eth2SerialVisaDevice):
             result.append(float(lst[4]))    # watt-hour
             return result
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     def set_output_state(self, state: int) -> None:
@@ -240,7 +240,7 @@ class M3400(Eth2SerialVisaDevice):
             cmd = 'CURR ' + param_str
             self.send(cmd)
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     #[SOURce:]CURRent[:LEVel][:IMMediate][:AMPLitude] <NRf+>
@@ -269,7 +269,7 @@ class M3400(Eth2SerialVisaDevice):
             cmd = 'CURR:LIM:POS ' + param_str
             self.send(cmd, 2000)
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     #[SOURce:]CURRent[:LEVel]:LIMit:POSitive <NRf+>
@@ -285,7 +285,7 @@ class M3400(Eth2SerialVisaDevice):
             cmd = "CURR:LIM:POS?"
             return float(self.request(cmd, 2000))
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     #[SOURce:]CURRent[:LEVel]:LIMit:NEGative <NRf+>
@@ -302,7 +302,7 @@ class M3400(Eth2SerialVisaDevice):
             cmd = 'CURR:LIM:NEG ' + param_str
             self.send(cmd)
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     #[SOURce:]CURRent[:LEVel]:LIMit:NEGative <NRf+>
@@ -318,7 +318,7 @@ class M3400(Eth2SerialVisaDevice):
             cmd = "CURR:LIM:NEG?"
             return float(self.request(cmd, 2000))
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     #[SOURce:]CURRent[:OVER]:PROTection[:LEVel] <NRf+>
@@ -335,7 +335,7 @@ class M3400(Eth2SerialVisaDevice):
             cmd = 'CURR:PROT ' + param_str
             self.send(cmd)
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     #[SOURce:]CURRent[:OVER]:PROTection[:LEVel] <NRf+>
@@ -351,7 +351,7 @@ class M3400(Eth2SerialVisaDevice):
             cmd = "CURR:PROT?"
             return float(self.request(cmd, 2000))
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     #[SOURce:]CURRent:UNDer:PROTection[:LEVel] <NRf+>
@@ -368,7 +368,7 @@ class M3400(Eth2SerialVisaDevice):
             cmd = 'CURR:UND:PROT ' + param_str
             self.send(cmd)
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     #[SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+>
@@ -384,7 +384,7 @@ class M3400(Eth2SerialVisaDevice):
             cmd = 'VOLT ' + param_str
             self.send(cmd)
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     #[SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+>
@@ -400,7 +400,7 @@ class M3400(Eth2SerialVisaDevice):
             cmd = 'VOLT?'
             return float(self.request(cmd, 2000))
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     #[SOURce:]VOLTage[:LEVel]:LIMit[:HIGH] <NRf+>
@@ -417,7 +417,7 @@ class M3400(Eth2SerialVisaDevice):
             cmd = 'VOLT:LIM ' + param_str
             self.send(cmd)
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     #[SOURce:]VOLTage[:LEVel]:LIMit:LOW <NRf+>
@@ -434,7 +434,7 @@ class M3400(Eth2SerialVisaDevice):
             cmd = 'VOLT:LIM:LOW ' + param_str
             self.send(cmd)
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     #[SOURce:]VOLTage[:OVER]:PROTection[:LEVel] <NRf+>
@@ -451,7 +451,7 @@ class M3400(Eth2SerialVisaDevice):
             cmd = 'VOLT:PROT ' + param_str
             self.send(cmd)
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     #[SOURce:]VOLTage:UNDer:PROTection[:LEVel] <NRf+>
@@ -468,7 +468,7 @@ class M3400(Eth2SerialVisaDevice):
             cmd = 'VOLT:UND:PROT ' + param_str
             self.send(cmd)
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
 #--------------------------------------------------------------------------------------------------

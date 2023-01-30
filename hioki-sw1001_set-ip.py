@@ -1,5 +1,5 @@
 import argparse
-from hioki import Hioki_SW1001
+from rrc.hioki import Hioki_SW1001
 
 # This script is used to set up LAN configuration on HIOKI SW1001
 #

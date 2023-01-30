@@ -115,7 +115,7 @@ class DAQ970A(Eth2SerialVisaDevice):
             cmd = "MEAS:RES? AUTO,DEF,(@" + slot_str + channel_str + ")"
             return float(self.request(cmd, 5000))
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     def get_4w_resistance(self, slot: int, channel: int):
@@ -143,7 +143,7 @@ class DAQ970A(Eth2SerialVisaDevice):
             cmd = "MEAS:FRES? AUTO,DEF,(@" + slot_str + channel_str + ")"
             return float(self.request(cmd, 5000))
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     def get_VDC(self, slot: int, channel: int) -> float:
@@ -171,7 +171,7 @@ class DAQ970A(Eth2SerialVisaDevice):
             cmd = "MEAS:VOLT:DC? AUTO,DEF,(@" + slot_str + channel_str + ")"
             return float(self.request(cmd, 5000))
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     def get_VAC(self, slot: int, channel: int) -> float:
@@ -199,7 +199,7 @@ class DAQ970A(Eth2SerialVisaDevice):
             cmd = "MEAS:VOLT:AC? AUTO,DEF,(@" + slot_str + channel_str + ")"
             return float(self.request(cmd, 5000))
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     def get_ADC(self, slot: int, channel: int) -> float:
@@ -227,7 +227,7 @@ class DAQ970A(Eth2SerialVisaDevice):
             cmd = "MEAS:CURR:DC? AUTO,DEF,(@" + slot_str + channel_str + ")"
             return float(self.request(cmd, 5000))
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
 
@@ -275,7 +275,7 @@ class DAQ970A(Eth2SerialVisaDevice):
                 case _:
                     raise ValueError('Error, get_temp: unknown parameter')
         except Exception as ex:
-            _log.exception(ex)
+            #_log.exception(ex)
             raise
 
     #def disconnect(self):
