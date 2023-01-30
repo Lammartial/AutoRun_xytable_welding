@@ -113,7 +113,7 @@ if __name__ == "__main__":
     #rb.set_relay(1)
     #rb.set_relay(4)
 
-    #rb.reset_relay(1)
+    rb.reset_relay(1)
     #rb.reset_relay(4)
 
     i2c.close()
