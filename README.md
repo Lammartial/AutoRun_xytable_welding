@@ -86,10 +86,10 @@ pymysql
 ### For the lazy guys (copy & paste):
 
 PIP:
-`pip wheel typing debugpy numpy==1.23 scipy pandas pytz pymodbus pyvisa SQLAlchemy pyodbc pymssql psycopg2 pymysql pyyaml pywin32 requests fastapi[all] humanfriendly pyelftools pyserial pyserial-asyncio`
+`pip wheel typing debugpy numpy==1.23 scipy pandas pytz pymodbus pyvisa pyvisa-py pygpib SQLAlchemy pyodbc pymssql psycopg2 pymysql pyyaml pywin32 requests fastapi[all] humanfriendly pyelftools pyserial pyserial-asyncio`
 
 CONDA:
-`typing pyyaml debugpy numpy==1.23 scipy pandas pytz pymodbus pyvisa SQLAlchemy pyodbc pymssql psycopg2 pymysql pywin32 requests fastapi[all] humanfriendly pyelftools pyserial pyserial-asyncio`
+`typing pyyaml debugpy numpy==1.23 scipy pandas pytz pymodbus pyvisa  pyvisa-py pygpib SQLAlchemy pyodbc pymssql psycopg2 pymysql pywin32 requests fastapi[all] humanfriendly pyelftools pyserial pyserial-asyncio`
 
 
 ## Debugging with VSCode
@@ -108,13 +108,13 @@ Es lassen sich Breakpoints auf VSCode Seite nach Belieben setzen oder ändern, s
 
 PYTHONPATH = C:\Production\Python_Libs
 
-
 # TestStand Config
 
 - globals nachziehen
 - adapter Python 3.10 (version)
     per thread
-    enable debug
+    reload modified modules before execution
+    (enable debug) optional
 
 
 ## Structure
@@ -123,7 +123,7 @@ PYTHONPATH = C:\Production\Python_Libs
   dbcon
     - experimental
   debug
-    - debug helper for TestStand as well as test functions for library modules 
+    - debug helper for TestStand as well as test functions for library modules
   eth2serial
     - basic socket handling for ETH to UART
   modbus
@@ -133,6 +133,13 @@ PYTHONPATH = C:\Production\Python_Libs
   ui
     - customized dialogs like scanner dialog
 
+## IVI-VISA / NI-VISA
+
+To uses the VISA drivers with python install VISA shared components from Keysight IO Libraries Suite 2022 Update 2.
+
+Then install pyvisa, modules for use with Python.
+As alternative Python-backend you can install pyvisa-py and pygpib modules.
+`pyvisa-info` is a command line tool to show the configuration of the backend.
 
 ## Network device configuration
 
@@ -140,7 +147,7 @@ PYTHONPATH = C:\Production\Python_Libs
     1. Connect your PC to the adapter using an Ethernet cable.
     2. Use "NetModuleConfig" GUI and file "Conf_CH9121_Barcode_and_LEDanalyzer.cfg" to configure the adapter:
       W:\260_Production-Engineering\100_Projekte\Vietnam\060_Testsysteme\Datenblätter_Manuals\Waveshare_Eth2UART_CH9121
-    3. Change the IP address if necessary. Port 1 and Port 2 are already preconfigured. 
+    3. Change the IP address if necessary. Port 1 and Port 2 are already preconfigured.
 
   Eth2I2C (NCD5500)
     1. Connect your PC to the adapter using an Ethernet cable or WiFi network.
@@ -152,16 +159,16 @@ PYTHONPATH = C:\Production\Python_Libs
     1. Default IP address of the device is 192.168.1.1
     2. Connect your PC to the device using an Ethernet cable or WiFi network.
     3. You can change the device's LAN interface settings using a web browser and current IP address of the device.
-    4. More info: 
+    4. More info:
       W:\260_Production-Engineering\100_Projekte\Vietnam\060_Testsysteme\Datenblätter_Manuals\HIOKI BT3561A
 
   Hioki SW1001
     1. Use Python script hioki-sw1001_set-ip.py.
     2. Connect the LAN cable to the SW1001.
-    3. Set communication setting mode switch (DFLT/USER) on the back of the SW1001 to DFLT. 
+    3. Set communication setting mode switch (DFLT/USER) on the back of the SW1001 to DFLT.
       Default: IP 192.168.0.254, Port 23.
     4. Set the IP of the PC to the same subnetwork. For example 192.168.0.10.
-    5. Define the IP address of the SW1001 below. 
+    5. Define the IP address of the SW1001 below.
     6. Run script.
     7. Switch off the SW1001. Set communication setting mode switch (DFLT/USER) to USER. Switch on the device.
     8. New IP has been applied.
@@ -176,6 +183,6 @@ PYTHONPATH = C:\Production\Python_Libs
       W:\260_Production-Engineering\100_Projekte\Vietnam\060_Testsysteme\Datenblätter_Manuals\Keysight DAQ
 
 
-  
+
 
 
