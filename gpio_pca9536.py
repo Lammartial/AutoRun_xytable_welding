@@ -103,6 +103,7 @@ class PCA9536:
         Args:
             gpio_n int: Index of the GPIO to configure [0, 3]
         """
+        pin_n = int(pin_n)
         _config = self._shadow_regs[PCA9536.REG_CONFIGURATION] | (1 << (pin_n & 0x03))  # set corresponding bit in configuration
         self._write_register(PCA9536.REG_CONFIGURATION, _config)
 
@@ -112,6 +113,7 @@ class PCA9536:
         Args:
             gpio_n int: Index of the GPIO to configure [0, 3]
         """
+        pin_n = int(pin_n)
         _config = self._shadow_regs[PCA9536.REG_CONFIGURATION] & ~(1 << (pin_n & 0x03))  # clear corresponding bit in configuration
         self._write_register(PCA9536.REG_CONFIGURATION, _config)
 
@@ -125,6 +127,7 @@ class PCA9536:
         Returns:
             bool: The logic level of the GPIO.
         """
+        pin_n = int(pin_n)
         reg_value = self._read_input_register()
         self._shadow_regs[PCA9536.REG_INPUT_PORT] = reg_value  # keep also track of last reading of input
         return bool(reg_value & (1 << (pin_n & 0x03)))
@@ -137,6 +140,7 @@ class PCA9536:
         Args:
             gpio_n int: Index of the GPIO [0, 3]
         """
+        pin_n = int(pin_n)
         _value = self._shadow_regs[PCA9536.REG_OUTPUT] | (1 << (pin_n & 0x03))  # set corresponding bit
         self._write_register(PCA9536.REG_OUTPUT, _value)
 
@@ -147,6 +151,7 @@ class PCA9536:
         Args:
             gpio_n int: Index of the GPIO [0, 3]
         """
+        pin_n = int(pin_n)
         _value = self._shadow_regs[PCA9536.REG_OUTPUT] & ~(1 << (pin_n & 0x03))  # clear corresponding bit
         self._write_register(PCA9536.REG_OUTPUT, _value)
 
