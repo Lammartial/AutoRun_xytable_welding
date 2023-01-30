@@ -97,6 +97,9 @@ class PCA9536:
         self._write_register(PCA9536.REG_POLARITY_INVERSE, _polarity)
         self._write_register(PCA9536.REG_CONFIGURATION, _config)
 
+    def reset_inversion(self):
+        self._write_register(PCA9536.REG_POLARITY_INVERSE, 0x00)
+
     def set_pin_as_input(self, pin_n: int):
         """Configure the GPIO with the index n (starts at 0) as an input with a 100k pullup.
 
