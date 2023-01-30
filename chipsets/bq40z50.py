@@ -1316,16 +1316,16 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def check_no_errors(self) -> bool:
         self.manufacturer_access = 0x0051
         buf = self.manufacturer_data
-        #for i in range(len(buf)):
-        #    if (buf[i] != 0):
-        #        return False
-        #return True
-        res = []
-        res.append(buf[0])
-        res.append(buf[1])
-        res.append(buf[2])
-        res.append(buf[3])
-        return res
+        for i in range(len(buf)):
+            if (buf[i] != 0):
+                return False
+        return True
+        #res = []
+        #res.append(buf[0])
+        #res.append(buf[1])
+        #res.append(buf[2])
+        #res.append(buf[3])
+        #return res
 
     def toggle_fet_control(self):
         """This command disables/enables control of the CHG, DSG, and PCHG FET by the firmware.

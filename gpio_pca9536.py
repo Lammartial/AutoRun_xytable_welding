@@ -61,7 +61,7 @@ class PCA9536:
             None,
             self.get_output_register() if init_shadow_from_ic else 0x00,
             self.get_polarity_register() if init_shadow_from_ic else 0x00,
-            self.get_config_register if init_shadow_from_ic else 0x0F,      # power-up pins input 0..3, 4..7 not used
+            self.get_config_register() if init_shadow_from_ic else 0x0F,      # power-up pins input 0..3, 4..7 not used
         ]
     
     def __str__(self) -> str:
@@ -115,6 +115,7 @@ class PCA9536:
         """
         pin_n = int(pin_n)
         _config = self._shadow_regs[PCA9536.REG_CONFIGURATION] & ~(1 << (pin_n & 0x03))  # clear corresponding bit in configuration
+
         self._write_register(PCA9536.REG_CONFIGURATION, _config)
 
 
@@ -178,7 +179,7 @@ class PCA9536:
                              f"You sent {value}")
 
         data = bytearray([register, value])
-        if 1 == self.i2c.writeto(self.i2c_address_7bit, data):
+        if len(data) == self.i2c.writeto(self.i2c_address_7bit, data):
             self._shadow_regs[register] = value
             return True
         else:
