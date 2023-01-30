@@ -1,5 +1,6 @@
 from rrc.eth2serial.base import Eth2Serial_SockSingleConnection_Device
 from rrc.eth2serial.base import Eth2SerialDevice
+from time import sleep
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
@@ -646,7 +647,7 @@ class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
 
     def set_new_ip_address(self, new_ip: str, new_port: int = 23,
                            new_subnet_mask: str = "255.255.255.0", new_default_gateway: str = "0.0.0.0",
-                           pause_reboot: float = 5.0):
+                           pause_reboot: float = 10.0):
         """_summary_
 
         Args:
