@@ -30,10 +30,13 @@ class CorePackRelayBoard():
         self.gpio = PCA9536(i2c, int(i2c_address_7bit))
         #super().__init__(i2c, int(i2c_address_7bit))    
         # Setup PCA9536 GPIO
+        self.gpio.reset_inversion()
         self.gpio.set_pin_as_output(self.relay_3570_switch)
         self.gpio.set_pin_as_output(self.relay_meas)
         self.gpio.set_pin_as_input(self.inp_300ohm_detect)
         self.gpio.set_pin_as_input(self.inp_3570_detect)
+        self.reset_relay(1)
+        self.reset_relay(4)
 
     def __str__(self) -> str:
         return f"CorePackRelayBoard using {self.gpio}"
@@ -98,12 +101,20 @@ class CorePackRelayBoard():
 if __name__ == "__main__":
     from rrc.eth2i2c import I2CPort
     from rrc.i2cbus import BusMux, I2CMuxedBus
-    i2c = I2CPort("192.168.1.111")
+    i2c = I2CPort("172.21.101.31")
     mux = BusMux(i2c, 0x77)
     bus = I2CMuxedBus(i2c, mux, 7)
     rb = CorePackRelayBoard(bus)
+
+    print(rb.gpio.get_polarity_register())
+
+    #rb.set_relay(4)
+
     print(rb.read_input(2))
     print(rb.read_input(3))
+
+    #rb.reset_relay(4)
+
     i2c.close()
     pass
 
