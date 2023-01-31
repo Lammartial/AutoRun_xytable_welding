@@ -500,8 +500,9 @@ class M3400(Eth2SerialVisaDevice):
             mode (str): CHAR|DISC
         """
         try:
-            assert((str == "CHAR") or (str == "DISC")), ValueError('Error, set_battery_mode: only "CHAR" or "DISC" allowed')
-            cmd = 'BATT:MODE ' + str
+            mode = str(mode)
+            assert((mode == "CHAR") or (mode == "DISC")), ValueError('Error, set_battery_mode: only "CHAR" or "DISC" allowed')
+            cmd = 'BATT:MODE ' + mode
             self.send(cmd)
         except Exception as ex:
             raise      
@@ -533,36 +534,6 @@ class M3400(Eth2SerialVisaDevice):
         try:
             param_str =  f"{volt:05.2f}"
             cmd = 'BATT:CHAR:VOLT ' + param_str
-            self.send(cmd)
-        except Exception as ex:
-            raise
-
-    def set_battery_charge_voltage_limit_low(self, volt: float) -> None:
-        """
-        This command is used to set the battery charging voltage low limit.
-        M3900 device only.
-
-        Args:
-            volt (float): voltage protection 'XX.XX' Volts
-        """
-        try:
-            param_str =  f"{volt:05.2f}"
-            cmd = 'BATT:CHAR:VOLT MIN' + param_str
-            self.send(cmd)
-        except Exception as ex:
-            raise
-
-    def set_battery_charge_voltage_limit_high(self, volt: float) -> None:
-        """
-        This command is used to set the battery charging voltage high limit.
-        M3900 device only.
-
-        Args:
-            volt (float): voltage protection 'XX.XX' Volts
-        """
-        try:
-            param_str =  f"{volt:05.2f}"
-            cmd = "BATT:CHAR:VOLT MAX" + param_str
             self.send(cmd)
         except Exception as ex:
             raise
@@ -611,20 +582,150 @@ class M3400(Eth2SerialVisaDevice):
             raise
 
     # BATTery:CHARge:CURRent <NRf+>
+    def set_battery_charge_current(self, curr: float) -> None:
+        """
+        This command is used to set the battery charging current value.
+        M3900 device only.
+
+        Args:
+            curr (float): voltage protection 'XX.XX' Volts
+        """
+        try:
+            param_str =  f"{curr:05.2f}"
+            cmd = 'BATT:CHAR:CURR ' + param_str
+            self.send(cmd)
+        except Exception as ex:
+            raise
+
     # BATTery:CHARge:CURRent? [MINimum|MAXimum|DEFault]
+    def get_battery_charge_current(self) -> float:
+        """
+        This command is used to get the battery charging current value.
+        M3900 device only.
+
+        Returns:
+            float: charge current
+        """
+        try:
+            cmd = "BATT:CHAR:CURR?"
+            return float(self.request(cmd, 2000))
+        except Exception as ex:
+            raise 
+
+    def get_battery_charge_current_limit_low(self) -> float:
+        """
+        This command is used to get the battery charging current low limit.
+        M3900 device only.
+
+        Returns:
+            float: charge current
+        """
+        try:
+            cmd = "BATT:CHAR:CURR? MIN"
+            return float(self.request(cmd, 2000))
+        except Exception as ex:
+            raise
+
+    def get_battery_charge_current_limit_high(self) -> float:
+        """
+        This command is used to get the battery charging current high limit.
+        M3900 device only.
+
+        Returns:
+            float: charge current
+        """
+        try:
+            cmd = "BATT:CHAR:CURR? MAX"
+            return float(self.request(cmd, 2000))
+        except Exception as ex:
+            raise
+
     # BATTery:DISCharge:VOLTage <NRf+> 
     # BATTery:DISCharge:VOLTage? [MINimum|MAXimum|DEFault] 
     # BATTery:DISCharge:CURRent <NRf+> 
     # BATTery:DISCharge:CURRent? [MINimum|MAXimum|DEFault] 
-    # BATTery:SHUT:VOLTage <NRf+> 
-    # BATTery:SHUT:VOLTage? [MINimum|MAXimum|DEFault] 
-    # BATTery:SHUT:CURRent <NRf+> 
-    # BATTery:SHUT:CURRent? [MINimum|MAXimum|DEFault] 
+    # BATTery:SHUT:VOLTage <NRf+>
+    def set_battery_shut_voltage(self, volt: float) -> None:
+        """
+        This command is used to set the voltage value for the battery test cutoff.
+        M3900 device only.
+
+        Args:
+            volt (float): cutoff voltage
+        """
+        try:
+            param_str =  f"{volt:05.2f}"
+            cmd = 'BATT:SHUT:VOLT ' + param_str
+            self.send(cmd)
+        except Exception as ex:
+            raise 
+    # BATTery:SHUT:VOLTage? [MINimum|MAXimum|DEFault]
+    def get_battery_shut_voltage(self) -> float:
+        """
+        This command is used to get the voltage value for the battery test cutoff.
+        M3900 device only.
+        """
+        try:
+            cmd = 'BATT:SHUT:VOLT?'
+            return float(self.request(cmd, 2000))
+        except Exception as ex:
+            raise 
+
+    # BATTery:SHUT:CURRent <NRf+>
+    def set_battery_shut_current(self, curr: float) -> None:
+        """
+        This command is used to set the current value for the battery test cutoff.
+        M3900 device only.
+
+        Args:
+            curr (float): cutoff current
+        """
+        try:
+            param_str =  f"{curr:05.2f}"
+            cmd = 'BATT:SHUT:CURR ' + param_str
+            self.send(cmd)
+        except Exception as ex:
+            raise 
+    # BATTery:SHUT:CURRent? [MINimum|MAXimum|DEFault]
+    def get_battery_shut_current(self) -> float:
+        """
+        This command is used to get the current value for the battery test cutoff.
+        M3900 device only.
+        """
+        try:
+            cmd = 'BATT:SHUT:CURR?'
+            return float(self.request(cmd, 2000))
+        except Exception as ex:
+            raise  
+
     # BATTery:SHUT:CAPacity <NRf+> 
     # BATTery:SHUT:CAPacity? [MINimum|MAXimum|DEFault]
-    # BATTery:SHUT:TIME <NRf+> 
-    # BATTery:SHUT:TIME? [MINimum|MAXimum|DEFault]
+    # BATTery:SHUT:TIME <NRf+>
+    def set_battery_shut_time(self, time: int) -> None:
+        """
+        This command is used to set the time value for the battery test cutoff.
+        M3900 device only.
 
+        Args:
+            time (int): cutoff time, sec
+        """
+        try:
+            time =  int(time)
+            cmd = 'BATT:SHUT:TIME ' + str(time)
+            self.send(cmd)
+        except Exception as ex:
+            raise      
+    # BATTery:SHUT:TIME? [MINimum|MAXimum|DEFault]
+    def get_battery_shut_time(self) -> float:
+        """
+        This command is used to get the time value for the battery test cutoff.
+        M3900 device only.
+        """
+        try:
+            cmd = 'BATT:SHUT:TIME?'
+            return float(self.request(cmd, 2000))
+        except Exception as ex:
+            raise 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     from time import sleep
@@ -637,7 +738,41 @@ if __name__ == "__main__":
 
     # predefined resource ID
     #M3412_IP_STR = "TCPIP0::172.21.101.14::inst0::INSTR"
-    M3900_IP_STR = "TCPIP0::192.168.1.172::inst0::INSTR"
+    M3900_IP_STR = "TCPIP0::172.21.101.33::inst0::INSTR"
+
+    # ===================== BATTERY MODE ============================================================
+    # 1. Create an instance of ITECH_DEV class
+    it_m3902 = M3400(M3900_IP_STR, 0)
+
+    print(it_m3902.set_remote_control())
+
+    it_m3902.set_current_limit_positive(curr = 5.000)       # No return value
+    it_m3902.set_current_limit_negative(curr = -5.000)   #(-02.000)       # No return value
+    it_m3902.set_current(curr= 2.0)
+    it_m3902.set_voltage(12.0)
+    
+
+    it_m3902.set_battery_charge_voltage(12.0)
+    it_m3902.set_battery_charge_current(2.0)
+    it_m3902.set_battery_shut_voltage(12.5)
+    it_m3902.set_battery_shut_current(2.5)
+    it_m3902.set_battery_shut_time(30)
+    it_m3902.set_battery_mode("CHAR")
+
+    #print(it_m3902.get_battery_charge_voltage_limit_low())
+    #print(it_m3902.get_battery_charge_voltage_limit_high())
+    print(it_m3902.get_battery_charge_voltage())
+    #print(it_m3902.get_battery_charge_current_limit_low())
+    #print(it_m3902.get_battery_charge_current_limit_high())
+    print(it_m3902.get_battery_charge_current())
+
+    print(it_m3902.get_battery_shut_voltage())
+    print(it_m3902.get_battery_shut_current())
+    print(it_m3902.get_battery_shut_time())
+
+    it_m3902.set_output_state(1)
+    it_m3902.set_output_state(0)
+    # ===============================================================================================
 
     # 1. Create an instance of ITECH_DEV class
     # using multi-channel communication
@@ -707,7 +842,7 @@ if __name__ == "__main__":
     #it_m3412.set_voltage_limit(20.00)                 # No return value
 
     # Set voltage lower limit under CC priority mode
-    #it_m3412.set_voltage_limit_low(1.00)              # No return value
+    #it_m3902.set_voltage_limit_low(1.00)              # No return value
 
     # Set over voltage limit (MAX = 61.00)
     #it_m3412.set_voltage_protection(60.00)            # No return value
