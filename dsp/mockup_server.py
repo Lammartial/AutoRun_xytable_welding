@@ -59,25 +59,27 @@ async def read_item(test_type, station_id, line_id, test_socket):
     async with lock_next_serial:
         next_serial += 1
         # some other thread-safe code here
-        _serial = None
-        match test_type:
-            case "PCBA_TEST":
-                _testprogram = "411828_A_RRC2020_PCBA-Test"
-                _part_number = "411828-01"
-            case "CELLSTACK_TEST":
-                _testprogram = "411828_A_RRC2020_Cell-Test"
-                _part_number = "41xxxx-01"
-            case "COREPACK_TEST":
-                _testprogram = "411828_A_RRC2020_Corepack-Test"
-                _serial = str(next_serial)
-                _part_number = "41xxxx-01"
-            case "EOL_TEST":
-                _testprogram = "411828_A_RRC2020_EOL-Test"
-                _serial = str(next_serial)
-                _part_number = "1xxxxx-01"
-            case _:
-                _testprogram = "UNKNOWW"
-                _part_number = None
+        _locked_serial = str(next_serial)
+
+    _serial = None
+    match test_type:
+        case "PCBA_TEST":
+            _testprogram = "411828_A_RRC2020_PCBA-Test"
+            _part_number = "411828-01"
+        case "CELLSTACK_TEST":
+            _testprogram = "411828_A_RRC2020_Cell-Test"
+            _part_number = "41xxxx-01"
+        case "COREPACK_TEST":
+            _testprogram = "411828_A_RRC2020_Corepack-Test"
+            _serial = _locked_serial
+            _part_number = "41xxxx-01"
+        case "EOL_TEST":
+            _testprogram = "411828_A_RRC2020_EOL-Test"
+            _serial = _locked_serial
+            _part_number = "1xxxxx-01"
+        case _:
+            _testprogram = "UNKNOWW"
+            _part_number = None
     return {
         "test_type": test_type,
         "station_id": station_id,
