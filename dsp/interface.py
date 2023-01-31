@@ -145,8 +145,8 @@ if __name__ == "__main__":
 
     # define the route
     #api_url = "https://production-network.rrc/testcontrol"
-    #API_URL = "http://127.0.0.1:8000"
-    API_URL = "http://172.22.2.99:8000"
+    API_URL = "http://127.0.0.1:8000"
+    #API_URL = "http://172.22.2.99:8000"
 
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
     dsp = DspInterface(API_URL, None)
@@ -154,7 +154,9 @@ if __name__ == "__main__":
     # 1. request information from MPI to start the correct test & UDI:
     #    create the GET route which contains TestStation, LineID and TestSocket
     test_run = dsp.get_parameter_for_testrun("COREPACK_TEST", "PDPC1302", 1, 3)
-    #test_run = ifc_get_parameter_for_testrun("COREPACK_TEST", "PDPC1302", 1, 3)
+    ts_test_run = dsp.ifc_get_parameter_for_testrun("COREPACK_TEST", "PDPC1302", 1, 3)
+    print(ts_test_run)
+
     # 2. start the test-run of given sequence with teststand
     _log.info("TESTRUN:", test_run)
     # 2.1 load program_id
