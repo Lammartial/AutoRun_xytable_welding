@@ -37,8 +37,9 @@ class Item(BaseModel):
     line_id: str                      # str: ??? fixed by PC ???
     test_socket: str                  # str:  -> from TestStand PC before start of sequence, known by TestStand at that time only
     test_program_id: str              # str: <- from MPI Server before start of sequence
+    part_number: str | None           # str -> from MPI Server before start of sequence
     serial_number: str | None = None  # str: <- from MPI Server before start of sequence
-    udi: list[str] | None = None     # str: -> from TestStand PC scanned by user to start the sequence    
+    udi: list[str] | None = None      # str: -> from TestStand PC scanned by user to start the sequence
     #udi_pcba: str | None = None       # str: -> from TestStand PC scanned by user to start the sequence
     #udi_stack: str | None = None      # str: -> from TestStand PC scanned by user to start the sequence
     result: str | None = None         # str: -> from TestStand PC at end of sequence P(ASS)/F(AIL)/A(BORT) as text letter
@@ -58,25 +59,33 @@ async def read_item(test_type, station_id, line_id, test_socket):
     async with lock_next_serial:
         next_serial += 1
         # some other thread-safe code here
-        _serial = str(next_serial)
-    match test_type:
-        case "PCBA_TEST":
-            _testprogram = "411828_A_RRC2020_PCBA-Test"
-        case "CELLSTACK_TEST":
-            _testprogram = "411828_A_RRC2020_Cell-Test"
-        case "COREPACK_TEST":
-            _testprogram = "411828_A_RRC2020_Corepack-Test"
-        case "EOL_TEST":
-            _testprogram = "411828_A_RRC2020_EOL-Test"
-        case _:
-            _testprogram = "UNKNOWW"
+        _serial = None
+        match test_type:
+            case "PCBA_TEST":
+                _testprogram = "411828_A_RRC2020_PCBA-Test"
+                _part_number = "411828-01"
+            case "CELLSTACK_TEST":
+                _testprogram = "411828_A_RRC2020_Cell-Test"
+                _part_number = "41xxxx-01"
+            case "COREPACK_TEST":
+                _testprogram = "411828_A_RRC2020_Corepack-Test"
+                _serial = str(next_serial)
+                _part_number = "41xxxx-01"
+            case "EOL_TEST":
+                _testprogram = "411828_A_RRC2020_EOL-Test"
+                _serial = str(next_serial)
+                _part_number = "1xxxxx-01"
+            case _:
+                _testprogram = "UNKNOWW"
+                _part_number = None
     return {
         "test_type": test_type,
         "station_id": station_id,
         "line_id": line_id,
         "test_socket": test_socket,
         "test_program_id": _testprogram,
-        "serial_number": _serial,        
+        "part_number": _part_number,
+        "serial_number": _serial,
     }
 
 @app.post("/result", response_model=Item)
