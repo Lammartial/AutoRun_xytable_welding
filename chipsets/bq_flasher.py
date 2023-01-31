@@ -59,11 +59,10 @@ class BQStudioFileFlasher:
     flasher.validate_and_program_fw_file()
     """
 
-    def __init__(self, battery: ChipsetTexasInstruments, firmware_file: Path | str = None, show_progressbar: bool = False, keep_progress_open: bool = False, color: str = None):
+    def __init__(self, battery: ChipsetTexasInstruments, firmware_file: Path | str = None, show_progressbar: bool = False, color: str = None):
         """Initialize a class instance."""
         self.battery = battery
         self._progress = None
-        self._keep_progress_open = keep_progress_open
         if firmware_file:
             self.set_firmware_file(firmware_file, show_progressbar=show_progressbar, color=color)
         else:
@@ -308,7 +307,7 @@ class BQStudioFileFlasher:
                     if not is_file_validation:
                         validation_result = int(1)  # ???
                         break
-        #if self._progress and not self._keep_progress_open:
+
         self._progress.close()
         self._progress = None
 

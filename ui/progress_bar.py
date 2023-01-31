@@ -56,7 +56,7 @@ class ProgressWindow:
         # create progress bar
         self.progress = ttk.Progressbar(self.root,
                     orient=tkinter.HORIZONTAL, mode="determinate", maximum=100, value=0,
-                    style="ColorProgress.Horizontal.TProgressbar" if color else None)
+                    style=("ColorProgress.Horizontal.TProgressbar" if color else None))
         # pack progress bar into root
         self.progress.pack(fill=tkinter.BOTH, expand=1)
         # leave window hidden
