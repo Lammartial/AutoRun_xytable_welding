@@ -77,7 +77,7 @@ class DspInterface:
 
         d = self.get_parameter_for_testrun(test_type, station_id, line_id, test_socket)
         order = ["serial_number", "test_program_id", "part_number"]
-        return tuple([d[field] for field in order])
+        return tuple([(d[field] if d[field] is not None else "") for field in order])
 
 
     #--------------------------------------------------------------------------------------------------
