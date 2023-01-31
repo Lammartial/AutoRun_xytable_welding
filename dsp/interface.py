@@ -145,8 +145,8 @@ if __name__ == "__main__":
 
     # define the route
     #api_url = "https://production-network.rrc/testcontrol"
-    API_URL = "http://127.0.0.1:8000"
-    #API_URL = "http://192.168.1.111:8000"
+    #API_URL = "http://127.0.0.1:8000"
+    API_URL = "http://172.22.2.99:8000"
 
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
     dsp = DspInterface(API_URL, None)
