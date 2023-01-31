@@ -42,8 +42,8 @@ class ProgressWindow:
         if color and color == "":
             color = None  # TestStand cannot transfer "None"
         if color:
-            global style
-        style.configure("ColorProgress.Horizontal.TProgressbar", background=color)
+            #global style
+            style.configure("ColorProgress.Horizontal.TProgressbar", background=color)
         self.root.title(title)
         # create the Widgets and keep them inside our App object
         x_size = int(self.root.winfo_screenwidth() * 0.60)
