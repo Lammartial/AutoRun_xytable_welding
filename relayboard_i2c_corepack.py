@@ -30,6 +30,7 @@ class CorePackRelayBoard():
         self.gpio = PCA9536(i2c, int(i2c_address_7bit))
         #super().__init__(i2c, int(i2c_address_7bit))    
         # Setup PCA9536 GPIO
+        self.gpio.reset_inversion()
         self.gpio.set_pin_as_output(self.relay_3570_switch)
         self.gpio.set_pin_as_output(self.relay_meas)
         self.gpio.set_pin_as_input(self.inp_300ohm_detect)
@@ -105,15 +106,13 @@ if __name__ == "__main__":
     bus = I2CMuxedBus(i2c, mux, 7)
     rb = CorePackRelayBoard(bus)
 
-    rb.set_relay(1)
+    print(rb.gpio.get_polarity_register())
+
+    #rb.set_relay(4)
 
     print(rb.read_input(2))
     print(rb.read_input(3))
 
-    #rb.set_relay(1)
-    #rb.set_relay(4)
-
-    rb.reset_relay(1)
     #rb.reset_relay(4)
 
     i2c.close()

@@ -91,6 +91,7 @@ PIP:
 CONDA:
 `typing pyyaml debugpy numpy==1.23 scipy pandas pytz pymodbus pyvisa  pyvisa-py pygpib SQLAlchemy pyodbc pymssql psycopg2 pymysql pywin32 requests fastapi[all] humanfriendly pyelftools pyserial pyserial-asyncio`
 
+consider: matplotlib, dash
 
 ## Debugging with VSCode
 

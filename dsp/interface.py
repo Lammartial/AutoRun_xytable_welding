@@ -24,20 +24,22 @@ class DspInterface:
         "test_socket": None,      # str: -> from TestStand PC before start of sequence, known by TestStand at that time only
         "test_program_id": None,  # str: <- from MPI Server before start of sequence
         "serial_number": None,    # str: <- from MPI Server before start of sequence
+        "part_number": None,      # str: <- from MPI Server before start of sequence
         "udi_pcba": None,         # str: -> from TestStand PC scanned by user to start the sequence
-        "udi_stack": None,         # str: -> from TestStand PC scanned by user to start the sequence
+        "udi_stack": None,        # str: -> from TestStand PC scanned by user to start the sequence
         "result": None,           # str: -> from TestStand PC at end of sequence P(ASS)/F(AIL)/A(BORT) as text letter
         "execution_time": None,   # float -> from TestStand PC at end of sequence: sec
         "start_datetime": None,   # str: -> from TestStand PC at end of sequence: ISO
     }
 
     #--------------------------------------------------------------------------------------------------
-
     def __init__(self, api_base_url: str, local_result_file: str | Path ) -> None:
         self.API_BASE_URL = api_base_url
-        self.LOCAL_RESULT_FILE = Path(local_result_file)
-    
-    def get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> dict:        
+        self.LOCAL_RESULT_FILE = Path(local_result_file) if local_result_file else None
+
+
+    def get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> dict:
+        _log = getLogger(__name__, DEBUG)
         response = requests.get(f"{self.API_BASE_URL}/parameter/{test_type}/{station_id}/{line_id}/{test_socket}")
         # expects JSON of
         # {
@@ -50,8 +52,8 @@ class DspInterface:
         if response.status_code != 200:
             raise Exception("Cannot start test!", response.json())
         runparams = response.json()
-        print(runparams)
-        self.api = {**runparams, **self.api} 
+        _log.debug(runparams)
+        self.api = {**self.api, **runparams}
         return runparams
 
 
@@ -74,15 +76,17 @@ class DspInterface:
         """
 
         d = self.get_parameter_for_testrun(test_type, station_id, line_id, test_socket)
-        order = ["serial_number", "test_program_id"]
-        return tuple([d[field] for field in order])
+        order = ["serial_number", "test_program_id", "part_number"]
+        return tuple([(d[field] if d[field] is not None else "") for field in order])
 
 
     #--------------------------------------------------------------------------------------------------
 
     def send_result_of_testrun(self, result_list: list[dict]) -> list[dict]:
+        _log = getLogger(__name__, DEBUG)
         _remaining_list = []
         for result in result_list:
+            _log.debug(f"To send: {result}")
             response = requests.post(f"{self.API_BASE_URL}/result", json=result)
             if response.status_code != 200:
                 # did not work, so keep this record for next round
@@ -92,6 +96,8 @@ class DspInterface:
     #--------------------------------------------------------------------------------------------------
 
     def load_result_list_from_json(self) -> list[dict]:
+        if not self.LOCAL_RESULT_FILE:
+            return []  # no file set -> always empty list to start with
         _local_result_file = self.LOCAL_RESULT_FILE
         if not _local_result_file.exists():
             # write empty JSON list
@@ -106,20 +112,22 @@ class DspInterface:
     #--------------------------------------------------------------------------------------------------
 
     def save_result_list_to_json(self, result_list: list[dict]) -> None:
+        if not self.LOCAL_RESULT_FILE:
+            return
         _local_result_file = self.LOCAL_RESULT_FILE
         with open(_local_result_file, "wt") as out_file:
             json.dump(result_list, out_file, indent=4)
 
     #--------------------------------------------------------------------------------------------------
 
-    def ifc_send_result_for_testrun(self, result: str, start_datetime: str, execution_time: float, 
-                                    udi_pcba: str, udi_stack: str, serial_number: str) -> None:        
+    def ifc_send_result_for_testrun(self, result: str, start_datetime: str, execution_time: float,
+                                    udi_pcba: str, udi_stack: str, serial_number: str) -> None:
         self.api["result"] = result[:1].upper()  # only first letter
         self.api["start_datetime"] = start_datetime
         self.api["execution_time"] = execution_time
         self.api["udi_pcba"] = udi_pcba
         self.api["udi_stack"] = udi_stack
-        self.api["serial_number"] = serial_number               
+        self.api["serial_number"] = serial_number
         result_list = self.load_result_list_from_json()
         result_list.append(self.api)
         remaining_list = self.send_result_of_testrun(result_list)
@@ -127,9 +135,9 @@ class DspInterface:
 
 #--------------------------------------------------------------------------------------------------
 
-if __name__ == "__main__":    
+if __name__ == "__main__":
     ## Initialize the logging
-    logger_init(filename_base="local_log")  ## init root logger with different filename
+    logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
     # define the JSON file for storage until data sent to MPI
@@ -138,16 +146,19 @@ if __name__ == "__main__":
     # define the route
     #api_url = "https://production-network.rrc/testcontrol"
     API_URL = "http://127.0.0.1:8000"
-    #API_URL = "http://192.168.1.111:8000"
+    #API_URL = "http://172.22.2.99:8000"
 
-    dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
+    #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
+    dsp = DspInterface(API_URL, None)
 
     # 1. request information from MPI to start the correct test & UDI:
     #    create the GET route which contains TestStation, LineID and TestSocket
-    test_run = dsp.get_parameter_for_testrun("CORE_PACK_TEST", "PDPC1302", 1, 3)
-    #test_run = ifc_get_parameter_for_testrun("CORE_PACK_TEST", "PDPC1302", 1, 3)
+    test_run = dsp.get_parameter_for_testrun("COREPACK_TEST", "PDPC1302", 1, 3)
+    ts_test_run = dsp.ifc_get_parameter_for_testrun("COREPACK_TEST", "PDPC1302", 1, 3)
+    print(ts_test_run)
+
     # 2. start the test-run of given sequence with teststand
-    print("TESTRUN:", test_run)
+    _log.info("TESTRUN:", test_run)
     # 2.1 load program_id
     # 2.2 scan UDI
     # 2.3 run program sequence
@@ -161,7 +172,7 @@ if __name__ == "__main__":
     test_result = {
         "udi_pcba": "1234567890",  # scanned string
         "udi_stack": None,
-        "result": "A",        # depending on TestStand result P(ASS)/F(AIL)/A(BORT) as text letter;
+        "result": "A",      # depending on TestStand result P(ASS)/F(AIL)/A(BORT) as text letter;
                             # "Abort" could unlock the serial_number at MPI
         "execution_time": 3.465,
         "start_datetime": datetime.utcnow().isoformat()  # e.g. 2022-12-24T17:28:23.382748
@@ -179,5 +190,13 @@ if __name__ == "__main__":
     dsp.save_result_list_to_json(remaining_list)
 
 
+    dsp.ifc_send_result_for_testrun(
+        test_result["result"],
+        test_result["start_datetime"],
+        test_result["execution_time"],
+        test_result["udi_pcba"],
+        test_result["udi_stack"],
+        test_run["serial_number"],
+    )
 
 # END OF FILE
