@@ -1,1 +1,1 @@
-uvicorn mockup_server:app --reload
+uvicorn mockup_server:app --reload --host 0.0.0.0
