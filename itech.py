@@ -56,6 +56,25 @@ class M3400(Eth2SerialVisaDevice):
 	# + [SOURce:]VOLTage[:OVER]:PROTection[:LEVel] <NRf+>
 	# + [SOURce:]VOLTage:UNDer:PROTection[:LEVel] <NRf+>
 
+    # BATTery:MODE <CPD>
+    # BATTery:MODE?
+    # BATTery:CHARge:VOLTage <NRf+>
+    # BATTery:CHARge:VOLTage? [MINimum|MAXimum|DEFault]
+    # BATTery:CHARge:CURRent <NRf+>
+    # BATTery:CHARge:CURRent? [MINimum|MAXimum|DEFault]
+    # BATTery:DISCharge:VOLTage <NRf+> 
+    # BATTery:DISCharge:VOLTage? [MINimum|MAXimum|DEFault] 
+    # BATTery:DISCharge:CURRent <NRf+> 
+    # BATTery:DISCharge:CURRent? [MINimum|MAXimum|DEFault] 
+    # BATTery:SHUT:VOLTage <NRf+> 
+    # BATTery:SHUT:VOLTage? [MINimum|MAXimum|DEFault] 
+    # BATTery:SHUT:CURRent <NRf+> 
+    # BATTery:SHUT:CURRent? [MINimum|MAXimum|DEFault] 
+    # BATTery:SHUT:CAPacity <NRf+> 
+    # BATTery:SHUT:CAPacity? [MINimum|MAXimum|DEFault]
+    # BATTery:SHUT:TIME <NRf+> 
+    # BATTery:SHUT:TIME? [MINimum|MAXimum|DEFault] 
+
     def __init__(self, resource_str: str, channel: int):
         """
         Initialize the object with visa resource string (IP name).
@@ -471,6 +490,141 @@ class M3400(Eth2SerialVisaDevice):
             #_log.exception(ex)
             raise
 
+    # BATTery:MODE <CPD>
+    def set_battery_mode(self, mode: str) -> None:
+        """
+        This command is used to set the mode of battery test: charging or discharging.
+        M3900 device only.
+
+        Args:
+            mode (str): CHAR|DISC
+        """
+        try:
+            assert((str == "CHAR") or (str == "DISC")), ValueError('Error, set_battery_mode: only "CHAR" or "DISC" allowed')
+            cmd = 'BATT:MODE ' + str
+            self.send(cmd)
+        except Exception as ex:
+            raise      
+
+    # BATTery:MODE?
+    def get_battery_mode(self) -> str:
+        """
+        This command is used to get the mode of battery test: charging or discharging.
+        M3900 device only.
+
+        Returns:
+            str: CHAR|DISC
+        """
+        try:
+            cmd = "BATT:MODE?"
+            return str(self.request(cmd, 2000))
+        except Exception as ex:
+            raise
+
+    # BATTery:CHARge:VOLTage <NRf+>
+    def set_battery_charge_voltage(self, volt: float) -> None:
+        """
+        This command is used to set the battery charging voltage value.
+        M3900 device only.
+
+        Args:
+            volt (float): voltage protection 'XX.XX' Volts
+        """
+        try:
+            param_str =  f"{volt:05.2f}"
+            cmd = 'BATT:CHAR:VOLT ' + param_str
+            self.send(cmd)
+        except Exception as ex:
+            raise
+
+    def set_battery_charge_voltage_limit_low(self, volt: float) -> None:
+        """
+        This command is used to set the battery charging voltage low limit.
+        M3900 device only.
+
+        Args:
+            volt (float): voltage protection 'XX.XX' Volts
+        """
+        try:
+            param_str =  f"{volt:05.2f}"
+            cmd = 'BATT:CHAR:VOLT MIN' + param_str
+            self.send(cmd)
+        except Exception as ex:
+            raise
+
+    def set_battery_charge_voltage_limit_high(self, volt: float) -> None:
+        """
+        This command is used to set the battery charging voltage high limit.
+        M3900 device only.
+
+        Args:
+            volt (float): voltage protection 'XX.XX' Volts
+        """
+        try:
+            param_str =  f"{volt:05.2f}"
+            cmd = "BATT:CHAR:VOLT MAX" + param_str
+            self.send(cmd)
+        except Exception as ex:
+            raise
+
+    # BATTery:CHARge:VOLTage? [MINimum|MAXimum|DEFault]
+    def get_battery_charge_voltage(self) -> float:
+        """
+        This command is used to get the battery charging voltage value.
+        M3900 device only.
+
+        Returns:
+            float: charge voltage
+        """
+        try:
+            cmd = "BATT:CHAR:VOLT?"
+            return float(self.request(cmd, 2000))
+        except Exception as ex:
+            raise   
+
+    def get_battery_charge_voltage_limit_low(self) -> float:
+        """
+        This command is used to get the battery charging voltage low limit.
+        M3900 device only.
+
+        Returns:
+            float: charge voltage
+        """
+        try:
+            cmd = "BATT:CHAR:VOLT? MIN"
+            return float(self.request(cmd, 2000))
+        except Exception as ex:
+            raise
+
+    def get_battery_charge_voltage_limit_high(self) -> float:
+        """
+        This command is used to get the battery charging voltage high limit.
+        M3900 device only.
+
+        Returns:
+            float: charge voltage
+        """
+        try:
+            cmd = "BATT:CHAR:VOLT? MAX"
+            return float(self.request(cmd, 2000))
+        except Exception as ex:
+            raise
+
+    # BATTery:CHARge:CURRent <NRf+>
+    # BATTery:CHARge:CURRent? [MINimum|MAXimum|DEFault]
+    # BATTery:DISCharge:VOLTage <NRf+> 
+    # BATTery:DISCharge:VOLTage? [MINimum|MAXimum|DEFault] 
+    # BATTery:DISCharge:CURRent <NRf+> 
+    # BATTery:DISCharge:CURRent? [MINimum|MAXimum|DEFault] 
+    # BATTery:SHUT:VOLTage <NRf+> 
+    # BATTery:SHUT:VOLTage? [MINimum|MAXimum|DEFault] 
+    # BATTery:SHUT:CURRent <NRf+> 
+    # BATTery:SHUT:CURRent? [MINimum|MAXimum|DEFault] 
+    # BATTery:SHUT:CAPacity <NRf+> 
+    # BATTery:SHUT:CAPacity? [MINimum|MAXimum|DEFault]
+    # BATTery:SHUT:TIME <NRf+> 
+    # BATTery:SHUT:TIME? [MINimum|MAXimum|DEFault]
+
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     from time import sleep
@@ -482,8 +636,8 @@ if __name__ == "__main__":
     res : float = 0
 
     # predefined resource ID
-    M3412_IP_STR = "TCPIP0::172.21.101.14::inst0::INSTR"
-    #M3900_IP_STR = "TCPIP0::192.168.1.172::inst0::INSTR"
+    #M3412_IP_STR = "TCPIP0::172.21.101.14::inst0::INSTR"
+    M3900_IP_STR = "TCPIP0::192.168.1.172::inst0::INSTR"
 
     # 1. Create an instance of ITECH_DEV class
     # using multi-channel communication
@@ -565,25 +719,25 @@ if __name__ == "__main__":
 
     # 1. Create an instance of ITECH_DEV class
     # using multi-channel communication
-    it_m3412_1 = M3400(M3412_IP_STR, 1)
-    it_m3412_2 = M3400(M3412_IP_STR, 2)
-    it_m3412_3 = M3400(M3412_IP_STR, 3)
-    it_m3412_4 = M3400(M3412_IP_STR, 4)
-    it_m3412_5 = M3400(M3412_IP_STR, 5)
-    it_m3412_6 = M3400(M3412_IP_STR, 6)
+    # it_m3412_1 = M3400(M3412_IP_STR, 1)
+    # it_m3412_2 = M3400(M3412_IP_STR, 2)
+    # it_m3412_3 = M3400(M3412_IP_STR, 3)
+    # it_m3412_4 = M3400(M3412_IP_STR, 4)
+    # it_m3412_5 = M3400(M3412_IP_STR, 5)
+    # it_m3412_6 = M3400(M3412_IP_STR, 6)
 
-    # 2. IMPORTANT! Set remote control mode.
-    it_m3412_1.set_remote_control()
-    it_m3412_2.set_remote_control()
+    # # 2. IMPORTANT! Set remote control mode.
+    # it_m3412_1.set_remote_control()
+    # it_m3412_2.set_remote_control()
 
-    # 3. Do some stuff
+    # # 3. Do some stuff
 
-    print(it_m3412_1.get_ADC())
-    print(it_m3412_2.get_ADC())
-    print(it_m3412_3.get_ADC())
-    print(it_m3412_4.get_ADC())
-    print(it_m3412_5.get_ADC())
-    print(it_m3412_6.get_ADC())
+    # print(it_m3412_1.get_ADC())
+    # print(it_m3412_2.get_ADC())
+    # print(it_m3412_3.get_ADC())
+    # print(it_m3412_4.get_ADC())
+    # print(it_m3412_5.get_ADC())
+    # print(it_m3412_6.get_ADC())
 
     #print(it_m3412_1.get_VDC())
     #print(it_m3412_2.get_VDC())
