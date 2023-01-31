@@ -641,9 +641,64 @@ class M3400(Eth2SerialVisaDevice):
             raise
 
     # BATTery:DISCharge:VOLTage <NRf+> 
+    def set_battery_discharge_voltage(self, volt: float) -> None:
+        """
+        This command is used to set the battery discharging voltage value.
+        M3900 device only.
+
+        Args:
+            volt (float): voltage 'XX.XX' Volts
+        """
+        try:
+            param_str =  f"{volt:05.2f}"
+            cmd = 'BATT:DISC:VOLT ' + param_str
+            self.send(cmd)
+        except Exception as ex:
+            raise
+
     # BATTery:DISCharge:VOLTage? [MINimum|MAXimum|DEFault] 
-    # BATTery:DISCharge:CURRent <NRf+> 
+    def get_battery_discharge_voltage(self) -> float:
+        """
+        This command is used to get the battery charging voltage value.
+        M3900 device only.
+
+        Returns:
+            float: charge voltage
+        """
+        try:
+            cmd = "BATT:DISC:VOLT?"
+            return float(self.request(cmd, 2000))
+        except Exception as ex:
+            raise 
+
+    # BATTery:DISCharge:CURRent <NRf+>
+    def set_battery_discharge_current(self, curr: float) -> None:
+        """
+        This command is used to set the battery discharging current value.
+        M3900 device only.
+
+        Args:
+            curr (float): discharge current 'XX.XX' Amps
+        """
+        try:
+            param_str =  f"{curr:05.2f}"
+            cmd = 'BATT:DISC:CURR ' + param_str
+            self.send(cmd)
+        except Exception as ex:
+            raise 
+
     # BATTery:DISCharge:CURRent? [MINimum|MAXimum|DEFault] 
+    def get_battery_discharge_current(self) -> float:
+        """
+        This command is used to get the battery discharging current value.
+        M3900 device only.
+        """
+        try:
+            cmd = "BATT:DISC:CURR?"
+            return float(self.request(cmd, 2000))
+        except Exception as ex:
+            raise
+
     # BATTery:SHUT:VOLTage <NRf+>
     def set_battery_shut_voltage(self, volt: float) -> None:
         """
@@ -746,18 +801,21 @@ if __name__ == "__main__":
 
     print(it_m3902.set_remote_control())
 
-    it_m3902.set_current_limit_positive(curr = 5.000)       # No return value
-    it_m3902.set_current_limit_negative(curr = -5.000)   #(-02.000)       # No return value
-    it_m3902.set_current(curr= 2.0)
+    it_m3902.set_current_limit_positive(curr = 1.000)       # No return value
+    it_m3902.set_current_limit_negative(curr = -1.000)   #(-02.000)       # No return value
+    it_m3902.set_current(curr= -0.5)
     it_m3902.set_voltage(12.0)
     
 
     it_m3902.set_battery_charge_voltage(12.0)
     it_m3902.set_battery_charge_current(2.0)
-    it_m3902.set_battery_shut_voltage(12.5)
-    it_m3902.set_battery_shut_current(2.5)
+    it_m3902.set_battery_discharge_voltage(12.0)
+    it_m3902.set_battery_discharge_current(-2.0)
+
+    it_m3902.set_battery_shut_voltage(10.0)
+    it_m3902.set_battery_shut_current(-5.0)
     it_m3902.set_battery_shut_time(30)
-    it_m3902.set_battery_mode("CHAR")
+    #it_m3902.set_battery_mode("DISC")
 
     #print(it_m3902.get_battery_charge_voltage_limit_low())
     #print(it_m3902.get_battery_charge_voltage_limit_high())

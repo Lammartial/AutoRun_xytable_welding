@@ -3,21 +3,6 @@ import time
 import tkinter
 from tkinter import ttk
 
-ROOT = tkinter.Tk()
-ROOT.withdraw()  # hide window
-style = ttk.Style()
-#print(style.theme_names())
-style.theme_use("winnative")
-
-def disable_event():
-   pass
-
-# Disable the Close Window Control Icon
-ROOT.protocol("WM_DELETE_WINDOW", disable_event)
-# set App icon
-ROOT.iconbitmap(Path(__file__).resolve().parent / "chip-icon.ico")
-
-
 
 def center(win: tkinter.Tk):
     """
@@ -38,14 +23,26 @@ def center(win: tkinter.Tk):
 class ProgressWindow:
 
     def __init__(self, title: str = "Programming Flash", color: str = None) -> None:
-        global ROOT
+        ROOT = tkinter.Tk()
+        ROOT.withdraw()  # hide window
+        style = ttk.Style()
+        #print(style.theme_names())
+        style.theme_use("winnative")
+
+        def disable_event():
+            pass
+
+        # Disable the Close Window Control Icon
+        ROOT.protocol("WM_DELETE_WINDOW", disable_event)
+        # set App icon
+        ROOT.iconbitmap(Path(__file__).resolve().parent / "chip-icon.ico")
 
         self.root = ROOT
         self.hidden = None
         if color and color == "":
             color = None  # TestStand cannot transfer "None"
         if color:
-            global style
+            #global style
             style.configure("ColorProgress.Horizontal.TProgressbar", background=color)
         self.root.title(title)
         # create the Widgets and keep them inside our App object
@@ -86,7 +83,9 @@ class ProgressWindow:
         for widget in self.root.winfo_children():
             widget.destroy()
 
-
+    def close(self):
+        self.root.destroy()
+        
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
