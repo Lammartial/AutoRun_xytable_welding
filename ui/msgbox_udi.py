@@ -21,8 +21,7 @@ from collections.abc import Iterator
 from typing import Optional, Tuple
 from pathlib import Path
 from serial import Serial
-from rrc.eth2serial import Eth2SerialDevice, tcp_send_and_receive_from_server
-from rrc.serialport import SerialComportDevice
+from rrc.barcode_scanner import create_barcode_scanner
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -81,11 +80,7 @@ async def aio_blocking_communication(task_id: int, tk_q: queue.Queue, resource_s
         Nothing. The work package is returned via the threadsafe tk_q.
     """
     _log = getLogger(__name__, DEBUG)
-
-    if ":" in resource_string:
-        dev = Eth2SerialDevice(resource_string, termination="\n")     # socket port
-    else:
-        dev = SerialComportDevice(resource_string, termination="\r")  # COM port
+    dev = create_barcode_scanner(resource_string)
     while True:
         #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = 30)
         #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0)  # uses .readuntil()
@@ -527,12 +522,12 @@ if __name__ == '__main__':
     # set the required UDIs per global
     udi_to_scan = [
         UDIScanCtrlItem("PCBA", validate_udi_by_string_at_position_1),
-        UDIScanCtrlItem("CELL", validate_udi_by_string_at_position_1),
+        #UDIScanCtrlItem("CELL", validate_udi_by_string_at_position_1),
         #UDIScanCtrlItem("HEINZ", validate_udi_by_string_at_position_1),
     ]
 
-    #main("192.168.1.163:2000", title="TEST SOCKET SCANNER")
-    main("COM24,9600,8N1", title="TEST HANDHELD SCANNER")
+    main("172.21.101.22:2000", title="TEST SOCKET SCANNER")
+    #main("COM24,9600,8N1", title="TEST HANDHELD SCANNER")
     #print(f"SCANNER -> {scanned_udi}")
 
     res = tuple()
