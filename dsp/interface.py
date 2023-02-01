@@ -154,7 +154,7 @@ if __name__ == "__main__":
     # 1. request information from MPI to start the correct test & UDI:
     #    create the GET route which contains TestStation, LineID and TestSocket
     test_run = dsp.get_parameter_for_testrun("COREPACK_TEST", "PDPC1302", 1, 3)
-    ts_test_run = dsp.ifc_get_parameter_for_testrun("COREPACK_TEST", "PDPC1302", 1, 3)
+    ts_test_run = dsp.ifc_get_parameter_for_testrun("PCBA_TEST", "PDPC1302", 1, 3)
     print(ts_test_run)
 
     # 2. start the test-run of given sequence with teststand

@@ -17,7 +17,7 @@ Start with:
 
 import random
 import asyncio
-from fastapi import FastAPI, Path
+from fastapi import FastAPI, Path, status
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -63,7 +63,7 @@ MOCK_PARTNUMBER = {
     }
 }
 
-@app.get("/parameter/{test_type}/{station_id}/{line_id}/{test_socket}")
+@app.get("/parameter/{test_type}/{station_id}/{line_id}/{test_socket}", status_code=status.HTTP_200_OK)
 async def read_item(test_type, station_id, line_id, test_socket):
     global next_serial, lock_next_serial, MOCK_PARTNUMBER
 
@@ -80,17 +80,17 @@ async def read_item(test_type, station_id, line_id, test_socket):
     _serial = None
     match test_type:
         case "PCBA_TEST":
-            _testprogram = f"{_mock['pcba'].spli('-')[0]}_{_product_name}_PCBA-Test_A"
+            _testprogram = f"{_mock['pcba'].split('-')[0]}_{_product_name}_PCBA-Test_A"
             _part_number = _mock["pcba"]
         case "CELLSTACK_TEST":
             _testprogram = f"{_product_name}_Cell-Test_A"
             _part_number = f"{_product_name}_CELLSTACK"
         case "COREPACK_TEST":
-            _testprogram = f"{_mock['pre_assembly'].spli('-')[0]}_{_product_name}_Corepack-Test_A"
+            _testprogram = f"{_mock['pre_assembly'].split('-')[0]}_{_product_name}_Corepack-Test_A"
             _part_number = _mock["pre_assembly"]
             _serial = _locked_serial
         case "EOL_TEST":
-            _testprogram = f"{_mock['product'].spli('-')[0]}_{_product_name}_EOL-Test_A"
+            _testprogram = f"{_mock['product'].split('-')[0]}_{_product_name}_EOL-Test_A"
             _part_number = _mock["product"]
             _serial = _locked_serial
         case _:
@@ -106,7 +106,7 @@ async def read_item(test_type, station_id, line_id, test_socket):
         "serial_number": _serial,
     }
 
-@app.post("/result", response_model=Item)
+@app.post("/result", response_model=Item, status_code=status.HTTP_202_ACCEPTED)
 async def create_item(item: Item):
     print(item)
     return item
