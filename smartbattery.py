@@ -14,6 +14,7 @@ from struct import pack
 from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
 from rrc.battery_errors import BatteryError
 from rrc.smbus import BusMaster
+from struct import unpack
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -129,6 +130,7 @@ class WordData:
         if self.read is None: self.update()
         # self.update() # always update!
         return self.read
+    
     # has NO setter as we do not allow writing - only for special words, see below
     # @value.setter
     # def value(self, value):
@@ -137,6 +139,37 @@ class WordData:
     # def value(self):
     #    del self.read
 
+class IntData:
+    def __init__(self, battery, command: int, value: int = None):
+        self._battery = battery
+        self._cmd = command
+        self.read = value
+
+    def __str__(self) -> str:
+        return f"{f'{self.read:04x}' if self.read else None}"
+
+    def __repr__(self) -> str:
+        return f"IntData({repr(self._battery)},0x{self._cmd:02x},{f'0x{self.read:04x}' if self.read else None})"
+
+    def update(self):
+        v, ok = self._battery.readWordVerified(self._cmd)  # try to update the value
+        # v, ok = self._battery.readWord(self._cmd) # try to update the value
+        if ok: self.read = v  # update
+        return ok
+
+    @property
+    def value(self) -> int:
+        if self.read is None: self.update()
+        # self.update() # always update!
+        return unpack("<h", self.read)[0]  # convert to signed int
+    
+    # has NO setter as we do not allow writing - only for special words, see below
+    # @value.setter
+    # def value(self, value):
+    #    self.read = value
+    # @value.deleter
+    # def value(self):
+    #    del self.read
 
 class StringData:
     def __init__(self, battery, command: int, value: str | bytes | bytearray = None):
@@ -435,10 +468,10 @@ class Battery:
             Cmd.AT_RATE_TIME_TO_FULL,
             Cmd.AT_RATE_TIME_TO_EMPTY,
             Cmd.AT_RATE_OK,
-            Cmd.TEMPERATURE,
+            #Cmd.TEMPERATURE,  # see IntData
             Cmd.VOLTAGE,
-            Cmd.CURRENT,
-            Cmd.AVERAGE_CURRENT,
+            #Cmd.CURRENT,         # see IntData
+            #Cmd.AVERAGE_CURRENT, # see IntData
             Cmd.MAX_ERROR,
             Cmd.RELATIVE_STATE_OF_CHARGE,
             Cmd.ABSOLUTE_STATE_OF_CHARGE,
@@ -464,9 +497,14 @@ class Battery:
 
         ]: self.ds[c] = WordData(_bat, c)
         for c in [
+            Cmd.TEMPERATURE,
+            Cmd.CURRENT,
+            Cmd.AVERAGE_CURRENT,
+        ]: self.ds[c] = IntData(_bat, c)
+        for c in [
             Cmd.MANUFACTURER_NAME,
             Cmd.DEVICE_NAME,
-            Cmd.DEVICE_CHEMISTRY
+            Cmd.DEVICE_CHEMISTRY,
         ]: self.ds[c] = StringData(_bat, c)
         for c in [
             Cmd.MANUFACTURER_DATA,

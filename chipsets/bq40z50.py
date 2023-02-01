@@ -1325,7 +1325,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return self.current()
 
     def get_cell_voltage(self):
-        return self.voltage()
+        buf = self.voltage()
+        return float(buf[0])
 
     def toggle_fet_control(self):
         """This command disables/enables control of the CHG, DSG, and PCHG FET by the firmware.
@@ -1484,7 +1485,7 @@ if __name__ == "__main__":
     logger_init(filename_base="local_log")  ## init root logger
     _log = getLogger(__name__, DEBUG)
 
-    i2c_port = I2CPort("192.168.1.111", 2101)
+    i2c_port = I2CPort("172.21.101.31", 2101)
     busmux = BusMux(i2c_port, address=0x77)
     for i in range(1,9):
         busmux.setChannel(i)
@@ -1523,10 +1524,17 @@ if __name__ == "__main__":
 
     #print(bat.get_udi())
 
-    #print(bat.is_sealed())
+    if (bat.is_sealed()):
+        bat.unseal(0x8D21FAC3, 0x63DB2CE4)
 
-    print(bat.check_no_errors())
-    print(bat.get_rsoc())
+
+    print(bat.is_sealed())
+
+    print(bat.get_current())
+    
+
+    #print(bat.check_no_errors())
+    #print(bat.get_rsoc())
 
     #print(bat.read_flash_block(0x4041, 32, True))
 
