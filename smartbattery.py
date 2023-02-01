@@ -130,7 +130,7 @@ class WordData:
         if self.read is None: self.update()
         # self.update() # always update!
         return self.read
-    
+
     # has NO setter as we do not allow writing - only for special words, see below
     # @value.setter
     # def value(self, value):
@@ -154,7 +154,7 @@ class IntData:
     def update(self):
         v, ok = self._battery.readWordVerified(self._cmd)  # try to update the value
         # v, ok = self._battery.readWord(self._cmd) # try to update the value
-        if ok: self.read = unpack("<h", v)[0]  # update & convert to signed int
+        if ok: self.read = unpack("<h", bytes(v))[0]  # update & convert to signed int
         return ok
 
     @property
@@ -162,7 +162,7 @@ class IntData:
         if self.read is None: self.update()
         # self.update() # always update!
         return self.read
-    
+
     # has NO setter as we do not allow writing - only for special words, see below
     # @value.setter
     # def value(self, value):
@@ -185,7 +185,7 @@ class StringData:
 
     def update(self) -> bool:
         v, ok = self._battery.readStringVerified(self._cmd)  # try to update the value
-        #_log = getLogger(__name__, 2) 
+        #_log = getLogger(__name__, 2)
         #_log.debug(f"StringData.update {(v, ok)}")
         if ok: self.read = v  # update
         return ok
