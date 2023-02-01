@@ -896,46 +896,6 @@ if __name__ == "__main__":
     # predefined resource ID
     #M3412_IP_STR = "TCPIP0::172.21.101.14::inst0::INSTR"
     M3900_IP_STR = "TCPIP0::172.21.101.33::inst0::INSTR"
-<<<<<<< HEAD
-=======
-
-    # ===================== BATTERY MODE ============================================================
-    # 1. Create an instance of ITECH_DEV class
-    it_m3902 = M3400(M3900_IP_STR, 0)
-
-    print(it_m3902.set_remote_control())
-
-    it_m3902.set_current_limit_positive(curr = 1.000)       # No return value
-    it_m3902.set_current_limit_negative(curr = -1.000)   #(-02.000)       # No return value
-    it_m3902.set_current(curr= -0.5)
-    it_m3902.set_voltage(12.0)
-    
-
-    it_m3902.set_battery_charge_voltage(12.0)
-    it_m3902.set_battery_charge_current(2.0)
-    it_m3902.set_battery_discharge_voltage(12.0)
-    it_m3902.set_battery_discharge_current(-2.0)
-
-    it_m3902.set_battery_shut_voltage(10.0)
-    it_m3902.set_battery_shut_current(-5.0)
-    it_m3902.set_battery_shut_time(30)
-    #it_m3902.set_battery_mode("DISC")
-
-    #print(it_m3902.get_battery_charge_voltage_limit_low())
-    #print(it_m3902.get_battery_charge_voltage_limit_high())
-    print(it_m3902.get_battery_charge_voltage())
-    #print(it_m3902.get_battery_charge_current_limit_low())
-    #print(it_m3902.get_battery_charge_current_limit_high())
-    print(it_m3902.get_battery_charge_current())
-
-    print(it_m3902.get_battery_shut_voltage())
-    print(it_m3902.get_battery_shut_current())
-    print(it_m3902.get_battery_shut_time())
-
-    it_m3902.set_output_state(1)
-    it_m3902.set_output_state(0)
-    # ===============================================================================================
->>>>>>> ae4f4809f4106cbfe289fd2ab4c30cb55b5d62b8
 
     # 1. Create an instance of ITECH_DEV class
     # using multi-channel communication
