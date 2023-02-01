@@ -424,7 +424,7 @@ class M3400(Eth2SerialVisaDevice):
             raise
 
     #[SOURce:]VOLTage[:LEVel]:LIMit[:HIGH] <NRf+>
-    def set_voltage_limit(self, volt: float) -> None:
+    def set_voltage_limit_high(self, volt: float) -> None:
         """
         This command sets voltage upper limit under CC priority mode.
         IT M3400 and M3900 devices.
@@ -642,6 +642,12 @@ class M3400(Eth2SerialVisaDevice):
             raise
 
     def set_power_limit_positive(self, power: float):
+        """
+        This command is used to set the power upper limit value.
+
+        Args:
+            power (float): power limit value, Watt.
+        """
         power = float(power)
         try:
             param_str =  f"{power:05.2f}"
@@ -651,6 +657,12 @@ class M3400(Eth2SerialVisaDevice):
             raise
 
     def set_power_limit_negative(self, power: float):
+        """
+        This command is used to set the power lower limit value.
+
+        Args:
+            power (float): power limit value, Watt.
+        """
         power = float(power)
         try:
             param_str =  f"{power:05.2f}"
@@ -660,6 +672,12 @@ class M3400(Eth2SerialVisaDevice):
             raise
 
     def set_function(self, func: str = "VOLT"):
+        """
+        This command is used to set the working mode of the power supply.
+
+        Args:
+            func (str, optional): CV or CC mode. Defaults to "VOLT".
+        """
         try:
             assert((func == "VOLT") or (func == "CURR")), ValueError('Error, set_function: only "VOLT" or "CURR" allowed')
             cmd = "FUNC " + func
@@ -685,63 +703,78 @@ class M3400(Eth2SerialVisaDevice):
         except Exception as ex:
             raise   
 
-    def wake_up_mode_on(self, voltage: float, curr: float, curr_limit: float) -> None:
+    def wake_up_mode_on(self, voltage_limit: float, curr_limit: float) -> None:
         """
+        Use to wake up bq40z50 or another bq chip. CV mode.
+        M3900 device only.
 
+        Args:
+            voltage (float): voltage value, Volts.
+            curr_limit (float): current limit, Amps
         """
-        voltage = float(voltage)
-        curr = float(curr)
+        voltage_limit = float(voltage_limit)
         curr_limit = float(curr_limit)
 
-        self.set_function("VOLT")
-        self.set_voltage(volt=voltage)
-        self.set_current(curr=curr)
-        self.set_current_limit_positive(curr=curr_limit)
-        self.set_current_limit_negative(curr=(-1)*curr_limit)
-        self.set_output_state(1)
+        self.set_function("CURR")              # CC mode
+        self.set_power_limit_positive(150.0)   # Watt
+        self.set_current(curr=curr_limit)
+        self.set_voltage_limit_high(volt=voltage_limit)
+        self.set_output_state(1)   
 
-    def wake_mode_off(self) -> None:
+    def wake_up_mode_off(self) -> None:
         self.set_output_state(0)
 
-    def charge_mode_on(self, voltage: float, curr: float, curr_limit: float) -> None:
-        voltage = float(voltage)
-        curr = float(curr)
-        curr_limit = float(curr_limit)
+    def charge_mode_on(self, voltage_limit: float, curr: float) -> None:
+        """
+        Use to switch on battery charging mode. CC mode.
+        M3900 device only.
 
-        self.set_power_limit_positive(1000.0)   #Watt
-        self.set_function("CURR")
-        self.set_voltage(volt=voltage)
+        Args:
+            voltage_limit (float): voltage limit value, Volts.
+            curr (float): charging current value, Amps.
+        """
+        voltage_limit = float(voltage_limit)
+        curr = float(curr)
+
+        self.set_function("CURR")              # CC mode
+        self.set_power_limit_positive(150.0)   # Watt
         self.set_current(curr=curr)
-        #self.set_current_limit_positive(curr=curr_limit)
-        #self.set_current_limit_negative(curr=(-1)*curr_limit)
+        self.set_voltage_limit_high(volt=voltage_limit)
         self.set_output_state(1)        
 
     def charge_mode_off(self) -> None:
+        """
+        Use to switch off battery charging mode.
+        M3900 device only.
+        """
         self.set_output_state(0)
-        self.set_function("VOLT")           # CV mode
+        
 
-    def discharge_mode_on(self, voltage: float, curr: float, curr_limit: float) -> None:
-        voltage = float(voltage)
+    def discharge_mode_on(self, voltage_limit: float, curr: float) -> None:
+        """
+        Use to switch on battery discharging mode. CC mode.
+        M3900 device only.
+
+        Args:
+            voltage_limit (float): voltage limit value, Volts.
+            curr (float): discharging current value, Amps.
+        """
+        voltage_limit = float(voltage_limit)
         curr = float(curr)
-        curr_limit = float(curr_limit)
-        self.set_power_limit_negative(-1000.0)        
-        self.set_function("CURR")           # CC mode
-        self.set_resistance_mode(1)         # CR mode
-        resist = abs(int(voltage/curr))
-        self.set_resistance(resist)
-        #self.set_current_limit_positive(curr=curr_limit)
-        #self.set_current_limit_negative(curr=(-1)*curr_limit)
+      
+        self.set_function("CURR")               # CC mode
+        self.set_power_limit_negative(-150.0)   # Watt 
+        self.set_resistance_mode(0)
+        #self.set_resistance_mode(1)            # CR mode
+        #resist = abs(int(voltage/curr))
+        #self.set_resistance(resist)
         self.set_current(curr=curr)
-        self.set_voltage(volt=voltage)
+        self.set_voltage_limit_low(volt=voltage_limit)
         self.set_output_state(1)
 
     def discharge_mode_off(self) -> None:
         self.set_output_state(0)
-        #self.set_resistance_mode(0)         # CR mode
-        self.set_function("VOLT")           # CV mode
         
-    # BATTery:CHARge:CURRent <NRf+>
-    # BATTery:CHARge:CURRent? [MINimum|MAXimum|DEFault]
     # BATTery:DISCharge:VOLTage <NRf+> 
     def set_battery_discharge_voltage(self, volt: float) -> None:
         """
@@ -855,8 +888,6 @@ class M3400(Eth2SerialVisaDevice):
         except Exception as ex:
             raise  
 
-    # BATTery:SHUT:CAPacity <NRf+> 
-    # BATTery:SHUT:CAPacity? [MINimum|MAXimum|DEFault]
     # BATTery:SHUT:TIME <NRf+>
     def set_battery_shut_time(self, time: int) -> None:
         """
@@ -908,18 +939,22 @@ if __name__ == "__main__":
 
     #========= CHARGE & DISCHARGE MODE =====================================================================
 
-    it_m3902.charge_mode_on(12.0, 2.0, 3.0)
+    it_m3902.wake_up_mode_on(voltage_limit= 12.0, curr_limit= 0.1)
+    it_m3902.wake_up_mode_off()
 
+
+    it_m3902.charge_mode_on(voltage_limit= 12.55, curr= 2.0)     # Volt limit 12.55 for RRC2020 
     it_m3902.charge_mode_off()
 
-    #print(it_m3902.set_raw_query("OUTP:DEL:FALL?"))
-    #print(it_m3902.set_raw_query("OUTP:DEL:RISE?"))
-
-    it_m3902.discharge_mode_on(12.0, -2.0, -6.0)
-
-    print(it_m3902.set_raw_query("SINK:RES?"))
-
+    it_m3902.discharge_mode_on(voltage_limit= 11.0, curr= -2.0)
     it_m3902.discharge_mode_off()
+
+    it_m3902.charge_mode_on(voltage_limit= 12.55, curr= 2.0)     # Volt limit 12.55 for RRC2020 
+    it_m3902.charge_mode_off()
+
+    it_m3902.discharge_mode_on(voltage_limit= 11.0, curr= -2.0)
+    it_m3902.discharge_mode_off()
+
     #=======================================================================================================
 
     #print(it_m3902.get_ADC())
