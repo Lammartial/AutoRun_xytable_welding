@@ -57,15 +57,26 @@ def createInternalSession(config, echo=False):
     Returns:
         Tuple of engine and session: These hold and manage the connection for queries.
     """
-    engine = sa.create_engine("{0}://{1}:{2}@{3}/{4}".format(
+    # somehow the new Python 310 installation with pymysql does not accept "encoding" parameter for mysql anymore"
+    # instead we have to use this WEB API like approach with "charset" appended.
+    engine = sa.create_engine("{0}://{1}:{2}@{3}/{4}?charset={5}".format(
                     config["sourceDatabase"]["servertype"],
                     config["sourceDatabase"]["login"],
                     config["sourceDatabase"]["password"],
                     config["sourceDatabase"]["serverhost"],
-                    config["sourceDatabase"]["database"]
+                    config["sourceDatabase"]["database"],
+                    config["sourceDatabase"]["encoding"]
                 ),
-                encoding=config["sourceDatabase"]["encoding"],
                 echo=echo)
+    # engine = sa.create_engine("{0}://{1}:{2}@{3}/{4}".format(
+    #                 config["sourceDatabase"]["servertype"],
+    #                 config["sourceDatabase"]["login"],
+    #                 config["sourceDatabase"]["password"],
+    #                 config["sourceDatabase"]["serverhost"],
+    #                 config["sourceDatabase"]["database"]
+    #             ),
+    #             encoding=config["sourceDatabase"]["encoding"],
+    #             echo=echo)
     #dialect = sa.dialects.postgresql
     session = sessionmaker(bind=engine, autoflush=False)
     return (engine, session)
@@ -89,7 +100,8 @@ if __name__ == "__main__":
     _log = getLogger(__name__, DEBUG)
 
     # global engine and session generator to share access in the callbacks later
-    srcEngine, SSession = get_teststand_db_connector()
+    #srcEngine, SSession = get_teststand_db_connector()
+    srcEngine, SSession = get_mockup_useracess_db_connector()
 
     _log.info(srcEngine.table_names())
 
