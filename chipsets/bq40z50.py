@@ -1320,12 +1320,12 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             if (buf[i] != 0):
                 return False
         return True
-        #res = []
-        #res.append(buf[0])
-        #res.append(buf[1])
-        #res.append(buf[2])
-        #res.append(buf[3])
-        #return res
+
+    def get_current(self) -> float:
+        return self.current()
+
+    def get_cell_voltage(self):
+        return self.voltage()
 
     def toggle_fet_control(self):
         """This command disables/enables control of the CHG, DSG, and PCHG FET by the firmware.
