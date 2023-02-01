@@ -3,21 +3,6 @@ import time
 import tkinter
 from tkinter import ttk
 
-ROOT = tkinter.Tk()
-ROOT.withdraw()  # hide window
-style = ttk.Style()
-#print(style.theme_names())
-style.theme_use("winnative")
-
-def disable_event():
-   pass
-
-# Disable the Close Window Control Icon
-ROOT.protocol("WM_DELETE_WINDOW", disable_event)
-# set App icon
-ROOT.iconbitmap(Path(__file__).resolve().parent / "chip-icon.ico")
-
-
 
 def center(win: tkinter.Tk):
     """
@@ -34,18 +19,30 @@ def center(win: tkinter.Tk):
     y = win.winfo_screenheight() // 2 - win_height // 2
     win.geometry(f"{width}x{height}+{x}+{y}")
 
-
 class ProgressWindow:
 
     def __init__(self, title: str = "Programming Flash", color: str = None) -> None:
-        global ROOT
+        ROOT = tkinter.Tk()
+        ROOT.withdraw()  # hide window
+        style = ttk.Style()
+        #print(style.theme_names())
+        style.theme_use("winnative")
 
+        
+        def disable_event():
+            pass
+
+        # Disable the Close Window Control Icon
+        ROOT.protocol("WM_DELETE_WINDOW", disable_event)
+        # set App icon
+        ROOT.iconbitmap(Path(__file__).resolve().parent / "chip-icon.ico")
+        
         self.root = ROOT
         self.hidden = None
         if color and color == "":
             color = None  # TestStand cannot transfer "None"
         if color:
-            global style
+            #global style
             style.configure("ColorProgress.Horizontal.TProgressbar", background=color)
         self.root.title(title)
         # create the Widgets and keep them inside our App object
@@ -59,7 +56,7 @@ class ProgressWindow:
         # create progress bar
         self.progress = ttk.Progressbar(self.root,
                     orient=tkinter.HORIZONTAL, mode="determinate", maximum=100, value=0,
-                    style="ColorProgress.Horizontal.TProgressbar" if color else None)
+                    style=("ColorProgress.Horizontal.TProgressbar" if color else None))
         # pack progress bar into root
         self.progress.pack(fill=tkinter.BOTH, expand=1)
         # leave window hidden
@@ -86,13 +83,15 @@ class ProgressWindow:
         for widget in self.root.winfo_children():
             widget.destroy()
 
-
+    def close(self):
+        self.root.destroy()
+        
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
     _title = "PROGRAM"
     colors = [None, "darkblue", "red"]
-    for z in range(2):
+    for z in range(3):
         win = ProgressWindow(title=_title + f" {z}", color=colors[z])
         i = 0
         mx = 10
@@ -109,8 +108,9 @@ if __name__ == '__main__':
             else:
                 pass
 
-        win.hide()
-        win.quit()
+        #win.hide()
+        #win.quit()
+        win.close()
 
 # END OF FILE
 
