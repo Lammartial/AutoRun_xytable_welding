@@ -121,7 +121,7 @@ class BQStudioFileFlasher:
                 output.append(s_int)
         return True, output[1:]  # Leave out the first byte. That is just the battery's I2C address.
 
-
+    #----------------------------------------------------------------------------------------------
     def set_firmware_file(self, _firmware_file: str | Path, show_progressbar: bool = False, color: str = None) -> None:
         """Store the path of the flash-stream file internally if it exists.
 
@@ -145,7 +145,7 @@ class BQStudioFileFlasher:
         if show_progressbar:
             self._progress = ProgressWindow(title=f"Program {_firmware_file}", color=color)
 
-
+    #----------------------------------------------------------------------------------------------
     def __process_file(self, is_file_validation: bool) -> bool:
         _log = getLogger(__name__, DEBUG)
         validation_result = True
@@ -158,6 +158,7 @@ class BQStudioFileFlasher:
                 current_line = current_line.strip()
                 line_number += 1
 
+                # we can open the progress bar only here as we need to know the size 
                 if self._progress:
                     self._print_progress_bar(line_number, line_count, "Progress")
 
@@ -306,11 +307,13 @@ class BQStudioFileFlasher:
                     if not is_file_validation:
                         validation_result = int(1)  # ???
                         break
-        if self._progress:
-            self._progress.hide()
+
+        self._progress.close()
+        self._progress = None
+
         return validation_result
 
-
+    #----------------------------------------------------------------------------------------------
     def validate_file(self) -> bool:
         """Validate the fw file return if no errors were found.
 
@@ -336,6 +339,7 @@ class BQStudioFileFlasher:
         return result
 
 
+    #----------------------------------------------------------------------------------------------
     def program_fw_file(self) -> bool:
         """Prepare the battery and program it with the given fw file.
 
@@ -400,7 +404,7 @@ if __name__ == "__main__":
     t1 = dt.now()
 
     bat = None
-    fs_file = Path("C:/Projekte/V-Kong/Battery-PCBA-Test/filestore/SCD_3412031-04_A_Rubin-B_RRC2020B.bq.fs")
+    fs_file = Path("C:/Production/Battery-PCBA-Test/filestore/SCD_3412031-04_A_Rubin-B_RRC2020B.bq.fs")
     flasher = BQStudioFileFlasher(bat, firmware_file=fs_file, show_progressbar=True)
     #flasher.set_firmware_file(fs_file)
 

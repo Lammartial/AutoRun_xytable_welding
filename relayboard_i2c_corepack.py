@@ -108,12 +108,12 @@ if __name__ == "__main__":
 
     print(rb.gpio.get_polarity_register())
 
-    #rb.set_relay(4)
+    rb.set_relay(4)
 
     print(rb.read_input(2))
     print(rb.read_input(3))
 
-    #rb.reset_relay(4)
+    rb.reset_relay(4)
 
     i2c.close()
     pass

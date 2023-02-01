@@ -90,6 +90,11 @@ class DAQ970A(Eth2SerialVisaDevice):
         """
         return self.request(str(cmd), 2000)
 
+    #----------------------------------------------------------------------------------------------
+    
+    def get_resistance_rounded(self, slot: int, channel: int, ndigits: int = 3) -> float:
+        return round(self.get_resistance(int(slot), int(channel)), ndigits=int(ndigits))
+    
     def get_resistance(self, slot: int, channel: int) -> float:
         """
         Returns resistance measurement.
@@ -118,6 +123,10 @@ class DAQ970A(Eth2SerialVisaDevice):
             #_log.exception(ex)
             raise
 
+
+    def get_4w_resistance_rounded(self, slot: int, channel: int, ndigits: int = 3) -> float:
+        return round(self.get_4w_resistance(int(slot), int(channel)), ndigits=int(ndigits))
+    
     def get_4w_resistance(self, slot: int, channel: int):
         """
         Returns 4-wire resistance measurement.
@@ -146,6 +155,10 @@ class DAQ970A(Eth2SerialVisaDevice):
             #_log.exception(ex)
             raise
 
+    
+    def get_VDC_rounded(self, slot: int, channel: int, ndigits: int = 3) -> float:
+        return round(self.get_VDC(int(slot), int(channel)), ndigits=int(ndigits))
+    
     def get_VDC(self, slot: int, channel: int) -> float:
         """
         Returns DC voltage measurement.
@@ -173,7 +186,10 @@ class DAQ970A(Eth2SerialVisaDevice):
         except Exception as ex:
             #_log.exception(ex)
             raise
-
+    
+    def get_VAC_rounded(self, slot: int, channel: int, ndigits: int = 3) -> float:
+        return round(self.get_VAC(int(slot), int(channel)), ndigits=int(ndigits))
+    
     def get_VAC(self, slot: int, channel: int) -> float:
         """
         Returns AC voltage measurement.
@@ -202,6 +218,10 @@ class DAQ970A(Eth2SerialVisaDevice):
             #_log.exception(ex)
             raise
 
+
+    def get_ADC_rounded(self, slot: int, channel: int, ndigits: int = 3) -> float:
+        return round(self.get_ADC(int(slot), int(channel)), ndigits=int(ndigits))
+    
     def get_ADC(self, slot: int, channel: int) -> float:
         """
         Returns DC current measurement.
@@ -230,7 +250,9 @@ class DAQ970A(Eth2SerialVisaDevice):
             #_log.exception(ex)
             raise
 
-
+    def get_temp_rounded(self, slot: int, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str, ndigits: int = 3) -> float:
+        return round(self.get_temp(int(slot), int(channel), tran_type, int(rtd_resist), int(fth_type), tc_type), ndigits=int(ndigits))
+    
     def get_temp(self, slot: int, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str) -> float:
         """
         Returns temperature measurement.
