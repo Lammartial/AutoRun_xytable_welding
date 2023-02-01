@@ -50,10 +50,26 @@ class Item(BaseModel):
 async def root():
     return {"message": "Hallo Welt!"}
 
+MOCK_PARTNUMBER = {
+    "RRC2020B": {
+        "product":        "100496-17",
+        "pre_assembly":   "412031-16",
+        "pcba":           "411828-05",
+    },
+    "RRC2040B": {
+        "product":        "100498-17",
+        "pre_assembly":   "412036-16",
+        "pcba":           "411829-05",
+    }
+}
 
 @app.get("/parameter/{test_type}/{station_id}/{line_id}/{test_socket}")
 async def read_item(test_type, station_id, line_id, test_socket):
-    global next_serial, lock_next_serial
+    global next_serial, lock_next_serial, MOCK_PARTNUMBER
+
+    # set the product to test for mockup: "RRC2040B" or "RRC2020B"
+    _product_name = "RRC2020B"
+    _mock = MOCK_PARTNUMBER[_product_name]
 
     #_serial = random.randint(1, 47236513)
     async with lock_next_serial:
@@ -64,19 +80,19 @@ async def read_item(test_type, station_id, line_id, test_socket):
     _serial = None
     match test_type:
         case "PCBA_TEST":
-            _testprogram = "411828_A_RRC2020_PCBA-Test"
-            _part_number = "411828-01"
+            _testprogram = f"{_mock['pcba'].spli('-')[0]}_{_product_name}_PCBA-Test_A"
+            _part_number = _mock["pcba"]
         case "CELLSTACK_TEST":
-            _testprogram = "411828_A_RRC2020_Cell-Test"
-            _part_number = "41xxxx-01"
+            _testprogram = f"{_product_name}_Cell-Test_A"
+            _part_number = f"{_product_name}_CELLSTACK"
         case "COREPACK_TEST":
-            _testprogram = "411828_A_RRC2020_Corepack-Test"
+            _testprogram = f"{_mock['pre_assembly'].spli('-')[0]}_{_product_name}_Corepack-Test_A"
+            _part_number = _mock["pre_assembly"]
             _serial = _locked_serial
-            _part_number = "41xxxx-01"
         case "EOL_TEST":
-            _testprogram = "411828_A_RRC2020_EOL-Test"
+            _testprogram = f"{_mock['product'].spli('-')[0]}_{_product_name}_EOL-Test_A"
+            _part_number = _mock["product"]
             _serial = _locked_serial
-            _part_number = "1xxxxx-01"
         case _:
             _testprogram = "UNKNOWW"
             _part_number = None
