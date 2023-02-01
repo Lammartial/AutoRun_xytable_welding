@@ -1,4 +1,5 @@
 from rrc.eth2serial.base_visa import Eth2SerialVisaDevice
+import math
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
@@ -610,6 +611,105 @@ class M3400(Eth2SerialVisaDevice):
         except Exception as ex:
             raise
 
+    def set_power_limit_positive(self, power: float):
+        power = float(power)
+        try:
+            param_str =  f"{power:05.2f}"
+            cmd = 'POW:LIM ' + param_str
+            self.send(cmd)
+        except Exception as ex:
+            raise
+
+    def set_power_limit_negative(self, power: float):
+        power = float(power)
+        try:
+            param_str =  f"{power:05.2f}"
+            cmd = 'POW:LIM:NEG ' + param_str
+            self.send(cmd)
+        except Exception as ex:
+            raise
+
+    def set_function(self, func: str = "VOLT"):
+        try:
+            assert((func == "VOLT") or (func == "CURR")), ValueError('Error, set_function: only "VOLT" or "CURR" allowed')
+            cmd = "FUNC " + func
+            self.send(cmd)
+        except Exception as ex:
+            raise       
+
+    def set_resistance_mode(self, mode: int):
+        try:
+            mode = int(mode)
+            assert((mode == 1) or (mode == 0)), ValueError('Error, set_resistance_mode: only 1 or 0 allowed')
+            cmd = "SINK:RES:STAT " + str(mode)
+            self.send(cmd)
+        except Exception as ex:
+            raise    
+
+    def set_resistance(self, resist: int):
+        try:
+            resist = int(resist)
+            assert((resist > 0) and (resist < 2500)), ValueError('Error, set_resistance: only 0 ... 2500 Ohm allowed')
+            cmd = "SINK:RES " + str(resist)
+            self.send(cmd)
+        except Exception as ex:
+            raise   
+
+    def wake_up_mode_on(self, voltage: float, curr: float, curr_limit: float) -> None:
+        """
+
+        """
+        voltage = float(voltage)
+        curr = float(curr)
+        curr_limit = float(curr_limit)
+
+        self.set_function("VOLT")
+        self.set_voltage(volt=voltage)
+        self.set_current(curr=curr)
+        self.set_current_limit_positive(curr=curr_limit)
+        self.set_current_limit_negative(curr=(-1)*curr_limit)
+        self.set_output_state(1)
+
+    def wake_mode_off(self) -> None:
+        self.set_output_state(0)
+
+    def charge_mode_on(self, voltage: float, curr: float, curr_limit: float) -> None:
+        voltage = float(voltage)
+        curr = float(curr)
+        curr_limit = float(curr_limit)
+
+        self.set_power_limit_positive(1000.0)   #Watt
+        self.set_function("CURR")
+        self.set_voltage(volt=voltage)
+        self.set_current(curr=curr)
+        #self.set_current_limit_positive(curr=curr_limit)
+        #self.set_current_limit_negative(curr=(-1)*curr_limit)
+        self.set_output_state(1)        
+
+    def charge_mode_off(self) -> None:
+        self.set_output_state(0)
+        self.set_function("VOLT")           # CV mode
+
+    def discharge_mode_on(self, voltage: float, curr: float, curr_limit: float) -> None:
+        voltage = float(voltage)
+        curr = float(curr)
+        curr_limit = float(curr_limit)
+        self.set_power_limit_negative(-1000.0)        
+        self.set_function("CURR")           # CC mode
+        self.set_resistance_mode(1)         # CR mode
+        resist = abs(int(voltage/curr))
+        self.set_resistance(resist)
+        #self.set_current_limit_positive(curr=curr_limit)
+        #self.set_current_limit_negative(curr=(-1)*curr_limit)
+        self.set_current(curr=curr)
+        self.set_voltage(volt=voltage)
+        self.set_output_state(1)
+
+    def discharge_mode_off(self) -> None:
+        self.set_output_state(0)
+        #self.set_resistance_mode(0)         # CR mode
+        self.set_function("VOLT")           # CV mode
+        
     # BATTery:CHARge:CURRent <NRf+>
     # BATTery:CHARge:CURRent? [MINimum|MAXimum|DEFault]
     # BATTery:DISCharge:VOLTage <NRf+> 
@@ -637,16 +737,32 @@ if __name__ == "__main__":
 
     # predefined resource ID
     #M3412_IP_STR = "TCPIP0::172.21.101.14::inst0::INSTR"
-    M3900_IP_STR = "TCPIP0::192.168.1.172::inst0::INSTR"
+    M3900_IP_STR = "TCPIP0::172.21.101.33::inst0::INSTR"
 
     # 1. Create an instance of ITECH_DEV class
     # using multi-channel communication
-    #it_m3902 = M3400(M3900_IP_STR, 0)
+    it_m3902 = M3400(M3900_IP_STR, 0)
 
     # 2. IMPORTANT! Set remote control mode.
-    #print(it_m3902.set_remote_control())
+    print(it_m3902.set_remote_control())
 
     # 3. Do some stuff
+
+    #========= CHARGE & DISCHARGE MODE =====================================================================
+
+    it_m3902.charge_mode_on(12.0, 2.0, 3.0)
+
+    it_m3902.charge_mode_off()
+
+    #print(it_m3902.set_raw_query("OUTP:DEL:FALL?"))
+    #print(it_m3902.set_raw_query("OUTP:DEL:RISE?"))
+
+    it_m3902.discharge_mode_on(12.0, -2.0, -6.0)
+
+    print(it_m3902.set_raw_query("SINK:RES?"))
+
+    it_m3902.discharge_mode_off()
+    #=======================================================================================================
 
     #print(it_m3902.get_ADC())
 
