@@ -10,11 +10,11 @@ __version__ = "0.5.0"
 import errno
 from time import sleep, monotonic_ns
 from binascii import hexlify
-from struct import pack
+from struct import pack, unpack
 from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
 from rrc.battery_errors import BatteryError
 from rrc.smbus import BusMaster
-from struct import unpack
+
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -154,8 +154,11 @@ class IntData:
     def update(self):
         v, ok = self._battery.readWordVerified(self._cmd)  # try to update the value
         # v, ok = self._battery.readWord(self._cmd) # try to update the value
-        if ok: self.read = unpack("<h", bytes(v))[0]  # update & convert to signed int
-        return ok
+        if ok: 
+            #self.read = int.from_bytes(v.to_bytes(2, byteorder="little", signed=False), 
+            #                           byteorder="little", signed=True)  # update & convert to signed int
+            self.read = unpack("<h", pack("<H", v))[0]  # update & convert to signed int
+        return ok    
 
     @property
     def value(self) -> int:

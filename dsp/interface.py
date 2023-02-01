@@ -124,7 +124,7 @@ class DspInterface:
                                     udi_pcba: str, udi_stack: str, serial_number: str) -> None:
         self.api["result"] = result[:1].upper()  # only first letter
         self.api["start_datetime"] = start_datetime
-        self.api["execution_time"] = execution_time
+        self.api["execution_time"] = str(execution_time)
         self.api["udi_pcba"] = udi_pcba
         self.api["udi_stack"] = udi_stack
         self.api["serial_number"] = serial_number
