@@ -154,14 +154,14 @@ class IntData:
     def update(self):
         v, ok = self._battery.readWordVerified(self._cmd)  # try to update the value
         # v, ok = self._battery.readWord(self._cmd) # try to update the value
-        if ok: self.read = v  # update
+        if ok: self.read = unpack("<h", v)[0]  # update & convert to signed int
         return ok
 
     @property
     def value(self) -> int:
         if self.read is None: self.update()
         # self.update() # always update!
-        return unpack("<h", self.read)[0]  # convert to signed int
+        return self.read
     
     # has NO setter as we do not allow writing - only for special words, see below
     # @value.setter
