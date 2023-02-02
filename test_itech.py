@@ -1,5 +1,5 @@
 #import unittest
-from rrc.itech import M3400, M9300
+from rrc.itech import M3400, M3900
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -9,7 +9,7 @@ from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
 #--------------------------------------------------------------------------------------------------
-def test_m9300_modes(m3900: M9300) -> bool:
+def test_m3900_modes(m3900: M3900) -> bool:
 
     #========= CHARGE & DISCHARGE MODE =====================================================================
 
@@ -252,11 +252,11 @@ if __name__ == "__main__":
 
     # # 1. Create an instance of ITECH_DEV class
     # # using multi-channel communication
-    # m3902 = M9300(M3902_IP_STR, 0)
+    # m3902 = M3900(M3902_IP_STR, 0)
     # # 2. IMPORTANT! Set remote control mode.
     # print(m3902.set_remote_control())
     # # 3. Do some stuff
-    # test_m9300_modes(m3902)
+    # test_m3900_modes(m3902)
 
     # there is one ETH bridge for 6 PSUs
     E1206_IP_STR = "TCPIP0::172.21.101.24::inst0::INSTR"
