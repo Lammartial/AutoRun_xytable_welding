@@ -1292,13 +1292,13 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
         self.manufacturer_access = 0x0021
 
-    def set_gauging(self, enable: bool) -> bool:
-        return self._ms_toggle_helper("gauge_en", enable, 0x0021)
+    #def set_gauging(self, enable: bool) -> bool:
+    #    return self._ms_toggle_helper("gauge_en", enable, 0x0021)
     
-    def get_gauging(self) -> bool:
-        self.manufacturer_access = 0x0056
-        buf = self.manufacturer_data
-        return bool((buf[1] & 0x10) >> 4)
+    #def get_gauging(self) -> bool:
+    #    self.manufacturer_access = 0x0056
+    #    buf = self.manufacturer_data
+    #    return bool((buf[1] & 0x10) >> 4)
     
     def get_udi(self) -> tuple:
         str = self.read_flash_block(0x4041, 32, True)
@@ -1334,35 +1334,68 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 no_errs = False
         return no_errs
 
-    def protection_activation(self) -> bool:
-        res = True
-        # Activate LED Display
-        self.manufacturer_access = 0x0027
-        # Activate Black Box Reader
-        self.manufacturer_access = 0x0025
-        # Activate Permanent Failure Detection
-        self.manufacturer_access = 0x0024
-        # Activate Firmware control of the Fuses
-        self.manufacturer_access = 0x0026
-        # Activate Firmware control of the FETs
-        self.manufacturer_access = 0x0022
-        # Check bits
-        status = self.manufacturing_status(True)
-        if (status["gauge_en"] != 1):               # bit 3
-            res = False
-        if (status["fet_en"] != 1):                 # bit 4
-            res = False
-        if (status["lf_en"] == 1):                  # bit 5
-            res = False
-        if (status["pf_en"] == 1):                  # bit 6
-            res = False
-        if (status["bbr_en"] == 1):                 # bit 7
-            res = False
-        if (status["fuse_en"] == 1):                # bit 8
-            res = False
-        if (status["led_en"] == 1):                 # bit 9
-            res = False
-        return res
+    def Gauge_enable(self) -> bool:
+        self.manufacturing_status(True)
+        if (self._manufacturing_status["gauge_en"] != 1):               # bit 3
+            # Activate Firmware control of the FETs
+            self.manufacturer_access = 0x0021
+            sleep(0.5)
+            self.manufacturing_status(True)
+        return True if (self._manufacturing_status["gauge_en"] == 1) else False       
+    
+    def FETs_enable(self) -> bool:
+        self.manufacturing_status(True)
+        if (self._manufacturing_status["fet_en"] != 1):                 # bit 4
+            # Activate Firmware control of the FETs
+            self.manufacturer_access = 0x0022
+            sleep(0.5)
+            self.manufacturing_status(True)
+        return True if (self._manufacturing_status["fet_en"] == 1) else False
+    
+    def LifeTimeData_disable(self) -> bool:
+        self.manufacturing_status(True)
+        if (self._manufacturing_status["lf_en"] == 1):                 # bit 5
+            # Activate Permanent Failure Detection
+            self.manufacturer_access = 0x0023
+            sleep(0.5)
+            self.manufacturing_status(True)
+        return True if (self._manufacturing_status["lf_en"] == 0) else False       
+    
+    def PermFailure_enable(self) -> bool:
+        self.manufacturing_status(True)
+        if (self._manufacturing_status["pf_en"] != 1):                 # bit 6
+            # Activate Permanent Failure Detection
+            self.manufacturer_access = 0x0024
+            sleep(0.5)
+            self.manufacturing_status(True)
+        return True if (self._manufacturing_status["pf_en"] == 1) else False
+
+    def BlackBox_enable(self):
+        self.manufacturing_status(True)
+        if (self._manufacturing_status["bbr_en"] != 1):                 # bit 7
+            # Activate Black Box Reader
+            self.manufacturer_access = 0x0025
+            sleep(0.5)
+            self.manufacturing_status(True)
+        return True if (self._manufacturing_status["bbr_en"] == 1) else False
+    
+    def Fuses_enable(self) -> bool:
+        self.manufacturing_status(True)
+        if (self._manufacturing_status["fuse_en"] != 1):                # bit 8
+            # Activate Firmware control of the Fuses
+            self.manufacturer_access = 0x0026
+            sleep(0.5)
+            self.manufacturing_status(True)
+        return True if (self._manufacturing_status["fuse_en"] == 1) else False
+
+    def LEDs_enable(self):
+        self.manufacturing_status(True)
+        if (self._manufacturing_status["led_en"] != 1):                 # bit 9
+            # Activate LED Display
+            self.manufacturer_access = 0x0027
+            sleep(0.5)
+            self.manufacturing_status(True)
+        return True if (self._manufacturing_status["led_en"] == 1) else False
 
     def toggle_fet_control(self):
         """This command disables/enables control of the CHG, DSG, and PCHG FET by the firmware.
@@ -1561,14 +1594,16 @@ if __name__ == "__main__":
     #print(bat.get_udi())
 
     #if (bat.is_sealed()):
-    #    bat.unseal(0x8D21FAC3, 0x63DB2CE4)
+        #bat.unseal(0x8D21FAC3, 0x63DB2CE4)
 
 
     #print(bat.is_sealed())
 
     #print(bat.get_current())
 
-    bat.protection_activation()
+    print(bat.Gauge_enable())
+
+    print(bat.BlackBox_enable())
 
     #print(bat.check_no_errors())
     #print(bat.get_rsoc())
