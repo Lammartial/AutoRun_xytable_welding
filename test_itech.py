@@ -207,21 +207,24 @@ def test_start_battery_pcba(psu1: M3400, psu2: M3400):
     sleep(2)
 
     power_limit = 150
-    current_limit = 0.05
+    current_limit = 0.1
     pack_voltage = 10.8
     cell_count = 3
     cellsim.enable_all_cell_channels()
-    psu1.set_voltage(pack_voltage)
-    psu1.set_current_limit_negative(-current_limit)
-    psu1.set_current_limit_positive(current_limit)
-    psu1.set_power_limit_positive(power_limit)
-    psu1.set_power_limit_negative(-power_limit)
+    
+    # psu1.set_voltage(pack_voltage)
+    # psu1.set_current_limit_negative(-current_limit)
+    # psu1.set_current_limit_positive(current_limit)
+    # psu1.set_power_limit_positive(power_limit)
+    # psu1.set_power_limit_negative(-power_limit)
+    psu1.configure_cc_supply(pack_voltage, current_limit, 50, 0)
 
-    psu2.set_voltage(pack_voltage)
-    psu2.set_current_limit_negative(0)
-    psu2.set_current_limit_positive(2.0)
-    psu2.set_power_limit_positive(power_limit)
-    psu2.set_power_limit_negative(-power_limit)
+    # psu2.set_voltage(pack_voltage)
+    # psu2.set_current_limit_negative(0)
+    # psu2.set_current_limit_positive(2.0)
+    # psu2.set_power_limit_positive(power_limit)
+    # psu2.set_power_limit_negative(-power_limit)
+    psu2.configure_cc_supply(pack_voltage, current_limit, 50, 0)
 
     cellsim.set_cell_n_voltage(1, pack_voltage/cell_count)
     cellsim.set_cell_n_voltage(2, pack_voltage/cell_count)
@@ -236,10 +239,25 @@ def test_start_battery_pcba(psu1: M3400, psu2: M3400):
     # output off
     psu1.set_output_state(0)
 
+    bat.manufacturing_status()
+    print(bat._manufacturing_status)
+    print("BEFORE FET TOGGLE:", bat.manufacturing_dastatus1())
     # connect the input PSU to the output
-    bat.toggle_chg_fet()
-    bat.toggle_dsg_fet()
+    #bat.toggle_fet_control()
+    bat.set_fet_control(0)
+    sleep(1)
+    bat.manufacturing_status()
+    print(bat._manufacturing_status)
+    
+    bat.set_chg_fet(1)
+    bat.manufacturing_status()
+    print(bat._manufacturing_status)
+    bat.set_dsg_fet(1)
+    bat.manufacturing_status()
+    print(bat._manufacturing_status)
 
+    print("AFTER FET TOGGLE:", bat.manufacturing_dastatus1())
+    
     psu2.set_current_limit_negative(0)
     psu2.set_current_limit_positive(2.0)
 
@@ -248,28 +266,29 @@ def test_start_battery_pcba(psu1: M3400, psu2: M3400):
     print(psu2.get_all_meas())
  
     sleep(2)
-    # measure
-    print(bat.voltage())
+    # measure battery
+    print(bat.manufacturing_dastatus1())
 
-    psu1.set_power_limit_positive(150.0)
-    #psu1.set_voltage_limit_high(pack_voltage)
-    #psu1.set_voltage_limit_low(1.0)
-    psu1.set_current_limit_negative(-2.0)
-    psu1.set_current_limit_positive(2.0)
-    psu1.set_current(-0.2)
-    psu1.set_function("CC") 
-    psu1.set_output_state(1)
+    # psu1.set_power_limit_positive(150.0)
+    # #psu1.set_voltage_limit_high(pack_voltage)
+    # #psu1.set_voltage_limit_low(1.0)
+    # psu1.set_current_limit_negative(-2.0)
+    # psu1.set_current_limit_positive(2.0)
+    # psu1.set_current(-0.2)
+    # psu1.set_function("CC") 
+    # psu1.set_output_state(1)
+    psu1.configure_cc_sink(-0.2, -2.0, 50.0, 1)
 
-    sleep(2)
+    sleep(10)
     # measure
     print(bat.voltage())
 
     # now disable FET in PCBA
-    bat.set_dsg_fet(False)
+    bat.set_dsg_fet(True)
 
     sleep(1)
     # measure
-    print(bat.voltage())
+    print(bat.manufacturing_dastatus1())
 
    
     sleep(2)
@@ -309,18 +328,13 @@ if __name__ == "__main__":
     m3412 = [M3400(E1206_IP_STR, i) for i in range(1,7)]
     #test_m3400_some(m3412[0])
 
-    for m in m3412[:2]:
+    for m in m3412[:]:
         m.set_remote_control()
         m.set_sense_state(1)
         m.set_output_state(0)
+        print(m.get_all_meas())
 
-    psu1 = m3412[0]
-    psu2 = m3412[1]
-
-    print(psu1.get_all_meas())
-    print(psu2.get_all_meas())
-
-    test_start_battery_pcba(psu1, psu2)
+    test_start_battery_pcba(m3412[0], m3412[1])
 
     for m in m3412:
         m.set_output_state(0)  # switch all outputs OFF

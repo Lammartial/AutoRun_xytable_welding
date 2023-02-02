@@ -12,8 +12,9 @@ CONF_FILENAME_PROD = Path("C:/") / "Production" / "station_config.yaml"  # produ
 
 class StationConfiguration:
 
-    def __init__(self, filename: str | Path = CONF_FILENAME_PROD) -> None:
+    def __init__(self, test_type: str, filename: str | Path = CONF_FILENAME_PROD) -> None:
         self._CONFIG = None
+        self.test_type = test_type
         self._filename = Path(filename)
         self._read_yaml_file(self._filename)
 
@@ -28,6 +29,8 @@ class StationConfiguration:
     def _read_yaml_file(self, filepath: str | Path) -> OrderedDict:
         with open(Path(filepath), "rt") as file:
             self._CONFIG = OrderedDict(yaml.safe_load(file))
+            # here we could check the YAML file setting of test_type
+            self._CONFIG["test_type"] = self.test_type
 
     # --- TestStand Interfaces --------------------------------------------------------------------
 

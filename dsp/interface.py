@@ -54,6 +54,14 @@ class DspInterface:
         runparams = response.json()
         _log.debug(runparams)
         self.api = {**self.api, **runparams}
+        # # check that the test_type matches the test_program_id somehow 
+        # # as it has shown that under development the YAML moduification 
+        # # is being forgotten very often.
+        # _x = self.api["test_type"].split("_")    
+        # _c = _x[0][:4] if "CELL" in _x[0] else _x[0]
+        # _p = self.api["test_program_id"]
+        # #if c not in self.api["test_program_id"].upper():
+        # #    raise Exception(f"Wrong station type configured in YAML file - cannot start test! {_c} {_p}")
         return runparams
 
 
