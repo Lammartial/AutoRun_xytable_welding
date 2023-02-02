@@ -566,6 +566,7 @@ class M3400(Eth2SerialVisaDevice):
         self.set_current(current)
         
 
+
    
     
    
