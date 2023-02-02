@@ -10,20 +10,20 @@ from rrc.custom_logging import getLogger, logger_init
 
 #--------------------------------------------------------------------------------------------------
 def test_m9300_modes(m3900: M9300) -> bool:
-   
+
     #========= CHARGE & DISCHARGE MODE =====================================================================
 
     m3900.wake_up_mode_on(voltage_limit= 12.0, curr_limit= 0.1)
     m3900.wake_up_mode_off()
 
 
-    m3900.charge_mode_on(voltage_limit= 12.55, curr= 2.0)     # Volt limit 12.55 for RRC2020 
+    m3900.charge_mode_on(voltage_limit= 12.55, curr= 2.0)     # Volt limit 12.55 for RRC2020
     m3900.charge_mode_off()
 
     m3900.discharge_mode_on(voltage_limit= 11.0, curr= -2.0)
     m3900.discharge_mode_off()
 
-    m3900.charge_mode_on(voltage_limit= 12.55, curr= 2.0)     # Volt limit 12.55 for RRC2020 
+    m3900.charge_mode_on(voltage_limit= 12.55, curr= 2.0)     # Volt limit 12.55 for RRC2020
     m3900.charge_mode_off()
 
     m3900.discharge_mode_on(voltage_limit= 11.0, curr= -2.0)
@@ -34,7 +34,7 @@ def test_m9300_modes(m3900: M9300) -> bool:
     #print(it_m3902.get_ADC())
 
     #print(it_m3902.get_VDC())
-    
+
     return True
 
 #--------------------------------------------------------------------------------------------------
@@ -185,7 +185,7 @@ def test_m3400_some(m3400: M3400) -> bool:
     #m3400_4.set_output_state(0)                    # No return value
     #m3400_5.set_output_state(0)                    # No return value
     #m3400_6.set_output_state(0)                    # No return value
-    
+
     return True
 
 #--------------------------------------------------------------------------------------------------
@@ -198,21 +198,27 @@ if __name__ == "__main__":
 
     res : float = 0
 
-    # predefined resource ID
-    M3902_IP_STR = "TCPIP0::172.21.101.33::inst0::INSTR"
+    # # predefined resource ID
+    # M3902_IP_STR = "TCPIP0::172.21.101.33::inst0::INSTR"
 
-    # 1. Create an instance of ITECH_DEV class
-    # using multi-channel communication
-    m3902 = M9300(M3902_IP_STR, 0)
-    # 2. IMPORTANT! Set remote control mode.
-    print(m3902.set_remote_control())
-    # 3. Do some stuff
-    test_m9300_modes(m3902)
-    
-    # there is one ETH bridge for 6 PSUs 
-    E1206_IP_STR = "TCPIP0::172.21.101.14::inst0::INSTR"
-    m3412 = [M3400(E1206_IP_STR, i) for i in range(0,5)]
-    test_m3400_some(m3412[0])
+    # # 1. Create an instance of ITECH_DEV class
+    # # using multi-channel communication
+    # m3902 = M9300(M3902_IP_STR, 0)
+    # # 2. IMPORTANT! Set remote control mode.
+    # print(m3902.set_remote_control())
+    # # 3. Do some stuff
+    # test_m9300_modes(m3902)
+
+    # there is one ETH bridge for 6 PSUs
+    E1206_IP_STR = "TCPIP0::172.21.101.24::inst0::INSTR"
+    m3412 = [M3400(E1206_IP_STR, i) for i in range(1,7)]
+    #test_m3400_some(m3412[0])
+
+    psu1 = m3412[0]
+    psu2 = m3412[1]
+
+    print(psu1.get_all_meas())
+    print(psu2.get_all_meas())
 
 
 
