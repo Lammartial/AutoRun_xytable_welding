@@ -189,6 +189,55 @@ def test_m3400_some(m3400: M3400) -> bool:
     return True
 
 #--------------------------------------------------------------------------------------------------
+def test_start_battery_pcba(psu1: M3400, psu2: M3400):
+    from rrc.eth2i2c import I2CPort
+    from rrc.i2cbus import I2CBus, BusMux, I2CMuxedBus
+    from rrc.testadapter_cell_voltage_source import CellVoltageSource
+    from rrc.smbus import BusMaster
+    from rrc.chipsets import BQ40Z50R1
+
+    i2cbus = I2CPort("172.21.101.21:2101")
+    mux = BusMux(i2cbus, 0x77)
+    cellsim = CellVoltageSource(I2CMuxedBus(i2cbus, mux, 4), 0x48)
+    cellsim.initialize()
+    smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 2), retry_limit=5, verify_rounds=3, pause_us=50)
+    bat = BQ40Z50R1(smbus)
+
+    # Wakeup battery
+
+    pack_voltage = 10.8
+    cell_count = 3
+    cellsim.enable_all_cell_channels()
+    psu1.set_voltage(pack_voltage)
+    psu1.set_current_limit_negative = 0.05
+    psu1.set_current_limit_positive = 0.05
+
+    psu2.set_voltage(pack_voltage)
+    psu2.set_current_limit_negative = 0.05
+    psu2.set_current_limit_positive = 0.05
+
+    cellsim.set_cell_n_voltage(1, pack_voltage/cell_count)
+    cellsim.set_cell_n_voltage(2, pack_voltage/cell_count)
+
+    psu2.set_output_state(1)
+    sleep(1.0)
+    psu1.set_output_state(1)
+    sleep(0.5)
+    if not bat.waitForReady(timeout_ms=2000):
+        print("battery not ready.")
+        return
+    # output off
+    psu1.set_output_state(0)
+
+    # connect the input PSU to the output
+    bat.toggle_chg_fet()
+    bat.toggle_dsg_fet()
+
+    # now we should see a voltage as Input for PSU1 in the next steps.
+
+
+
+#--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     from time import sleep
 
@@ -214,13 +263,18 @@ if __name__ == "__main__":
     m3412 = [M3400(E1206_IP_STR, i) for i in range(1,7)]
     #test_m3400_some(m3412[0])
 
+    for m in m3412:
+        m.set_remote_control()
+        m.set_sense_state(1)
+        m.set_output_state(0)
+
     psu1 = m3412[0]
     psu2 = m3412[1]
 
     print(psu1.get_all_meas())
     print(psu2.get_all_meas())
 
-
+    test_start_battery_pcba(psu1, psu2)
 
 
  #=============================================================================================
