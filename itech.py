@@ -539,7 +539,7 @@ class M3400(Eth2SerialVisaDevice):
         except Exception as ex:
             raise
 
-    def set_function(self, func: str = "VOLT"):
+    def set_function(self, func: str = "VOLT") -> None:
         """
         This command is used to set the working mode of the power supply.
 
@@ -1079,202 +1079,17 @@ class M9300(M3400):
         self.set_output_state(0)
 
 
-
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     from time import sleep
 
     ## Initialize the logging
-    logger_init(filename_base="local_log")  ## init root logger with different filename
+    logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    res : float = 0
-
-    # predefined resource ID
-    #M3412_IP_STR = "TCPIP0::172.21.101.14::inst0::INSTR"
-    M3900_IP_STR = "TCPIP0::172.21.101.33::inst0::INSTR"
-
-    # 1. Create an instance of ITECH_DEV class
-    # using multi-channel communication
-    it_m3902 = M3400(M3900_IP_STR, 0)
-
-    # 2. IMPORTANT! Set remote control mode.
-    print(it_m3902.set_remote_control())
-
-    # 3. Do some stuff
-
-    #========= CHARGE & DISCHARGE MODE =====================================================================
-
-    it_m3902.wake_up_mode_on(voltage_limit= 12.0, curr_limit= 0.1)
-    it_m3902.wake_up_mode_off()
-
-
-    it_m3902.charge_mode_on(voltage_limit= 12.55, curr= 2.0)     # Volt limit 12.55 for RRC2020 
-    it_m3902.charge_mode_off()
-
-    it_m3902.discharge_mode_on(voltage_limit= 11.0, curr= -2.0)
-    it_m3902.discharge_mode_off()
-
-    it_m3902.charge_mode_on(voltage_limit= 12.55, curr= 2.0)     # Volt limit 12.55 for RRC2020 
-    it_m3902.charge_mode_off()
-
-    it_m3902.discharge_mode_on(voltage_limit= 11.0, curr= -2.0)
-    it_m3902.discharge_mode_off()
-
-    #=======================================================================================================
-
-    #print(it_m3902.get_ADC())
-
-    #print(it_m3902.get_VDC())
-
-    # Get current
-    #print(it_m3412.get_ADC())
-
-    # Get voltage
-    #print(it_m3412.get_VDC())
-
-    # Doesn't work. Get temperature
-    #print(it_m3412.get_temp())
-
-    # Get Current, Voltage, Temperature, ...
-    #print(it_m3412.get_all_meas())
-
-    # Set SENSE state
-    #it_m3412.set_sense_state(0)                        # No return value
-
-    # Get SENSE state
-    #print(it_m3412.get_sense_state())
-
-    #Doesn't work. Get output reverse state
-    #print(it_m3412.get_output_reverse_state())
-
-    # Set current. curr - string 'MIN', 'MAX' or'XX.XXX' Amp
-    #it_m3412.set_current(1.0005)                      # No return value
-
-    # Get current.
-    #print(it_m3412.get_current())
-
-    # Set current limit positive. curr - string 'MIN', 'MAX' or'X.XX' Amp
-    #it_m3412.set_current_limit_positive(curr = 5.000)       # No return value
-
-    # Get current limit positive
-    #print(it_m3412.get_current_limit_positive())
-
-    # Set current limit negative. curr - string 'MIN', 'MAX' or'X.XX' Amp
-    #it_m3412.set_current_limit_negative(curr = -5.000)   #(-02.000)       # No return value
-
-    # Get current limit negative
-    #print(it_m3412.get_current_limit_negative())
-
-    # Set current protection
-    #it_m3412.set_current_protection(10.000)           # No return value
-
-    # Get current protection
-    #print(it_m3412.get_current_protection())
-
-    # Set under-current limit
-    #it_m3412.set_current_under_protection(1.000)      # No return value
-
-    # Set voltage value
-    #it_m3412.set_voltage(10.00)                       # No return value
-
-    # Set voltage upper limit
-    #it_m3412.set_voltage_limit(20.00)                 # No return value
-
-    # Set voltage lower limit under CC priority mode
-    #it_m3902.set_voltage_limit_low(1.00)              # No return value
-
-    # Set over voltage limit (MAX = 61.00)
-    #it_m3412.set_voltage_protection(60.00)            # No return value
-
-    # Set voltage under-protection
-    #it_m3412.set_voltage_under_protection(10.00)      # No return value
-
-    #============== 6 channel test ===============================================================
-
-    # 1. Create an instance of ITECH_DEV class
-    # using multi-channel communication
-    # it_m3412_1 = M3400(M3412_IP_STR, 1)
-    # it_m3412_2 = M3400(M3412_IP_STR, 2)
-    # it_m3412_3 = M3400(M3412_IP_STR, 3)
-    # it_m3412_4 = M3400(M3412_IP_STR, 4)
-    # it_m3412_5 = M3400(M3412_IP_STR, 5)
-    # it_m3412_6 = M3400(M3412_IP_STR, 6)
-
-    # # 2. IMPORTANT! Set remote control mode.
-    # it_m3412_1.set_remote_control()
-    # it_m3412_2.set_remote_control()
-
-    # # 3. Do some stuff
-
-    # print(it_m3412_1.get_ADC())
-    # print(it_m3412_2.get_ADC())
-    # print(it_m3412_3.get_ADC())
-    # print(it_m3412_4.get_ADC())
-    # print(it_m3412_5.get_ADC())
-    # print(it_m3412_6.get_ADC())
-
-    #print(it_m3412_1.get_VDC())
-    #print(it_m3412_2.get_VDC())
-
-    # Set voltage value
-    #it_m3412_1.set_voltage(1.00)                       # No return value
-    #it_m3412_2.set_voltage(1.00)                       # No return value
-    #it_m3412_3.set_voltage(1.00)                       # No return value
-    #it_m3412_4.set_voltage(1.00)                       # No return value
-    #it_m3412_5.set_voltage(1.00)                       # No return value
-    #it_m3412_6.set_voltage(1.00)                       # No return value
-
-    # Set current. curr - string 'MIN', 'MAX' or'XX.XXX' Amp
-    #it_m3412_1.set_current_limit_positive(0.05)                      # No return value
-    #it_m3412_2.set_current_limit_positive(0.05)                      # No return value
-    #it_m3412_3.set_current_limit_positive(0.05)                      # No return value
-    #it_m3412_4.set_current_limit_positive(0.05)                      # No return value
-    #it_m3412_5.set_current_limit_positive(0.05)                      # No return value
-    #it_m3412_6.set_current_limit_positive(0.05)                      # No return value
-
-    # Set current. curr - string 'MIN', 'MAX' or'XX.XXX' Amp
-    #it_m3412_1.set_current(0.100)                      # No return value
-    #it_m3412_2.set_current(0.100)                      # No return value
-    #it_m3412_3.set_current(0.100)                      # No return value
-    #it_m3412_4.set_current(0.100)                      # No return value
-    #it_m3412_5.set_current(0.100)                      # No return value
-    #it_m3412_6.set_current(0.100)                      # No return value
-
-    # Set OUTPUT ON/OFF
-    #it_m3412_1.set_output_state(1)                    # No return value
-    #it_m3412_2.set_output_state(1)                    # No return value
-    #it_m3412_3.set_output_state(1)                    # No return value
-    #it_m3412_4.set_output_state(1)                    # No return value
-    #it_m3412_5.set_output_state(1)                    # No return value
-    #it_m3412_6.set_output_state(1)                    # No return value
-
-    #sleep(1)
-
-    # Get OUTPUT state
-    #print(it_m3412_1.get_output_state())
-    #print(it_m3412_2.get_output_state())
-    #print(it_m3412_3.get_output_state())
-    #print(it_m3412_4.get_output_state())
-    #print(it_m3412_5.get_output_state())
-    #print(it_m3412_6.get_output_state())
-
-    #print(it_m3412_1.get_all_meas())
-    #print(it_m3412_2.get_all_meas())
-    #print(it_m3412_3.get_all_meas())
-    #print(it_m3412_4.get_all_meas())
-    #print(it_m3412_5.get_all_meas())
-    #print(it_m3412_6.get_all_meas())
-
-    # Set OUTPUT ON/OFF
-    #it_m3412_1.set_output_state(0)                    # No return value
-    #it_m3412_2.set_output_state(0)                    # No return value
-    #it_m3412_3.set_output_state(0)                    # No return value
-    #it_m3412_4.set_output_state(0)                    # No return value
-    #it_m3412_5.set_output_state(0)                    # No return value
-    #it_m3412_6.set_output_state(0)                    # No return value
-
- #=============================================================================================
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    # TESTS have been moved out to module: test_itech.py
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     print("DONE.")
 
