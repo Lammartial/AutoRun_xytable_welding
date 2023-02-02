@@ -102,7 +102,8 @@ class SpecSOHData:
 
     @property
     def value(self) -> int:
-        if self.read is None: self.update()
+        #if self.read is None: self.update()
+        self.update() # always update!
         return self.read
 
 
@@ -127,8 +128,8 @@ class WordData:
 
     @property
     def value(self) -> int:
-        if self.read is None: self.update()
-        # self.update() # always update!
+        #if self.read is None: self.update()
+        self.update() # always update!
         return self.read
 
     # has NO setter as we do not allow writing - only for special words, see below
@@ -162,8 +163,8 @@ class IntData:
 
     @property
     def value(self) -> int:
-        if self.read is None: self.update()
-        # self.update() # always update!
+        #if self.read is None: self.update()
+        self.update() # always update!
         return self.read
 
     # has NO setter as we do not allow writing - only for special words, see below
@@ -195,7 +196,8 @@ class StringData:
 
     @property
     def value(self) -> str | bytes | bytearray:
-        if self.read is None: self.update()  # only update once as this is constant data
+        #if self.read is None: self.update()  # only update once as this is constant data
+        self.update() # always update!
         return self.read
 
 
@@ -315,7 +317,8 @@ class BatteryStatus:
 
     @property
     def value(self) -> int:
-        if self._v is None: self.update()
+        #if self._v is None: self.update()
+        self.update() # always update!
         return self._v
 
     @value.setter
@@ -365,7 +368,8 @@ class BatteryMode:
 
     @property
     def value(self):
-        if self._v is None: self.update()
+        #if self._v is None: self.update()
+        self.update() # always update!
         return self._v
 
     @value.setter
@@ -410,7 +414,8 @@ class BatterySpecification:
 
     @property
     def value(self):
-        if self._v is None: self.update()
+        #if self._v is None: self.update()
+        self.update() # always update!
         return self._v
 
 

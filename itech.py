@@ -565,15 +565,10 @@ class M3400(Eth2SerialVisaDevice):
         self.set_function("CC")
         self.set_current(current)
 
-
-
-
-
-
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 
-class M9300(M3400):
+class M3900(M3400):
 
     def __init__(self, resource_str: str, channel: int):
         """
@@ -687,8 +682,6 @@ class M9300(M3400):
 
     def set_function(self, func: str) -> None:
         super().set_function(func)
-
-
 
     #----------------------------------------------------------------------------------------------
     def set_resistance_mode(self, mode: int):

@@ -1307,20 +1307,46 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def get_rsoc(self) -> int:
         buf = self.soc()
         return int(buf[0])
+
+    def get_current(self) -> float:
+        buf =  self.current()
+        return float(buf[0])
     
     def reset_errors(self) -> None:
+        # Black Box Recorder reset
         self.manufacturer_access = 0x002A
+        # Permanent Fail Data Reset
         self.manufacturer_access = 0x0029
 
     
     def check_no_errors(self) -> bool:
+        no_errs = True
+        # Safety status
         self.manufacturer_access = 0x0051
         buf = self.manufacturer_data
         for i in range(len(buf)):
             if (buf[i] != 0):
-                return False
-        return True
+                no_errs = False
+        # PF status
+        self.manufacturer_access = 0x0053
+        buf = self.manufacturer_data
+        for i in range(len(buf)):
+            if (buf[i] != 0):
+                no_errs = False
+        return no_errs
 
+    def protection_activation(self) -> bool:
+        # Activate LED Display
+        self.manufacturer_access = 0x0027
+        # Activate Black Box Reader
+        self.manufacturer_access = 0x0025
+        # Activate Permanent Failure Detection
+        self.manufacturer_access = 0x0024
+        # Activate Firmware control of the Fuses
+        self.manufacturer_access = 0x0026
+        # Activate Firmware control of the FETs
+        self.manufacturer_access = 0x0022
+        # Check bits
 
     def toggle_fet_control(self):
         """This command disables/enables control of the CHG, DSG, and PCHG FET by the firmware.
@@ -1518,15 +1544,20 @@ if __name__ == "__main__":
 
     #print(bat.get_udi())
 
-    if (bat.is_sealed()):
-        bat.unseal(0x8D21FAC3, 0x63DB2CE4)
+    #if (bat.is_sealed()):
+    #    bat.unseal(0x8D21FAC3, 0x63DB2CE4)
 
 
-    print(bat.is_sealed())
+    #print(bat.is_sealed())
 
-    print(bat.get_current())
+    #print(bat.get_current())
+
+    buf = bat.manufacturing_dastatus1()
+
+    buf = bat.manufacturing_dastatus1()
+
+    buf = bat.manufacturing_dastatus1()
     
-
     #print(bat.check_no_errors())
     #print(bat.get_rsoc())
 
