@@ -78,7 +78,7 @@ class M3400(Eth2SerialVisaDevice):
 
     def __init__(self, resource_str: str, channel: int):
         """
-        Initialize the object with visa resource string (IP name).
+        Initialize the object with VISA resource string (IP name).
         Example "TCPIP0::192.168.1.101::inst0::INSTR"
 
         Args:
@@ -103,7 +103,7 @@ class M3400(Eth2SerialVisaDevice):
         cmd = "SYST:REM"
         self.send(cmd)
 
-    def set_raw_command(self, cmd: str) -> None:
+    def send_raw_command(self, cmd: str) -> None:
         """
         Sets raw SCPI command and returns error.
 
@@ -112,7 +112,7 @@ class M3400(Eth2SerialVisaDevice):
         """
         self.send(str(cmd))
 
-    def set_raw_query(self, cmd: str) -> str:
+    def request_raw_query(self, cmd: str) -> str:
         """
         Sets raw SCPI query and returns the result or error.
 
@@ -124,6 +124,10 @@ class M3400(Eth2SerialVisaDevice):
         """
         return self.request(str(cmd))
 
+
+    def get_ADC_rounded(self, ndigits: int = 3) -> float:
+        return round(self.get_ADC(), ndigits=int(ndigits))
+    
     def get_ADC(self) -> float:
         """
         This command queries the present current measurement.
@@ -135,6 +139,10 @@ class M3400(Eth2SerialVisaDevice):
         cmd = "FETC:CURR?"
         return float(self.request(cmd, 2000))
 
+
+    def get_VDC_rounded(self, ndigits: int = 3) -> float:
+        return round(self.get_VDC(), ndigits=int(ndigits))
+    
     def get_VDC(self) -> float:
         """
         This command queries the present measured voltage.
@@ -146,6 +154,10 @@ class M3400(Eth2SerialVisaDevice):
         cmd = "FETC:VOLT?"
         return float(self.request(cmd, 2000))
 
+
+    def get_temp_rounded(self, ndigits: int = 3) -> float:
+        return round(self.get_temp(), ndigits=int(ndigits))
+    
     def get_temp(self) -> float:
         """
         This command queries the measured UUT temperature.
@@ -156,6 +168,7 @@ class M3400(Eth2SerialVisaDevice):
         """
         cmd = "FETC:UUT:TEMP?"
         return float(self.request(cmd, 2000))
+
 
     def get_all_meas(self) -> list:
         """
@@ -181,6 +194,7 @@ class M3400(Eth2SerialVisaDevice):
         except Exception as ex:
             #_log.exception(ex)
             raise
+
 
     def set_output_state(self, state: int) -> None:
         """
@@ -263,6 +277,10 @@ class M3400(Eth2SerialVisaDevice):
             #_log.exception(ex)
             raise
 
+
+    def get_current_rounded(self, ndigits: int = 3) -> float:
+        return round(self.get_current(), ndigits=int(ndigits))
+        
     #[SOURce:]CURRent[:LEVel][:IMMediate][:AMPLitude] <NRf+>
     def get_current(self) -> float:
         """
@@ -491,6 +509,208 @@ class M3400(Eth2SerialVisaDevice):
             #_log.exception(ex)
             raise
 
+    def set_power_limit_positive(self, power: float):
+        """
+        This command is used to set the power upper limit value.
+
+        Args:
+            power (float): power limit value, Watt.
+        """
+        power = float(power)
+        try:
+            param_str =  f"{power:05.2f}"
+            cmd = 'POW:LIM ' + param_str
+            self.send(cmd)
+        except Exception as ex:
+            raise
+
+    def set_power_limit_negative(self, power: float):
+        """
+        This command is used to set the power lower limit value.
+
+        Args:
+            power (float): power limit value, Watt.
+        """
+        power = float(power)
+        try:
+            param_str =  f"{power:05.2f}"
+            cmd = 'POW:LIM:NEG ' + param_str
+            self.send(cmd)
+        except Exception as ex:
+            raise
+
+    def set_function(self, func: str = "VOLT"):
+        """
+        This command is used to set the working mode of the power supply.
+
+        Args:
+            func (str, optional): CV or CC mode. Defaults to "VOLT".
+        """
+        try:
+            assert(func in ["VOLT", "CV", "CURR", "CC"]), ValueError('Error, set_function: only "VOLT", "CURR", "CV" or "CC" allowed')
+            cmd = "FUNC " + func
+            self.send(cmd)
+        except Exception as ex:
+            raise       
+
+    def configure_cv_mode(self, voltage: float, current_limit_negative: float, current_limit_positive: float) -> None:
+        self.set_current_limit_negative(current_limit_negative)        
+        self.set_current_limit_positive(current_limit_positive)        
+        self.set_function("CV")
+        self.set_voltage(voltage)
+    
+    def configure_cc_mode(self, current: float, voltage_limit_low: float, voltage_limit_high) -> None:
+        self.set_voltage_limit_low(voltage_limit_low)
+        self.set_voltage_limit_high(voltage_limit_high)
+        self.set_function("CC")        
+        self.set_current(current)
+        
+
+   
+    
+   
+
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+
+class M9300(M3400):
+
+    def __init__(self, resource_str: str, channel: int):
+        """
+        Initialize the object with VISA resource string (IP name).
+        Example "TCPIP0::192.168.1.101::inst0::INSTR"
+
+        Args:
+            resource_str (str): visa resource string
+        """
+        super().__init__(resource_str, channel)
+        pass
+
+    def __str__(self) -> str:
+        return f"M3900 VISA device on {self.super().__str__()}"
+
+    def __repr__(self) -> str:
+        return f"M3900({self.resource_str}, {self.channel})"
+
+    #----------------------------------------------------------------------------------------------
+    # common function repeated as trampoline for TestStand only :-(
+
+    def set_remote_control(self) -> None:        
+        super().set_remote_control()
+
+    def send_raw_command(self, cmd: str) -> None:        
+        super().send_raw_command(cmd)
+
+    def request_raw_query(self, cmd: str) -> str:
+        return super().request_raw_query(cmd)        
+
+    def get_ADC_rounded(self, ndigits: int = 3) -> float:
+        return super.get_ADC_rounded(ndigits=int(ndigits))
+    
+    def get_ADC(self) -> float:
+        return super().get_ADC()
+        
+    def get_VDC_rounded(self, ndigits: int = 3) -> float:
+        return super().get_VDC_rounded(ndigits=int(ndigits))
+    
+    def get_VDC(self) -> float:
+        return super().get_VDC()
+
+    def get_temp_rounded(self, ndigits: int = 3) -> float:
+        return super().get_temp_rounded(ndigits=int(ndigits))
+    
+    def get_temp(self) -> float:
+        return super().get_temp()
+
+    def get_all_meas(self) -> list:
+        return super().get_all_meas()
+
+    def set_output_state(self, state: int) -> None:
+        super().set_output_state(int(state))
+
+    def get_output_state(self) -> int:
+        return super().get_output_state()
+ 
+    def set_current(self, curr: float) -> None:
+        super().set_current(curr)
+
+    def get_current_rounded(self, ndigits: int = 3) -> float:
+        return super().get_current_rounded(ndigits=int(ndigits))
+        
+    def get_current(self) -> float:
+        return super().get_current()
+
+    def set_current_limit_positive(self, curr: float) -> None:
+        super().set_current_limit_positive(curr)
+
+    def get_current_limit_positive(self) -> float:
+        return super().get_current_limit_positive()
+
+    def set_current_limit_negative(self, curr: float) -> None:
+        super().set_current_limit_negative(curr)
+
+    def get_current_limit_negative(self) -> float:
+        return super().get_current_limit_negative()
+
+    def set_current_protection(self, curr: float) -> None:
+        super().set_current_protection(curr)
+
+    def get_current_protection(self) -> float:
+        return super().get_current_protection()
+
+    def set_current_under_protection(self, curr: float) -> None:
+        super().set_current_under_protection(curr)
+
+    def set_voltage(self, volt: float) -> None:
+        super().set_voltage(volt)
+
+    def get_voltage(self) -> float:
+        return super().get_voltage()
+
+    def set_voltage_limit_high(self, volt: float) -> None:
+        super().set_voltage_limit_high(volt)
+
+    def set_voltage_limit_low(self, volt: float) -> None:
+        super().set_voltage_limit_low(volt)
+
+    def set_voltage_protection(self, volt: float) -> None:
+        super().set_voltage_protection(volt)
+
+    def set_voltage_under_protection(self, volt: float) -> None:
+        super().set_voltage_under_protection(volt)
+
+    def set_power_limit_positive(self, power: float) -> None:
+        super().set_power_limit_positive(power)
+
+    def set_power_limit_negative(self, power: float) -> None:
+        super().set_power_limit_negative(power)
+
+    def set_function(self, func: str) -> None:
+        super().set_function(func)
+
+
+
+    #----------------------------------------------------------------------------------------------
+    def set_resistance_mode(self, mode: int):
+        """M3900 device only."""
+        try:
+            mode = int(mode)
+            assert((mode == 1) or (mode == 0)), ValueError('Error, set_resistance_mode: only 1 or 0 allowed')
+            cmd = "SINK:RES:STAT " + str(mode)
+            self.send(cmd)
+        except Exception as ex:
+            raise    
+
+    def set_resistance(self, resist: int):
+        """M3900 device only."""
+        try:
+            resist = int(resist)
+            assert((resist > 0) and (resist < 2500)), ValueError('Error, set_resistance: only 0 ... 2500 Ohm allowed')
+            cmd = "SINK:RES " + str(resist)
+            self.send(cmd)
+        except Exception as ex:
+            raise   
+
     # BATTery:MODE <CPD>
     def set_battery_mode(self, mode: str) -> None:
         """
@@ -641,88 +861,6 @@ class M3400(Eth2SerialVisaDevice):
         except Exception as ex:
             raise
 
-    def set_power_limit_positive(self, power: float):
-        """
-        This command is used to set the power upper limit value.
-
-        Args:
-            power (float): power limit value, Watt.
-        """
-        power = float(power)
-        try:
-            param_str =  f"{power:05.2f}"
-            cmd = 'POW:LIM ' + param_str
-            self.send(cmd)
-        except Exception as ex:
-            raise
-
-    def set_power_limit_negative(self, power: float):
-        """
-        This command is used to set the power lower limit value.
-
-        Args:
-            power (float): power limit value, Watt.
-        """
-        power = float(power)
-        try:
-            param_str =  f"{power:05.2f}"
-            cmd = 'POW:LIM:NEG ' + param_str
-            self.send(cmd)
-        except Exception as ex:
-            raise
-
-    def set_function(self, func: str = "VOLT"):
-        """
-        This command is used to set the working mode of the power supply.
-
-        Args:
-            func (str, optional): CV or CC mode. Defaults to "VOLT".
-        """
-        try:
-            assert((func == "VOLT") or (func == "CURR")), ValueError('Error, set_function: only "VOLT" or "CURR" allowed')
-            cmd = "FUNC " + func
-            self.send(cmd)
-        except Exception as ex:
-            raise       
-
-    def set_resistance_mode(self, mode: int):
-        try:
-            mode = int(mode)
-            assert((mode == 1) or (mode == 0)), ValueError('Error, set_resistance_mode: only 1 or 0 allowed')
-            cmd = "SINK:RES:STAT " + str(mode)
-            self.send(cmd)
-        except Exception as ex:
-            raise    
-
-    def set_resistance(self, resist: int):
-        try:
-            resist = int(resist)
-            assert((resist > 0) and (resist < 2500)), ValueError('Error, set_resistance: only 0 ... 2500 Ohm allowed')
-            cmd = "SINK:RES " + str(resist)
-            self.send(cmd)
-        except Exception as ex:
-            raise   
-
-    def wake_up_mode_on(self, voltage_limit: float, curr_limit: float) -> None:
-        """
-        Use to wake up bq40z50 or another bq chip. CV mode.
-        M3900 device only.
-
-        Args:
-            voltage (float): voltage value, Volts.
-            curr_limit (float): current limit, Amps
-        """
-        voltage_limit = float(voltage_limit)
-        curr_limit = float(curr_limit)
-
-        self.set_function("CURR")              # CC mode
-        self.set_power_limit_positive(150.0)   # Watt
-        self.set_current(curr=curr_limit)
-        self.set_voltage_limit_high(volt=voltage_limit)
-        self.set_output_state(1)   
-
-    def wake_up_mode_off(self) -> None:
-        self.set_output_state(0)
 
     def charge_mode_on(self, voltage_limit: float, curr: float) -> None:
         """
@@ -913,7 +1051,35 @@ class M3400(Eth2SerialVisaDevice):
             cmd = 'BATT:SHUT:TIME?'
             return float(self.request(cmd, 2000))
         except Exception as ex:
-            raise 
+            raise
+
+    def wake_up_mode_on(self, voltage_limit: float, curr_limit: float) -> None:
+        """
+        Use to wake up bq40z50 or another bq chip. CV mode.
+        M3900 device only.
+
+        Args:
+            voltage (float): voltage value, Volts.
+            curr_limit (float): current limit, Amps
+        """
+        voltage_limit = float(voltage_limit)
+        curr_limit = float(curr_limit)
+
+        self.set_function("CURR")              # CC mode
+        self.set_power_limit_positive(150.0)   # Watt
+        self.set_current(curr=curr_limit)
+        self.set_voltage_limit_high(volt=voltage_limit)
+        self.set_output_state(1)   
+
+    def wake_up_mode_off(self) -> None:
+        """
+        Use to wake up bq40z50 or another bq chip. CV mode.
+        M3900 device only.
+        """
+        self.set_output_state(0)
+
+
+
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     from time import sleep
