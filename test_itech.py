@@ -4,7 +4,7 @@ from rrc.itech import M3400, M3900
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-DEBUG = 1
+DEBUG = 0
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
@@ -204,17 +204,24 @@ def test_start_battery_pcba(psu1: M3400, psu2: M3400):
     bat = BQ40Z50R1(smbus)
 
     # Wakeup battery
+    sleep(2)
 
+    power_limit = 150
+    current_limit = 0.05
     pack_voltage = 10.8
     cell_count = 3
     cellsim.enable_all_cell_channels()
     psu1.set_voltage(pack_voltage)
-    psu1.set_current_limit_negative = 0.05
-    psu1.set_current_limit_positive = 0.05
+    psu1.set_current_limit_negative(-current_limit)
+    psu1.set_current_limit_positive(current_limit)
+    psu1.set_power_limit_positive(power_limit)
+    psu1.set_power_limit_negative(-power_limit)
 
     psu2.set_voltage(pack_voltage)
-    psu2.set_current_limit_negative = 0.05
-    psu2.set_current_limit_positive = 0.05
+    psu2.set_current_limit_negative(0)
+    psu2.set_current_limit_positive(2.0)
+    psu2.set_power_limit_positive(power_limit)
+    psu2.set_power_limit_negative(-power_limit)
 
     cellsim.set_cell_n_voltage(1, pack_voltage/cell_count)
     cellsim.set_cell_n_voltage(2, pack_voltage/cell_count)
@@ -233,16 +240,55 @@ def test_start_battery_pcba(psu1: M3400, psu2: M3400):
     bat.toggle_chg_fet()
     bat.toggle_dsg_fet()
 
+    psu2.set_current_limit_negative(0)
+    psu2.set_current_limit_positive(2.0)
+
     # now we should see a voltage as Input for PSU1 in the next steps.
+    print(psu1.get_all_meas())
+    print(psu2.get_all_meas())
+ 
+    sleep(2)
+    # measure
+    print(bat.voltage())
+
+    psu1.set_power_limit_positive(150.0)
+    #psu1.set_voltage_limit_high(pack_voltage)
+    #psu1.set_voltage_limit_low(1.0)
+    psu1.set_current_limit_negative(-2.0)
+    psu1.set_current_limit_positive(2.0)
+    psu1.set_current(-0.2)
+    psu1.set_function("CC") 
+    psu1.set_output_state(1)
+
+    sleep(2)
+    # measure
+    print(bat.voltage())
+
+    # now disable FET in PCBA
+    bat.set_dsg_fet(False)
+
+    sleep(1)
+    # measure
+    print(bat.voltage())
+
+   
+    sleep(2)
+    psu1.set_output_state(0)
+    psu2.set_output_state(0)
+    cellsim.power_down_all_cell_channels()
+    
 
 
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
+    import logging
     from time import sleep
 
     ## Initialize the logging
     logger_init(filename_base=None)  ## init root logger with different filename
+    logger = logging.getLogger()  # we need to cut down the root logger
+    logger.setLevel(logging.INFO)
     _log = getLogger(__name__, DEBUG)
 
     res : float = 0
@@ -276,6 +322,8 @@ if __name__ == "__main__":
 
     test_start_battery_pcba(psu1, psu2)
 
+    for m in m3412:
+        m.set_output_state(0)  # switch all outputs OFF
 
  #=============================================================================================
 

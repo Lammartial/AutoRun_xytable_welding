@@ -553,17 +553,24 @@ class M3400(Eth2SerialVisaDevice):
         except Exception as ex:
             raise
 
-    def configure_cv_mode(self, voltage: float, current_limit_negative: float, current_limit_positive: float) -> None:
-        self.set_current_limit_negative(current_limit_negative)
-        self.set_current_limit_positive(current_limit_positive)
-        self.set_function("CV")
-        self.set_voltage(voltage)
+    def configure_cc_sink(self, current: float, voltage: float, current_limit: float, power_limit, set_output: bool = False) -> None:
+        self.set_power_limit_negative(power_limit if power_limit < 0 else -power_limit)
+        self.set_power_limit_positive(0)  # always fixed!
+        self.set_current_limit_negative(current_limit if current_limit < 0 else -current_limit)
+        self.set_current_limit_positive(0)  # always fixed!
+        self.set_current(current if current < 0 else -current)
+        self.set_function("CC") 
+        self.set_output_state(1 if set_output else 0)
 
-    def configure_cc_mode(self, current: float, voltage_limit_low: float, voltage_limit_high) -> None:
-        self.set_voltage_limit_low(voltage_limit_low)
-        self.set_voltage_limit_high(voltage_limit_high)
-        self.set_function("CC")
-        self.set_current(current)
+    def configure_cc_supply(self, current: float, voltage: float, current_limit: float, power_limit, set_output: bool = False) -> None:
+        self.set_power_limit_positive(abs(power_limit))
+        self.set_power_limit_negative(0)  # always fixed!
+        self.set_current_limit_positive(abs(current_limit))
+        self.set_current_limit_negative(0)  # always fixed!
+        self.set_current(abs(current))
+        self.set_function("CC") 
+        self.set_output_state(1 if set_output else 0)
+
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
