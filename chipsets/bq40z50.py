@@ -1307,6 +1307,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def get_rsoc(self) -> int:
         buf = self.soc()
         return int(buf[0])
+
+    def get_current(self) -> float:
+        buf =  self.current()
+        return float(buf[0])
     
     def reset_errors(self) -> None:
         self.manufacturer_access = 0x002A
@@ -1526,7 +1530,6 @@ if __name__ == "__main__":
 
     print(bat.get_current())
     
-
     #print(bat.check_no_errors())
     #print(bat.get_rsoc())
 

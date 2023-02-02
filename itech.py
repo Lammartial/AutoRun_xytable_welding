@@ -63,18 +63,18 @@ class M3400(Eth2SerialVisaDevice):
     # BATTery:CHARge:VOLTage? [MINimum|MAXimum|DEFault]
     # BATTery:CHARge:CURRent <NRf+>
     # BATTery:CHARge:CURRent? [MINimum|MAXimum|DEFault]
-    # BATTery:DISCharge:VOLTage <NRf+> 
-    # BATTery:DISCharge:VOLTage? [MINimum|MAXimum|DEFault] 
-    # BATTery:DISCharge:CURRent <NRf+> 
-    # BATTery:DISCharge:CURRent? [MINimum|MAXimum|DEFault] 
-    # BATTery:SHUT:VOLTage <NRf+> 
-    # BATTery:SHUT:VOLTage? [MINimum|MAXimum|DEFault] 
-    # BATTery:SHUT:CURRent <NRf+> 
-    # BATTery:SHUT:CURRent? [MINimum|MAXimum|DEFault] 
-    # BATTery:SHUT:CAPacity <NRf+> 
+    # BATTery:DISCharge:VOLTage <NRf+>
+    # BATTery:DISCharge:VOLTage? [MINimum|MAXimum|DEFault]
+    # BATTery:DISCharge:CURRent <NRf+>
+    # BATTery:DISCharge:CURRent? [MINimum|MAXimum|DEFault]
+    # BATTery:SHUT:VOLTage <NRf+>
+    # BATTery:SHUT:VOLTage? [MINimum|MAXimum|DEFault]
+    # BATTery:SHUT:CURRent <NRf+>
+    # BATTery:SHUT:CURRent? [MINimum|MAXimum|DEFault]
+    # BATTery:SHUT:CAPacity <NRf+>
     # BATTery:SHUT:CAPacity? [MINimum|MAXimum|DEFault]
-    # BATTery:SHUT:TIME <NRf+> 
-    # BATTery:SHUT:TIME? [MINimum|MAXimum|DEFault] 
+    # BATTery:SHUT:TIME <NRf+>
+    # BATTery:SHUT:TIME? [MINimum|MAXimum|DEFault]
 
     def __init__(self, resource_str: str, channel: int):
         """
@@ -127,7 +127,7 @@ class M3400(Eth2SerialVisaDevice):
 
     def get_ADC_rounded(self, ndigits: int = 3) -> float:
         return round(self.get_ADC(), ndigits=int(ndigits))
-    
+
     def get_ADC(self) -> float:
         """
         This command queries the present current measurement.
@@ -142,7 +142,7 @@ class M3400(Eth2SerialVisaDevice):
 
     def get_VDC_rounded(self, ndigits: int = 3) -> float:
         return round(self.get_VDC(), ndigits=int(ndigits))
-    
+
     def get_VDC(self) -> float:
         """
         This command queries the present measured voltage.
@@ -157,7 +157,7 @@ class M3400(Eth2SerialVisaDevice):
 
     def get_temp_rounded(self, ndigits: int = 3) -> float:
         return round(self.get_temp(), ndigits=int(ndigits))
-    
+
     def get_temp(self) -> float:
         """
         This command queries the measured UUT temperature.
@@ -280,7 +280,7 @@ class M3400(Eth2SerialVisaDevice):
 
     def get_current_rounded(self, ndigits: int = 3) -> float:
         return round(self.get_current(), ndigits=int(ndigits))
-        
+
     #[SOURce:]CURRent[:LEVel][:IMMediate][:AMPLitude] <NRf+>
     def get_current(self) -> float:
         """
@@ -551,30 +551,35 @@ class M3400(Eth2SerialVisaDevice):
             cmd = "FUNC " + func
             self.send(cmd)
         except Exception as ex:
-            raise       
+            raise
 
     def configure_cv_mode(self, voltage: float, current_limit_negative: float, current_limit_positive: float) -> None:
-        self.set_current_limit_negative(current_limit_negative)        
-        self.set_current_limit_positive(current_limit_positive)        
+        self.set_current_limit_negative(current_limit_negative)
+        self.set_current_limit_positive(current_limit_positive)
         self.set_function("CV")
         self.set_voltage(voltage)
-    
+
     def configure_cc_mode(self, current: float, voltage_limit_low: float, voltage_limit_high) -> None:
         self.set_voltage_limit_low(voltage_limit_low)
         self.set_voltage_limit_high(voltage_limit_high)
-        self.set_function("CC")        
+        self.set_function("CC")
         self.set_current(current)
-        
 
 
+<<<<<<< HEAD
    
     
    
+=======
+
+
+
+>>>>>>> c15f84a6c175c938faf846aac0259ace69c32cbb
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 
-class M9300(M3400):
+class M3900(M3400):
 
     def __init__(self, resource_str: str, channel: int):
         """
@@ -596,30 +601,30 @@ class M9300(M3400):
     #----------------------------------------------------------------------------------------------
     # common function repeated as trampoline for TestStand only :-(
 
-    def set_remote_control(self) -> None:        
+    def set_remote_control(self) -> None:
         super().set_remote_control()
 
-    def send_raw_command(self, cmd: str) -> None:        
+    def send_raw_command(self, cmd: str) -> None:
         super().send_raw_command(cmd)
 
     def request_raw_query(self, cmd: str) -> str:
-        return super().request_raw_query(cmd)        
+        return super().request_raw_query(cmd)
 
     def get_ADC_rounded(self, ndigits: int = 3) -> float:
         return super.get_ADC_rounded(ndigits=int(ndigits))
-    
+
     def get_ADC(self) -> float:
         return super().get_ADC()
-        
+
     def get_VDC_rounded(self, ndigits: int = 3) -> float:
         return super().get_VDC_rounded(ndigits=int(ndigits))
-    
+
     def get_VDC(self) -> float:
         return super().get_VDC()
 
     def get_temp_rounded(self, ndigits: int = 3) -> float:
         return super().get_temp_rounded(ndigits=int(ndigits))
-    
+
     def get_temp(self) -> float:
         return super().get_temp()
 
@@ -631,13 +636,13 @@ class M9300(M3400):
 
     def get_output_state(self) -> int:
         return super().get_output_state()
- 
+
     def set_current(self, curr: float) -> None:
         super().set_current(curr)
 
     def get_current_rounded(self, ndigits: int = 3) -> float:
         return super().get_current_rounded(ndigits=int(ndigits))
-        
+
     def get_current(self) -> float:
         return super().get_current()
 
@@ -689,8 +694,6 @@ class M9300(M3400):
     def set_function(self, func: str) -> None:
         super().set_function(func)
 
-
-
     #----------------------------------------------------------------------------------------------
     def set_resistance_mode(self, mode: int):
         """M3900 device only."""
@@ -700,7 +703,7 @@ class M9300(M3400):
             cmd = "SINK:RES:STAT " + str(mode)
             self.send(cmd)
         except Exception as ex:
-            raise    
+            raise
 
     def set_resistance(self, resist: int):
         """M3900 device only."""
@@ -710,7 +713,7 @@ class M9300(M3400):
             cmd = "SINK:RES " + str(resist)
             self.send(cmd)
         except Exception as ex:
-            raise   
+            raise
 
     # BATTery:MODE <CPD>
     def set_battery_mode(self, mode: str) -> None:
@@ -727,7 +730,7 @@ class M9300(M3400):
             cmd = 'BATT:MODE ' + mode
             self.send(cmd)
         except Exception as ex:
-            raise      
+            raise
 
     # BATTery:MODE?
     def get_battery_mode(self) -> str:
@@ -773,7 +776,7 @@ class M9300(M3400):
             cmd = "BATT:CHAR:VOLT?"
             return float(self.request(cmd, 2000))
         except Exception as ex:
-            raise   
+            raise
 
     def get_battery_charge_voltage_limit_low(self) -> float:
         """
@@ -832,7 +835,7 @@ class M9300(M3400):
             cmd = "BATT:CHAR:CURR?"
             return float(self.request(cmd, 2000))
         except Exception as ex:
-            raise 
+            raise
 
     def get_battery_charge_current_limit_low(self) -> float:
         """
@@ -879,7 +882,7 @@ class M9300(M3400):
         self.set_power_limit_positive(150.0)   # Watt
         self.set_current(curr=curr)
         self.set_voltage_limit_high(volt=voltage_limit)
-        self.set_output_state(1)        
+        self.set_output_state(1)
 
     def charge_mode_off(self) -> None:
         """
@@ -887,7 +890,7 @@ class M9300(M3400):
         M3900 device only.
         """
         self.set_output_state(0)
-        
+
 
     def discharge_mode_on(self, voltage_limit: float, curr: float) -> None:
         """
@@ -900,9 +903,9 @@ class M9300(M3400):
         """
         voltage_limit = float(voltage_limit)
         curr = float(curr)
-      
+
         self.set_function("CURR")               # CC mode
-        self.set_power_limit_negative(-150.0)   # Watt 
+        self.set_power_limit_negative(-150.0)   # Watt
         self.set_resistance_mode(0)
         #self.set_resistance_mode(1)            # CR mode
         #resist = abs(int(voltage/curr))
@@ -913,8 +916,8 @@ class M9300(M3400):
 
     def discharge_mode_off(self) -> None:
         self.set_output_state(0)
-        
-    # BATTery:DISCharge:VOLTage <NRf+> 
+
+    # BATTery:DISCharge:VOLTage <NRf+>
     def set_battery_discharge_voltage(self, volt: float) -> None:
         """
         This command is used to set the battery discharging voltage value.
@@ -930,7 +933,7 @@ class M9300(M3400):
         except Exception as ex:
             raise
 
-    # BATTery:DISCharge:VOLTage? [MINimum|MAXimum|DEFault] 
+    # BATTery:DISCharge:VOLTage? [MINimum|MAXimum|DEFault]
     def get_battery_discharge_voltage(self) -> float:
         """
         This command is used to get the battery charging voltage value.
@@ -943,7 +946,7 @@ class M9300(M3400):
             cmd = "BATT:DISC:VOLT?"
             return float(self.request(cmd, 2000))
         except Exception as ex:
-            raise 
+            raise
 
     # BATTery:DISCharge:CURRent <NRf+>
     def set_battery_discharge_current(self, curr: float) -> None:
@@ -959,9 +962,9 @@ class M9300(M3400):
             cmd = 'BATT:DISC:CURR ' + param_str
             self.send(cmd)
         except Exception as ex:
-            raise 
+            raise
 
-    # BATTery:DISCharge:CURRent? [MINimum|MAXimum|DEFault] 
+    # BATTery:DISCharge:CURRent? [MINimum|MAXimum|DEFault]
     def get_battery_discharge_current(self) -> float:
         """
         This command is used to get the battery discharging current value.
@@ -987,7 +990,7 @@ class M9300(M3400):
             cmd = 'BATT:SHUT:VOLT ' + param_str
             self.send(cmd)
         except Exception as ex:
-            raise 
+            raise
     # BATTery:SHUT:VOLTage? [MINimum|MAXimum|DEFault]
     def get_battery_shut_voltage(self) -> float:
         """
@@ -998,7 +1001,7 @@ class M9300(M3400):
             cmd = 'BATT:SHUT:VOLT?'
             return float(self.request(cmd, 2000))
         except Exception as ex:
-            raise 
+            raise
 
     # BATTery:SHUT:CURRent <NRf+>
     def set_battery_shut_current(self, curr: float) -> None:
@@ -1014,7 +1017,7 @@ class M9300(M3400):
             cmd = 'BATT:SHUT:CURR ' + param_str
             self.send(cmd)
         except Exception as ex:
-            raise 
+            raise
     # BATTery:SHUT:CURRent? [MINimum|MAXimum|DEFault]
     def get_battery_shut_current(self) -> float:
         """
@@ -1025,7 +1028,7 @@ class M9300(M3400):
             cmd = 'BATT:SHUT:CURR?'
             return float(self.request(cmd, 2000))
         except Exception as ex:
-            raise  
+            raise
 
     # BATTery:SHUT:TIME <NRf+>
     def set_battery_shut_time(self, time: int) -> None:
@@ -1041,7 +1044,7 @@ class M9300(M3400):
             cmd = 'BATT:SHUT:TIME ' + str(time)
             self.send(cmd)
         except Exception as ex:
-            raise      
+            raise
     # BATTery:SHUT:TIME? [MINimum|MAXimum|DEFault]
     def get_battery_shut_time(self) -> float:
         """
@@ -1070,7 +1073,7 @@ class M9300(M3400):
         self.set_power_limit_positive(150.0)   # Watt
         self.set_current(curr=curr_limit)
         self.set_voltage_limit_high(volt=voltage_limit)
-        self.set_output_state(1)   
+        self.set_output_state(1)
 
     def wake_up_mode_off(self) -> None:
         """
