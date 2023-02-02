@@ -109,7 +109,7 @@ if __name__ == "__main__":
     from time import perf_counter
 
     ## Initialize the logging
-    logger_init(filename_base="local_log")  ## init root logger with different filename
+    logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
     tic = perf_counter()
