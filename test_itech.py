@@ -263,7 +263,7 @@ if __name__ == "__main__":
     m3412 = [M3400(E1206_IP_STR, i) for i in range(1,7)]
     #test_m3400_some(m3412[0])
 
-    for m in m3412:
+    for m in m3412[:2]:
         m.set_remote_control()
         m.set_sense_state(1)
         m.set_output_state(0)
