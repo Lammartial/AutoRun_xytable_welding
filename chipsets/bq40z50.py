@@ -1317,7 +1317,6 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.manufacturer_access = 0x002A
         # Permanent Fail Data Reset
         self.manufacturer_access = 0x0029
-
     
     def check_no_errors(self) -> bool:
         no_errs = True
@@ -1336,6 +1335,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return no_errs
 
     def protection_activation(self) -> bool:
+        res = True
         # Activate LED Display
         self.manufacturer_access = 0x0027
         # Activate Black Box Reader
@@ -1347,6 +1347,22 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # Activate Firmware control of the FETs
         self.manufacturer_access = 0x0022
         # Check bits
+        status = self.manufacturing_status(True)
+        if (status["gauge_en"] != 1):               # bit 3
+            res = False
+        if (status["fet_en"] != 1):                 # bit 4
+            res = False
+        if (status["lf_en"] == 1):                  # bit 5
+            res = False
+        if (status["pf_en"] == 1):                  # bit 6
+            res = False
+        if (status["bbr_en"] == 1):                 # bit 7
+            res = False
+        if (status["fuse_en"] == 1):                # bit 8
+            res = False
+        if (status["led_en"] == 1):                 # bit 9
+            res = False
+        return res
 
     def toggle_fet_control(self):
         """This command disables/enables control of the CHG, DSG, and PCHG FET by the firmware.
@@ -1552,12 +1568,8 @@ if __name__ == "__main__":
 
     #print(bat.get_current())
 
-    buf = bat.manufacturing_dastatus1()
+    bat.protection_activation()
 
-    buf = bat.manufacturing_dastatus1()
-
-    buf = bat.manufacturing_dastatus1()
-    
     #print(bat.check_no_errors())
     #print(bat.get_rsoc())
 
