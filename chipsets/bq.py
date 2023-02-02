@@ -168,11 +168,12 @@ class ChipsetTexasInstruments(Chipset):
             if self.is_unsealed():
                 #print("bestens")
                 break
-
+        sleep(0.1)
         if not self.is_unsealed(refresh=True):
             return False
         if fullaccess_key is None:
             return True # only unseal needed
+        sleep(0.1)
         if self.is_unsealed(check_fullaccess=True, refresh=True):
             return True # already full access without dedicated key
         #print("try full access")
