@@ -354,6 +354,35 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     #         return result[0][2:]
 
 
+    def is_fuse_pin_active(self, refresh: bool = False) -> bool:
+        """check if fuse pin has been activated on OpertionStatus.
+
+        Args:
+            refresh (bool, optional): if True, the operation_status shadow will be read fresh from battery before analyze its flags. Defaults to False.
+
+        Returns:
+            bool: True, if sealed False otherwise
+        """
+        if refresh or self._operation_status is None: 
+            self.operation_status()
+        return (self._operation_status["fuse"] == 1) # using shadow copy to avoid bus access
+
+
+    def wait_for_operation_status_flag(self, os_key: str, state: bool, retries: int = 20, pause_on_retry: float = 0.1) -> bool:
+        """Wait for flags on operation_status()."""
+        retries = int(retries)
+        while (retries >= 0):
+            try:
+                self.operation_status()  # => update the self._operation_status attribute
+                if bool(self._operation_status[os_key]) == state:
+                    break                                                           
+                sleep(pause_on_retry)  
+            except OSError as ex:
+                sleep(pause_on_retry)
+            finally:
+                retries -= 1
+        return bool(self._operation_status[os_key]) == state
+
 
     def lifetime_datablock(self, hexi: bool | str | None = None):
         """Compatibility function: reading just first block of lifetimedata for use e.g. in production.
