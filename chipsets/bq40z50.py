@@ -1357,119 +1357,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         latest gauging status prior to a reset.
         """
         self.manufacturer_access = 0x0021
-
-    #def set_gauging(self, enable: bool) -> bool:
-    #    return self._ms_toggle_helper("gauge_en", enable, 0x0021)
     
-    #def get_gauging(self) -> bool:
-    #    self.manufacturer_access = 0x0056
-    #    buf = self.manufacturer_data
-    #    return bool((buf[1] & 0x10) >> 4)
-    
-    def get_udi(self) -> tuple:
-        str = self.read_flash_block(0x4041, 32, True)
-        return str[0:12]
-
-    def get_rsoc(self) -> int:
-        buf = self.soc()
-        return int(buf[0])
-
-    def get_current(self) -> float:
-        buf =  self.current()
-        return float(buf[0])
-    
-    def reset_errors(self) -> None:
-        # Black Box Recorder reset
-        self.manufacturer_access = 0x002A
-        # Permanent Fail Data Reset
-        self.manufacturer_access = 0x0029
-    
-    def check_no_errors(self) -> bool:
-        no_errs = True
-        # Safety status
-        self.manufacturer_access = 0x0051
-        buf = self.manufacturer_data
-        for i in range(len(buf)):
-            if (buf[i] != 0):
-                no_errs = False
-        # PF status
-        self.manufacturer_access = 0x0053
-        buf = self.manufacturer_data
-        for i in range(len(buf)):
-            if (buf[i] != 0):
-                no_errs = False
-        return no_errs
-
-    # doublette
-    def Gauge_enable(self) -> bool:
-        self.manufacturing_status(True)
-        if (self._manufacturing_status["gauge_en"] != 1):               # bit 3
-            # Activate Firmware control of the FETs
-            self.manufacturer_access = 0x0021
-            sleep(0.5)
-            self.manufacturing_status(True)
-        return True if (self._manufacturing_status["gauge_en"] == 1) else False       
-    
-    # doublette
-    def FETs_enable(self) -> bool:
-        self.manufacturing_status(True)
-        if (self._manufacturing_status["fet_en"] != 1):                 # bit 4
-            # Activate Firmware control of the FETs
-            self.manufacturer_access = 0x0022
-            sleep(0.5)
-            self.manufacturing_status(True)
-        return True if (self._manufacturing_status["fet_en"] == 1) else False
-    
-    # doublette
-    def LifeTimeData_disable(self) -> bool:
-        self.manufacturing_status(True)
-        if (self._manufacturing_status["lf_en"] == 1):                 # bit 5
-            # Activate Permanent Failure Detection
-            self.manufacturer_access = 0x0023
-            sleep(0.5)
-            self.manufacturing_status(True)
-        return True if (self._manufacturing_status["lf_en"] == 0) else False       
-    
-    # doublette
-    def PermFailure_enable(self) -> bool:
-        self.manufacturing_status(True)
-        if (self._manufacturing_status["pf_en"] != 1):                 # bit 6
-            # Activate Permanent Failure Detection
-            self.manufacturer_access = 0x0024
-            sleep(0.5)
-            self.manufacturing_status(True)
-        return True if (self._manufacturing_status["pf_en"] == 1) else False
-
-    # doublette
-    def BlackBox_enable(self):
-        self.manufacturing_status(True)
-        if (self._manufacturing_status["bbr_en"] != 1):                 # bit 7
-            # Activate Black Box Reader
-            self.manufacturer_access = 0x0025
-            sleep(0.5)
-            self.manufacturing_status(True)
-        return True if (self._manufacturing_status["bbr_en"] == 1) else False
-    
-    # doublette
-    def Fuses_enable(self) -> bool:
-        self.manufacturing_status(True)
-        if (self._manufacturing_status["fuse_en"] != 1):                # bit 8
-            # Activate Firmware control of the Fuses
-            self.manufacturer_access = 0x0026
-            sleep(0.5)
-            self.manufacturing_status(True)
-        return True if (self._manufacturing_status["fuse_en"] == 1) else False
-
-    # please use _toggle_helper and lower_case names
-    def LEDs_enable(self):
-        self.manufacturing_status(True)
-        if (self._manufacturing_status["led_en"] != 1):                 # bit 9
-            # Activate LED Display
-            self.manufacturer_access = 0x0027
-            sleep(0.5)
-            self.manufacturing_status(True)
-        return True if (self._manufacturing_status["led_en"] == 1) else False
-
+    def set_gauging(self, enable: bool) -> bool:
+        return self._ms_toggle_helper("gauge_en", enable, 0x0021)
 
     def toggle_fet_control(self):
         """This command disables/enables control of the CHG, DSG, and PCHG FET by the firmware.
@@ -1498,12 +1388,20 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
         self.manufacturer_access = 0x0023
 
+    def set_lifetime_data_collection(self, enable: bool) -> bool:
+        return self._ms_toggle_helper("lf_en", enable, 0x0023)
+
     def toggle_permanent_failure(self):
         self.manufacturer_access = 0x0024
 
-    def toggle_permanent_black_box_recorder(self):
+    def set_permanent_failure(self, enable: bool) -> bool:
+        return self._ms_toggle_helper("pf_en", enable, 0x0024)
+
+    def toggle_black_box_recorder(self):
         self.manufacturer_access = 0x0025
 
+    def set_black_box_recorder(self, enable: bool) -> bool:
+        return self._ms_toggle_helper("bbr_en", enable, 0x0025)    
 
     def toggle_fuse_control(self):
         self.manufacturer_access = 0x0026
@@ -1511,9 +1409,14 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def set_fuse_control(self, enable: bool) -> bool:
         return self._ms_toggle_helper("fuse_en", enable, 0x0026)
 
+    def toggle_led_display(self):
+        self.manufacturer_access = 0x0027
 
-    def toggle_led_display_enable(self):
-        self.manufacturer_access = 0x002b
+    def set_led_display(self, enable: bool) -> bool:
+        return self._ms_toggle_helper("led_en", enable, 0x0027)
+
+    #def toggle_led_display_enable(self):
+    #    self.manufacturer_access = 0x002b
 
     #def set_led_display_enable(self, enable: bool) -> bool:
     #    return self._ms_toggle_helper("led", enable, 0x002b)
@@ -1555,11 +1458,43 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "scd2":  unpack_from("<b", buf, 0)[0],
         }))
 
+    def get_udi(self) -> tuple:
+        str = self.read_flash_block(0x4041, 32, True)
+        return str[0:12]
+
+    def get_rsoc(self) -> int:
+        buf = self.soc()
+        return int(buf[0])
+
+    def get_current(self) -> float:
+        buf =  self.current()
+        return float(buf[0])
+    
+    def reset_errors(self) -> None:
+        # Black Box Recorder reset
+        self.manufacturer_access = 0x002A
+        # Permanent Fail Data Reset
+        self.manufacturer_access = 0x0029
+    
+    def check_no_errors(self) -> bool:
+        no_errs = True
+        # Safety status
+        self.manufacturer_access = 0x0051
+        buf = self.manufacturer_data
+        for i in range(len(buf)):
+            if (buf[i] != 0):
+                no_errs = False
+        # PF status
+        self.manufacturer_access = 0x0053
+        buf = self.manufacturer_data
+        for i in range(len(buf)):
+            if (buf[i] != 0):
+                no_errs = False
+        return no_errs
+
     def ts_DeviceName(self) -> str:
         pass
     
-
-
 #--------------------------------------------------------------------------------------------------
 # -R2-
 #--------------------------------------------------------------------------------------------------
