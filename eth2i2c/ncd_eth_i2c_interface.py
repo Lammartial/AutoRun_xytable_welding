@@ -283,7 +283,7 @@ class I2CPort(I2CBase):
         #
         if error_code == NCD_I2C_READ_ERROR:
             raise OSError(error_code, f"I2C timeout error while read on {self}, slave-IC did Not Respond, check I2C address.")
-        elif error_code in [NCD_I2C_WRITE_ERROR1, NCD_I2C_WRITE_ERROR1]:
+        elif error_code in [NCD_I2C_WRITE_ERROR1, NCD_I2C_WRITE_ERROR2]:
             raise OSError(error_code, f"I2C timeout error while write on {self}, slave-IC did Not Respond, check I2C address.")
         elif error_code == NCD_I2C_ACK_ERROR:
             raise OSError(error_code, f"I2C ACK Error on {self}")
