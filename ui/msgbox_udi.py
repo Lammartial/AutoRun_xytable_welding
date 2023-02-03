@@ -397,9 +397,9 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     root.focus_force()  # this is to activate the window again (important after programmatically closed)
     if allow_manual_edit:
         entry_lst[0][1].focus_set()   # now set the focus to the first dialog element
+        #ok_button.focus_set()
     else:
-        ok_button.focus_set()
-
+        cancel_button.focus_set()
 
     # The asyncio loop must start before the tkinter event loop.
     while not aio_loop:
