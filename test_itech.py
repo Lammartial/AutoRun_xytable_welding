@@ -334,7 +334,7 @@ if __name__ == "__main__":
         m.set_output_state(0)
         print(m.get_all_meas())
 
-    test_start_battery_pcba(m3412[0], m3412[1])
+    #test_start_battery_pcba(m3412[0], m3412[1])
 
     for m in m3412:
         m.set_output_state(0)  # switch all outputs OFF

@@ -226,6 +226,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.operation_status(True)
         return self._operation_status["block"]
 
+
     def manufacturing_status(self, hexi: bool | str | None = None) -> tuple:
         """This command returns the ManufacturingStatus() flags.
 
@@ -352,20 +353,6 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     #     result = self.readBlock(Cmd.MANUFACTURER_BLOCK_ACCESS)
     #     if result[1]:
     #         return result[0][2:]
-
-
-    def is_fuse_pin_active(self, refresh: bool = False) -> bool:
-        """check if fuse pin has been activated on OpertionStatus.
-
-        Args:
-            refresh (bool, optional): if True, the operation_status shadow will be read fresh from battery before analyze its flags. Defaults to False.
-
-        Returns:
-            bool: True, if sealed False otherwise
-        """
-        if refresh or self._operation_status is None: 
-            self.operation_status()
-        return (self._operation_status["fuse"] == 1) # using shadow copy to avoid bus access
 
 
     def wait_for_operation_status_flag(self, os_key: str, state: bool, retries: int = 20, pause_on_retry: float = 0.1) -> bool:
