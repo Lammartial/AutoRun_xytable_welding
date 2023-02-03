@@ -79,9 +79,9 @@ class PCA9536:
         the corresponding port pin is enabled as an output.
 
         Args:
-            pin_io (tuple):  4-tuple of 0 | 1, 0=pin is output, 1=pin is input
-            invert_input (tuple):   4-tuple of 0 | 1, 0=pin is read normal, 1=pin is read inverted
-
+            pin_io (tuple | str):  4-tuple of 0 | 1, 0=pin is output, 1=pin is input
+            invert_input (tuple | str):   4-tuple of 0 | 1, 0=pin is read normal, 1=pin is read inverted
+            preset_output (tuple | str):  4-tuple of 0 | 1, preset if outout
         """
         if len(pin_io) != 4:
             raise ValueError("Parameter 'pin_as_output' must be tuple if 4 integers or a string of length 4.")
