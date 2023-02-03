@@ -113,7 +113,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         slot = int(slot)
         channel = int(channel)
         assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_resistance: Allowed slot range is 1 .. 3')
-        assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_resistance: Allowed channel range is 1 .. 20.')
+        assert ((channel >= 1) and (channel <= 22)), ValueError('Error, get_resistance: Allowed channel range is 1 .. 22.')
         try:
             slot_str = str(slot)
             channel_str = str(channel).zfill(2)
@@ -177,7 +177,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         slot = int(slot)
         channel = int(channel)
         assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_VDC: Allowed slot range is 1 .. 3')
-        assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VDC: Allowed channel range is 1 .. 20.')
+        assert ((channel >= 1) and (channel <= 22)), ValueError('Error, get_VDC: Allowed channel range is 1 .. 20.')
         try:
             slot_str = str(slot)
             channel_str = str(channel).zfill(2)
@@ -208,7 +208,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         slot = int(slot)
         channel = int(channel)
         assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_VAC: Allowed slot range is 1 .. 3')
-        assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VAC: Allowed channel range is 1 .. 20.')
+        assert ((channel >= 1) and (channel <= 22)), ValueError('Error, get_VAC: Allowed channel range is 1 .. 20.')
         try:
             slot_str = str(slot)
             channel_str = str(channel).zfill(2)
@@ -277,7 +277,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         rtd_resist = int(rtd_resist)
         fth_type = int(fth_type)
         assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
-        assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
+        assert ((channel >= 1) and (channel <= 22)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
         try:
             slot_str = str(slot)
             channel_str = str(channel).zfill(2)

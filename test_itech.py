@@ -303,6 +303,7 @@ def test_start_battery_pcba(psu1: M3400, psu2: M3400):
 if __name__ == "__main__":
     import logging
     from time import sleep
+    from pyvisa import ResourceManager
 
     ## Initialize the logging
     logger_init(filename_base=None)  ## init root logger with different filename
@@ -322,6 +323,9 @@ if __name__ == "__main__":
     # print(m3902.set_remote_control())
     # # 3. Do some stuff
     # test_m3900_modes(m3902)
+
+    rm = ResourceManager()
+    print(rm.list_resources())
 
     # there is one ETH bridge for 6 PSUs
     E1206_IP_STR = "TCPIP0::172.21.101.24::inst0::INSTR"
