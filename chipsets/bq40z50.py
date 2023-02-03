@@ -222,6 +222,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         })
         return _od2t(self._operation_status)
 
+    def operation_status_ts(self) -> str:
+        self.operation_status(True)
+        return self._operation_status["block"]
+
     def manufacturing_status(self, hexi: bool | str | None = None) -> tuple:
         """This command returns the ManufacturingStatus() flags.
 
@@ -1202,7 +1206,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             raise
         return res
 
-    def _ms_toggle_helper(self, ms_key: str, enable: bool, ma_cmd: int, retries: int = 1) -> bool:
+    def _ms_toggle_helper(self, ms_key: str, enable: bool, ma_cmd: int, retries: int = 5, pause_on_retry: float = 0.1) -> bool:
         """Internal function to set a defined state using toggle and manufacturing_status() reads for control.
 
         Having retries = 1 results in always one control read of operation status after potential toggle.
@@ -1216,20 +1220,65 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             bool: _description_
         """
+        _toggle_issued = False  # restrict to exactily one toggle command if needed
         while (retries >= 0):
-            self.manufacturing_status()  # => update the self._manufacturing_status attribute
-            if enable:
-                if not self._manufacturing_status[ms_key]:
-                    self.manufacturer_access = ma_cmd  # need to toggle
+            try:
+                self.manufacturing_status()  # => update the self._manufacturing_status attribute
+                if bool(self._manufacturing_status[ms_key]) != enable:
+                    if not _toggle_issued:
+                        self.manufacturer_access = ma_cmd  # need to toggle
+                        _toggle_issued = True                       
+                    else:
+                        # already issued the toggle command -> wait for correct state
+                        pass
+                    if pause_on_retry: 
+                        sleep(pause_on_retry)
                 else:
-                    pass  # already on the target state
-            else:
-                if self._manufacturing_status[ms_key]:
-                    self.manufacturer_access = ma_cmd  # need to toggle
-                else:
-                    pass  # already on the target state
-            retries -= 1
+                    pass  # already on the target state -> do not pause  
+            except OSError as ex:
+                if pause_on_retry: 
+                    sleep(pause_on_retry)
+            finally:
+                retries -= 1
         return (bool(self._manufacturing_status[ms_key]) == enable)
+
+
+    def _os_toggle_helper(self, os_key: str, enable: bool, ma_cmd: int, retries: int = 5, pause_on_retry: float = 0.2) -> bool:
+        """Internal function to set a defined state using toggle and operation_status() reads for control.
+
+        Having retries = 1 results in always one control read of operation status after potential toggle.
+
+        Args:
+            os_key (str): _description_
+            enable (bool): _description_
+            ma_cmd (int): _description_
+            retries (int, optional): _description_. Defaults to 1.
+
+        Returns:
+            bool: _description_
+        """
+        _toggle_issued = False  # restrict to exactily one toggle command if needed
+        while (retries >= 0):
+            try:
+                self.operation_status()  # => update the self._manufacturing_status attribute
+                if bool(self._operation_status[os_key]) != enable:
+                    if not _toggle_issued:
+                        self.manufacturer_access = ma_cmd  # need to toggle
+                        _toggle_issued = True
+                    else:
+                        # already issued the toggle command -> wait for correct state
+                        pass
+                    if pause_on_retry: 
+                        sleep(pause_on_retry)
+                else:
+                    pass  # already on the target state -> do not pause  
+            except OSError as ex:
+                if pause_on_retry: 
+                    sleep(pause_on_retry)
+            finally:
+                retries -= 1
+        return (bool(self._operation_status[os_key]) == enable)
+
 
     def toggle_fuse(self) -> None:
         """This command manually activates/deactivates the FUSE output to ease testing during manufacturing.
@@ -1245,7 +1294,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.manufacturer_access = 0x001d
 
     def set_fuse(self, enable: bool) -> bool:
-        return self._ms_toggle_helper("fuse", enable, 0x001d)
+        #return self._ms_toggle_helper("fuse", enable, 0x001d, pause_after_toggle=0.5)
+        return self._os_toggle_helper("fuse", enable, 0x001d, retries=40)
 
 
     def toggle_pchg_fet(self) -> None:
@@ -1334,6 +1384,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 no_errs = False
         return no_errs
 
+    # doublette
     def Gauge_enable(self) -> bool:
         self.manufacturing_status(True)
         if (self._manufacturing_status["gauge_en"] != 1):               # bit 3
@@ -1343,6 +1394,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self.manufacturing_status(True)
         return True if (self._manufacturing_status["gauge_en"] == 1) else False       
     
+    # doublette
     def FETs_enable(self) -> bool:
         self.manufacturing_status(True)
         if (self._manufacturing_status["fet_en"] != 1):                 # bit 4
@@ -1352,6 +1404,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self.manufacturing_status(True)
         return True if (self._manufacturing_status["fet_en"] == 1) else False
     
+    # doublette
     def LifeTimeData_disable(self) -> bool:
         self.manufacturing_status(True)
         if (self._manufacturing_status["lf_en"] == 1):                 # bit 5
@@ -1361,6 +1414,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self.manufacturing_status(True)
         return True if (self._manufacturing_status["lf_en"] == 0) else False       
     
+    # doublette
     def PermFailure_enable(self) -> bool:
         self.manufacturing_status(True)
         if (self._manufacturing_status["pf_en"] != 1):                 # bit 6
@@ -1370,6 +1424,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self.manufacturing_status(True)
         return True if (self._manufacturing_status["pf_en"] == 1) else False
 
+    # doublette
     def BlackBox_enable(self):
         self.manufacturing_status(True)
         if (self._manufacturing_status["bbr_en"] != 1):                 # bit 7
@@ -1379,6 +1434,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self.manufacturing_status(True)
         return True if (self._manufacturing_status["bbr_en"] == 1) else False
     
+    # doublette
     def Fuses_enable(self) -> bool:
         self.manufacturing_status(True)
         if (self._manufacturing_status["fuse_en"] != 1):                # bit 8
@@ -1388,6 +1444,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self.manufacturing_status(True)
         return True if (self._manufacturing_status["fuse_en"] == 1) else False
 
+    # please use _toggle_helper and lower_case names
     def LEDs_enable(self):
         self.manufacturing_status(True)
         if (self._manufacturing_status["led_en"] != 1):                 # bit 9
@@ -1396,6 +1453,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             sleep(0.5)
             self.manufacturing_status(True)
         return True if (self._manufacturing_status["led_en"] == 1) else False
+
 
     def toggle_fet_control(self):
         """This command disables/enables control of the CHG, DSG, and PCHG FET by the firmware.
@@ -1431,7 +1489,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.manufacturer_access = 0x0025
 
 
-    def toggle_fuse(self):
+    def toggle_fuse_control(self):
         self.manufacturer_access = 0x0026
 
     def set_fuse_control(self, enable: bool) -> bool:
