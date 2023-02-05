@@ -1,4 +1,5 @@
 import yaml
+import socket
 from pathlib import Path
 from pprint import pprint
 from collections import OrderedDict
@@ -9,10 +10,47 @@ CONF_FILENAME_PROD = Path("C:/") / "Production" / "station_config.yaml"  # produ
 
 
 #--------------------------------------------------------------------------------------------------
+def get_ipv4():
+    """
+    Helper function that determines the own IPv4 address on the primary interface.
+    Falls back to localhost if no IP available.
+
+    Returns:
+        str: IPv4 address
+    """
+    _s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    _s.settimeout(0)
+    try:
+        # doesn't even have to be reachable
+        _s.connect(('10.254.254.254', 1))
+        _ip = _s.getsockname()[0]
+    except Exception:
+        _ip = "127.0.0.1"
+    finally:
+        _s.close()
+    return _ip
+
+#--------------------------------------------------------------------------------------------------
 
 class StationConfiguration:
 
     def __init__(self, test_type: str, filename: str | Path = CONF_FILENAME_PROD) -> None:
+        # get the own, main IP address
+        self._hostname = socket.gethostname()
+        self._primary_ip = socket.gethostbyname(socket.gethostname())
+        # analyze the IP a bit:
+        self._own_network = [int(s) for s in self._primary_ip.split(".")]
+        match self._own_network[1]:
+            case 71 | 168:
+                # RRC Germany
+                pass
+            case 75:
+                # RRC VN
+                pass
+        if int(self._own_network[2]) > 100:
+            self._line_id = 100 - self._own_network[2]
+        else:
+            self._line_id = self._own_network[2]  # line 1   
         self._CONFIG = None
         self.test_type = test_type
         self._filename = Path(filename)
@@ -38,12 +76,17 @@ class StationConfiguration:
     def get_resource_strings_for_socket(self, socket: int | str) -> tuple:
         # return the selected socket configuration in a convenient way for teststand
         socket = int(socket)
-        if socket == -1: socket = 1  # -1 is the SingleSequential setting
+        if socket == -1: socket = 0  # -1 is the SingleSequential setting
         d = self._CONFIG
         _test_type = d["test_type"]
         _ns = len(d[_test_type]["test_sockets"])
-        assert (socket > 0 and socket <= _ns), ValueError(f"Socket must be in [1..{_ns}].")
+        assert (socket >= 0 and socket < _ns), ValueError(f"Socket must be in [0..{_ns}].")
         r = OrderedDict(self._CONFIG[_test_type]["test_sockets"][str(socket)]["resource_strings"])
+        # here we could change the network tuples 
+        # of the YAML resources by replacement
+        #nw_correction = ".".join(d["line_network"].split(".")[:3])  # only the first three IP numbers
+        # need a regex here ... todo
+        #return tuple([v.replace(xyz, nw_correction) for k,v in r.items()])      
         return tuple([v for k,v in r.items()])
 
 
@@ -70,9 +113,11 @@ class StationConfiguration:
         _ns = len(d[_test_type]["test_sockets"])
         result = (
             d["test_type"],         # str
-            d["station_id"],        # str
+            #d["station_id"],        # str
+            self._hostname,         # str, replace by auto-detection
             d["dsp_api_base_url"],  # str
-            d["line_id"],           # int
+            #d["line_id"],           # int
+            self._line_id,          # int, replace by auto-detection
             _ns                     # int
         )
         return result
@@ -80,11 +125,10 @@ class StationConfiguration:
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    cfg = StationConfiguration(CONF_FILENAME_PROD)
+    cfg = StationConfiguration("PCBA_TEST", filename=CONF_FILENAME_PROD)
     #pprint(cfg._CONFIG)
     pprint(cfg.get_station_configuration())
-    pprint(cfg.get_resource_strings_for_socket(1))
+    pprint(cfg.get_resource_strings_for_socket(0))
     pprint(cfg.get_i2c_mux_configuration())
-
-
+    print(cfg._primary_ip, cfg._hostname, cfg._own_network, cfg._line_id)
 # END OF FILE

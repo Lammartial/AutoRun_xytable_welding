@@ -475,7 +475,7 @@ def main(resource_str: str, title: str = "ENTER UDI"):
     #_log.debug('main ending')
 
 #--------------------------------------------------------------------------------------------------
-def identify_uut(requested_udi: list, scanner_resource_str: str, allow_user_edit:bool = False) -> Tuple[bool, str]:
+def identify_uut(test_socket: int, requested_udi: list, scanner_resource_str: str, allow_user_edit:bool = False) -> Tuple[bool, str]:
     """Entry function for TestStand using context IDispatch interface (block of data)
 
     Args:
@@ -488,18 +488,21 @@ def identify_uut(requested_udi: list, scanner_resource_str: str, allow_user_edit
 
     _log = getLogger(__name__, DEBUG)
     allow_manual_edit = allow_user_edit
-    #allow_manual_edit = True
+    allow_manual_edit = True
     # # this is just to demonstrate the parameter passing from TestStand
     # context_id = seq_context.Id
     # executing_sequence_name = seq_context.Sequence.Name
     # executing_step_name = seq_context.Step.Name
+
+    title = "ENTER UDI" if int(test_socket) < 0 else f"SOCKET {int(test_socket)}: ENTER UDI"
+
     # _scanner = str(seq_context.Locals.TestSocketResources.scanner)
     _scanner = scanner_resource_str
     # clear the UDIs to scan from TestStand context:
     udi_to_scan = [
         UDIScanCtrlItem(item, validate_udi_by_string_at_position_1) for item in requested_udi
     ]
-    main(_scanner)
+    main(_scanner, title=title)
     res = tuple()
     for item in udi_to_scan:
         _log.debug(f"UDI({item.name})={item.scanned_udi}")
