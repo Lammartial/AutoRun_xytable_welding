@@ -397,9 +397,9 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
         #root.geometry(f"+{_x-50}+{_y-180}")
         root.geometry(f"+{_x}+{_y}")
     else:
-        x = 50 + test_socket * (_w + 20)
-        y = 50
-        root.geometry(f"+{x}+{y}")
+        _x = 50 + test_socket * (_w + 20)
+        _y = 50
+        root.geometry(f"+{_x}+{_y}")
     #root.attributes('-alpha', 1.0)  # now make the main window visible again
 
     root.update()
@@ -477,7 +477,7 @@ def main(resource_str: str, title: str = "ENTER UDI", test_socket: int = -1):
     aio_thread = threading.Thread(target=aio_main, args=(aio_initiate_shutdown,), name="Asyncio's Thread")
     aio_thread.start()
 
-    tk_main(resource_str, title, test_socket=test_socket)
+    tk_main(resource_str, title, test_socket=int(test_socket))
 
     # Close the asyncio permanent loop and join the thread in which it runs.
     aio_initiate_shutdown.set()
@@ -513,7 +513,7 @@ def identify_uut(test_socket: int, requested_udi: list, scanner_resource_str: st
     udi_to_scan = [
         UDIScanCtrlItem(item, validate_udi_by_string_at_position_1) for item in requested_udi
     ]
-    main(_scanner, title=title, test_socket=test_socket)
+    main(_scanner, title=title, test_socket=int(test_socket))
     res = tuple()
     for item in udi_to_scan:
         _log.debug(f"UDI({item.name})={item.scanned_udi}")
