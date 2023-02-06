@@ -148,13 +148,12 @@ class CellVoltageSource:
 
 if __name__ == '__main__':
     from rrc.eth2i2c import I2CPort
+    from rrc.i2cbus import BusMux, I2CMuxedBus
 
-    I2C_BRIDGE_IP = "192.168.1.60"
-    I2C_BRIDGE_PORT = 2101
-    my_i2c_port = I2CPort(I2C_BRIDGE_IP, I2C_BRIDGE_PORT)
-    # print(i2c_port.i2c_bus_scan())
-    my_i2c_port.writeto(0x77, bytearray([0x01]))
-    cvs = CellVoltageSource(my_i2c_port, 0x48)
+    i2c = I2CPort("172.21.101.21:2101")
+    mux = BusMux(i2c, 0x77)
+    bus = I2CMuxedBus(i2c, mux, 4)
+    cvs = CellVoltageSource(bus, 0x48)
     cvs.initialize()
     cvs.set_aux_voltage(3.141)
     # cvs.set_cell_n_voltage(1, 3.7)
@@ -163,7 +162,6 @@ if __name__ == '__main__':
     # cvs.set_cell_n_voltage(4, 2.5)
     cvs.set_all_cell_voltages(3.7)
     cvs.power_down_cell_n_channel(2)
-
 
 
 # END OF FILE
