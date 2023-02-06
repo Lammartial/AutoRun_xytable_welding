@@ -296,25 +296,32 @@ class I2CMuxedBus(I2CBase):
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    from rrc.eth2i2c.ncd_eth_i2c_interface import I2CPort
+    from rrc.eth2i2c import I2CPort
+    from rrc.i2cbus import I2CBus
     from rrc.smbus import BusMaster as SMBusMaster
 
     ## Initialize the logging
     logger_init(filename_base="local_log")  ## init root logger
     _log = getLogger(__name__, DEBUG)
 
-    with I2CPort("192.168.1.56", 2101) as ncd:
-        bus = SMBusMaster(ncd)
-        _log.info(bus.isReady(0x77))
-        mux = BusMux(ncd, address=0x77)
-        mux.setChannel(1)
-        _log.info(mux.getChannels())
-        _log.info(bus.readWord(0x0b,0x09))
-        mux.reset()
-        # check if the mux-automatic works also
-        muxbus = I2CMuxedBus(ncd, bus, 1)
-        smbus = SMBusMaster(muxbus)
-        _log.info(smbus.readWord(0x0b,0x09))
+    ncd = I2CPort("172.21.101.21:2101")
+    #i2c = I2CBus(ncd)
+    #bus = SMBusMaster(ncd)
+    #_log.info(bus.isReady(0x77))
+    mux = BusMux(ncd, address=0x77)
+
+    for n in range(1,9):
+        mux.setChannel(n)
+        print(ncd.i2c_bus_scan())
+        
+    # mux.setChannel(1)
+    # _log.info(mux.getChannels())
+    # _log.info(bus.readWord(0x0b,0x09))
+    # mux.reset()
+    # # check if the mux-automatic works also
+    # muxbus = I2CMuxedBus(ncd, bus, 1)
+    # smbus = SMBusMaster(muxbus)
+    # _log.info(smbus.readWord(0x0b,0x09))
     pass
 
 # END OF FILE

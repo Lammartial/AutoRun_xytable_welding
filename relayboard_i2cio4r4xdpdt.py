@@ -165,22 +165,24 @@ class RelayBoard4Relay4GPIO:
     def __validate_relay_pin(self, relay_n: int):
         if relay_n not in RelayBoard4Relay4GPIO.relay_dict.keys():
             raise ValueError(f"Relay pin number for the {str(self)} must be between "
-                             f"1 and {max(RelayBoard4Relay4GPIO.relay_dict.keys())}. You selected {relay_n}")
+                             f"{min(RelayBoard4Relay4GPIO.relay_dict.keys())} and {max(RelayBoard4Relay4GPIO.relay_dict.keys())}. You selected {relay_n}")
 
     def __validate_gpio_pin(self, gpio_n: int):
         if gpio_n not in RelayBoard4Relay4GPIO.gpio_dict.keys():
             raise ValueError(f"GPIO pin number for {str(self)} must be between "
-                             f"1 and {max(RelayBoard4Relay4GPIO.gpio_dict.keys())}. You selected {gpio_n}")
+                             f"{min(RelayBoard4Relay4GPIO.gpio_dict.keys())} and {max(RelayBoard4Relay4GPIO.gpio_dict.keys())}. You selected {gpio_n}")
 
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
     from rrc.eth2i2c import I2CPort
     from rrc.i2cbus import BusMux, I2CMuxedBus
-    i2c = I2CPort("192.168.1.56")
+    i2c = I2CPort("172.21.101.21")
     mux = BusMux(i2c, 0x77)
     bus = I2CMuxedBus(i2c, mux, 3)
     rb = RelayBoard4Relay4GPIO(bus, 32)
+
+    print(rb.read_gpio_n(4))
     i2c.close()
     pass
 

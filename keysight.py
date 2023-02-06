@@ -78,7 +78,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         cmd = f"TEST:ALL?"
         return int(self.request(cmd, 10000))
 
-    def set_raw_command(self, cmd: str):
+    def set_raw_request(self, cmd: str):
         """
         Sets raw SCPI command and returns the result or error.
 
@@ -89,6 +89,18 @@ class DAQ970A(Eth2SerialVisaDevice):
             str: response
         """
         return self.request(str(cmd), 2000)
+    
+    def set_raw_command(self, cmd: str):
+        """
+        Sets raw SCPI command.
+
+        Args:
+            cmd (str): SCPI command
+
+        Returns:
+            str: response
+        """
+        return self.send(str(cmd), 2000)
 
     #----------------------------------------------------------------------------------------------
     
@@ -113,7 +125,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         slot = int(slot)
         channel = int(channel)
         assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_resistance: Allowed slot range is 1 .. 3')
-        assert ((channel >= 1) and (channel <= 22)), ValueError('Error, get_resistance: Allowed channel range is 1 .. 22.')
+        assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_resistance: Allowed channel range is 1 .. 20.')
         try:
             slot_str = str(slot)
             channel_str = str(channel).zfill(2)
@@ -177,7 +189,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         slot = int(slot)
         channel = int(channel)
         assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_VDC: Allowed slot range is 1 .. 3')
-        assert ((channel >= 1) and (channel <= 22)), ValueError('Error, get_VDC: Allowed channel range is 1 .. 20.')
+        assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VDC: Allowed channel range is 1 .. 20.')
         try:
             slot_str = str(slot)
             channel_str = str(channel).zfill(2)
@@ -208,7 +220,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         slot = int(slot)
         channel = int(channel)
         assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_VAC: Allowed slot range is 1 .. 3')
-        assert ((channel >= 1) and (channel <= 22)), ValueError('Error, get_VAC: Allowed channel range is 1 .. 20.')
+        assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VAC: Allowed channel range is 1 .. 20.')
         try:
             slot_str = str(slot)
             channel_str = str(channel).zfill(2)
@@ -222,13 +234,14 @@ class DAQ970A(Eth2SerialVisaDevice):
     def get_ADC_rounded(self, slot: int, channel: int, ndigits: int = 3) -> float:
         return round(self.get_ADC(int(slot), int(channel)), ndigits=int(ndigits))
     
-    def get_ADC(self, slot: int, channel: int) -> float:
+    def get_ADC(self, slot: int, channel: int, scale: str = "1 A") -> float:
         """
         Returns DC current measurement.
 
         Args:
             slot (int): slot number (1, 2, 3)
             channel (int): channel number (21 or 22)
+            scale: AUTO, "1 uA", "10 uA", "100 uA", "1 mA", "10 mA", "100 mA", "1 A"
 
         Raises:
             ValueError: invalid argument
@@ -239,13 +252,17 @@ class DAQ970A(Eth2SerialVisaDevice):
         # trick to use function in NI Teststand
         slot = int(slot)
         channel = int(channel)
+        scale_str_list = ("AUTO", "1 uA", "10 uA", "100 uA", "1 mA", "10 mA", "100 mA", "1 A")
+        scale_div_list = (1, 1e+6, 1e+5, 1e+4, 1e+3, 1e+2, 1e+1, 1)
         assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
         assert ((channel == 21) or (channel == 22)), ValueError('Invalid channel. Only 21 or 22 allowed.')
+        assert(scale in scale_str_list), ValueError('Invalid scale. Check the available scale values in the function description.')
+        scale_index = scale_str_list.index(scale)
         try:
             slot_str = str(slot)
             channel_str = str(channel).zfill(2)
-            cmd = "MEAS:CURR:DC? AUTO,DEF,(@" + slot_str + channel_str + ")"
-            return float(self.request(cmd, 5000))
+            cmd = f"MEAS:CURR:DC? {scale},(@{slot_str}{channel_str})"
+            return float(self.request(cmd, 5000)/scale_div_list[scale_index])
         except Exception as ex:
             #_log.exception(ex)
             raise
@@ -277,7 +294,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         rtd_resist = int(rtd_resist)
         fth_type = int(fth_type)
         assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
-        assert ((channel >= 1) and (channel <= 22)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
+        assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
         try:
             slot_str = str(slot)
             channel_str = str(channel).zfill(2)
@@ -326,26 +343,26 @@ if __name__ == "__main__":
     res : float = 0
 
     # predefined resource ID
-    DAQ970A_IP_STR = "TCPIP0::192.168.1.53::inst0::INSTR" #"TCPIP0::169.254.196.86::inst0::INSTR"
-    DAQ970A_NAME_STR = "TCPIP0::K-DAQ970A-17481.local::inst0::INSTR"
+    DAQ970A_IP_STR = "TCPIP0::172.21.101.13::inst0::INSTR" #"TCPIP0::169.254.196.86::inst0::INSTR"
+    #DAQ970A_NAME_STR = "TCPIP0::K-DAQ970A-17481.local::inst0::INSTR"
 
     # 1. Create an instance of DAQ970A class
     chn = 0                                 # default value
     daq970a = DAQ970A(DAQ970A_IP_STR, chn)
 
     # 2. Do some stuff
-    print(daq970a.selftest())
+    #print(daq970a.selftest())
 
-    res = daq970a.get_resistance(1,1)
-    print(res)
+    #res = daq970a.get_resistance(1,1)
+    #print(res)
 
     #print(daq970a.get_4w_resistance(1,2))
 
-    print(daq970a.get_VDC(1,3))
+    #print(daq970a.get_VDC(1,3))
 
-    print(daq970a.get_VAC(1,4))
+    #print(daq970a.get_VAC(1,4))
 
-    print(daq970a.get_ADC(1,21))
+    print(daq970a.get_ADC(1, 22, "1 mA"))
 
     #print(daq970a.get_temp(1, 1, "DEF", 0, 0, "B"))
 
