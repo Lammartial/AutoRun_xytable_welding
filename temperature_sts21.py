@@ -162,6 +162,16 @@ lutable_poly_0x31 = [0x00, 0x31, 0x62, 0x53, 0xC4, 0xF5, 0xA6, 0x97, 0xB9, 0x88,
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
+    from rrc.eth2i2c import I2CPort
+    from rrc.i2cbus import BusMux, I2CMuxedBus
+    i2c = I2CPort("172.21.101.31")
+    mux = BusMux(i2c, 0x77)
+    bus = I2CMuxedBus(i2c, mux, 8)
+    ts = STS21(bus)
+
+    print(ts.start_measurement_no_hold())
+
+    i2c.close()
     pass
 
 # END OF FILE
