@@ -1415,11 +1415,11 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def set_led_display(self, enable: bool) -> bool:
         return self._ms_toggle_helper("led_en", enable, 0x0027)
 
-    #def toggle_led_display_enable(self):
-    #    self.manufacturer_access = 0x002b
+    def toggle_led_onoff(self):
+        self.manufacturer_access = 0x002b
 
-    #def set_led_display_enable(self, enable: bool) -> bool:
-    #    return self._ms_toggle_helper("led", enable, 0x002b)
+    def set_led_onoff(self, enable: bool) -> bool:
+        return self._ms_toggle_helper("led", enable, 0x002b)
 
     def reset_device(self):
         self.manufacturer_access = 0x0041

@@ -569,10 +569,10 @@ class M3400(Eth2SerialVisaDevice):
         self.set_power_limit_negative(0)  # always fixed!
         self.set_current_limit_positive(abs(current_limit))
         self.set_current_limit_negative(0)  # always fixed!
-        self.set_voltage_limit_high(abs(voltage) * 1.05)
-        self.set_voltage_limit_low(abs(voltage) * 0.90)
+        self.set_voltage_limit_high(abs(voltage) * 1.15)
+        self.set_voltage_limit_low(0)
         self.set_voltage(abs(voltage))
-        #self.set_function("VOLT") 
+        self.set_function("VOLT") 
         self.set_output_state(1 if set_output else 0)
 
 

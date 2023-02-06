@@ -25,11 +25,12 @@ class CellStackRelayBoard():
         self.gpio = PCA9536(i2c, int(i2c_address_7bit))
         #super().__init__(i2c, int(i2c_address_7bit))    
         # Setup PCA9536 GPIO
-        self.gpio.reset_inversion()
-        self.gpio.set_pin_as_input(self.gpio_pin_0)
-        self.gpio.set_pin_as_input(self.gpio_pin_1)
-        self.gpio.set_pin_as_input(self.gpio_pin_2)
-        self.gpio.set_pin_as_input(self.gpio_pin_3)
+        self.gpio.configure_pins("1111", "0000", "0000")
+        # self.gpio.reset_inversion()
+        # self.gpio.set_pin_as_input(self.gpio_pin_0)
+        # self.gpio.set_pin_as_input(self.gpio_pin_1)
+        # self.gpio.set_pin_as_input(self.gpio_pin_2)
+        # self.gpio.set_pin_as_input(self.gpio_pin_3)
 
     def __str__(self) -> str:
         return f"CorePackRelayBoard using {self.gpio}"
@@ -62,6 +63,7 @@ class CellStackRelayBoard():
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    from time import sleep
     from rrc.eth2i2c import I2CPort
     from rrc.i2cbus import BusMux, I2CMuxedBus
     i2c = I2CPort("172.21.101.11")
@@ -69,7 +71,13 @@ if __name__ == "__main__":
     #bus = I2CMuxedBus(i2c, mux, 7)
     ib = CellStackRelayBoard(i2c)
 
-    print(ib.read_input(1))
+    while (1):
+        print(ib.read_input(1))
+        print(ib.read_input(2))
+        print(ib.read_input(3))
+        print(ib.read_input(4))
+        print("\n")
+        sleep(2)
 
     i2c.close()
     pass

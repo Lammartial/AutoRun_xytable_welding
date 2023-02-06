@@ -165,12 +165,12 @@ class RelayBoard4Relay4GPIO:
     def __validate_relay_pin(self, relay_n: int):
         if relay_n not in RelayBoard4Relay4GPIO.relay_dict.keys():
             raise ValueError(f"Relay pin number for the {str(self)} must be between "
-                             f"1 and {max(RelayBoard4Relay4GPIO.relay_dict.keys())}. You selected {relay_n}")
+                             f"{min(RelayBoard4Relay4GPIO.relay_dict.keys())} and {max(RelayBoard4Relay4GPIO.relay_dict.keys())}. You selected {relay_n}")
 
     def __validate_gpio_pin(self, gpio_n: int):
         if gpio_n not in RelayBoard4Relay4GPIO.gpio_dict.keys():
             raise ValueError(f"GPIO pin number for {str(self)} must be between "
-                             f"1 and {max(RelayBoard4Relay4GPIO.gpio_dict.keys())}. You selected {gpio_n}")
+                             f"{min(RelayBoard4Relay4GPIO.gpio_dict.keys())} and {max(RelayBoard4Relay4GPIO.gpio_dict.keys())}. You selected {gpio_n}")
 
 #--------------------------------------------------------------------------------------------------
 
