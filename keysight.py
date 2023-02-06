@@ -252,13 +252,17 @@ class DAQ970A(Eth2SerialVisaDevice):
         # trick to use function in NI Teststand
         slot = int(slot)
         channel = int(channel)
+        scale_str_list = ("AUTO", "1 uA", "10 uA", "100 uA", "1 mA", "10 mA", "100 mA", "1 A")
+        scale_div_list = (1, 1e+6, 1e+5, 1e+4, 1e+3, 1e+2, 1e+1, 1)
         assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
         assert ((channel == 21) or (channel == 22)), ValueError('Invalid channel. Only 21 or 22 allowed.')
+        assert(scale in scale_str_list), ValueError('Invalid scale. Check the available scale values in the function description.')
+        scale_index = scale_str_list.index(scale)
         try:
             slot_str = str(slot)
             channel_str = str(channel).zfill(2)
             cmd = f"MEAS:CURR:DC? {scale},(@{slot_str}{channel_str})"
-            return float(self.request(cmd, 5000))
+            return float(self.request(cmd, 5000)/scale_div_list[scale_index])
         except Exception as ex:
             #_log.exception(ex)
             raise
