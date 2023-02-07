@@ -24,7 +24,8 @@ from rrc.battery_errors import BatteryError, BatterySecurityError
 from rrc.smbus import BusMaster
 from rrc.smartbattery import Cmd
 from rrc.chipsets.bq import ChipsetTexasInstruments
-import struct, numpy
+import struct
+from datetime import datetime
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -35,9 +36,6 @@ DEBUG = 1
 from rrc.custom_logging import getLogger, logger_init
 
 # --------------------------------------------------------------------------- #
-
-
-
 
 def _od2t(d: OrderedDict) -> tuple:
     """To convert an ordered dict to a tuple of values for TestStand Container.
@@ -307,7 +305,6 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             return (int(self._operation_status["sec"]) == 1) # full access
         return (int(self._operation_status["sec"]) in [1, 2]) # unsealed OR full access
 
-
     #---UNSEALED HELPER FOR PRODUCTION-------------------------------------------------------------
 
     # ...
@@ -317,7 +314,6 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # no encrypted keys here!
         #
         return self.unseal(0x8D21FAC3, 0x63DB2CE4)  # low-word goes first to battery
-
 
     # def operation_status(self):
     #     return int.from_bytes((self.read_mac_data(0x0054)[:2]), "little")
@@ -1458,25 +1454,115 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "scd2":  unpack_from("<b", buf, 0)[0],
         }))
 
-    def get_udi(self) -> tuple:
-        str = self.read_flash_block(0x4041, 32, True)
-        return str[0:12]
+    def get_mib(self, length: int, hexi : bool) -> str|tuple:
+        """
+         Reads 32 bytes of Manufacturer info block, starting at address 0x4041.
+
+        Args:
+            length (int): length of manufacturer info data
+            hexi (bool): True - returns tuple of ASCII codes, False - returns string 
+
+        Returns:
+            str | tuple:  Manufacturer info block A01 - (A01 + length)
+        """
+        hexi = bool(hexi)
+        length = int(length)
+        assert((length) > 0 and (length <= 32)), ValueError('Invalid block length. Allowed length is 1 .. 32')
+        if (hexi == False):
+            # string
+            mib: bytearray = self.read_flash_block(flash_address= 0x4041, length= 32, hexi= False)
+            mib_str = "".join(map(chr, mib))
+            mib_str = mib_str[0:length]
+            return mib_str
+        else:
+            mib : tuple = tuple(self.read_flash_block(flash_address= 0x4041, length= 32, hexi= False))
+            mib = mib[0:length]
+            return mib
+
+    def set_mib(self, data: str, length: int, address: int) -> bool:
+        """
+        Writes "length" bytes of "data" to Manufacturer info block, starting at "address"
+
+        Args:
+            data (tuple): manufacturer info data (dec or hex)
+            length (int): length of manufacturer info data
+            address (int): starting address
+
+        Returns:
+            bool: True - success, False - failed
+        """
+        data = str(data)
+        length = int(length)
+        address = int(address)
+        assert((length) > 0 and (length <= 32)), ValueError('Invalid block length. Allowed length is 1 .. 32')
+        assert((address >= 0x4041) and (address <= 0x4060)), ValueError('Invalid address. Allowed 0x4041 .. 0x4060')
+        assert((address-1) + len(data) <= 0x4060), ValueError('Invalid data length or start address. Block of data out of range 0x4041 ..0x4060')
+        try:
+            start_ind = address - 0x4041
+            stop_ind = start_ind + len(data)
+            mib = self.get_mib(32, True)
+            #udi : str = "12345678123456781234567812345678"
+            #ss : str = ''.join(map(str,data))
+            new_mib = mib[:start_ind] + data[:length] + mib[stop_ind:]
+            print(new_mib)
+            res = self.write_flash_block(0x4041, bytearray(new_mib))
+        except Exception:
+            raise
+        return res
+
+    def set_manufacturer_date(self) -> bool:
+        """
+        Writes and verifies manufacturer date to the register 0x1B ManufacturerDate()
+
+        Returns:
+            bool: True - success, False - failed
+        """
+        try:
+            now = datetime.now()
+            bq_date = int(now.day + 32*now.month + (now.year - 1980)*512)
+            cmd_manufacturer_date = 0x1B
+            res = self.writeWordVerified(cmd= cmd_manufacturer_date, w= bq_date)
+        except Exception:
+            raise
+        return bool(res)
 
     def get_rsoc(self) -> int:
+        """
+        Returns the predicted remaining battery capacity as a percentage of
+        FullChargeCapacity()
+
+        Returns:
+            int: RSOC, %
+        """
         buf = self.soc()
         return int(buf[0])
 
     def get_current(self) -> float:
+        """
+        Returns the measured current.
+
+        Returns:
+            float: _description_
+        """
         buf =  self.current()
         return float(buf[0])
     
     def reset_errors(self) -> None:
+        """
+        Resets Black Box Recorder and Permanent Fail Data.
+        """
         # Black Box Recorder reset
         self.manufacturer_access = 0x002A
         # Permanent Fail Data Reset
         self.manufacturer_access = 0x0029
     
     def check_no_errors(self) -> bool:
+        """
+        Checks Safety Status and Permanent Fail Status.
+
+        Returns:
+            bool: True - no errors, False - errors detected.
+        """
         no_errs = True
         # Safety status
         self.manufacturer_access = 0x0051
@@ -1563,16 +1649,26 @@ if __name__ == "__main__":
     logger_init(filename_base="local_log")  ## init root logger
     _log = getLogger(__name__, DEBUG)
 
-    i2c_port = I2CPort("172.21.101.31", 2101)
+
+    i2c_port = I2CPort(resource_str = "172.21.101.31:2101")
     busmux = BusMux(i2c_port, address=0x77)
+    
     for i in range(1,9):
         busmux.setChannel(i)
         print(i2c_port.i2c_bus_scan())
+    
     auto_muxed_i2cbus = I2CMuxedBus(i2c_port, busmux, 6)
     busmaster = BusMaster(auto_muxed_i2cbus)
     bat = BQ40Z50R2(busmaster)
-    buf = bat.battery_status()
-    print("BatteryStatus:", buf)
+
+    #udi:tuple = (8, 7, 6, 5, 4, 3, 2, 1, 8, 7, 6, 5, 4, 3, 2, 1, 8, 7, 6, 5, 4, 3, 2, 1, 8, 7, 6, 5, 4, 3, 2, 1)
+    mib: str = "8765432187654321"
+    bat.set_mib(data= mib, length= 16, address= 0x4051)
+
+    bat.set_manufacturer_date()
+
+    #buf = bat.battery_status()
+    #print("BatteryStatus:", buf)
 
     #t1 = dt.now()
 
@@ -1610,9 +1706,9 @@ if __name__ == "__main__":
 
     #print(bat.get_current())
 
-    print(bat.Gauge_enable())
+    #print(bat.Gauge_enable())
 
-    print(bat.BlackBox_enable())
+    #print(bat.BlackBox_enable())
 
     #print(bat.check_no_errors())
     #print(bat.get_rsoc())
