@@ -238,7 +238,7 @@ def tk_callbacks(mainframe: ttk.Frame, row_itr: Iterator, resource_string: str):
 
 #--------------------------------------------------------------------------------------------------
 
-def tk_main(resource_string: str, title: str = "ENTER UID"):
+def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -1):
     """ Run tkinter.
 
     This runs in the Main Thread.
@@ -386,14 +386,25 @@ def tk_main(resource_string: str, title: str = "ENTER UID"):
     # Set a minsize for the window, and place it in the middle
     #root.update()
     root.minsize(root.winfo_width(), root.winfo_height())
-    x_cordinate = int((root.winfo_screenwidth() / 2) - (root.winfo_width() / 2))
-    y_cordinate = int((root.winfo_screenheight() / 2) - (root.winfo_height() / 2))
-    root.geometry("+{}+{}".format(x_cordinate-50, y_cordinate-180))
+    # for some reasonm the winfo_width() and _heihgt() do not show correct values here
+    #_w = root.winfo_width()
+    #_h = root.winfo_height()
+    _w = 375  # width set manually
+    _h = 485  # height set manually
+    if test_socket < 0:
+        _x = int((root.winfo_screenwidth() / 2) - (_w / 2))
+        _y = int((root.winfo_screenheight() / 2) - (_h / 2))
+        #root.geometry(f"+{_x-50}+{_y-180}")
+        root.geometry(f"+{_x}+{_y}")
+    else:
+        _x = 50 + test_socket * (_w + 20)
+        _y = 50
+        root.geometry(f"+{_x}+{_y}")
     #root.attributes('-alpha', 1.0)  # now make the main window visible again
 
     root.update()
     root.deiconify()
-
+    print (root.winfo_geometry())
     root.focus_force()  # this is to activate the window again (important after programmatically closed)
     if allow_manual_edit:
         entry_lst[0][1].focus_set()   # now set the focus to the first dialog element
@@ -452,7 +463,7 @@ def aio_main(aio_initiate_shutdown: threading.Event):
     #_log.debug('aio_main ending')
 
 
-def main(resource_str: str, title: str = "ENTER UDI"):
+def main(resource_str: str, title: str = "ENTER UDI", test_socket: int = -1):
     """Set up working environments for asyncio and tkinter.
 
     This runs in the Main Thread.
@@ -466,7 +477,7 @@ def main(resource_str: str, title: str = "ENTER UDI"):
     aio_thread = threading.Thread(target=aio_main, args=(aio_initiate_shutdown,), name="Asyncio's Thread")
     aio_thread.start()
 
-    tk_main(resource_str, title)
+    tk_main(resource_str, title, test_socket=int(test_socket))
 
     # Close the asyncio permanent loop and join the thread in which it runs.
     aio_initiate_shutdown.set()
@@ -502,7 +513,7 @@ def identify_uut(test_socket: int, requested_udi: list, scanner_resource_str: st
     udi_to_scan = [
         UDIScanCtrlItem(item, validate_udi_by_string_at_position_1) for item in requested_udi
     ]
-    main(_scanner, title=title)
+    main(_scanner, title=title, test_socket=int(test_socket))
     res = tuple()
     for item in udi_to_scan:
         _log.debug(f"UDI({item.name})={item.scanned_udi}")
@@ -529,7 +540,7 @@ if __name__ == '__main__':
         #UDIScanCtrlItem("HEINZ", validate_udi_by_string_at_position_1),
     ]
 
-    main("172.21.101.22:2000", title="TEST SOCKET SCANNER")
+    main("172.21.101.22:2000", title="TEST SOCKET SCANNER", test_socket=-1)
     #main("COM24,9600,8N1", title="TEST HANDHELD SCANNER")
     #print(f"SCANNER -> {scanned_udi}")
 

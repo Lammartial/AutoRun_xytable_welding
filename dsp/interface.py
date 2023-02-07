@@ -83,7 +83,7 @@ class DspInterface:
 
         """
 
-        d = self.get_parameter_for_testrun(test_type, station_id, line_id, test_socket)
+        d = self.get_parameter_for_testrun(test_type, station_id, int(line_id), int(test_socket))
         order = ["serial_number", "test_program_id", "part_number"]
         return tuple([(d[field] if d[field] is not None else "") for field in order])
 
@@ -96,7 +96,7 @@ class DspInterface:
         for result in result_list:
             _log.debug(f"To send: {result}")
             response = requests.post(f"{self.API_BASE_URL}/result", json=result)
-            if response.status_code != 200:
+            if response.status_code not in [200, 202]:
                 # did not work, so keep this record for next round
                 _remaining_list.append(result)
         return _remaining_list
@@ -154,7 +154,8 @@ if __name__ == "__main__":
     # define the route
     #api_url = "https://production-network.rrc/testcontrol"
     API_URL = "http://127.0.0.1:8000"
-    #API_URL = "http://172.22.2.99:8000"
+    #API_URL = "http://172.22.2.40:9925"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
+
 
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
     dsp = DspInterface(API_URL, None)
@@ -170,6 +171,8 @@ if __name__ == "__main__":
     # 2.1 load program_id
     # 2.2 scan UDI
     # 2.3 run program sequence
+
+    exit(1)
 
     # 3. combine the test-run result information from TestStand with the provided test_run data
     #    and save it to a JSON file before sending it
