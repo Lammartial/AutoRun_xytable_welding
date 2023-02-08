@@ -52,8 +52,7 @@ class DAQ970A(Eth2SerialVisaDevice):
 
         """
         super().__init__(resource_str, int(dev_channel))
-        assert (int(card_slot) > 0 and int(card_slot) < 4), ValueError(f"Error, 'card_slot' must be in 1..3 but was {int(card_slot)}")
-        self.card_slot = int(card_slot)
+        self.change_card_slot(card_slot)
 
     def __str__(self) -> str:
         return f"DAQ970A VISA device on {super().__str__()}"
@@ -112,16 +111,27 @@ class DAQ970A(Eth2SerialVisaDevice):
         return f"{slot if slot > 0 else self.card_slot}{channel:02d}"
         
     #----------------------------------------------------------------------------------------------
+
+    def change_card_slot(self, new_slot: int):
+        """
+        Changes the slot number of a device instance.
+
+        Args:
+            new_slot (int): slot number (1, 2, 3)
+        """
+        assert (int(new_slot) > 0 and int(new_slot) < 4), ValueError(f"Error, 'card_slot' must be in 1..3 but was {int(new_slot)}")        
+        self.card_slot = int(new_slot)
+
+    #----------------------------------------------------------------------------------------------
     
-    def get_resistance_rounded(self, slot: int, channel: int, ndigits: int = 3) -> float:
-        return round(self.get_resistance(int(slot), int(channel)), ndigits=int(ndigits))
+    def get_resistance_rounded(self, channel: int, ndigits: int = 3) -> float:
+        return round(self.get_resistance(int(channel)), ndigits=int(ndigits))
     
-    def get_resistance(self, slot: int, channel: int) -> float:
+    def get_resistance(self, channel: int) -> float:
         """
         Returns resistance measurement.
 
         Args:
-            slot (int): slot number (1, 2, 3)
             channel (int): channel number (1 ... 20)
 
         Raises:
@@ -131,9 +141,7 @@ class DAQ970A(Eth2SerialVisaDevice):
             float: resistance
         """
         # trick to use function in NI Teststand
-        slot = int(slot)
         channel = int(channel)
-        assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_resistance: Allowed slot range is 1 .. 3')
         assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_resistance: Allowed channel range is 1 .. 20.')
         try:
             cmd = "MEAS:RES? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
@@ -143,15 +151,14 @@ class DAQ970A(Eth2SerialVisaDevice):
             raise
 
 
-    def get_4w_resistance_rounded(self, slot: int, channel: int, ndigits: int = 3) -> float:
-        return round(self.get_4w_resistance(int(slot), int(channel)), ndigits=int(ndigits))
+    def get_4w_resistance_rounded(self, channel: int, ndigits: int = 3) -> float:
+        return round(self.get_4w_resistance(int(channel)), ndigits=int(ndigits))
     
-    def get_4w_resistance(self, slot: int, channel: int):
+    def get_4w_resistance(self, channel: int):
         """
         Returns 4-wire resistance measurement.
 
         Args:
-            slot (int): slot number (1, 2, 3)
             channel (int): channel number (1 ... 10)
 
         Raises:
@@ -161,9 +168,7 @@ class DAQ970A(Eth2SerialVisaDevice):
             float: resistance
         """
         # trick to use function in NI Teststand
-        slot = int(slot)
         channel = int(channel)
-        assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_4w_resistance: Allowed slot range is 1 .. 3')
         assert ((channel >= 1) and (channel <= 10)), ValueError('Error, get_4w_resistance: Allowed channel range is 1 .. 10.')
         try:
             cmd = "MEAS:FRES? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
@@ -173,15 +178,14 @@ class DAQ970A(Eth2SerialVisaDevice):
             raise
 
     
-    def get_VDC_rounded(self, slot: int, channel: int, ndigits: int = 3) -> float:
-        return round(self.get_VDC(int(slot), int(channel)), ndigits=int(ndigits))
+    def get_VDC_rounded(self, channel: int, ndigits: int = 3) -> float:
+        return round(self.get_VDC(int(channel)), ndigits=int(ndigits))
     
-    def get_VDC(self, slot: int, channel: int) -> float:
+    def get_VDC(self, channel: int) -> float:
         """
         Returns DC voltage measurement.
 
         Args:
-            slot (int): slot number (1, 2, 3)
             channel (int): channel number (1 ... 20)
 
         Raises:
@@ -191,9 +195,7 @@ class DAQ970A(Eth2SerialVisaDevice):
             float: VDC
         """
         # trick to use function in NI Teststand
-        slot = int(slot)
         channel = int(channel)
-        assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_VDC: Allowed slot range is 1 .. 3')
         assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VDC: Allowed channel range is 1 .. 20.')
         try:
             cmd = "MEAS:VOLT:DC? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
@@ -202,15 +204,14 @@ class DAQ970A(Eth2SerialVisaDevice):
             #_log.exception(ex)
             raise
     
-    def get_VAC_rounded(self, slot: int, channel: int, ndigits: int = 3) -> float:
-        return round(self.get_VAC(int(slot), int(channel)), ndigits=int(ndigits))
+    def get_VAC_rounded(self, channel: int, ndigits: int = 3) -> float:
+        return round(self.get_VAC(int(channel)), ndigits=int(ndigits))
     
-    def get_VAC(self, slot: int, channel: int) -> float:
+    def get_VAC(self, channel: int) -> float:
         """
         Returns AC voltage measurement.
 
         Args:
-            slot (int): slot number (1, 2, 3)
             channel (int): channel number (1 ... 20)
 
         Raises:
@@ -220,13 +221,9 @@ class DAQ970A(Eth2SerialVisaDevice):
             float: VAC
         """
         # trick to use function code in NI Teststand
-        slot = int(slot)
         channel = int(channel)
-        assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_VAC: Allowed slot range is 1 .. 3')
         assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VAC: Allowed channel range is 1 .. 20.')
         try:
-            slot_str = str(slot)
-            channel_str = str(channel).zfill(2)
             cmd = "MEAS:VOLT:AC? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
             return float(self.request(cmd, 5000))
         except Exception as ex:
@@ -234,10 +231,10 @@ class DAQ970A(Eth2SerialVisaDevice):
             raise
 
 
-    def get_ADC_rounded(self, slot: int, channel: int, ndigits: int = 3) -> float:
-        return round(self.get_ADC(int(slot), int(channel)), ndigits=int(ndigits))
+    def get_ADC_rounded(self, channel: int, ndigits: int = 3) -> float:
+        return round(self.get_ADC(int(channel)), ndigits=int(ndigits))
     
-    def get_ADC(self, slot: int, channel: int, scale: str = "1 A") -> float:
+    def get_ADC(self, channel: int, scale: str = "1 A") -> float:
         """
         Returns DC current measurement.
 
@@ -253,10 +250,8 @@ class DAQ970A(Eth2SerialVisaDevice):
             float: ADC
         """
         # trick to use function in NI Teststand
-        slot = int(slot)
         channel = int(channel)
         scale_str_list = ("AUTO", "1 uA", "10 uA", "100 uA", "1 mA", "10 mA", "100 mA", "1 A")
-        assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
         assert ((channel == 21) or (channel == 22)), ValueError('Invalid channel. Only 21 or 22 allowed.')
         assert(scale in scale_str_list), ValueError('Invalid scale. Check the available scale values in the function description.')
         try:
@@ -266,10 +261,10 @@ class DAQ970A(Eth2SerialVisaDevice):
             #_log.exception(ex)
             raise
 
-    def get_temp_rounded(self, slot: int, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str, ndigits: int = 3) -> float:
-        return round(self.get_temp(int(slot), int(channel), tran_type, int(rtd_resist), int(fth_type), tc_type), ndigits=int(ndigits))
+    def get_temp_rounded(self, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str, ndigits: int = 3) -> float:
+        return round(self.get_temp(int(channel), tran_type, int(rtd_resist), int(fth_type), tc_type), ndigits=int(ndigits))
     
-    def get_temp(self, slot: int, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str) -> float:
+    def get_temp(self, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str) -> float:
         """
         Returns temperature measurement.
 
@@ -288,11 +283,9 @@ class DAQ970A(Eth2SerialVisaDevice):
             float: Temperature
         """
         # trick to use function in NI Teststand
-        slot = int(slot)
         channel = int(channel)
         rtd_resist = int(rtd_resist)
         fth_type = int(fth_type)
-        assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
         assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
         try:
             match tran_type:
@@ -359,7 +352,7 @@ if __name__ == "__main__":
 
     #print(daq970a.get_VAC(1,4))
 
-    print(daq970a.get_ADC(1, 22, "1 mA"))
+    print(daq970a.get_ADC(channel= 22, scale= "1 mA"))
 
     #print(daq970a.get_temp(1, 1, "DEF", 0, 0, "B"))
 
