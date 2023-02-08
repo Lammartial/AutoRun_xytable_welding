@@ -300,6 +300,38 @@ class M3400(Eth2SerialVisaDevice):
         cmd = "CURR?"
         return float(self.request(cmd, 2000))
 
+    #[SOURce:]CURRent:SLEW:POSitive <NRf+>
+    def set_current_slew_positive(self, rate: float) -> None:
+        """
+        This command sets the current rising slew rate of the power supply.
+
+        Args:
+            rate (float): current slew rate, seconds
+        """
+        try:
+            rate = float(rate)
+            rate_str =  f"{rate:05.2f}"
+            cmd = "CURR:SLEW:POS " + rate_str
+            self.send(cmd)
+        except Exception as ex:
+            raise
+
+    #[SOURce:]CURRent:SLEW:NEGative <NRf+> 
+    def set_current_slew_negative(self, rate: float) -> None:
+        """
+        This command sets the current falling slew rate of the power supply.
+
+        Args:
+            rate (float): current slew rate, seconds
+        """
+        try:
+            rate = float(rate)
+            rate_str =  f"{rate:05.2f}"
+            cmd = "CURR:SLEW:NEG " + rate_str
+            self.send(cmd)
+        except Exception as ex:
+            raise
+
     #[SOURce:]CURRent[:LEVel]:LIMit:POSitive <NRf+>
     def set_current_limit_positive(self, curr: float) -> None:
         """
@@ -446,6 +478,38 @@ class M3400(Eth2SerialVisaDevice):
             return float(self.request(cmd, 2000))
         except Exception as ex:
             #_log.exception(ex)
+            raise
+
+    #[SOURce:]VOLTage:SLEW:POSitive <NRf+>
+    def set_voltage_slew_positive(self, rate: float) -> None:
+        """
+        This command sets the voltage rising slew rate of the power supply.
+
+        Args:
+            rate (float): voltage slew rate, seconds
+        """
+        try:
+            rate = float(rate)
+            rate_str =  f"{rate:05.2f}"
+            cmd = "VOLT:SLEW:POS " + rate_str
+            self.send(cmd)
+        except Exception as ex:
+            raise
+
+    #[SOURce:]VOLTage:SLEW:NEGative <NRf+>  
+    def set_curren_slew_negative(self, rate: float) -> None:
+        """
+        This command sets the voltage falling slew rate of the power supply.
+
+        Args:
+            rate (float): voltage slew rate, seconds
+        """
+        try:
+            rate = float(rate)
+            rate_str =  f"{rate:05.2f}"
+            cmd = "VOLT:SLEW:NEG " + rate_str
+            self.send(cmd)
+        except Exception as ex:
             raise
 
     #[SOURce:]VOLTage[:LEVel]:LIMit[:HIGH] <NRf+>
