@@ -7,7 +7,7 @@ from pathlib import Path
 # Logging
 # --------------------------------------------------------------------------- #
 
-DEBUG = 0
+DEBUG = 2
 
 from rrc.custom_logging import getLogger, logger_init
 
@@ -54,14 +54,39 @@ class DspInterface:
         runparams = response.json()
         _log.debug(runparams)
         self.api = {**self.api, **runparams}
-        # # check that the test_type matches the test_program_id somehow 
-        # # as it has shown that under development the YAML moduification 
+        # # check that the test_type matches the test_program_id somehow
+        # # as it has shown that under development the YAML moduification
         # # is being forgotten very often.
-        # _x = self.api["test_type"].split("_")    
+        # _x = self.api["test_type"].split("_")
         # _c = _x[0][:4] if "CELL" in _x[0] else _x[0]
         # _p = self.api["test_program_id"]
         # #if c not in self.api["test_program_id"].upper():
         # #    raise Exception(f"Wrong station type configured in YAML file - cannot start test! {_c} {_p}")
+        return runparams
+
+    def get_parameter_for_testrun2(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> dict:
+        _log = getLogger(__name__, DEBUG)
+        response = requests.get(f"{self.API_BASE_URL}/GET_PARAMETER_FOR_TEST_RUN",
+                                params= {"station_id": station_id, "line_id": line_id, "test_socket": test_socket })
+                                #params= {"test_type": test_type, "station_id": station_id, "line_id": line_id, "test_socket": test_socket })
+        if response.status_code != 200:
+            raise Exception("Cannot start test!", response.json())
+        runparams = response.json()
+        _log.debug(runparams)
+        self.api = {**self.api, **runparams}
+        return runparams
+
+
+    def get_serial_number_for_udis(self, test_type: str, station_id: str, line_id: str, test_socket: str, udi1: str, udi2: str) -> dict:
+        _log = getLogger(__name__, DEBUG)
+        response = requests.get(f"{self.API_BASE_URL}/GET_SERIAL_NUMBER_FOR_UDIS",
+                                params= {"station_id": station_id, "line_id": line_id, "test_socket": test_socket })
+                                #params= {"test_type": test_type, "station_id": station_id, "line_id": line_id, "test_socket": test_socket, "udi_pcba": udi1, "udi_stack": udi2 })
+        if response.status_code != 200:
+            raise Exception("Cannot start test!", response.json())
+        runparams = response.json()
+        _log.debug(runparams)
+        self.api = {**self.api, **runparams}
         return runparams
 
 
@@ -95,7 +120,7 @@ class DspInterface:
         _remaining_list = []
         for result in result_list:
             _log.debug(f"To send: {result}")
-            response = requests.post(f"{self.API_BASE_URL}/result", json=result)
+            response = requests.post(f"{self.API_BASE_URL}/REPORT_TEST_RESULT", json=result)
             if response.status_code not in [200, 202]:
                 # did not work, so keep this record for next round
                 _remaining_list.append(result)
@@ -154,7 +179,7 @@ if __name__ == "__main__":
     # define the route
     #api_url = "https://production-network.rrc/testcontrol"
     API_URL = "http://127.0.0.1:8000"
-    #API_URL = "http://172.22.2.40:9925"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
+    API_URL = "http://172.22.2.40:9927"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
 
 
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
@@ -162,16 +187,18 @@ if __name__ == "__main__":
 
     # 1. request information from MPI to start the correct test & UDI:
     #    create the GET route which contains TestStation, LineID and TestSocket
-    test_run = dsp.get_parameter_for_testrun("COREPACK_TEST", "PDPC1302", 1, 3)
-    ts_test_run = dsp.ifc_get_parameter_for_testrun("PCBA_TEST", "PDPC1302", 1, 3)
-    print(ts_test_run)
+    test_run = dsp.get_parameter_for_testrun2("COREPACK_TEST", "PDPC1302", 1, 3)
+    #ts_test_run = dsp.ifc_get_parameter_for_testrun("PCBA_TEST", "PDPC1302", 1, 3)
+    #print(ts_test_run)
 
     # 2. start the test-run of given sequence with teststand
-    _log.info("TESTRUN:", test_run)
+    _log.info(f"TESTRUN: {test_run}")
     # 2.1 load program_id
     # 2.2 scan UDI
     # 2.3 run program sequence
 
+    serial = dsp.get_serial_number_for_udis("COREPACK_TEST", "PDPC1302", 1, 3, "2163512635", "712737632")
+    _log.info(f"SERIAL: {serial}")
     exit(1)
 
     # 3. combine the test-run result information from TestStand with the provided test_run data

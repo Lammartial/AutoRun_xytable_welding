@@ -1,80 +1,171 @@
 %YAML 1.2
 ---
-
 #
 # DSP REST interface
 #
-dsp_api_base_url:  "http://127.0.0.1:8000"  # mockup on localhost
+#dsp_api_base_url:  "http://127.0.0.1:8000"  # mockup on localhost
 #dsp_api_base_url:  "http://172.22.2.99:8000"  # mockup on sv-production
+#dsp_api_base_url:  "http://172.22.2.40:9925"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
 
+#
 #
 # Configures the kind of test station as well as the
 # hardware of PC and assigned measurement hardware
 #
-station_id: PCPD1302         # AD Name of PC
-line_id:    1                # 1 .. 9
-test_type:  PCBA_TEST        # CELLSTACK_TEST, PCBA_TEST, COREPACK_TEST, EOL_TEST
+
+line_id:        1                # 1 .. 9
+test_type:      UNDETERMINED     # CELLSTACK_TEST, PCBA_TEST, COREPACK_TEST, EOL_TEST
+station_id:     PL1-WS102        # Name of PC: PL1-WS102=CELLSTACK_TEST
+                                 #             PL1-WS103=PCBA_TEST
+                                 #             PL1-WS111=CORPACK_TEST
+                                 #             PL1-WS113=EOL_TEST
+line_network:   "172.25.101.0"   # Line specific network range
 
 #
-# Configuration setup depending on the test_type selected for this station above
-#
-PCBA_TEST:
+#------------------------------------------------------------------------------
+# Configuration setup depending on the test_type selected
+# for this station above:
+#------------------------------------------------------------------------------
+CELLSTACK_TEST:
+  dsp_api_base_url:  "http://172.22.2.40:9925"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
+  # There is NO I2C MUX on cell stack tester.
+  #
   # List of TestSocket configurations
   # Minimum is one (the first) socket.
   # Make sure the index is a string.
   test_sockets:
-    "1":
+    "0":
       resource_strings:
-        ncd_ethi2c:         "172.21.101.11:2101"  # NCD.io Eth->I2C
-        scanner:            "172.21.101.12:2000"  # Eth->UART
-        feasa_led_analyzer: "172.21.101.12:3000"  # Eth->UART   
-        daq970a:            "TCPIP0::172.21.101.13::inst0::INSTR"
-        m3400:              "TCPIP0::172.21.101.14::inst0::INSTR"
+        eth_to_i2c:   "172.21.101.11:2101"  # RRC Lager
+        scanner:      "COM3,9600,8N1"       # RRC Lager
+        icr_bt3562:   "172.21.101.12:23"    # RRC Lager
+        mux_sw1001:   "172.21.101.13:23"    # RRC Lager
+        # eth_to_i2c:   "172.25.101.11:2101"
+        # scanner:      "COM3,9600,8N1"
+        # icr_bt3562:   "172.25.101.12:23"
+        # mux_sw1001:   "172.25.101.13:23"
+#------------------------------------------------------------------------------
+PCBA_TEST:
+  dsp_api_base_url:  "http://172.22.2.40:9926"  # Orbis DSP REST API
+  i2c_mux:
+    # NCD 8x I2C-MUX:
+    #  bus 1: Shunt calibration
+    #  bus 2: smbus to battery (UUT)
+    #  bus 3: GPIO Relayboard
+    #  bus 4: Cell voltage simulation
+    #  bus 5: spare i2c bus to UUT
+    #  bus 6,7,8: unused
+    num_bus: 8
+    device_to_bus_map:
+      # NOTE: This order may not be changed.
+      #       Append new mappings on the end.
+      #       (list is passed to TS as tuple without names)
+      shunt_calibration: 1
+      smbus_dut: 2
+      gpio_relayboard: 3
+      cell_voltage_simulation: 4
+      spare_i2c_dut: 5
+  test_sockets:
+    "0":
+      resource_strings:
+        eth_to_i2c:  "172.21.101.21:2101"  #            RRC Lager
+        scanner:     "172.21.101.22:2000"  # Eth->UART  RRC Lager
+        led_ch9121:  "172.21.101.22:3000"  # Eth->UART  RRC Lager
+        # Following are shared with ALL sockets
+        daq_daq970a: "TCPIP0::172.21.101.23::inst0::INSTR"  # RRC Lager
+        psu_e1206:   "TCPIP0::172.21.101.24::inst0::INSTR"  # RRC Lager
+        # eth_to_i2c:  "172.25.101.30:2101"
+        # scanner:     "172.25.101.31:2000"
+        # led_ch9121:  "172.25.101.31:3000"
+        # # Following are shared with ALL sockets
+        # daq_daq970a: "TCPIP0::172.25.101.36::inst0::INSTR"
+        # psu_e1206:   "TCPIP0::172.25.101.37::inst0::INSTR"
+    "1":
+      resource_strings: # already correct IP addresses
+        eth_to_i2c:  "172.25.101.32:2101"
+        scanner:     "172.25.101.33:2000"
+        led_ch9121:  "172.25.101.33:3000"
+        # Following are shared with ALL sockets
+        daq_daq970a: "TCPIP0::172.25.101.36::inst0::INSTR"
+        psu_e1206:   "TCPIP0::172.25.101.37::inst0::INSTR"  # bridge to m3400/3900 devices
     "2":
       resource_strings:
-        ncd_ethi2c:         "172.21.101.151:2101"  
-        scanner:            "172.21.101.152:2000"
-        feasa_led_analyzer: "172.21.101.152:3000"      
-        daq970a:            "TCPIP0::172.21.101.153::inst0::INSTR"
-        m3400:              "TCPIP0::172.21.101.154::inst0::INSTR"
-    "3":
-      resource_strings:
-        ncd_ethi2c:         "172.21.101.155:2101" 
-        scanner:            "172.21.101.156:2000"
-        feasa_led_analyzer: "172.21.101.156:3000"      
-        daq970a:            "TCPIP0::172.21.101.157::inst0::INSTR"
-        m3400:              "TCPIP0::172.21.101.158::inst0::INSTR"
-
-
-CELLSTACK_TEST:
-  test_sockets:
-    "1":
-      resource_strings:
-        ncd_ethi2c:   "172.21.101.21:2101"
-        scanner:      "COM1,9600,8N1"
-        cell_tester:  "TCPIP0::172.21.101.22::inst0::INSTR"
-        cell_mux:     "TCPIP0::172.21.101.23::inst0::INSTR"
-
+        eth_to_i2c:  "172.25.101.34:2101"
+        scanner:     "172.25.101.35:2000"
+        led_ch9121:  "172.25.101.35:3000"
+        # Following are shared with ALL sockets
+        daq_daq970a: "TCPIP0::172.25.101.36::inst0::INSTR"
+        psu_e1206:   "TCPIP0::172.25.101.37::inst0::INSTR"  # bridge to m3400/3900 devices
+#------------------------------------------------------------------------------
 COREPACK_TEST:
+  dsp_api_base_url:  "http://172.22.2.40:9927"  # Orbis DSP REST API
+  i2c_mux:
+    # NCD 8x I2C-MUX:
+    #  bus 1: smbus to DUT
+    #  bus 2: gpio board (pca9536)
+    #  bus 3: reference temperature (sts21)
+    #  bus 4,5,6,7,8: unused
+    num_bus: 8
+    device_to_bus_map:
+      # NOTE: This order may not be changed.
+      #       Append new mappings on the end.
+      #       (list is passed to TS as tuple without names)
+
+      #gpio_board: 2
+      smbus_dut: 6
+      gpio_relayboard: 7
+      temp_meas: 8
   test_sockets:
+    "0":
+      resource_strings:
+        eth_to_i2c:    "172.21.101.31:2101"  # RRC lager
+        scanner:       "172.21.101.32:2000"  # RRC lager
+        led_ch9121:    "172.21.101.32:3000"  # RRC lager
+        psu_m3900_1:   "TCPIP0::172.21.101.33::inst0::INSTR"  # RRC lager
+        psu_m3900_2:   "TCPIP0::172.21.101.34::inst0::INSTR"  # RRC lager
+        icr_bt3561a_1: "172.21.101.35:23"  # RRC lager
+        icr_bt3561a_2: "172.21.101.36:23"  # RRC lager
+        #eth_to_i2c:    "172.25.101.40:2101"
+        #scanner:       "172.25.101.41:2000"
+        #led_ch9121:    "172.25.101.41:3000"
+        # Following are shared with ALL sockets
+        #icr_bt3562_1:  "172.25.101.44:23"
+        #icr_bt3562_2:  "172.25.101.45:23"
+        #psu_m3902c_1:  "TCPIP0::172.25.101.46::inst0::INSTR"
+        #psu_m3902c_2:  "TCPIP0::172.25.101.47::inst0::INSTR"
     "1":
       resource_strings:
-        ncd_ethi2c:   "172.21.101.31:2101"
-        scanner:      "172.21.101.32:2000"
-        led_analyzer: "172.21.101.32:3000"
-        m3900_1977:   "TCPIP0::172.21.101.33::inst0::INSTR"
-        m3900_1978:   "TCPIP0::172.21.101.34::inst0::INSTR"
-        bt3561a_1967: "172.21.101.35:23"
-        bt3561a_1968: "172.21.101.36:23"
-  
+        eth_to_i2c:    "172.25.101.42:2101"
+        scanner:       "172.25.101.43:2000"
+        led_ch9121:    "172.25.101.43:3000"
+        icr_bt3562_1:   "172.25.101.44:23"
+        icr_bt3562_2:   "172.25.101.45:23"
+        psu_m3902c_1:   "TCPIP0::172.25.101.46::inst0::INSTR"
+        psu_m3902c_2:   "TCPIP0::172.25.101.47::inst0::INSTR"
+#------------------------------------------------------------------------------
 EOL_TEST:
+  dsp_api_base_url:  "http://172.22.2.40:9928"  # Orbis DSP REST API
+  i2c_mux:
+    # NCD 8x I2C-MUX:
+    #  bus 1: smbus to DUT
+    #  bus 2: gpio board (pca9536)
+    #  bus 3: reference temperature (sts21)
+    #  bus 4,5,6,7,8: unused
+    num_bus: 8
+    device_to_bus_map:
+      # NOTE: This order may not be changed.
+      #       Append new mappings on the end.
+      #       (list is passed to TS as tuple without names)
+      smbus_dut: 6
+      gpio_relayboard: 7
+      temp_meas: 8
   test_sockets:
-    "1":
+    "0":
       resource_strings:
-        ncd_ethi2c:   "172.21.101.41:2101"
-        scanner:      "172.21.101.42:2000"
-        led_analyzer: "172.21.101.42:3000"
-        m3400:        "TCPIP0::172.21.101.43::inst0::INSTR"
+        eth_to_i2c:   "192.168.1.111:2101"                   # RRC lager
+        psu_e1206:    "TCPIP0::192.168.1.173::inst0::INSTR"  # RRC lager
+        #eth_to_i2c:   "172.25.101.50:2101"
+        #psu_e1206:    "TCPIP0::172.25.101.51::inst0::INSTR"  # bridge to m3400/3900 devices
 
 
 # END OF FILE

@@ -63,13 +63,16 @@ MOCK_PARTNUMBER = {
     }
 }
 
-@app.get("/parameter/{test_type}/{station_id}/{line_id}/{test_socket}", status_code=status.HTTP_200_OK)
-async def read_item(test_type, station_id, line_id, test_socket):
+
+@app.get("/GET_SERIAL_NUMBER_FOR_UDIS", status_code=status.HTTP_200_OK)
+async def get_serial(test_type, station_id, line_id, test_socket, udi_pcba, udi_stack):
+#@app.get("/parameter/{test_type}/{station_id}/{line_id}/{test_socket}", status_code=status.HTTP_200_OK)
+#async def read_item(test_type, station_id, line_id, test_socket):
     global next_serial, lock_next_serial, MOCK_PARTNUMBER
 
     # set the product to test for mockup: "RRC2040B" or "RRC2020B"
     _product_name = "RRC2020B"
-    _mock = MOCK_PARTNUMBER[_product_name]
+    #_mock = MOCK_PARTNUMBER[_product_name]
 
     #_serial = random.randint(1, 47236513)
     async with lock_next_serial:
@@ -77,7 +80,29 @@ async def read_item(test_type, station_id, line_id, test_socket):
         # some other thread-safe code here
         _locked_serial = str(next_serial)
 
-    _serial = None
+    return {
+        "serial_number": _locked_serial
+    }
+
+
+
+@app.get("/GET_PARAMETER_FOR_TEST_RUN", status_code=status.HTTP_200_OK)
+async def read_item2(test_type, station_id, line_id, test_socket):
+#@app.get("/parameter/{test_type}/{station_id}/{line_id}/{test_socket}", status_code=status.HTTP_200_OK)
+#async def read_item(test_type, station_id, line_id, test_socket):
+    global next_serial, lock_next_serial, MOCK_PARTNUMBER
+
+    # set the product to test for mockup: "RRC2040B" or "RRC2020B"
+    _product_name = "RRC2020B"
+    _mock = MOCK_PARTNUMBER[_product_name]
+
+    # #_serial = random.randint(1, 47236513)
+    # async with lock_next_serial:
+    #     next_serial += 1
+    #     # some other thread-safe code here
+    #     _locked_serial = str(next_serial)
+
+    # _serial = None
     match test_type:
         case "PCBA_TEST":
             _testprogram = f"{_mock['pcba'].split('-')[0]}_{_product_name}_PCBA-Test_A"
@@ -88,11 +113,11 @@ async def read_item(test_type, station_id, line_id, test_socket):
         case "COREPACK_TEST":
             _testprogram = f"{_mock['pre_assembly'].split('-')[0]}_{_product_name}_Corepack-Test_A"
             _part_number = _mock["pre_assembly"]
-            _serial = _locked_serial
+            #_serial = _locked_serial
         case "EOL_TEST":
             _testprogram = f"{_mock['product'].split('-')[0]}_{_product_name}_EOL-Test_A"
             _part_number = _mock["product"]
-            _serial = _locked_serial
+            #_serial = _locked_serial
         case _:
             _testprogram = "UNKNOWW"
             _part_number = None
@@ -103,24 +128,25 @@ async def read_item(test_type, station_id, line_id, test_socket):
         "test_socket": test_socket,
         "test_program_id": _testprogram,
         "part_number": _part_number,
-        "serial_number": _serial,
+        #"serial_number": _serial,
+        "serial_number": "",
     }
 
-@app.post("/result", response_model=Item, status_code=status.HTTP_202_ACCEPTED)
+@app.post("/REPORT_TEST_RESULT", response_model=Item, status_code=status.HTTP_202_ACCEPTED)
 async def create_item(item: Item):
     print(item)
     return item
 
 
-@app.post("/result_yyy")
-async def update_item(
-        *,
-        serial_number: int = Path(title="The serial number of the test item", ge=0, le=999999999999),
-        item: Item | None = None,
-        ):
-    results = {"serial_number": serial_number}
-    if item:
-        results.update({"item": item})
-    return results
+# @app.post("/result_yyy")
+# async def update_item(
+#         *,
+#         serial_number: int = Path(title="The serial number of the test item", ge=0, le=999999999999),
+#         item: Item | None = None,
+#         ):
+#     results = {"serial_number": serial_number}
+#     if item:
+#         results.update({"item": item})
+#     return results
 
 # END OF FILE

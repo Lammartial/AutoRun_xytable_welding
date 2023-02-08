@@ -13,8 +13,6 @@ from pymodbus.register_write_message import WriteMultipleRegistersResponse
 from pymodbus.exceptions import ModbusException
 from pymodbus.pdu import ExceptionResponse
 
-# our libs
-from .tools import filterString, createTimestamp, get_tz
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -97,7 +95,7 @@ class ModbusClient:
             word_order (str, optional): _description_. Defaults to Endian.Big.
 
         """
-        self._connection_str = connection_str
+
         self.byte_order = byte_order
         self.word_order = word_order
         self.group_by_gateway = group_by_gateway
@@ -150,15 +148,6 @@ class ModbusClient:
         _log.debug("GATEWAY: %s", self.gateway_str)
         _log.debug("UNIT: %s", self.unit_address)
 
-    def __str__(self) -> str:
-        return f"Modbus/TCP client at {self._connection_str}"
-
-    def __repr__(self) -> str:
-        return f"ModbusClient({self._connection_str}, unit_address={self.unit_address},\
-                 group_by_gateway={self.group_by_gateway}, byte_order={self.byte_order}, word_order={self.word_order})"
-
-    # ---------------------------------------------------------------------------------------------
-
     # to provide the with ... statement protector
     def __enter__(self):
         self.open()
@@ -202,6 +191,9 @@ class ModbusClient:
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
     log_modbus_version()
+
+    dev = ModbusClient("tcp:172.21.101.100:502")
+
     _log.info("End test")
 
 # END OF FILE

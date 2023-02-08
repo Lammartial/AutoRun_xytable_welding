@@ -50,7 +50,7 @@ class StationConfiguration:
         if int(self._own_network[2]) > 100:
             self._line_id = 100 - self._own_network[2]
         else:
-            self._line_id = self._own_network[2]  # line 1   
+            self._line_id = self._own_network[2]  # line 1
         self._CONFIG = None
         self.test_type = test_type
         self._filename = Path(filename)
@@ -82,11 +82,11 @@ class StationConfiguration:
         _ns = len(d[_test_type]["test_sockets"])
         assert (socket >= 0 and socket < _ns), ValueError(f"Socket must be in [0..{_ns}].")
         r = OrderedDict(self._CONFIG[_test_type]["test_sockets"][str(socket)]["resource_strings"])
-        # here we could change the network tuples 
+        # here we could change the network tuples
         # of the YAML resources by replacement
         #nw_correction = ".".join(d["line_network"].split(".")[:3])  # only the first three IP numbers
         # need a regex here ... todo
-        #return tuple([v.replace(xyz, nw_correction) for k,v in r.items()])      
+        #return tuple([v.replace(xyz, nw_correction) for k,v in r.items()])
         return tuple([v for k,v in r.items()])
 
 
@@ -101,7 +101,7 @@ class StationConfiguration:
         if "num_bus" not in mux:
             raise AttributeError(f"Missing 'i2c_mux.num_bus' attribute.")
         if "device_to_bus_map" not in mux:
-            raise AttributeError(f"Missing 'i2c_mux.device_to_bus_map' attribute.")        
+            raise AttributeError(f"Missing 'i2c_mux.device_to_bus_map' attribute.")
         result = mux["num_bus"], tuple([v for k,v in mux["device_to_bus_map"].items()])
         return result
 
@@ -111,12 +111,17 @@ class StationConfiguration:
         d = self._CONFIG
         _test_type = d["test_type"]
         _ns = len(d[_test_type]["test_sockets"])
+        if "dsp_api_base_url" in d:
+            _api_base_url = d["dsp_api_base_url"]  # one global base url
+        else:
+            _api_base_url = d[_test_type]["dsp_api_base_url"]  # allows for test specific base urls
+        if "station_id" not in d:
+            _station_id = self._hostname  # we are using the hostname
+        _api_base_url
         result = (
-            d["test_type"],         # str
-            #d["station_id"],        # str
-            self._hostname,         # str, replace by auto-detection
-            d["dsp_api_base_url"],  # str
-            #d["line_id"],           # int
+            _test_type,             # str
+            _station_id,            # str
+            _api_base_url,          # str
             self._line_id,          # int, replace by auto-detection
             _ns                     # int
         )
@@ -125,7 +130,7 @@ class StationConfiguration:
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    cfg = StationConfiguration("PCBA_TEST", filename=CONF_FILENAME_PROD)
+    cfg = StationConfiguration("PCBA_TEST", filename=CONF_FILENAME_DEV)
     #pprint(cfg._CONFIG)
     pprint(cfg.get_station_configuration())
     pprint(cfg.get_resource_strings_for_socket(0))
