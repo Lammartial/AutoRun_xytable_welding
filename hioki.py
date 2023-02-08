@@ -32,7 +32,7 @@ class Hioki_BT3561A(Eth2SerialDevice):
         super().__init__(resource_str, termination)
 
     def __str__(self) -> str:
-        return f"Hioki BT3561A device on {self.super().__str__()}"
+        return f"Hioki BT3561A device on {super().__str__()}"
 
     def __repr__(self) -> str:
         return f"Hioki_BT3561A({self.host}, {self.port}, termination={self.termination})"

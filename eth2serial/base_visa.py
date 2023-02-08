@@ -18,7 +18,7 @@ from rrc.custom_logging import getLogger, logger_init
 #--------------------------------------------------------------------------------------------------
 class Eth2SerialVisaDevice(object):
 
-    def __init__(self, resource_str: str, channel: int):
+    def __init__(self, resource_str: str, dev_channel: int):
         """
         Initialize the object with visa resource string (IP name).
         Example "TCPIP0::192.168.1.101::inst0::INSTR"
@@ -28,13 +28,13 @@ class Eth2SerialVisaDevice(object):
         """
         self.rm = ResourceManager()          # auto decision for backend
         self.resource_str = str(resource_str)
-        self.channel = int(channel)
+        self.dev_channel = int(dev_channel)
 
     def __str__(self) -> str:
-        return f"ETH to VISA bridge at {self.resource_str}:{self.channel}"
+        return f"ETH to VISA bridge at {self.resource_str}:{self.dev_channel}"
 
     def __repr__(self) -> str:
-        return f"Eth2SerialVisaDevice({self.resource_str}, {self.channel})"
+        return f"Eth2SerialVisaDevice({self.resource_str}, {self.dev_channel})"
 
     #----------------------------------------------------------------------------------------------
 
@@ -56,8 +56,8 @@ class Eth2SerialVisaDevice(object):
             self.session.timeout = timeout
             # In case of use without channel separation
             chn = ""
-            if (self.channel != 0):
-                chn = "CHAN " + str(self.channel) + ";"
+            if (self.dev_channel != 0):
+                chn = "CHAN " + str(self.dev_channel) + ";"
             self.session.write(chn + msg)
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling
@@ -89,8 +89,8 @@ class Eth2SerialVisaDevice(object):
             self.session.timeout = timeout
             # In case of use without channel separation
             chn = ""
-            if (self.channel != 0):
-                chn = "CHAN " + str(self.channel) + ";"
+            if (self.dev_channel != 0):
+                chn = "CHAN " + str(self.dev_channel) + ";"
             result = self.session.query(chn + msg)
             _log.debug(f"Received: {result!r}")
         except TimeoutError as ex:

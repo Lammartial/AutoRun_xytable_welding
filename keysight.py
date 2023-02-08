@@ -40,22 +40,26 @@ class DAQ970A(Eth2SerialVisaDevice):
     #        print(inst.args)     # arguments stored in .args
     #        print(inst)          # __str__ allows args to be printed directly,
 
-    def __init__(self, resource_str: str, channel: int):
+    def __init__(self, resource_str: str, dev_channel: int = 0, card_slot: int = 1):
         """
         Initialize the object with visa resource string (IP name).
         Example "TCPIP0::192.168.1.101::inst0::INSTR"
 
         Args:
             resource_str (str): visa resource string
+            dev_channel (int, optional): 0=off, 1 .. n selects a proprietary dev_channel behind the gateway. Defaults to 0.
+            card_slot (int, optional): Selects a measurement channel card on slot 1..3. Defaults to 1 
+
         """
-        super().__init__(resource_str, channel)
-        pass
+        super().__init__(resource_str, int(dev_channel))
+        assert (int(card_slot) > 0 and int(card_slot) < 4), ValueError(f"Error, 'card_slot' must be in 1..3 but was {int(card_slot)}")
+        self.card_slot = int(card_slot)
 
     def __str__(self) -> str:
-        return f"DAQ970A VISA device on {self.super().__str__()}"
+        return f"DAQ970A VISA device on {super().__str__()}"
 
     def __repr__(self) -> str:
-        return f"DAQ970A({self.resource_str}, {self.channel})"
+        return f"DAQ970A({self.resource_str}, {self.dev_channel})"
 
     #----------------------------------------------------------------------------------------------
     def selftest(self) -> int:
@@ -104,6 +108,11 @@ class DAQ970A(Eth2SerialVisaDevice):
 
     #----------------------------------------------------------------------------------------------
     
+    def _meas_chan(self, slot: int, channel: int) -> str:
+        return f"{slot if slot > 0 else self.card_slot}{channel:02d}"
+        
+    #----------------------------------------------------------------------------------------------
+    
     def get_resistance_rounded(self, slot: int, channel: int, ndigits: int = 3) -> float:
         return round(self.get_resistance(int(slot), int(channel)), ndigits=int(ndigits))
     
@@ -127,9 +136,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_resistance: Allowed slot range is 1 .. 3')
         assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_resistance: Allowed channel range is 1 .. 20.')
         try:
-            slot_str = str(slot)
-            channel_str = str(channel).zfill(2)
-            cmd = "MEAS:RES? AUTO,DEF,(@" + slot_str + channel_str + ")"
+            cmd = "MEAS:RES? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
             return float(self.request(cmd, 5000))
         except Exception as ex:
             #_log.exception(ex)
@@ -159,9 +166,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_4w_resistance: Allowed slot range is 1 .. 3')
         assert ((channel >= 1) and (channel <= 10)), ValueError('Error, get_4w_resistance: Allowed channel range is 1 .. 10.')
         try:
-            slot_str = str(slot)
-            channel_str = str(channel).zfill(2)
-            cmd = "MEAS:FRES? AUTO,DEF,(@" + slot_str + channel_str + ")"
+            cmd = "MEAS:FRES? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
             return float(self.request(cmd, 5000))
         except Exception as ex:
             #_log.exception(ex)
@@ -191,9 +196,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         assert ((slot >= 1) and (slot <= 3)), ValueError('Error, get_VDC: Allowed slot range is 1 .. 3')
         assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VDC: Allowed channel range is 1 .. 20.')
         try:
-            slot_str = str(slot)
-            channel_str = str(channel).zfill(2)
-            cmd = "MEAS:VOLT:DC? AUTO,DEF,(@" + slot_str + channel_str + ")"
+            cmd = "MEAS:VOLT:DC? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
             return float(self.request(cmd, 5000))
         except Exception as ex:
             #_log.exception(ex)
@@ -224,7 +227,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         try:
             slot_str = str(slot)
             channel_str = str(channel).zfill(2)
-            cmd = "MEAS:VOLT:AC? AUTO,DEF,(@" + slot_str + channel_str + ")"
+            cmd = "MEAS:VOLT:AC? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
             return float(self.request(cmd, 5000))
         except Exception as ex:
             #_log.exception(ex)
@@ -257,9 +260,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         assert ((channel == 21) or (channel == 22)), ValueError('Invalid channel. Only 21 or 22 allowed.')
         assert(scale in scale_str_list), ValueError('Invalid scale. Check the available scale values in the function description.')
         try:
-            slot_str = str(slot)
-            channel_str = str(channel).zfill(2)
-            cmd = f"MEAS:CURR:DC? {scale},(@{slot_str}{channel_str})"
+            cmd = f"MEAS:CURR:DC? {scale},(@{self._meas_chan(0, channel)})"
             return float(self.request(cmd, 5000).strip())
         except Exception as ex:
             #_log.exception(ex)
@@ -294,20 +295,18 @@ class DAQ970A(Eth2SerialVisaDevice):
         assert ((slot >= 1) and (slot <= 3)), ValueError('Invalid slot number. Allowed range is 1 .. 3')
         assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
         try:
-            slot_str = str(slot)
-            channel_str = str(channel).zfill(2)
             match tran_type:
                 case 'TC' | 'DEF':
                     assert (tc_type in ["B", "E", "J", "K", "N", "R", "S", "T"]), ValueError('Error, get_temp: incorrect tc_type parameter')
-                    cmd = "MEAS:TEMP:TC?" + " " + tc_type + ",(@" + slot_str + channel_str + ")"
+                    cmd = "MEAS:TEMP:TC?" + " " + tc_type + ",(@" + self._meas_chan(0, channel) + ")"
                     return float(self.request(cmd, 5000).strip())
                 case 'FTH' | 'THER':
                     assert ((fth_type == 2252) or (fth_type == 5000) or (fth_type == 10000)), ValueError('Error, get_temp: incorrect fth_type parameter')
-                    cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(fth_type) + ",(@" + slot_str + channel_str + ")"
+                    cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(fth_type) + ",(@" + self._meas_chan(0, channel) + ")"
                     return float(self.request(cmd, 5000).strip())
                 case 'FRTD' | 'RTD':
                     assert((rtd_resist == 100) or (rtd_resist == 1000)), ValueError('Error, get_temp: incorrect rtd_resist parameters')
-                    cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(rtd_resist) + ",(@" + slot_str + channel_str + ")"
+                    cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(rtd_resist) + ",(@" + self._meas_chan(0, channel) + ")"
                     return float(self.request(cmd, 5000).strip())
                 case _:
                     raise ValueError('Error, get_temp: unknown parameter')

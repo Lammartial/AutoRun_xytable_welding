@@ -76,22 +76,29 @@ class M3400(Eth2SerialVisaDevice):
     # BATTery:SHUT:TIME <NRf+>
     # BATTery:SHUT:TIME? [MINimum|MAXimum|DEFault]
 
-    def __init__(self, resource_str: str, channel: int):
+    def __init__(self, resource_str: str, dev_channel: int = 0):
         """
         Initialize the object with VISA resource string (IP name).
         Example "TCPIP0::192.168.1.101::inst0::INSTR"
 
+        In fact this M3400 device is using an IT-E1206 LAN gateway to access the PSUs behind.
+
+        We have 6 PSUs indexed from channel 1 to 6. The communication module 
+        Eth2SerialVisaDevice takes care about the routing command.
+
         Args:
             resource_str (str): visa resource string
+            dev_channel (int, optional): indexes the real PSU behind the gateway, 0=off, 1..6. Defaults to 0.
+
         """
-        super().__init__(resource_str, channel)
+        super().__init__(resource_str, dev_channel)
         pass
 
     def __str__(self) -> str:
-        return f"M3400 VISA device on {self.super().__str__()}"
+        return f"M3400 VISA device on {super().__str__()}"
 
     def __repr__(self) -> str:
-        return f"M3400({self.resource_str}, {self.channel})"
+        return f"M3400({self.resource_str}, {self.dev_channel})"
 
     #----------------------------------------------------------------------------------------------
 
@@ -581,22 +588,24 @@ class M3400(Eth2SerialVisaDevice):
 
 class M3900(M3400):
 
-    def __init__(self, resource_str: str, channel: int):
+    def __init__(self, resource_str: str, dev_channel: int = 0):
         """
         Initialize the object with VISA resource string (IP name).
         Example "TCPIP0::192.168.1.101::inst0::INSTR"
 
         Args:
             resource_str (str): visa resource string
+            dev_channel (int, optional): 0=off, 1 .. n selects a proprietary device behind the gateway. Defaults to 0.
+
         """
-        super().__init__(resource_str, channel)
+        super().__init__(resource_str, dev_channel)
         pass
 
     def __str__(self) -> str:
-        return f"M3900 VISA device on {self.super().__str__()}"
+        return f"M3900 VISA device on {super().__str__()}"
 
     def __repr__(self) -> str:
-        return f"M3900({self.resource_str}, {self.channel})"
+        return f"M3900({self.resource_str}, {self.dev_channel})"
 
     #----------------------------------------------------------------------------------------------
     # common function repeated as trampoline for TestStand only :-(
