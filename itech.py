@@ -83,7 +83,7 @@ class M3400(Eth2SerialVisaDevice):
 
         In fact this M3400 device is using an IT-E1206 LAN gateway to access the PSUs behind.
 
-        We have 6 PSUs indexed from channel 1 to 6. The communication module 
+        We have 6 PSUs indexed from channel 1 to 6. The communication module
         Eth2SerialVisaDevice takes care about the routing command.
 
         Args:
@@ -316,7 +316,7 @@ class M3400(Eth2SerialVisaDevice):
         except Exception as ex:
             raise
 
-    #[SOURce:]CURRent:SLEW:NEGative <NRf+> 
+    #[SOURce:]CURRent:SLEW:NEGative <NRf+>
     def set_current_slew_negative(self, rate: float) -> None:
         """
         This command sets the current falling slew rate of the power supply.
@@ -496,7 +496,7 @@ class M3400(Eth2SerialVisaDevice):
         except Exception as ex:
             raise
 
-    #[SOURce:]VOLTage:SLEW:NEGative <NRf+>  
+    #[SOURce:]VOLTage:SLEW:NEGative <NRf+>
     def set_curren_slew_negative(self, rate: float) -> None:
         """
         This command sets the voltage falling slew rate of the power supply.
@@ -624,15 +624,29 @@ class M3400(Eth2SerialVisaDevice):
         except Exception as ex:
             raise
 
-    def configure_sink(self, current: float, current_limit: float, power_limit, set_output: bool = False) -> None:
+    def configure_current_rise_times(self, pos: float| str = "MIN", neg: float | str = "MIN"):
+        self.send(f"CURRENT:SLEW:NEG {neg}")
+        self.send(f"CURRENT:SLEW:POS {pos}")
+
+    def configure_voltage_rise_times(self, pos: float | str = "MIN", neg: float | str = "MIN"):
+        self.send(f"VOLTAGE:SLEW:NEG {neg}")
+        self.send(f"VOLTAGE:SLEW:POS {pos}")
+
+    def configure_sink(self, current: float, resistance: float | None,
+                       current_limit: float, voltage_limit_high: float, power_limit: float, set_output: bool = False) -> None:
         self.set_power_limit_negative(-abs(power_limit))
         self.set_power_limit_positive(0)  # always fixed!
         self.set_current_limit_negative(-abs(current_limit))
         self.set_current_limit_positive(0)  # always fixed!
-        self.set_voltage_limit_high(abs(11) * 1.05)
+        self.set_voltage_limit_high(abs(voltage_limit_high))
         self.set_voltage_limit_low(0)  # always fixed!
         self.set_current(-abs(current))
-        self.set_function("CURR")  # CC priority
+        self.send("FUNC CURR")  # CC priority
+        if resistance is not None:
+            self.send("SINK:RES:STATE 1")
+            self.send(f"SINK:RES {resistance}")
+        else:
+            self.send("SINK:RES:STATE 0")
         self.set_output_state(1 if set_output else 0)
 
     def configure_supply(self, voltage: float, current_limit: float, power_limit, set_output: bool = False) -> None:
@@ -643,7 +657,8 @@ class M3400(Eth2SerialVisaDevice):
         self.set_voltage_limit_high(abs(voltage) * 1.15)
         self.set_voltage_limit_low(0)
         self.set_voltage(abs(voltage))
-        self.set_function("VOLT") 
+        self.send("SINK:RES:STATE 0")
+        self.send("FUNC VOLT")  # CV priority
         self.set_output_state(1 if set_output else 0)
 
 
