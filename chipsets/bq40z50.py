@@ -1503,9 +1503,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             mib = self.get_mib(32, False)
             #udi : str = "12345678123456781234567812345678"
             #ss : str = ''.join(map(str,data))
-            new_mib = mib[:start_ind] + data[:length] + mib[stop_ind:]
+            new_mib : str = (mib[:start_ind] + data[:length] + mib[stop_ind:])
+            new_mib = bytearray(new_mib.encode("ascii"))
             #print(new_mib)
-            res = self.write_flash_block(0x4041, bytearray(new_mib))
+            res = self.write_flash_block(0x4041, new_mib)
         except Exception:
             raise
         return res
@@ -1682,12 +1683,14 @@ if __name__ == "__main__":
     bat = BQ40Z50R2(busmaster)
 
     #udi:tuple = (8, 7, 6, 5, 4, 3, 2, 1, 8, 7, 6, 5, 4, 3, 2, 1, 8, 7, 6, 5, 4, 3, 2, 1, 8, 7, 6, 5, 4, 3, 2, 1)
-    mib: str = "8765432187654321"
-    #bat.set_mib(data= mib, length= 16, address= 0x4051)
+    mib: str = "87654321876543218765432187654321"
+    #mib = bat.get_mib(32, True)
+    #print(mib)
+    bat.set_mib(data= mib, length= 32, address= 0x4041)
 
     #bat.set_manufacturer_date()
 
-    bat.set_pack_sn("00B4")
+    #bat.set_pack_sn("00B4")
 
     #buf = bat.battery_status()
     #print("BatteryStatus:", buf)
