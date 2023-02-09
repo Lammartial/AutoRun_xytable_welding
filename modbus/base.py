@@ -3,9 +3,9 @@ Modbus client base module. Defines abstract base class for all modbus clients.
 
 """
 
-from typing import Any
+from typing import Any, List
 from pymodbus import version as modbus_version
-from pymodbus.client.sync import ModbusTcpClient, ModbusSerialClient, ModbusAsciiFramer, ModbusRtuFramer
+from pymodbus.client import ModbusTcpClient, ModbusSerialClient
 from pymodbus.payload import BinaryPayloadDecoder, BinaryPayloadBuilder
 from pymodbus.constants import Endian, Defaults
 from pymodbus.register_read_message import ReadHoldingRegistersResponse, ReadInputRegistersResponse
@@ -58,8 +58,8 @@ __version__ = VERSION
 
 def _check_call(rr):
     """Check modbus call worked generically."""
-    assert not rr.isError()  # test that call was OK
-    assert not isinstance(rr, ExceptionResponse)  # Device rejected request
+    assert not isinstance(rr, ExceptionResponse), rr      # Device rejected request
+    assert not rr.isError(), "Error in MODBUS response"   # test that call was OK    
     return rr
 
 #--------------------------------------------------------------------------------------------------
@@ -84,7 +84,7 @@ class ModbusClient:
                           # group them by the host interface and port to work with typical modbus gateways
     _connection_open = {}
 
-    def __init__(self, connection_str: str, unit_address: int = 0,
+    def __init__(self, connection_str: str, unit_address: int | None = 0,
                  group_by_gateway: bool = True, byte_order: str = Endian.Big, word_order: str = Endian.Big) -> None:
         """_summary_
 
@@ -176,23 +176,80 @@ class ModbusClient:
 
     #--------------------------------------------------------------------------------------------------
     # easier to use interface
-    def readInputRegisters(self, address: int, count: int) -> Any:
-        readResponse = _check_call(self.client.read_input_registers(address, count, unit=self.unit_address))
+    def read_discrete_inputs(self, address: int, count: int, unit_address: int | None = None) -> ReadInputRegistersResponse | Any:
+        readResponse = _check_call(self.client.read_discrete_inputs(address, count, slave=unit_address if unit_address is not None else self.unit_address))
+        return readResponse.registers
+    
+    def read_input_registers(self, address: int, count: int, unit_address: int | None = None) -> ReadInputRegistersResponse | Any:
+        readResponse = _check_call(self.client.read_input_registers(address, count, slave=unit_address if unit_address is not None else self.unit_address))
         return readResponse.registers
 
-    def readHoldingRegisters(self, address: int, count: int) -> Any:
-        readResponse = _check_call(self.client.read_holding_registers(address, count, unit=self.unit_address))
+    def read_holding_registers(self, address: int, count: int, unit_address: int | None = None) -> ReadHoldingRegistersResponse | Any:
+        readResponse = _check_call(self.client.read_holding_registers(address, count, slave=unit_address if unit_address is not None else self.unit_address))
         return readResponse.registers
 
-    def writeHoldingRegisters(self, address: int, registers: int) -> Any:
-        writeResponse = _check_call(self.client.write_registers(address, registers, unit=self.unit_address, skip_encode=True))
+    def write_register(self, address: int, value: int | float | str, unit_address: int | None = None) -> WriteMultipleRegistersResponse | Any:
+        writeResponse = _check_call(self.client.write_register(address, value, slave=unit_address if unit_address is not None else self.unit_address))
+        return writeResponse
+    
+    def write_registers(self, address: int, values: List[int | float | str], unit_address: int | None = None) -> WriteMultipleRegistersResponse | Any:
+        writeResponse = _check_call(self.client.write_coils(address, values, slave=unit_address if unit_address is not None else self.unit_address))
+        return writeResponse
+
+    def write_coil(self, address: int, value: bool, unit_address: int | None = None) -> WriteMultipleRegistersResponse | Any:
+        writeResponse = _check_call(self.client.write_coil(address, value, slave=unit_address if unit_address is not None else self.unit_address))
+        return writeResponse
+    
+    def write_coils(self, address: int, values: List[bool], unit_address: int | None = None) -> WriteMultipleRegistersResponse | Any:
+        writeResponse = _check_call(self.client.write_coils(address, values, slave=unit_address if unit_address is not None else self.unit_address))
         return writeResponse
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
+    from time import sleep 
+
     log_modbus_version()
 
-    dev = ModbusClient("tcp:172.21.101.100:502")
+    #for a in range(0, 256):
+    try:
+        with ModbusClient("tcp:172.21.101.100:502", unit_address=None, byte_order=Endian.Little, word_order=Endian.Little) as dev:
+            #encoder = BinaryPayloadBuilder(byteorder=Endian.Big, wordorder=Endian.Big)
+            #encoder.add_16bit_uint(1)
+            #payload = encoder.to_registers()
+            response = dev.write_register(9999-1, 1, unit_address=3)  # switch byte order to little endian
+            #response = dev.read_input_registers(9999-1, 1, unit_address=3)
+            #print(response)
+            response = dev.read_holding_registers(200-1, 2, unit_address=3)
+            print(response)
+            decoder = BinaryPayloadDecoder.fromRegisters(response, byteorder=Endian.Little, wordorder=Endian.Little)
+            d = decoder.decode_32bit_int()
+            print(d)
+            response = dev.read_holding_registers(208-1, 2, unit_address=3)
+            print(response)
+            decoder = BinaryPayloadDecoder.fromRegisters(response, byteorder=Endian.Little, wordorder=Endian.Little)
+            d = decoder.decode_32bit_int()
+            print(d)
+            #for i in range(100):
+            response = dev.read_holding_registers(0, 2, unit_address=1)
+            print(response)
+            decoder = BinaryPayloadDecoder.fromRegisters(response, byteorder=Endian.Little, wordorder=Endian.Little)
+            d = decoder.decode_32bit_uint()
+            print(d)
+            #sleep(0.2)
+            response = dev.read_holding_registers(501-1, 1, unit_address=3)            
+            print(response)
+            decoder = BinaryPayloadDecoder.fromRegisters(response, byteorder=Endian.Little, wordorder=Endian.Little)
+            d = decoder.decode_8bit_uint()
+            print(d)
+            #sleep(0.2)
+            response = dev.read_holding_registers(801-1, 10, unit_address=3)
+            print(response)
+            decoder = BinaryPayloadDecoder.fromRegisters(response, byteorder=Endian.Little, wordorder=Endian.Little)
+            cc = "ascii"
+            d = decoder.decode_string(size=8)
+            print(d)
+    except Exception:
+        raise    
 
     _log.info("End test")
 
