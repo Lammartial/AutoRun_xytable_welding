@@ -17,9 +17,10 @@ Start with:
 
 import random
 import asyncio
-from fastapi import FastAPI, Path, status
+from fastapi import FastAPI, Response, Path, status
 from pydantic import BaseModel
 from datetime import datetime
+from rrc.custom_logging import getLogger
 
 app = FastAPI()
 
@@ -39,7 +40,7 @@ class Item(BaseModel):
     test_program_id: str              # str: <- from MPI Server before start of sequence
     part_number: str | None           # str -> from MPI Server before start of sequence
     serial_number: str | None = None  # str: <- from MPI Server before start of sequence
-    udi: list[str] | None = None      # str: -> from TestStand PC scanned by user to start the sequence
+    udi: str | None = None      # str: -> from TestStand PC scanned by user to start the sequence
     #udi_pcba: str | None = None       # str: -> from TestStand PC scanned by user to start the sequence
     #udi_stack: str | None = None      # str: -> from TestStand PC scanned by user to start the sequence
     result: str | None = None         # str: -> from TestStand PC at end of sequence P(ASS)/F(AIL)/A(BORT) as text letter
@@ -65,14 +66,17 @@ MOCK_PARTNUMBER = {
 
 
 @app.get("/GET_SERIAL_NUMBER_FOR_UDIS", status_code=status.HTTP_200_OK)
-async def get_serial(test_type, station_id, line_id, test_socket, udi_pcba, udi_stack):
+async def get_serial(test_type, station_id, line_id, test_socket, udi, response: Response):
 #@app.get("/parameter/{test_type}/{station_id}/{line_id}/{test_socket}", status_code=status.HTTP_200_OK)
 #async def read_item(test_type, station_id, line_id, test_socket):
     global next_serial, lock_next_serial, MOCK_PARTNUMBER
 
     # set the product to test for mockup: "RRC2040B" or "RRC2020B"
-    _product_name = "RRC2020B"
+    #_product_name = "RRC2020B"
     #_mock = MOCK_PARTNUMBER[_product_name]
+    if not (("CELL" in udi) or ("PCBA" in udi)):
+        response.status_code = status.HTTP_406_NOT_ACCEPTABLE
+        return { "error": "UDI is blacklisted", "code": 7, "udi": udi }
 
     #_serial = random.randint(1, 47236513)
     async with lock_next_serial:
@@ -81,6 +85,7 @@ async def get_serial(test_type, station_id, line_id, test_socket, udi_pcba, udi_
         _locked_serial = str(next_serial)
 
     return {
+        "udi": udi,
         "serial_number": _locked_serial
     }
 
@@ -134,7 +139,7 @@ async def read_item2(test_type, station_id, line_id, test_socket):
 
 @app.post("/REPORT_TEST_RESULT", response_model=Item, status_code=status.HTTP_202_ACCEPTED)
 async def create_item(item: Item):
-    print(item)
+    getLogger(__name__, 2).debug(f"Accepted item: {item}")
     return item
 
 
