@@ -117,6 +117,8 @@ class StationConfiguration:
             _api_base_url = d[_test_type]["dsp_api_base_url"]  # allows for test specific base urls
         if "station_id" not in d:
             _station_id = self._hostname  # we are using the hostname
+        else:
+            _station_id = d["station_id"]
         _api_base_url
         result = (
             _test_type,             # str
