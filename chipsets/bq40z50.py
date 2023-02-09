@@ -1500,11 +1500,11 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         try:
             start_ind = address - 0x4041
             stop_ind = start_ind + len(data)
-            mib = self.get_mib(32, True)
+            mib = self.get_mib(32, False)
             #udi : str = "12345678123456781234567812345678"
             #ss : str = ''.join(map(str,data))
             new_mib = mib[:start_ind] + data[:length] + mib[stop_ind:]
-            print(new_mib)
+            #print(new_mib)
             res = self.write_flash_block(0x4041, bytearray(new_mib))
         except Exception:
             raise
@@ -1522,6 +1522,26 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             bq_date = int(now.day + 32*now.month + (now.year - 1980)*512)
             cmd_manufacturer_date = 0x1B
             res = self.writeWordVerified(cmd= cmd_manufacturer_date, w= bq_date)
+        except Exception:
+            raise
+        return bool(res)
+    
+    def set_pack_sn(self, sn: str) -> bool:
+        """
+        Writes and verifies pack serial number to the register 0x1C SerialNumber()
+
+        Args:
+            sn (str): serial number (hex). Examplpe "00B4"
+
+        Returns:
+            bool: True - success, False - failed
+        """
+        assert(len(sn) == 4), ValueError('Invalid string length. Allowed length is 4')
+        try:
+            sn = str(sn)
+            sn_int = int(sn, 16)
+            cmd_serial_number = 0x1C
+            res = self.writeWordVerified(cmd= cmd_serial_number, w= sn_int)
         except Exception:
             raise
         return bool(res)
@@ -1663,9 +1683,11 @@ if __name__ == "__main__":
 
     #udi:tuple = (8, 7, 6, 5, 4, 3, 2, 1, 8, 7, 6, 5, 4, 3, 2, 1, 8, 7, 6, 5, 4, 3, 2, 1, 8, 7, 6, 5, 4, 3, 2, 1)
     mib: str = "8765432187654321"
-    bat.set_mib(data= mib, length= 16, address= 0x4051)
+    #bat.set_mib(data= mib, length= 16, address= 0x4051)
 
-    bat.set_manufacturer_date()
+    #bat.set_manufacturer_date()
+
+    bat.set_pack_sn("00B4")
 
     #buf = bat.battery_status()
     #print("BatteryStatus:", buf)
