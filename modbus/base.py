@@ -205,7 +205,7 @@ class ModbusClient:
 if __name__ == '__main__':
 
     ## Initialize the logging
-    logger_init(filename_base="local_log")  ## init root logger with different filename
+    logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
     log_modbus_version()
