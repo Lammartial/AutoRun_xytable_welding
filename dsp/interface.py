@@ -90,13 +90,38 @@ class DspInterface:
         #    "test_program_id": a valid subsequence name which will be called,
         #    "part_number": a valid part number matching the test_program_id,
         # }
-        if response.status_code != 200:
+        if response.status_code != 200:  # black list
             raise DSPInterfaceError(f"DSP controller error, cannot get parameters for test run {response.status_code}: {response.json()}")
         runparams = response.json()
         _log.debug(runparams)
         self.api = {**self.api, **runparams}
         return runparams
 
+    #----------------------------------------------------------------------------------------------
+    
+    def verify_serial_number(self, test_type: str, station_id: str, line_id: str, test_socket: str, part_number:str, serial_number: str) -> Tuple[bool, dict]:
+        _log = getLogger(__name__, DEBUG)
+        response = requests.get(f"{self.API_BASE_URL}/VERIFY_SERIAL_NUMBER",
+                                params= {"test_type": test_type, "station_id": station_id, "line_id": line_id, "test_socket": test_socket, 
+                                         "serial_number": serial_number, "part_number": part_number})
+        # expects JSON of
+        # {
+        #    "serial_number": serial_number,
+        #    "part_number": part_number,
+        #    "udi": "1CELL1296237,1PCBA2713282"
+        # }
+        if response.status_code not in [200, 202, 406]:
+            pass
+        if response.status_code == 406:  # not acceptable!
+            # Serial number black listed or any other failer with it
+            _log.warning(response.json())
+            return False, response.json()
+        # valid response
+        runparams = response.json()
+        _log.debug(f"Verified SN: {runparams}")
+        # we got a verified SN
+        return True, runparams
+    
     #----------------------------------------------------------------------------------------------
 
     def get_serial_number_for_udi(self, test_type: str, station_id: str, line_id: str, test_socket: str, udi: str) -> Tuple[bool, dict]:
@@ -105,7 +130,7 @@ class DspInterface:
         #  "1CELL1296237,1PCBA2713282" -> "1CELL1296237"
         # but we may not store it back into our self.api object
         _udi_cleaned = udi.split(",")[0]
-        response = requests.get(f"{self.API_BASE_URL}/GET_SERIAL_NUMBER_FOR_UDIS",
+        response = requests.get(f"{self.API_BASE_URL}/GET_SERIAL_NUMBER_FOR_UDI",
                                 params= {"test_type": test_type, "station_id": station_id, "line_id": line_id, "test_socket": test_socket, "udi": _udi_cleaned})
         # expects JSON of
         # {
@@ -310,8 +335,8 @@ if __name__ == "__main__":
 
     #test_interface(dsp)
     test_teststand_interface(dsp, "CELLSTACK_TEST", "1CELL163512635")
-    test_teststand_interface(dsp, "PCBA_TEST", "1PCBA163512635")
-    test_teststand_interface(dsp, "COREPACK_TEST", "1CELL163512635,1PCBA163512635")
-    test_teststand_interface(dsp, "EOL_TEST", "7")
+    #test_teststand_interface(dsp, "PCBA_TEST", "1PCBA163512635")
+    #test_teststand_interface(dsp, "COREPACK_TEST", "1CELL163512635,1PCBA163512635")
+    #test_teststand_interface(dsp, "EOL_TEST", "7")
 
 # END OF FILE

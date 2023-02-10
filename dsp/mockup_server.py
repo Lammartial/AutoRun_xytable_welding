@@ -134,7 +134,7 @@ async def read_item2(test_type, station_id, line_id, test_socket):
         "test_program_id": _testprogram,
         "part_number": _part_number,
         #"serial_number": _serial,
-        "serial_number": "",
+        #"serial_number": "",
     }
 
 @app.post("/REPORT_TEST_RESULT", response_model=Item, status_code=status.HTTP_202_ACCEPTED)
