@@ -17,10 +17,9 @@ from pymodbus.pdu import ExceptionResponse
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-import logging
-
-_log = logging.getLogger(__name__)
-_log.setLevel(logging.DEBUG)
+DEBUG = 1
+from rrc.custom_logging import getLogger, logger_init
+# --------------------------------------------------------------------------- #
 
 # ----------------------------------------------------------------------- #
 # This will send the error messages in the specified namespace to a file.
@@ -31,15 +30,11 @@ _log.setLevel(logging.DEBUG)
 # * pymodbus.client.*   - all logging messages involving the client
 # * pymodbus.protocol.* - all logging messages inside the protocol layer
 # ----------------------------------------------------------------------- #
+import logging
 logging.getLogger("pymodbus.client").setLevel(logging.INFO)
 logging.getLogger("pymodbus.protocol").setLevel(logging.INFO)
 logging.getLogger("pymodbus").setLevel(logging.INFO)
 
-# Initialize the logging
-try:
-    logging.basicConfig()
-except Exception as e:
-    print("Logging is not supported on this system")
 
 
 #--------------------------------------------------------------------------------------------------
@@ -64,6 +59,7 @@ def _check_call(rr):
 
 #--------------------------------------------------------------------------------------------------
 def log_modbus_version():
+    _log = getLogger(__name__, DEBUG)
     _log.info(f"PyModbus version: {modbus_version.version.short()}")
 
 #--------------------------------------------------------------------------------------------------
@@ -96,6 +92,7 @@ class ModbusClient:
 
         """
 
+        _log = getLogger(__name__, DEBUG)
         self.byte_order = byte_order
         self.word_order = word_order
         self.group_by_gateway = group_by_gateway
@@ -206,50 +203,12 @@ class ModbusClient:
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
-    from time import sleep 
+
+    ## Initialize the logging
+    logger_init(filename_base="local_log")  ## init root logger with different filename
+    _log = getLogger(__name__, DEBUG)
 
     log_modbus_version()
-
-    #for a in range(0, 256):
-    try:
-        with ModbusClient("tcp:172.21.101.100:502", unit_address=None, byte_order=Endian.Little, word_order=Endian.Little) as dev:
-            #encoder = BinaryPayloadBuilder(byteorder=Endian.Big, wordorder=Endian.Big)
-            #encoder.add_16bit_uint(1)
-            #payload = encoder.to_registers()
-            response = dev.write_register(9999-1, 1, unit_address=3)  # switch byte order to little endian
-            #response = dev.read_input_registers(9999-1, 1, unit_address=3)
-            #print(response)
-            response = dev.read_holding_registers(200-1, 2, unit_address=3)
-            print(response)
-            decoder = BinaryPayloadDecoder.fromRegisters(response, byteorder=Endian.Little, wordorder=Endian.Little)
-            d = decoder.decode_32bit_int()
-            print(d)
-            response = dev.read_holding_registers(208-1, 2, unit_address=3)
-            print(response)
-            decoder = BinaryPayloadDecoder.fromRegisters(response, byteorder=Endian.Little, wordorder=Endian.Little)
-            d = decoder.decode_32bit_int()
-            print(d)
-            #for i in range(100):
-            response = dev.read_holding_registers(0, 2, unit_address=1)
-            print(response)
-            decoder = BinaryPayloadDecoder.fromRegisters(response, byteorder=Endian.Little, wordorder=Endian.Little)
-            d = decoder.decode_32bit_uint()
-            print(d)
-            #sleep(0.2)
-            response = dev.read_holding_registers(501-1, 1, unit_address=3)            
-            print(response)
-            decoder = BinaryPayloadDecoder.fromRegisters(response, byteorder=Endian.Little, wordorder=Endian.Little)
-            d = decoder.decode_8bit_uint()
-            print(d)
-            #sleep(0.2)
-            response = dev.read_holding_registers(801-1, 10, unit_address=3)
-            print(response)
-            decoder = BinaryPayloadDecoder.fromRegisters(response, byteorder=Endian.Little, wordorder=Endian.Little)
-            cc = "ascii"
-            d = decoder.decode_string(size=8)
-            print(d)
-    except Exception:
-        raise    
 
     _log.info("End test")
 

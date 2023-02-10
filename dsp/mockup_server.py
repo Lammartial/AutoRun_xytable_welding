@@ -26,6 +26,8 @@ app = FastAPI()
 
 next_serial = 0  # = random.randint(762343, 47236513)
 lock_next_serial = asyncio.Lock()
+serial_db = {}
+lock_serial_db = asyncio.Lock()
 
 class Item(BaseModel):
     #name: str
@@ -65,11 +67,9 @@ MOCK_PARTNUMBER = {
 }
 
 
-@app.get("/GET_SERIAL_NUMBER_FOR_UDIS", status_code=status.HTTP_200_OK)
+@app.get("/GET_SERIAL_NUMBER_FOR_UDI", status_code=status.HTTP_200_OK)
 async def get_serial(test_type, station_id, line_id, test_socket, udi, response: Response):
-#@app.get("/parameter/{test_type}/{station_id}/{line_id}/{test_socket}", status_code=status.HTTP_200_OK)
-#async def read_item(test_type, station_id, line_id, test_socket):
-    global next_serial, lock_next_serial, MOCK_PARTNUMBER
+    global next_serial, lock_next_serial, lock_serial_db, MOCK_PARTNUMBER
 
     # set the product to test for mockup: "RRC2040B" or "RRC2020B"
     #_product_name = "RRC2020B"
@@ -84,17 +84,41 @@ async def get_serial(test_type, station_id, line_id, test_socket, udi, response:
         # some other thread-safe code here
         _locked_serial = str(next_serial)
 
+    async with lock_serial_db:
+        serial_db[next_serial] = udi
+
     return {
         "udi": udi,
         "serial_number": _locked_serial
     }
 
 
+@app.get("/VERIFY_SERIAL_NUMBER", status_code=status.HTTP_200_OK)
+async def verify_serial(test_type, station_id, line_id, test_socket, part_number, serial_number, response: Response):
+    global serial_db, lock_serial_db
+
+    r = None 
+    async with lock_serial_db:        
+        if serial_number not in serial_db:
+            response.status_code = status.HTTP_406_NOT_ACCEPTABLE
+            r = { "error": "Serial number not found in db", "code": 8, 
+                  "serial_number": serial_number, "part_number": part_number }
+        # if serial_number in [1,5,7,11]:
+        #     response.status_code = status.HTTP_406_NOT_ACCEPTABLE
+        #     r = { "error": "Serial number is blacklisted", "code": 7, 
+        #           "serial_number": serial_number, "part_number": part_number }
+        else:
+            r = {
+                "serial_number": serial_number,
+                "part_number": part_number, 
+                "udi": "76378126378163"
+            }
+    return r
+
+
 
 @app.get("/GET_PARAMETER_FOR_TEST_RUN", status_code=status.HTTP_200_OK)
-async def read_item2(test_type, station_id, line_id, test_socket):
-#@app.get("/parameter/{test_type}/{station_id}/{line_id}/{test_socket}", status_code=status.HTTP_200_OK)
-#async def read_item(test_type, station_id, line_id, test_socket):
+async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket):
     global next_serial, lock_next_serial, MOCK_PARTNUMBER
 
     # set the product to test for mockup: "RRC2040B" or "RRC2020B"
@@ -138,7 +162,7 @@ async def read_item2(test_type, station_id, line_id, test_socket):
     }
 
 @app.post("/REPORT_TEST_RESULT", response_model=Item, status_code=status.HTTP_202_ACCEPTED)
-async def create_item(item: Item):
+async def report_test_result(item: Item):
     getLogger(__name__, 2).debug(f"Accepted item: {item}")
     return item
 
