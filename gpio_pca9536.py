@@ -224,12 +224,13 @@ if __name__ == '__main__':
     from rrc.eth2i2c import I2CPort
     from rrc.i2cbus import I2CMuxedBus, BusMux
 
-    i2c_p = I2CPort("192.168.1.111")
+    i2c_p = I2CPort("172.21.101.31:2101")
     mux = BusMux(i2c_p, 0x77)
-    mux.setChannelMask(0xff)
+    #mux.setChannelMask(0xff)
+    mux.setChannel(7)
 
     gpio = PCA9536(i2c_p)
-    #gpio.configure_pins("1111", "0000", "0000")
+    gpio.configure_pins("0110", "0000", "0000")
 
     #gpio.set_pin_as_input(0)
     #gpio.set_pin_as_output(1)
@@ -240,7 +241,7 @@ if __name__ == '__main__':
     print(gpio.get_pin(2))
     print(gpio.get_pin(3))
 
-    gpio.set_pin(3)
-    gpio.reset_pin(3)
+    #gpio.set_pin(3)
+    #gpio.reset_pin(3)
 
 # END OF FILE

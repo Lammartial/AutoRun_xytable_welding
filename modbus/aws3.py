@@ -48,7 +48,7 @@ class AWS3Modbus(ModbusClient):
         return response
 
     def read_system_parameters(self):
-        response = self.read_holding_registers(501-1, 1, unit_address=3)
+        response = self.read_holding_registers(501-1, 125, unit_address=3)
         return response
 
     def read_name(self) -> bytearray:        
@@ -80,16 +80,18 @@ if __name__ == '__main__':
            
             d = dev.read_name()
             print(d)
-            #d = dev.read_system_parameters()
-            #print(d)
+            d = dev.read_parameters()
+            print("PARAMETERS:", d)
+            d = dev.read_system_parameters()
+            print("SYSTEM PARAMETERS: ", d)
             d = dev.read_measuring_values(1)
-            print(d)
+            print("MEASURING AXIS 1: ", d)
             d = dev.read_measuring_values(2)
-            print(d)
+            print("MEASURING AXIS 2: ",d)
             d = dev.read_program_parameters(1)
-            print(d)
+            print("PROGRAM PARAMETERS AXIS 1: ",d)
             d = dev.read_program_parameters(2)
-            print(d)           
+            print("PROGRAM PARAMETERS AXIS 1: ", d)           
     except Exception:
         raise    
 
