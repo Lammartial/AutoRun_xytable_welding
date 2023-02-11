@@ -237,13 +237,14 @@ def tk_callbacks(mainframe: ttk.Frame, row_itr: Iterator, resource_string: str):
 
 
 #--------------------------------------------------------------------------------------------------
+block_accept_udi = True
 
 def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -1):
     """ Run tkinter.
 
     This runs in the Main Thread.
     """
-    global udi_to_scan, allow_manual_edit, ok_button
+    global udi_to_scan, allow_manual_edit, ok_button #, block_accept_udi
 
     _log = getLogger(__name__, DEBUG)
     _log.debug('tk_main starting\n')
@@ -252,8 +253,10 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
     # Create the Tk root and mainframe.
     root = tk.Tk()
 
+    
     def _accept_udi(parent):
-        global udi_to_scan
+        global udi_to_scan, block_accept_udi
+        if block_accept_udi: return
         for item in udi_to_scan:
             item.scanned_udi = item.var.get()  # transfer from each tkinter widget into the result space
         root.destroy()
@@ -265,15 +268,39 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
         root.destroy()
 
     #---for test only---
-    def validate_entry(entry, newstr, oldstr):
-        print(f"{entry},{newstr},{oldstr}")
-        return False
+   
 
-    def invalidate_entry(wname, newstr, oldstr):
-        #print(f"{wname},{newstr},{oldstr}")
-        entry = root.nametowidget(wname)
-        entry.delete(0, tk.END)
-        return
+    def validate_entry(entry, action: str, index: str, current: str, change: str, trigger: str) -> bool:
+        global block_accept_udi
+        #print(f"{entry},{action},{index},{current},{change},{trigger}")        
+        if trigger in ["key", "focusout"]:
+            _s = current
+            if action == "0":
+                index = int(index)            
+                _s = current[:index] + current[index+len(change):]
+            if action == "1":
+                index = int(index)
+                _s = current[:index] + change + current[index:]
+            #print(_s)
+            if len(_s)<4:
+                block_accept_udi = True
+            else:
+                block_accept_udi = False        
+        if trigger == "focusout":
+            if block_accept_udi:
+                return False
+            else:
+                return True
+        return True
+
+    # def on_invalid_entry(wname, newstr, oldstr):
+    #     global block_accept_udi
+    #     #print(f"{wname},{newstr},{oldstr}")
+    #     #entry = root.nametowidget(wname)
+    #     #entry.delete(0, tk.END)
+    #     block_accept_udi = True
+    #     return
+
     #-------------------
 
     root.withdraw()  # hide window
@@ -328,19 +355,31 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
         if item.name:
             _label = ttk.Label(mainframe, text=item.name)
             _label.grid(row=_row, column=_col, padx=5, pady=(0, 10), sticky="ew")
-            _col += 1
-
-        #validate_udi_handle = root.register(validate_entry)
-        #invalidate_udi_hanlde = root.register(invalidate_entry)
-
+            _col += 1    
         entry = ttk.Entry(
             mainframe,
             state=tk.NORMAL if allow_manual_edit else tk.DISABLED,
-            textvariable=item.var,
-            #validate='focusout',
-            #validatecommand=(validate_udi_handle, '%W', '%s', '%S'),
-            #invalidcommand=(invalidate_udi_hanlde, '%W', '%s', '%S'),
+            textvariable=item.var,            
             font=("-size", 15),
+        )
+         # valid percent substitutions (from the Tk entry man page)
+        # note: you only have to register the ones you need; this
+        # example registers them all for illustrative purposes
+        #
+        # %d = Type of action (1=insert, 0=delete, -1 for others)
+        # %i = index of char string to be inserted/deleted, or -1
+        # %P = value of the entry if the edit is allowed
+        # %s = value of entry prior to editing
+        # %S = the text string being inserted or deleted, if any
+        # %v = the type of validation that is currently set
+        # %V = the type of validation that triggered the callback
+        #      (key, focusin, focusout, forced)
+        # %W = the tk name of the widget
+        # #validate_udi_handle = root.register(validate_entry)
+        # #invalidate_udi_hanlde = root.register(invalidate_entry)
+        entry.configure(validate="all",
+            validatecommand=(root.register(validate_entry), "%W", "%d", "%i", "%s", "%S", "%V"),
+            #invalidcommand=(root.register(on_invalid_entry), '%W', '%s', '%S'),
         )
         entry.insert(0, "")
         entry.bind("<Return>", _accept_udi )
@@ -353,6 +392,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
     ok_button.bind("<Return>", _accept_udi)
     ok_button.bind("<Key-Escape>", _cancel)
     ok_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, padx=5, pady=10, sticky="nsew")
+    ok_button.grid_forget()
 
     # Separator
     separator = ttk.Separator(mainframe)
@@ -397,8 +437,8 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
         #root.geometry(f"+{_x-50}+{_y-180}")
         root.geometry(f"+{_x}+{_y}")
     else:
-        _x = 50 + test_socket * (_w + 20)
-        _y = 50
+        _x = 250 + test_socket * (_w + 20)
+        _y = 100
         root.geometry(f"+{_x}+{_y}")
     #root.attributes('-alpha', 1.0)  # now make the main window visible again
 
@@ -540,6 +580,7 @@ if __name__ == '__main__':
         #UDIScanCtrlItem("HEINZ", validate_udi_by_string_at_position_1),
     ]
 
+    allow_manual_edit = True
     main("172.21.101.22:2000", title="TEST SOCKET SCANNER", test_socket=-1)
     #main("COM24,9600,8N1", title="TEST HANDHELD SCANNER")
     #print(f"SCANNER -> {scanned_udi}")
