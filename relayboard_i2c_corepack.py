@@ -88,6 +88,52 @@ class CorePackRelayBoard():
         self.__validate_gpio_pin(input_n)
         return self.gpio.get_pin(self.input_dict[input_n])
 
+    def is_battery_inserted(self) -> bool:
+        """
+        Reads specific GPIO (Pin 2, inp_300ohm_detect)
+
+        Returns:
+            bool: True - battery is inserted, otherwise - False
+        """
+        return self.gpio.get_pin(self.inp_300ohm_detect)
+
+    def is_rrc3570_inserted(self) -> bool:
+        """"
+        Reads specific GPIO (Pin 3, inp_3570_detect)
+
+        Returns:
+            bool: True - battery is inserted, otherwise - False
+        """
+        return self.gpio.get_pin(self.inp_3570_detect)
+
+    def switch_to_battery_tester_measurement(self):
+        """
+        Writes specific Relay (Pin 3, PSU/Hioki Relay)
+        (0 - Hioki Sense, 1 - PSU Sense)
+        """
+        self.gpio.reset_pin(self.relay_meas)
+
+    def switch_to_psu_measurement(self):
+        """
+        Writes specific Relay (Pin 3, PSU/Hioki Relay)
+        (0 - Hioki Sense, 1 - PSU Sense)
+        """
+        self.gpio.set_pin(self.relay_meas)
+
+    def switch_rrc3570_tpin_open(self):
+        """
+        Writes specific Relay (Pin 0, T-Pin Switch Relay)
+        (0 - T-Pin Open, 1 - T-Pin shorted to GND)
+        """
+        self.gpio.reset_pin(self.relay_3570_switch)
+
+    def switch_rrc3570_tpin_shorted(self):
+        """
+        Writes specific Relay (Pin 0, T-Pin Switch Relay)
+        (0 - T-Pin Open, 1 - T-Pin shorted to GND)
+        """
+        self.gpio.set_pin(self.relay_3570_switch)
+
     def __validate_relay(self, relay_n: int):
         if relay_n not in self.relay_dict.keys():
             raise ValueError(f"Relay pin number for the {str(self)} must be 1 or 4. You selected {relay_n}")
