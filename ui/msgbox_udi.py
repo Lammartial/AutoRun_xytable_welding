@@ -193,7 +193,8 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
         if _stop:
             #mainframe.master.withdraw()
             #mainframe.master.destroy()
-            global ok_button
+            global ok_button, block_accept_udi
+            block_accept_udi = False
             ok_button.invoke()
             # do NOT reschedule after()
         #else:
@@ -576,7 +577,7 @@ if __name__ == '__main__':
     # set the required UDIs per global
     udi_to_scan = [
         UDIScanCtrlItem("PCBA", validate_udi_by_string_at_position_1),
-        #UDIScanCtrlItem("CELL", validate_udi_by_string_at_position_1),
+        UDIScanCtrlItem("CELL", validate_udi_by_string_at_position_1),
         #UDIScanCtrlItem("HEINZ", validate_udi_by_string_at_position_1),
     ]
 

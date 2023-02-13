@@ -39,8 +39,10 @@ class AWS3Modbus(ModbusClient):
     def read_program_parameters(self, axis: int):
         assert (axis in [1,2])
         response1 = self.read_holding_registers(301-1, 120, unit_address=axis)
+        
         response2 = self.read_holding_registers(420-1, 120, unit_address=axis)
-        return response1 + response2
+        pc1 = self.read_holding_registers(446-1, 2, unit_address=axis)        
+        return response1 + response2 + ["COUNTER "] + pc1 
 
     def read_global_parameters(self, axis: int):
         assert (axis in [1,2])
@@ -51,7 +53,15 @@ class AWS3Modbus(ModbusClient):
         response = self.read_holding_registers(501-1, 125, unit_address=3)
         return response
 
-    def read_name(self) -> bytearray:        
+    def read_program_name(self, axis: int) -> str:        
+        assert (axis in [1,2])
+        n = 16 
+        response = self.read_holding_registers(801-1, n, unit_address=axis)
+        self.decoder = BinaryPayloadDecoder.fromRegisters(response, byteorder=self.byte_order, wordorder=self.word_order)
+        b = self.decoder.decode_string(size=n*2)  # size = bytes not words
+        return b.decode("utf8")
+    
+    def read_name(self) -> str:        
         n = 32  # guessed 
         response = self.read_holding_registers(801-1, n, unit_address=3)
         self.decoder = BinaryPayloadDecoder.fromRegisters(response, byteorder=self.byte_order, wordorder=self.word_order)
@@ -80,10 +90,18 @@ if __name__ == '__main__':
            
             d = dev.read_name()
             print(d)
+            d = dev.read_program_name(1)
+            print(d)
+            d = dev.read_program_name(2)
+            print(d)            
             d = dev.read_parameters()
             print("PARAMETERS:", d)
             d = dev.read_system_parameters()
             print("SYSTEM PARAMETERS: ", d)
+            d = dev.read_global_parameters(1)
+            print("GLOBAL PARAMETERS AXIS 1:", d)
+            d = dev.read_global_parameters(2)
+            print("GLOBAL PARAMETERS AXIS 1:", d)            
             d = dev.read_measuring_values(1)
             print("MEASURING AXIS 1: ", d)
             d = dev.read_measuring_values(2)
