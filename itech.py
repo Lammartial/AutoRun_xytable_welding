@@ -1170,6 +1170,22 @@ class M3900(M3400):
         """
         self.set_output_state(0)
 
+    def configure_sink(self, current: float, resistance: float | None,
+                       current_limit: float, voltage_limit_high: float, power_limit: float, set_output: bool = False) -> None:
+        self.set_power_limit_negative(-abs(power_limit))
+        self.set_power_limit_positive(0)  # always fixed!
+        self.set_current_limit_negative(-abs(current_limit))
+        self.set_current_limit_positive(0)  # always fixed!
+        self.set_voltage_limit_high(abs(voltage_limit_high))
+        self.set_voltage_limit_low(0)  # always fixed!
+        self.set_current(-abs(current))
+        self.send("FUNC CURR")  # CC priority
+        if resistance is not None:
+            self.send("SINK:RES:STATE 1")
+            self.send(f"SINK:RES {resistance}")
+        else:
+            self.send("SINK:RES:STATE 0")
+        self.set_output_state(1 if set_output else 0)
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
