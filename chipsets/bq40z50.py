@@ -1454,7 +1454,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "scd2":  unpack_from("<b", buf, 0)[0],
         }))
 
-    def get_mib(self, length: int, hexi : bool) -> str|tuple:
+    def read_mib(self, address: int, length: int, hexi : bool) -> str|tuple:
         """
          Reads 32 bytes of Manufacturer info block, starting at address 0x4041.
 
@@ -1468,18 +1468,20 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         hexi = bool(hexi)
         length = int(length)
         assert((length) > 0 and (length <= 32)), ValueError('Invalid block length. Allowed length is 1 .. 32')
+        assert((address >= 0x4041) and (address <= 0x4060)), ValueError('Invalid address. Allowed 0x4041 .. 0x4060')
+        assert((address-1) + length <= 0x4060), ValueError('Invalid data length or start address. Block of data out of range 0x4041 ..0x4060')
         if (hexi == False):
             # string
-            mib: bytearray = self.read_flash_block(flash_address= 0x4041, length= 32, hexi= False)
+            mib: bytearray = self.read_flash_block(flash_address= address, length= 32, hexi= False)
             mib_str = "".join(map(chr, mib))
             mib_str = mib_str[0:length]
             return mib_str
         else:
-            mib : tuple = tuple(self.read_flash_block(flash_address= 0x4041, length= 32, hexi= False))
+            mib : tuple = tuple(self.read_flash_block(flash_address= address, length= 32, hexi= False))
             mib = mib[0:length]
             return mib
 
-    def set_mib(self, data: str, length: int, address: int) -> bool:
+    def write_mib(self, data: str, length: int, address: int) -> bool:
         """
         Writes "length" bytes of "data" to Manufacturer info block, starting at "address"
 
@@ -1500,7 +1502,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         try:
             start_ind = address - 0x4041
             stop_ind = start_ind + len(data)
-            mib = self.get_mib(32, False)
+            mib = self.read_mib(32, False)
             #udi : str = "12345678123456781234567812345678"
             #ss : str = ''.join(map(str,data))
             new_mib : str = (mib[:start_ind] + data[:length] + mib[stop_ind:])
@@ -1510,6 +1512,107 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         except Exception:
             raise
         return res
+
+    def write_pcba_udi_block(self, pcba_sn: str, prefix: str = "A") -> bool:
+        """
+        Writes specific RRC prefix and PCBA serial number into Manufacturer info block.
+        Addresses: A01-A08 (0x4041 .. 0x4048)
+
+        Args:
+            pcba_sn (str): unique serial number for every PCBA (7 characters)
+            prefix (str, optional): specific prefix provided by RRC. Defaults to "A".
+
+        Returns:
+            bool: True - success, False - failed
+        """
+        pcba_sn = str(pcba_sn)
+        assert(len(prefix) == 1), ValueError('Prefix length more then 1 character.')
+        assert(len(pcba_sn) >= 7), ValueError('Serial number length less then 7 characters.')
+        try:
+            # The last 7 characters contain the serial number
+            pcba_sn = prefix + pcba_sn[-7:]
+            res = self.write_mib(pcba_sn, len(pcba_sn), 0x4041)
+        except Exception:
+            raise
+        return res
+
+    def read_pcba_udi_block(self) -> str:
+        """
+        Reads specific RRC prefix and PCBA serial number from the Manufacturer info block.
+        Addresses: A01-A08 (0x4041 .. 0x4048)
+
+        Returns:
+            str: pcba udi block
+        """
+        return self.read_mib(address= 0x4041, length= 8, hexi= False)
+
+    def write_serial_number_block(self, sn: str) -> bool:
+        """
+        Writes serial number into Manufacturer info block.
+        Addresses: A17-A30 (0x4051 .. 0x4060)
+
+        Args:
+            sn (str): serial number (14 characters)
+
+        Returns:
+            bool: True - success, False - failed
+        """
+        sn = str(sn)
+        assert(len(sn) <= 14), ValueError('Serial number length more then 14 characters.')
+        try:
+            res = self.write_mib(sn, len(sn), 0x4051)
+        except Exception:
+            raise
+        return res
+
+    def read_serial_number_block(self) -> str:
+        """
+        Reads serial number from the Manufacturer info block.
+        Addresses: A17-A30 (0x4051 .. 0x4060)
+
+        Returns:
+            str: serial number block
+        """
+        return self.read_mib(address= 0x4051, length= 14, hexi= False)
+
+    def write_index_byte(self, index: str) -> bool:
+        """
+        Writes Internal Use Indexing Byte into Manufacturer info block.
+        Addresses: A16 (0x4050)
+
+        Args:
+            index (str): index value (1 character)
+
+        Returns:
+            bool: True - success, False - failed
+        """
+        sn = str(index)
+        assert(len(index) == 1), ValueError('Index length more then 1 character.')
+        try:
+            res = self.write_mib(index, len(index), 0x4050)
+        except Exception:
+            raise
+        return res
+
+    def read_index_byte(self) -> str:
+        """
+        Reads Internal Use Indexing Byte from the Manufacturer info block.
+        Addresses: A16 (0x4050)
+
+        Returns:
+            str: Internal Use Indexing Byte
+        """
+        return self.read_mib(address= 0x4050, length= 1, hexi= False)
+
+    def read_firmware_revision(self) -> str:
+        """
+        Reads firmware_revision from the Manufacturer info block.
+        Addresses: A31-A32 (0x405F .. 0x4060)
+
+        Returns:
+            str: firmware_revision
+        """
+        return self.read_mib(address= 0x405F, length= 2, hexi= False)
 
     def set_manufacturer_date(self) -> bool:
         """
