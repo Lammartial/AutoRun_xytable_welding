@@ -43,7 +43,7 @@ class Eth2SerialVisaDevice(object):
 
         Args:
             msg (str): _description_
-            timeout (float, optional): _description_. Defaults to 1.0.
+            timeout (float, optional): _description_. Defaults to 1000ms
 
         Returns:
             bool: _description_
@@ -69,12 +69,12 @@ class Eth2SerialVisaDevice(object):
         finally:
             self.session.close()
 
-    def request(self, msg: str, timeout: float = 2000) -> str:
+    def request(self, msg: str, timeout: float = 3000) -> str:
         """_summary_
 
         Args:
             msg (str): command
-            timeout (float, optional): Defaults to 5.0.
+            timeout (float, optional): Defaults to 3000ms
 
         Returns:
             str: result
@@ -90,8 +90,8 @@ class Eth2SerialVisaDevice(object):
             # In case of use without channel separation
             chn = ""
             if (self.dev_channel != 0):
-                chn = "CHAN " + str(self.dev_channel) + ";"
-            result = self.session.query(chn + msg)
+                chn = f"CHAN {self.dev_channel};"
+            result = self.session.query(chn + msg).strip()
             _log.debug(f"Received: {result!r}")
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling
