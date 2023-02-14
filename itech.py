@@ -1,3 +1,5 @@
+from typing import List
+from time import sleep
 from rrc.eth2serial.base_visa import Eth2SerialVisaDevice
 import math
 
@@ -57,24 +59,6 @@ class M3400(Eth2SerialVisaDevice):
 	# + [SOURce:]VOLTage[:OVER]:PROTection[:LEVel] <NRf+>
 	# + [SOURce:]VOLTage:UNDer:PROTection[:LEVel] <NRf+>
 
-    # BATTery:MODE <CPD>
-    # BATTery:MODE?
-    # BATTery:CHARge:VOLTage <NRf+>
-    # BATTery:CHARge:VOLTage? [MINimum|MAXimum|DEFault]
-    # BATTery:CHARge:CURRent <NRf+>
-    # BATTery:CHARge:CURRent? [MINimum|MAXimum|DEFault]
-    # BATTery:DISCharge:VOLTage <NRf+>
-    # BATTery:DISCharge:VOLTage? [MINimum|MAXimum|DEFault]
-    # BATTery:DISCharge:CURRent <NRf+>
-    # BATTery:DISCharge:CURRent? [MINimum|MAXimum|DEFault]
-    # BATTery:SHUT:VOLTage <NRf+>
-    # BATTery:SHUT:VOLTage? [MINimum|MAXimum|DEFault]
-    # BATTery:SHUT:CURRent <NRf+>
-    # BATTery:SHUT:CURRent? [MINimum|MAXimum|DEFault]
-    # BATTery:SHUT:CAPacity <NRf+>
-    # BATTery:SHUT:CAPacity? [MINimum|MAXimum|DEFault]
-    # BATTery:SHUT:TIME <NRf+>
-    # BATTery:SHUT:TIME? [MINimum|MAXimum|DEFault]
 
     def __init__(self, resource_str: str, dev_channel: int = 0):
         """
@@ -92,7 +76,7 @@ class M3400(Eth2SerialVisaDevice):
 
         """
         super().__init__(resource_str, dev_channel)
-        pass
+        self.last_mode = "??"  # not yet set
 
     def __str__(self) -> str:
         return f"M3400 VISA device on {super().__str__()}"
@@ -107,8 +91,7 @@ class M3400(Eth2SerialVisaDevice):
         This command clears the system status register.
         IT M3400 and M3900 devices
         """
-        cmd = "SYST:REM"
-        self.send(cmd)
+        self.send("SYST:REM")
 
     def send_raw_command(self, cmd: str) -> None:
         """
@@ -132,49 +115,49 @@ class M3400(Eth2SerialVisaDevice):
         return self.request(str(cmd))
 
 
-    def get_ADC_rounded(self, ndigits: int = 3) -> float:
-        return round(self.get_ADC(), ndigits=int(ndigits))
+    # def get_ADC_rounded(self, ndigits: int = 3) -> float:
+    #     return round(self.get_ADC(), ndigits=int(ndigits))
 
-    def get_ADC(self) -> float:
-        """
-        This command queries the present current measurement.
-        IT M3400 and M3900 devices
+    # def get_ADC(self) -> float:
+    #     """
+    #     This command queries the present current measurement.
+    #     IT M3400 and M3900 devices
 
-        Returns:
-            float: ADC
-        """
-        cmd = "FETC:CURR?"
-        return float(self.request(cmd, 2000))
-
-
-    def get_VDC_rounded(self, ndigits: int = 3) -> float:
-        return round(self.get_VDC(), ndigits=int(ndigits))
-
-    def get_VDC(self) -> float:
-        """
-        This command queries the present measured voltage.
-        IT M3400 and M3900 devices
-
-        Returns:
-            float: VDC
-        """
-        cmd = "FETC:VOLT?"
-        return float(self.request(cmd, 2000))
+    #     Returns:
+    #         float: ADC
+    #     """
+    #     cmd = "FETC:CURR?"
+    #     return float(self.request(cmd))
 
 
-    def get_temp_rounded(self, ndigits: int = 3) -> float:
-        return round(self.get_temp(), ndigits=int(ndigits))
+    # def get_VDC_rounded(self, ndigits: int = 3) -> float:
+    #     return round(self.get_VDC(), ndigits=int(ndigits))
 
-    def get_temp(self) -> float:
-        """
-        This command queries the measured UUT temperature.
-        IT M3400 devices
+    # def get_VDC(self) -> float:
+    #     """
+    #     This command queries the present measured voltage.
+    #     IT M3400 and M3900 devices
 
-        Returns:
-            float: temperature
-        """
-        cmd = "FETC:UUT:TEMP?"
-        return float(self.request(cmd, 2000))
+    #     Returns:
+    #         float: VDC
+    #     """
+    #     cmd = "FETC:VOLT?"
+    #     return float(self.request(cmd, 2000))
+
+
+    # def get_temp_rounded(self, ndigits: int = 3) -> float:
+    #     return round(self.get_temp(), ndigits=int(ndigits))
+
+    # def get_temp(self) -> float:
+    #     """
+    #     This command queries the measured UUT temperature.
+    #     IT M3400 devices
+
+    #     Returns:
+    #         float: temperature
+    #     """
+    #     cmd = "FETC:UUT:TEMP?"
+    #     return float(self.request(cmd, 2000))
 
 
     def get_all_meas(self) -> list:
@@ -186,21 +169,16 @@ class M3400(Eth2SerialVisaDevice):
         Returns:
             list[5], float:  voltage, current, power, amp-hour, watt-hour
         """
-        try:
-            cmd = "FETC?"
-            result = self.request(cmd, 2000)
-            # 5 results - string "###, ###, ###, ###, ###"
-            lst = str(result).split(',')
-            result = []
-            result.append(float(lst[0]))    # voltage
-            result.append(float(lst[1]))    # current
-            result.append(float(lst[2]))    # power
-            result.append(float(lst[3]))    # amp-hour
-            result.append(float(lst[4]))    # watt-hour
-            return result
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
+        result = self.request("FETC?")
+        # 5 results - string "###, ###, ###, ###, ###"
+        lst = str(result).split(',')
+        result = []
+        result.append(float(lst[0]))    # voltage
+        result.append(float(lst[1]))    # current
+        result.append(float(lst[2]))    # power
+        result.append(float(lst[3]))    # amp-hour
+        result.append(float(lst[4]))    # watt-hour
+        return result
 
 
     def set_output_state(self, state: int) -> None:
@@ -212,20 +190,21 @@ class M3400(Eth2SerialVisaDevice):
             state (int):  1 - On, 0 - Off
         """
         # trick to use function in NI Teststand
-        state = int(state)
-        cmd = f'OUTP {state}'
-        self.send(cmd)
+        self.send(f"OUTP {int(state)}")
+        sleep(0.5)
+        #self._helper_wait_for_result("OUTP?", [str(int(state))])  # wait for correct output state
 
-    def get_output_state(self) -> int:
-        """
-        This command sets the output state of the power supply.
-        IT M3400 and M3900 devices.
 
-        Returns:
-            int: state, 1 - On, 0 - Off
-        """
-        cmd = "OUTP?"
-        return int(self.request(cmd, 2000))
+    # def get_output_state(self) -> int:
+    #     """
+    #     This command sets the output state of the power supply.
+    #     IT M3400 and M3900 devices.
+
+    #     Returns:
+    #         int: state, 1 - On, 0 - Off
+    #     """
+    #     return int(self.request("OUTP?"))
+    
 
     def set_sense_state(self, state: int):
         """
@@ -233,432 +212,448 @@ class M3400(Eth2SerialVisaDevice):
         IT M3400 devices.
 
         Args:
-            state (int or str): state: int 1|0 or string 'ON'|'OFF'
+            state (int): state: int 1|0 
 
         Raises:
             ValueError: invalid parameters
         """
         # trick to use function in NI Teststand
-        state = int(state)
-        assert((state == 0) or (state == 1)), ValueError('Error, set_output_state: only 1 or 0 allowed')
-        cmd = f'SENS {state}'
-        self.send(cmd)
-
-    def get_sense_state(self) -> int:
-        """
-        This command sets the output state of the power supply
-        IT M3400 devices.
-
-        Returns:
-            int: sense, 1 - On, 0 - Off
-        """
-        cmd = "SENS?"
-        return int(self.request(cmd, 2000))
-
-    def get_output_reverse_state(self) -> int:
-        """
-        This command is used to query the connection of output terminals.
-        IT M3400 devices
-
-        Returns:
-            int: state, 1 - On, 0 - Off
-        """
-        cmd = "OUTP:REV?"
-        return int(self.request(cmd, 2000))
-
-    #[SOURce:]CURRent[:LEVel][:IMMediate][:AMPLitude] <NRf+>
-    def set_current(self, curr: float) -> None:
-        """
-        This command sets the current value of the power supply.
-        The query form of this command gets the set current value of the power supply.
-        IT M3400 and M3900 devices
-
-        Args:
-            curr (float): current 'XX.XXX' Amp
-        """
-        try:
-            param_str =  f"{curr:06.3f}"
-            cmd = 'CURR ' + param_str
-            self.send(cmd)
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
+        _s = 1 if int(state) > 0 else 0
+        self.send(f"SENS {_s}")
+        #self._helper_wait_for_result("SENS?", [str(_s)])  # wait for correct output state
 
 
-    def get_current_rounded(self, ndigits: int = 3) -> float:
-        return round(self.get_current(), ndigits=int(ndigits))
+    # def get_sense_state(self) -> int:
+    #     """
+    #     This command sets the output state of the power supply
+    #     IT M3400 devices.
 
-    #[SOURce:]CURRent[:LEVel][:IMMediate][:AMPLitude] <NRf+>
-    def get_current(self) -> float:
-        """
-        This command gets the current value of the power supply.
-        IT M3400 and M3900 devices.
+    #     Returns:
+    #         int: sense, 1 - On, 0 - Off
+    #     """
+    #     return int(self.request("SENS?"))
 
-        Returns:
-            float: current
-        """
-        cmd = "CURR?"
-        return float(self.request(cmd, 2000))
 
-    #[SOURce:]CURRent:SLEW:POSitive <NRf+>
-    def set_current_slew_positive(self, rate: float) -> None:
-        """
-        This command sets the current rising slew rate of the power supply.
+    # def get_output_reverse_state(self) -> int:
+    #     """
+    #     This command is used to query the connection of output terminals.
+    #     IT M3400 devices
 
-        Args:
-            rate (float): current slew rate, seconds
-        """
-        try:
-            rate = float(rate)
-            rate_str =  f"{rate:05.2f}"
-            cmd = "CURR:SLEW:POS " + rate_str
-            self.send(cmd)
-        except Exception as ex:
-            raise
+    #     Returns:
+    #         int: state, 1 - On, 0 - Off
+    #     """
+    #     cmd = "OUTP:REV?"
+    #     return int(self.request(cmd, 2000))
 
-    #[SOURce:]CURRent:SLEW:NEGative <NRf+>
-    def set_current_slew_negative(self, rate: float) -> None:
-        """
-        This command sets the current falling slew rate of the power supply.
+    # #[SOURce:]CURRent[:LEVel][:IMMediate][:AMPLitude] <NRf+>
+    # def set_current(self, curr: float) -> None:
+    #     """
+    #     This command sets the current value of the power supply.
+    #     The query form of this command gets the set current value of the power supply.
+    #     IT M3400 and M3900 devices
 
-        Args:
-            rate (float): current slew rate, seconds
-        """
-        try:
-            rate = float(rate)
-            rate_str =  f"{rate:05.2f}"
-            cmd = "CURR:SLEW:NEG " + rate_str
-            self.send(cmd)
-        except Exception as ex:
-            raise
+    #     Args:
+    #         curr (float): current 'XX.XXX' Amp
+    #     """
+    #     try:
+    #         param_str =  f"{curr:06.3f}"
+    #         cmd = 'CURR ' + param_str
+    #         self.send(cmd)
+    #     except Exception as ex:
+    #         #_log.exception(ex)
+    #         raise
 
-    #[SOURce:]CURRent[:LEVel]:LIMit:POSitive <NRf+>
-    def set_current_limit_positive(self, curr: float) -> None:
-        """
-        This command sets the positive current limit value of the power supply.
-        IT M3400 and M3900 devices.
 
-        Args:
-            curr (float): current limit 'XX.XXX' Amps
-        """
-        try:
-            param_str =  f"{curr:06.3f}"
-            cmd = 'CURR:LIM:POS ' + param_str
-            self.send(cmd, 2000)
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
+    # def get_current_rounded(self, ndigits: int = 3) -> float:
+    #     return round(self.get_current(), ndigits=int(ndigits))
 
-    #[SOURce:]CURRent[:LEVel]:LIMit:POSitive <NRf+>
-    def get_current_limit_positive(self) -> float:
-        """
-        This command gets the positive current limit value of the power supply.
-        IT M3400 and M3900 devices.
+    # #[SOURce:]CURRent[:LEVel][:IMMediate][:AMPLitude] <NRf+>
+    # def get_current(self) -> float:
+    #     """
+    #     This command gets the current value of the power supply.
+    #     IT M3400 and M3900 devices.
 
-        Returns:
-            float: current limit
-        """
-        try:
-            cmd = "CURR:LIM:POS?"
-            return float(self.request(cmd, 2000))
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
+    #     Returns:
+    #         float: current
+    #     """
+    #     cmd = "CURR?"
+    #     return float(self.request(cmd, 2000))
 
-    #[SOURce:]CURRent[:LEVel]:LIMit:NEGative <NRf+>
-    def set_current_limit_negative(self, curr: float) -> None:
-        """
-        This command sets the negative current limit value of the power supply.
-        IT M3400 and M3900 devices.
+    # #[SOURce:]CURRent:SLEW:POSitive <NRf+>
+    # def set_current_slew_positive(self, rate: float) -> None:
+    #     """
+    #     This command sets the current rising slew rate of the power supply.
 
-        Args:
-            curr (float): current limit '-XX.XXX' Amps
-        """
-        try:
-            param_str =  f"{curr:07.3f}"
-            cmd = 'CURR:LIM:NEG ' + param_str
-            self.send(cmd)
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
+    #     Args:
+    #         rate (float): current slew rate, seconds
+    #     """
+    #     try:
+    #         rate = float(rate)
+    #         rate_str =  f"{rate:05.2f}"
+    #         cmd = "CURR:SLEW:POS " + rate_str
+    #         self.send(cmd)
+    #     except Exception as ex:
+    #         raise
 
-    #[SOURce:]CURRent[:LEVel]:LIMit:NEGative <NRf+>
-    def get_current_limit_negative(self) -> float:
-        """
-        This command gets the negative current limit value of the power supply.
-        IT M3400 and M3900 devices.
+    # #[SOURce:]CURRent:SLEW:NEGative <NRf+>
+    # def set_current_slew_negative(self, rate: float) -> None:
+    #     """
+    #     This command sets the current falling slew rate of the power supply.
 
-        Returns:
-            float: current limit
-        """
-        try:
-            cmd = "CURR:LIM:NEG?"
-            return float(self.request(cmd, 2000))
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
+    #     Args:
+    #         rate (float): current slew rate, seconds
+    #     """
+    #     try:
+    #         rate = float(rate)
+    #         rate_str =  f"{rate:05.2f}"
+    #         cmd = "CURR:SLEW:NEG " + rate_str
+    #         self.send(cmd)
+    #     except Exception as ex:
+    #         raise
 
-    #[SOURce:]CURRent[:OVER]:PROTection[:LEVel] <NRf+>
-    def set_current_protection(self, curr: float) -> None:
-        """
-        This command sets the over current limit of the power supply.
-        IT M3400 and M3900 devices.
+    # #[SOURce:]CURRent[:LEVel]:LIMit:POSitive <NRf+>
+    # def set_current_limit_positive(self, curr: float) -> None:
+    #     """
+    #     This command sets the positive current limit value of the power supply.
+    #     IT M3400 and M3900 devices.
 
-        Args:
-            curr (float): current protection 'XX.XXX' Amps
-        """
-        try:
-            param_str =  f"{curr:06.3f}"
-            cmd = 'CURR:PROT ' + param_str
-            self.send(cmd)
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
+    #     Args:
+    #         curr (float): current limit 'XX.XXX' Amps
+    #     """
+    #     try:
+    #         param_str =  f"{curr:06.3f}"
+    #         cmd = 'CURR:LIM:POS ' + param_str
+    #         self.send(cmd, 2000)
+    #     except Exception as ex:
+    #         #_log.exception(ex)
+    #         raise
 
-    #[SOURce:]CURRent[:OVER]:PROTection[:LEVel] <NRf+>
-    def get_current_protection(self) -> float:
-        """
-        This command gets the over current limit of the power supply.
-        IT M3400 and M3900 devices.
+    # #[SOURce:]CURRent[:LEVel]:LIMit:POSitive <NRf+>
+    # def get_current_limit_positive(self) -> float:
+    #     """
+    #     This command gets the positive current limit value of the power supply.
+    #     IT M3400 and M3900 devices.
 
-        Returns:
-            float: current protection
-        """
-        try:
-            cmd = "CURR:PROT?"
-            return float(self.request(cmd, 2000))
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
+    #     Returns:
+    #         float: current limit
+    #     """
+    #     try:
+    #         cmd = "CURR:LIM:POS?"
+    #         return float(self.request(cmd, 2000))
+    #     except Exception as ex:
+    #         #_log.exception(ex)
+    #         raise
 
-    #[SOURce:]CURRent:UNDer:PROTection[:LEVel] <NRf+>
-    def set_current_under_protection(self, curr: float) -> None:
-        """
-        This command sets the under current limit of the power supply.
-        IT M3400 and M3900 devices.
+    # #[SOURce:]CURRent[:LEVel]:LIMit:NEGative <NRf+>
+    # def set_current_limit_negative(self, curr: float) -> None:
+    #     """
+    #     This command sets the negative current limit value of the power supply.
+    #     IT M3400 and M3900 devices.
 
-        Args:
-            curr (_type_): current under protection 'XX.XXX' Amps
-        """
-        try:
-            param_str =  f"{curr:06.3f}"
-            cmd = 'CURR:UND:PROT ' + param_str
-            self.send(cmd)
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
+    #     Args:
+    #         curr (float): current limit '-XX.XXX' Amps
+    #     """
+    #     try:
+    #         param_str =  f"{curr:07.3f}"
+    #         cmd = 'CURR:LIM:NEG ' + param_str
+    #         self.send(cmd)
+    #     except Exception as ex:
+    #         #_log.exception(ex)
+    #         raise
 
-    #[SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+>
-    def set_voltage(self, volt: float) -> None:
-        """
-        This command sets the voltage value of the power supply.
-        IT M3400 and M3900 devices.
-        Args:
-            volt (float): voltage 'XX.XX' Volts
-        """
-        try:
-            param_str =  f"{volt:05.2f}"
-            cmd = 'VOLT ' + param_str
-            self.send(cmd)
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
+    # #[SOURce:]CURRent[:LEVel]:LIMit:NEGative <NRf+>
+    # def get_current_limit_negative(self) -> float:
+    #     """
+    #     This command gets the negative current limit value of the power supply.
+    #     IT M3400 and M3900 devices.
 
-    #[SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+>
-    def get_voltage(self) -> float:
-        """
-        The query form of this command gets the set voltage value of the power supply.
-        IT M3400 and M3900 devices.
+    #     Returns:
+    #         float: current limit
+    #     """
+    #     try:
+    #         cmd = "CURR:LIM:NEG?"
+    #         return float(self.request(cmd, 2000))
+    #     except Exception as ex:
+    #         #_log.exception(ex)
+    #         raise
 
-        Returns:
-            float: voltage
-        """
-        try:
-            cmd = 'VOLT?'
-            return float(self.request(cmd, 2000))
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
+    # #[SOURce:]CURRent[:OVER]:PROTection[:LEVel] <NRf+>
+    # def set_current_protection(self, curr: float) -> None:
+    #     """
+    #     This command sets the over current limit of the power supply.
+    #     IT M3400 and M3900 devices.
 
-    #[SOURce:]VOLTage:SLEW:POSitive <NRf+>
-    def set_voltage_slew_positive(self, rate: float) -> None:
-        """
-        This command sets the voltage rising slew rate of the power supply.
+    #     Args:
+    #         curr (float): current protection 'XX.XXX' Amps
+    #     """
+    #     try:
+    #         param_str =  f"{curr:06.3f}"
+    #         cmd = 'CURR:PROT ' + param_str
+    #         self.send(cmd)
+    #     except Exception as ex:
+    #         #_log.exception(ex)
+    #         raise
 
-        Args:
-            rate (float): voltage slew rate, seconds
-        """
-        try:
-            rate = float(rate)
-            rate_str =  f"{rate:05.2f}"
-            cmd = "VOLT:SLEW:POS " + rate_str
-            self.send(cmd)
-        except Exception as ex:
-            raise
+    # #[SOURce:]CURRent[:OVER]:PROTection[:LEVel] <NRf+>
+    # def get_current_protection(self) -> float:
+    #     """
+    #     This command gets the over current limit of the power supply.
+    #     IT M3400 and M3900 devices.
 
-    #[SOURce:]VOLTage:SLEW:NEGative <NRf+>
-    def set_curren_slew_negative(self, rate: float) -> None:
-        """
-        This command sets the voltage falling slew rate of the power supply.
+    #     Returns:
+    #         float: current protection
+    #     """
+    #     try:
+    #         cmd = "CURR:PROT?"
+    #         return float(self.request(cmd, 2000))
+    #     except Exception as ex:
+    #         #_log.exception(ex)
+    #         raise
 
-        Args:
-            rate (float): voltage slew rate, seconds
-        """
-        try:
-            rate = float(rate)
-            rate_str =  f"{rate:05.2f}"
-            cmd = "VOLT:SLEW:NEG " + rate_str
-            self.send(cmd)
-        except Exception as ex:
-            raise
+    # #[SOURce:]CURRent:UNDer:PROTection[:LEVel] <NRf+>
+    # def set_current_under_protection(self, curr: float) -> None:
+    #     """
+    #     This command sets the under current limit of the power supply.
+    #     IT M3400 and M3900 devices.
 
-    #[SOURce:]VOLTage[:LEVel]:LIMit[:HIGH] <NRf+>
-    def set_voltage_limit_high(self, volt: float) -> None:
-        """
-        This command sets voltage upper limit under CC priority mode.
-        IT M3400 and M3900 devices.
+    #     Args:
+    #         curr (_type_): current under protection 'XX.XXX' Amps
+    #     """
+    #     try:
+    #         param_str =  f"{curr:06.3f}"
+    #         cmd = 'CURR:UND:PROT ' + param_str
+    #         self.send(cmd)
+    #     except Exception as ex:
+    #         #_log.exception(ex)
+    #         raise
 
-        Args:
-            volt (float): voltage limit 'XX.XX' Volts
-        """
-        try:
-            param_str =  f"{volt:05.2f}"
-            cmd = 'VOLT:LIM ' + param_str
-            self.send(cmd)
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
+    # #[SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+>
+    # def set_voltage(self, volt: float) -> None:
+    #     """
+    #     This command sets the voltage value of the power supply.
+    #     IT M3400 and M3900 devices.
+    #     Args:
+    #         volt (float): voltage 'XX.XX' Volts
+    #     """
+    #     try:
+    #         param_str =  f"{volt:05.2f}"
+    #         cmd = 'VOLT ' + param_str
+    #         self.send(cmd)
+    #     except Exception as ex:
+    #         #_log.exception(ex)
+    #         raise
 
-    #[SOURce:]VOLTage[:LEVel]:LIMit:LOW <NRf+>
-    def set_voltage_limit_low(self, volt: float) -> None:
-        """
-        This command sets voltage lower limit under CC priority mode.
-        IT M3400 devices.
+    # #[SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+>
+    # def get_voltage(self) -> float:
+    #     """
+    #     The query form of this command gets the set voltage value of the power supply.
+    #     IT M3400 and M3900 devices.
 
-        Args:
-            volt (float): voltage limit 'XX.XX' Volts
-        """
-        try:
-            param_str =  f"{volt:05.2f}"
-            cmd = 'VOLT:LIM:LOW ' + param_str
-            self.send(cmd)
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
+    #     Returns:
+    #         float: voltage
+    #     """
+    #     try:
+    #         cmd = 'VOLT?'
+    #         return float(self.request(cmd, 2000))
+    #     except Exception as ex:
+    #         #_log.exception(ex)
+    #         raise
 
-    #[SOURce:]VOLTage[:OVER]:PROTection[:LEVel] <NRf+>
-    def set_voltage_protection(self, volt: float) -> None:
-        """
-        This command sets the over voltage limit of the power supply.
-        IT M3400 and M3900 devices.
+    # #[SOURce:]VOLTage:SLEW:POSitive <NRf+>
+    # def set_voltage_slew_positive(self, rate: float) -> None:
+    #     """
+    #     This command sets the voltage rising slew rate of the power supply.
 
-        Args:
-            volt (float): voltage protection 'XX.XX' Volts
-        """
-        try:
-            param_str =  f"{volt:05.2f}"
-            cmd = 'VOLT:PROT ' + param_str
-            self.send(cmd)
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
+    #     Args:
+    #         rate (float): voltage slew rate, seconds
+    #     """
+    #     try:
+    #         rate = float(rate)
+    #         rate_str =  f"{rate:05.2f}"
+    #         cmd = "VOLT:SLEW:POS " + rate_str
+    #         self.send(cmd)
+    #     except Exception as ex:
+    #         raise
 
-    #[SOURce:]VOLTage:UNDer:PROTection[:LEVel] <NRf+>
-    def set_voltage_under_protection(self, volt: float) -> None:
-        """
-        This command sets the under voltage limit of the power supply.
-        IT M3400 and M3900 devices.
+    # #[SOURce:]VOLTage:SLEW:NEGative <NRf+>
+    # def set_curren_slew_negative(self, rate: float) -> None:
+    #     """
+    #     This command sets the voltage falling slew rate of the power supply.
 
-        Args:
-            volt (float): voltage under protection
-        """
-        try:
-            param_str =  f"{volt:05.2f}"
-            cmd = 'VOLT:UND:PROT ' + param_str
-            self.send(cmd)
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
+    #     Args:
+    #         rate (float): voltage slew rate, seconds
+    #     """
+    #     try:
+    #         rate = float(rate)
+    #         rate_str =  f"{rate:05.2f}"
+    #         cmd = "VOLT:SLEW:NEG " + rate_str
+    #         self.send(cmd)
+    #     except Exception as ex:
+    #         raise
 
-    def set_power_limit_positive(self, power: float):
-        """
-        This command is used to set the power upper limit value.
+    # #[SOURce:]VOLTage[:LEVel]:LIMit[:HIGH] <NRf+>
+    # def set_voltage_limit_high(self, volt: float) -> None:
+    #     """
+    #     This command sets voltage upper limit under CC priority mode.
+    #     IT M3400 and M3900 devices.
 
-        Args:
-            power (float): power limit value, Watt.
-        """
-        power = float(power)
-        try:
-            param_str =  f"{power:05.2f}"
-            cmd = 'POW:LIM ' + param_str
-            self.send(cmd)
-        except Exception as ex:
-            raise
+    #     Args:
+    #         volt (float): voltage limit 'XX.XX' Volts
+    #     """
+    #     try:
+    #         param_str =  f"{volt:05.2f}"
+    #         cmd = 'VOLT:LIM:HIGH ' + param_str
+    #         self.send(cmd)
+    #     except Exception as ex:
+    #         #_log.exception(ex)
+    #         raise
 
-    def set_power_limit_negative(self, power: float):
-        """
-        This command is used to set the power lower limit value.
+    # #[SOURce:]VOLTage[:LEVel]:LIMit:LOW <NRf+>
+    # def set_voltage_limit_low(self, volt: float) -> None:
+    #     """
+    #     This command sets voltage lower limit under CC priority mode.
+    #     IT M3400 devices.
 
-        Args:
-            power (float): power limit value, Watt.
-        """
-        power = float(power)
-        try:
-            param_str =  f"{power:05.2f}"
-            cmd = 'POW:LIM:NEG ' + param_str
-            self.send(cmd)
-        except Exception as ex:
-            raise
+    #     Args:
+    #         volt (float): voltage limit 'XX.XX' Volts
+    #     """
+    #     try:
+    #         param_str =  f"{volt:05.2f}"
+    #         cmd = 'VOLT:LIM:LOW ' + param_str
+    #         self.send(cmd)
+    #     except Exception as ex:
+    #         #_log.exception(ex)
+    #         raise
 
-    def set_function(self, func: str = "VOLT") -> None:
+    # #[SOURce:]VOLTage[:OVER]:PROTection[:LEVel] <NRf+>
+    # def set_voltage_protection(self, volt: float) -> None:
+    #     """
+    #     This command sets the over voltage limit of the power supply.
+    #     IT M3400 and M3900 devices.
+
+    #     Args:
+    #         volt (float): voltage protection 'XX.XX' Volts
+    #     """
+    #     try:
+    #         param_str =  f"{volt:05.2f}"
+    #         cmd = 'VOLT:PROT ' + param_str
+    #         self.send(cmd)
+    #     except Exception as ex:
+    #         #_log.exception(ex)
+    #         raise
+
+    # #[SOURce:]VOLTage:UNDer:PROTection[:LEVel] <NRf+>
+    # def set_voltage_under_protection(self, volt: float) -> None:
+    #     """
+    #     This command sets the under voltage limit of the power supply.
+    #     IT M3400 and M3900 devices.
+
+    #     Args:
+    #         volt (float): voltage under protection
+    #     """
+    #     try:
+    #         param_str =  f"{volt:05.2f}"
+    #         cmd = 'VOLT:UND:PROT ' + param_str
+    #         self.send(cmd)
+    #     except Exception as ex:
+    #         #_log.exception(ex)
+    #         raise
+
+    # def set_power_limit_positive(self, power: float):
+    #     """
+    #     This command is used to set the power upper limit value.
+
+    #     Args:
+    #         power (float): power limit value, Watt.
+    #     """
+    #     power = float(power)
+    #     try:
+    #         param_str =  f"{power:05.2f}"
+    #         cmd = 'POW:LIM ' + param_str
+    #         self.send(cmd)
+    #     except Exception as ex:
+    #         raise
+
+    # def set_power_limit_negative(self, power: float):
+    #     """
+    #     This command is used to set the power lower limit value.
+
+    #     Args:
+    #         power (float): power limit value, Watt.
+    #     """
+    #     power = float(power)
+    #     try:
+    #         param_str =  f"{power:05.2f}"
+    #         cmd = 'POW:LIM:NEG ' + param_str
+    #         self.send(cmd)
+    #     except Exception as ex:
+    #         raise
+
+    def _helper_wait_for_result(self, query:str, expected_result: List[str], loops: int = 20) -> None:
+        for n in range(loops):
+            r = self.request(query, timeout=5000)
+            if any(e in r for e in expected_result):
+                return True
+            sleep(0.1)
+        raise TimeoutError(f"Could not get desired result '{expected_result}'")
+
+
+    def set_function(self, func: str = "VOLT") -> bool:
         """
         This command is used to set the working mode of the power supply.
 
         Args:
-            func (str, optional): CV or CC mode. Defaults to "VOLT".
+            func (str, optional): VOLT or CURR mode. Defaults to "VOLT".
         """
-        try:
-            assert(func in ["VOLT", "CV", "CURR", "CC"]), ValueError('Error, set_function: only "VOLT", "CURR", "CV" or "CC" allowed')
-            cmd = "FUNC " + func
-            self.send(cmd)
-        except Exception as ex:
-            raise
-
+        assert(func in ["VOLT", "CURR"]), ValueError('Error, set_function: only "VOLT", "CURR" allowed')
+        self.last_mode = func
+        self.send(f"FUNC {func}")
+        sleep(0.5)
+        #self._helper_wait_for_result("FUNC?", [str(func)])
+        
+        
     def configure_current_rise_times(self, pos: float| str = "MIN", neg: float | str = "MIN"):
-        self.send(f"CURRENT:SLEW:NEG {neg}")
-        self.send(f"CURRENT:SLEW:POS {pos}")
+        self.send(f"CURRENT:SLEW:NEG {neg:0.3f}")
+        self.send(f"CURRENT:SLEW:POS {pos:0.3f}")
 
     def configure_voltage_rise_times(self, pos: float | str = "MIN", neg: float | str = "MIN"):
-        self.send(f"VOLTAGE:SLEW:NEG {neg}")
-        self.send(f"VOLTAGE:SLEW:POS {pos}")
+        self.send(f"VOLTAGE:SLEW:NEG {neg:0.3f}")
+        self.send(f"VOLTAGE:SLEW:POS {pos:0.3f}")
+
 
     def configure_sink(self, current: float, resistance: float | None,
                        current_limit: float, voltage_limit_high: float, power_limit: float, set_output: bool = False) -> None:
-        self.set_power_limit_negative(-abs(power_limit))
-        self.set_power_limit_positive(0)  # always fixed!
-        self.set_current_limit_negative(-abs(current_limit))
-        self.set_current_limit_positive(0)  # always fixed!
-        self.set_voltage_limit_high(abs(voltage_limit_high))
-        self.set_voltage_limit_low(0)  # always fixed!
-        self.set_current(-abs(current))
-        self.send("FUNC CURR")  # CC priority
+        if self.last_mode != "CURR":
+            self.set_output_state(0)  # make sure output is OFF
+        self.set_function("CURR")  # CC priority
+        self.send(f"POW:LIM:NEG {-abs(power_limit):0.2f}")
+        self.send(f"POW:LIM:POS {0.0:0.2f}") # always fixed!
+        self.send(f"CURR:LIM:NEG {-abs(current_limit):0.3f}")
+        self.send(f"CURR:LIM:POS {0.0:0.3f}") # always fixed!        
+        self.send(f"VOLT:LIM:LOW {0.0:0.2f}") # always fixed!
+        self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
+        #self.send(f"VOLT {voltage_limit_high:0.2f}")
+        self.send(f"CURR {-abs(current):0.3f}")        
         if resistance is not None:
-            self.send("SINK:RES:STATE 1")
-            self.send(f"SINK:RES {resistance}")
+            self.send(f"SINK:RES {resistance:0.3f}")
+            self.send("SINK:RES:STATE 1")            
         else:
             self.send("SINK:RES:STATE 0")
         self.set_output_state(1 if set_output else 0)
 
-    def configure_supply(self, voltage: float, current_limit: float, power_limit, set_output: bool = False) -> None:
-        self.set_power_limit_positive(abs(power_limit))
-        self.set_power_limit_negative(0)  # always fixed!
-        self.set_current_limit_positive(abs(current_limit))
-        self.set_current_limit_negative(0)  # always fixed!
-        self.set_voltage_limit_high(abs(voltage) * 1.15)
-        self.set_voltage_limit_low(0)
-        self.set_voltage(abs(voltage))
-        self.send("SINK:RES:STATE 0")
-        self.send("FUNC VOLT")  # CV priority
+    def configure_supply(self, voltage: float, current_limit: float, power_limit: float, set_output: bool = False) -> None:
+        if self.last_mode != "VOLT":
+            self.set_output_state(0)  # make sure output is OFF
+        self.set_function("VOLT")
+        self.send(f"POW:LIM:NEG {0.0:0.2f}") # always fixed!
+        self.send(f"POW:LIM:POS {abs(power_limit):0.2f}")
+        self.send(f"CURR:LIM:NEG {0.0:0.3f}") # always fixed!
+        self.send(f"CURR:LIM:POS {abs(current_limit):0.3f}")
+        self.send(f"VOLT:LIM:LOW {0.0:0.2f}") # always fixed!
+        self.send(f"VOLT:LIM:HIGH {voltage:0.2f}")
+        #self.send(f"CURR {abs(current_limit):0.3f}")
+        self.send(f"VOLT {voltage:0.2f}")
+        self.send("SINK:RES:STATE 0")       
         self.set_output_state(1 if set_output else 0)
 
 
@@ -1177,7 +1172,7 @@ class M3900(M3400):
         self.set_current_limit_negative(-abs(current_limit))
         self.set_current_limit_positive(0)  # always fixed!
         self.set_voltage_limit_high(abs(voltage_limit_high))
-        self.set_voltage_limit_low(0)  # always fixed!
+        self.set_voltage_limit_low(0)  # always fixed!        
         self.set_current(-abs(current))
         self.send("FUNC CURR")  # CC priority
         if resistance is not None:
