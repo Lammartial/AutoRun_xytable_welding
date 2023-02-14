@@ -220,9 +220,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         })
         return _od2t(self._operation_status)
 
-    def operation_status_ts(self) -> str:
-        self.operation_status(True)
-        return self._operation_status["block"]
+    # def operation_status_ts(self) -> str:
+    #     self.operation_status(True)
+    #     return self._operation_status["block"]
 
 
     def manufacturing_status(self, hexi: bool | str | None = None) -> tuple:
@@ -1236,7 +1236,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         while (retries >= 0):
             try:
                 self.manufacturing_status()  # => update the self._manufacturing_status attribute
-                if bool(self._manufacturing_status[ms_key]) != enable:
+                if bool(self._manufacturing_status[ms_key]) != bool(enable):
                     if not _toggle_issued:
                         self.manufacturer_access = ma_cmd  # need to toggle
                         _toggle_issued = True                       
@@ -1252,7 +1252,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                     sleep(pause_on_retry)
             finally:
                 retries -= 1
-        return (bool(self._manufacturing_status[ms_key]) == enable)
+        return (bool(self._manufacturing_status[ms_key]) == bool(enable))
 
 
     def _os_toggle_helper(self, os_key: str, enable: bool, ma_cmd: int, retries: int = 5, pause_on_retry: float = 0.2) -> bool:
@@ -1531,7 +1531,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         else:
             clean_udi = udi_block
         assert(len(clean_udi) >= 2 and len(clean_udi) <= 15), ValueError(f"Clean UDI length={len(clean_udi)} not between 2 and 15.")
-        return self.write_flash_block(0x4041, bytes(clean_udi))
+        return self.write_flash_block(0x4041, bytes(clean_udi, encoding="utf-8"))
 
     def read_pcba_udi_block(self) -> str:
         """
@@ -1584,7 +1584,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             bool: True - success, False - failed
         """
         assert(len(index_byte) == 1), ValueError('Index my not have more then 1 character.')
-        return self.write_flash_block(0x4051, bytes(index_byte))
+        return self.write_flash_block(0x4051, bytes(index_byte, encoding="utf-8"))
 
 
 
