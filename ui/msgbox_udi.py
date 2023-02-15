@@ -193,7 +193,8 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
         if _stop:
             #mainframe.master.withdraw()
             #mainframe.master.destroy()
-            global ok_button
+            global ok_button, block_accept_udi
+            block_accept_udi = False
             ok_button.invoke()
             # do NOT reschedule after()
         #else:
@@ -581,7 +582,7 @@ if __name__ == '__main__':
     ]
 
     allow_manual_edit = True
-    main("172.21.101.22:2000", title="TEST SOCKET SCANNER", test_socket=-1)
+    main("172.21.101.33:2000", title="TEST SOCKET SCANNER", test_socket=-1)
     #main("COM24,9600,8N1", title="TEST HANDHELD SCANNER")
     #print(f"SCANNER -> {scanned_udi}")
 
