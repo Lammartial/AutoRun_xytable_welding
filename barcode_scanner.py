@@ -44,7 +44,7 @@ if __name__ == "__main__":
     #asyncio.run(tcp_send_and_receive_from_server(None, limit=10, timeout=25.0))
     try:
         #dev = create_barcode_scanner("COM24,9600,8N1")
-        dev = create_barcode_scanner("172.21.101.22:2000")
+        dev = create_barcode_scanner("172.21.101.33:2000")
         s = dev.request(None, timeout=10.5)
         print(s)
     except TimeoutError:
