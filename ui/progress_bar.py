@@ -21,17 +21,19 @@ def center(win: tkinter.Tk):
 
 class ProgressWindow:
 
-    def __init__(self, title: str = "Programming Flash", color: str = None) -> None:
+    def __init__(self, title: str = "Programming Flash", color: str = None,
+                 fontsize: int = 18, width: int = 800, height: int = 100,
+                 test_socket: int = -1) -> None:
+
+        def disable_event():
+            pass
+
         ROOT = tkinter.Tk()
         ROOT.withdraw()  # hide window
         style = ttk.Style()
         #print(style.theme_names())
         style.theme_use("winnative")
-
         
-        def disable_event():
-            pass
-
         # Disable the Close Window Control Icon
         ROOT.protocol("WM_DELETE_WINDOW", disable_event)
         # set App icon
@@ -44,14 +46,24 @@ class ProgressWindow:
         if color:
             #global style
             style.configure("ColorProgress.Horizontal.TProgressbar", background=color)
-        self.root.title(title)
-        # create the Widgets and keep them inside our App object
-        x_size = int(self.root.winfo_screenwidth() * 0.60)
-        y_size = int(self.root.winfo_screenheight() * 0.1)
-        x = int((self.root.winfo_screenwidth() - x_size) / 2)
-        y = int((self.root.winfo_screenheight() - y_size) / 2)
-        self.root.geometry(f"{x_size}x{y_size}+{x}+{y}")
+        test_socket = int(test_socket)     
         # define the geometry for the window or frame
+        #x_size = int(self.root.winfo_screenwidth() * 0.60)
+        #y_size = int(self.root.winfo_screenheight() * 0.1)
+        #x = int((self.root.winfo_screenwidth() - x_size) / 2)
+        #y = int((self.root.winfo_screenheight() - y_size) / 2)
+        #self.root.geometry(f"{x_size}x{y_size}+{x}+{y}")
+        x_size = int(width)
+        y_size = int(height)
+        if test_socket < 0:
+            self.root.title(title)
+            _x = int((self.root.winfo_screenwidth() / 2) - (x_size / 2))
+            _y = int((self.root.winfo_screenheight() / 2) - (y_size / 2))
+        else:
+            self.root.title(f"SOCKET {test_socket}: {title}")
+            _x = int((self.root.winfo_screenwidth() / 2) - (x_size / 2))
+            _y = 500 + test_socket * (y_size + 20)
+        self.root.geometry(f"{x_size}x{y_size}+{_x}+{_y}")        
         self.root.columnconfigure(0, weight=1)
         # create progress bar
         self.progress = ttk.Progressbar(self.root,
@@ -92,7 +104,7 @@ if __name__ == '__main__':
     _title = "PROGRAM"
     colors = [None, "darkblue", "red"]
     for z in range(3):
-        win = ProgressWindow(title=_title + f" {z}", color=colors[z])
+        win = ProgressWindow(title=_title + f" {z}", color=colors[z], test_socket=0)
         i = 0
         mx = 10
         win.show()
