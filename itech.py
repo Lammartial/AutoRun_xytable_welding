@@ -77,6 +77,7 @@ class M3400(Eth2SerialVisaDevice):
         """
         super().__init__(resource_str, dev_channel)
         self.last_mode = "??"  # not yet set
+        self.initialize_device()
 
     def __str__(self) -> str:
         return f"M3400 VISA device on {super().__str__()}"
@@ -86,12 +87,20 @@ class M3400(Eth2SerialVisaDevice):
 
     #----------------------------------------------------------------------------------------------
 
-    def set_remote_control(self) -> None:
-        """
-        This command clears the system status register.
-        IT M3400 and M3900 devices
-        """
-        self.send("SYST:REM")
+    def initialize_device(self) -> None:        
+        self.send("SYST:REM")     # set remote control ON        
+        self.send("SENS:STAT 1")  # set sense state ON        
+        self.send("OUTP 0")       # set OUTPUT OFF
+        sleep(0.25)
+
+    #----------------------------------------------------------------------------------------------
+
+    # def set_remote_control(self) -> None:
+    #     """
+    #     This command clears the system status register.
+    #     IT M3400 and M3900 devices
+    #     """
+    #     self.send("SYST:REM")
 
     def send_raw_command(self, cmd: str) -> None:
         """
@@ -199,23 +208,24 @@ class M3400(Eth2SerialVisaDevice):
     #     return int(self.request("OUTP?"))
     
 
-    def set_sense_state(self, state: int):
-        """
-        This command enables or disables the sense function.
-        IT M3400 devices.
+    # def set_sense_state(self, state: int) -> None:
+    #     """
+    #     This command enables or disables the sense function.
+    #     IT M3400 devices.
 
-        Args:
-            state (int): state: int 1|0 
+    #     Args:
+    #         state (int): state: int 1|0 
 
-        Raises:
-            ValueError: invalid parameters
-        """
-        # trick to use function in NI Teststand
-        _s = 1 if int(state) > 0 else 0
-        #self.send(f"SENS:STAT {_s}")
-        r = self.request(f"SENS:STAT {_s}; STAT?")
-        return int(r) == int(state)
-        #self._helper_wait_for_result("SENS?", [str(_s)])  # wait for correct output state
+    #     Raises:
+    #         ValueError: invalid parameters
+    #     """
+    #     # trick to use function in NI Teststand
+        
+    #     self.send(f"SENS:STAT {1 if int(state) > 0 else 0}")
+    #     # _s = 1 if int(state) > 0 else 0
+    #     #r = self.request(f"SENS:STAT {_s}; STAT?")
+    #     #return int(r) == int(state)
+    #     #self._helper_wait_for_result("SENS?", [str(_s)])  # wait for correct output state
 
 
     # def get_sense_state(self) -> int:
@@ -240,24 +250,18 @@ class M3400(Eth2SerialVisaDevice):
     #     cmd = "OUTP:REV?"
     #     return int(self.request(cmd, 2000))
 
-    # #[SOURce:]CURRent[:LEVel][:IMMediate][:AMPLitude] <NRf+>
-    # def set_current(self, curr: float) -> None:
-    #     """
-    #     This command sets the current value of the power supply.
-    #     The query form of this command gets the set current value of the power supply.
-    #     IT M3400 and M3900 devices
+    #[SOURce:]CURRent[:LEVel][:IMMediate][:AMPLitude] <NRf+>
+    def set_current(self, curr: float) -> None:
+        """
+        This command sets the current value of the power supply.
+        The query form of this command gets the set current value of the power supply.
+        IT M3400 and M3900 devices
 
-    #     Args:
-    #         curr (float): current 'XX.XXX' Amp
-    #     """
-    #     try:
-    #         param_str =  f"{curr:06.3f}"
-    #         cmd = 'CURR ' + param_str
-    #         self.send(cmd)
-    #     except Exception as ex:
-    #         #_log.exception(ex)
-    #         raise
-
+        Args:
+            curr (float): current 'X.XXX' Amp
+        """
+        self.send(f"CURR {curr:0.3f}")
+        
 
     # def get_current_rounded(self, ndigits: int = 3) -> float:
     #     return round(self.get_current(), ndigits=int(ndigits))
@@ -422,22 +426,17 @@ class M3400(Eth2SerialVisaDevice):
     #         #_log.exception(ex)
     #         raise
 
-    # #[SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+>
-    # def set_voltage(self, volt: float) -> None:
-    #     """
-    #     This command sets the voltage value of the power supply.
-    #     IT M3400 and M3900 devices.
-    #     Args:
-    #         volt (float): voltage 'XX.XX' Volts
-    #     """
-    #     try:
-    #         param_str =  f"{volt:05.2f}"
-    #         cmd = 'VOLT ' + param_str
-    #         self.send(cmd)
-    #     except Exception as ex:
-    #         #_log.exception(ex)
-    #         raise
+    #[SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+>
+    def set_voltage(self, volt: float) -> None:
+        """
+        This command sets the voltage value of the power supply.
+        IT M3400 and M3900 devices.
+        Args:
+            volt (float): voltage 'X.XX' Volts
+        """
+        self.send(f"VOLT {volt:0.2f}")
 
+        
     # #[SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+>
     # def get_voltage(self) -> float:
     #     """
