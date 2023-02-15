@@ -115,73 +115,64 @@ class M3400(Eth2SerialVisaDevice):
         return self.request(str(cmd))
 
 
-    # def get_ADC_rounded(self, ndigits: int = 3) -> float:
-    #     return round(self.get_ADC(), ndigits=int(ndigits))
+    def get_current_rounded(self, ndigits: int = 3) -> float:
+        return round(self.get_current(), ndigits=int(ndigits))
 
-    # def get_ADC(self) -> float:
-    #     """
-    #     This command queries the present current measurement.
-    #     IT M3400 and M3900 devices
+    def get_current(self) -> float:
+        """
+        This command queries the present current measurement.
+        IT M3400 and M3900 devices
 
-    #     Returns:
-    #         float: ADC
-    #     """
-    #     cmd = "FETC:CURR?"
-    #     return float(self.request(cmd))
-
-
-    # def get_VDC_rounded(self, ndigits: int = 3) -> float:
-    #     return round(self.get_VDC(), ndigits=int(ndigits))
-
-    # def get_VDC(self) -> float:
-    #     """
-    #     This command queries the present measured voltage.
-    #     IT M3400 and M3900 devices
-
-    #     Returns:
-    #         float: VDC
-    #     """
-    #     cmd = "FETC:VOLT?"
-    #     return float(self.request(cmd, 2000))
+        Returns:
+            float: ADC
+        """
+        return float(self.request("FETC:CURR?"))
 
 
-    # def get_temp_rounded(self, ndigits: int = 3) -> float:
-    #     return round(self.get_temp(), ndigits=int(ndigits))
+    def get_voltage_rounded(self, ndigits: int = 3) -> float:
+        return round(self.get_voltage(), ndigits=int(ndigits))
 
-    # def get_temp(self) -> float:
-    #     """
-    #     This command queries the measured UUT temperature.
-    #     IT M3400 devices
-
-    #     Returns:
-    #         float: temperature
-    #     """
-    #     cmd = "FETC:UUT:TEMP?"
-    #     return float(self.request(cmd, 2000))
+    def get_voltage(self) -> float:
+        """
+        This command queries the present measured voltage.
+    
+        Returns:
+            float: VDC
+        """
+        return float(self.request("FETC:VOLT?"))
 
 
-    def get_all_meas(self) -> list:
+    def get_temperature_rounded(self, ndigits: int = 3) -> float:
+        return round(self.get_temperature(), ndigits=int(ndigits))
+
+    def get_temperature(self) -> float:
+        """
+        This command queries the measured UUT temperature.
+        IT M3400 devices
+
+        Returns:
+            float: temperature
+        """
+        cmd = "FETC:UUT:TEMP?"
+        return float(self.request(cmd, 2000))
+
+
+    def get_all_measurements(self) -> list:
         """
         This command queries the present voltage measurement, current
         measurement and power measurement.
-        IT M3400 and M3900 devices
-
+     
         Returns:
             list[5], float:  voltage, current, power, amp-hour, watt-hour
         """
         result = self.request("FETC?")
         # 5 results - string "###, ###, ###, ###, ###"
+        # voltage, current, power, amp-hour, watt-hour
         lst = str(result).split(',')
-        result = []
-        result.append(float(lst[0]))    # voltage
-        result.append(float(lst[1]))    # current
-        result.append(float(lst[2]))    # power
-        result.append(float(lst[3]))    # amp-hour
-        result.append(float(lst[4]))    # watt-hour
-        return result
+        return [float(m) for m in lst]
 
 
-    def set_output_state(self, state: int) -> None:
+    def set_output_state(self, state: int) -> bool:
         """
         This command sets the output state of the power supply.
         IT M3400 and M3900 devices.
@@ -191,9 +182,11 @@ class M3400(Eth2SerialVisaDevice):
         """
         # trick to use function in NI Teststand
         self.send(f"OUTP {int(state)}")
-        sleep(0.5)
+        #r = self.request(f"OUTPUT:STATE {int(state)};OUTPUT:STATE?")
+        #return int(r) == int(state)
+        sleep(0.25)
         #self._helper_wait_for_result("OUTP?", [str(int(state))])  # wait for correct output state
-
+        return True
 
     # def get_output_state(self) -> int:
     #     """
@@ -219,7 +212,9 @@ class M3400(Eth2SerialVisaDevice):
         """
         # trick to use function in NI Teststand
         _s = 1 if int(state) > 0 else 0
-        self.send(f"SENS {_s}")
+        #self.send(f"SENS:STAT {_s}")
+        r = self.request(f"SENS:STAT {_s}; STAT?")
+        return int(r) == int(state)
         #self._helper_wait_for_result("SENS?", [str(_s)])  # wait for correct output state
 
 
@@ -608,29 +603,34 @@ class M3400(Eth2SerialVisaDevice):
         assert(func in ["VOLT", "CURR"]), ValueError('Error, set_function: only "VOLT", "CURR" allowed')
         self.last_mode = func
         self.send(f"FUNC {func}")
-        sleep(0.5)
+        sleep(0.1)
+        #self.send(f"FUNC {func}")
+        #r = self.request("FUNC?")
+        #return func in r
         #self._helper_wait_for_result("FUNC?", [str(func)])
-        
+        return True
+
         
     def configure_current_rise_times(self, pos: float| str = "MIN", neg: float | str = "MIN"):
-        self.send(f"CURRENT:SLEW:NEG {neg:0.3f}")
-        self.send(f"CURRENT:SLEW:POS {pos:0.3f}")
+        self.send(f"CURRENT:SLEW:NEG {neg:0.3f}; SLEW:POS {pos:0.3f}")
+        #self.send(f"CURRENT:SLEW:POS {pos:0.3f}")
 
     def configure_voltage_rise_times(self, pos: float | str = "MIN", neg: float | str = "MIN"):
-        self.send(f"VOLTAGE:SLEW:NEG {neg:0.3f}")
-        self.send(f"VOLTAGE:SLEW:POS {pos:0.3f}")
+        self.send(f"VOLTAGE:SLEW:NEG {neg:0.3f}; SLEW:POS {pos:0.3f}")
+        #self.send(f"VOLTAGE:SLEW:POS {pos:0.3f}")
 
 
     def configure_sink(self, current: float, resistance: float | None,
-                       current_limit: float, voltage_limit_high: float, power_limit: float, set_output: bool = False) -> None:
+                       current_limit: float, voltage_limit_high: float, 
+                       power_limit: float, set_output: bool = False) -> None:
         if self.last_mode != "CURR":
             self.set_output_state(0)  # make sure output is OFF
         self.set_function("CURR")  # CC priority
         self.send(f"POW:LIM:NEG {-abs(power_limit):0.2f}")
-        self.send(f"POW:LIM:POS {0.0:0.2f}") # always fixed!
+        self.send(f"POW:LIM:POS 0.0") # always fixed!
         self.send(f"CURR:LIM:NEG {-abs(current_limit):0.3f}")
-        self.send(f"CURR:LIM:POS {0.0:0.3f}") # always fixed!        
-        self.send(f"VOLT:LIM:LOW {0.0:0.2f}") # always fixed!
+        self.send(f"CURR:LIM:POS 0.0") # always fixed!        
+        self.send(f"VOLT:LIM:LOW 0.0") # always fixed!
         self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
         #self.send(f"VOLT {voltage_limit_high:0.2f}")
         self.send(f"CURR {-abs(current):0.3f}")        
@@ -645,11 +645,11 @@ class M3400(Eth2SerialVisaDevice):
         if self.last_mode != "VOLT":
             self.set_output_state(0)  # make sure output is OFF
         self.set_function("VOLT")
-        self.send(f"POW:LIM:NEG {0.0:0.2f}") # always fixed!
+        self.send(f"POW:LIM:NEG 0.0") # always fixed!
         self.send(f"POW:LIM:POS {abs(power_limit):0.2f}")
-        self.send(f"CURR:LIM:NEG {0.0:0.3f}") # always fixed!
+        self.send(f"CURR:LIM:NEG 0.0") # always fixed!
         self.send(f"CURR:LIM:POS {abs(current_limit):0.3f}")
-        self.send(f"VOLT:LIM:LOW {0.0:0.2f}") # always fixed!
+        self.send(f"VOLT:LIM:LOW 0.0") # always fixed!
         self.send(f"VOLT:LIM:HIGH {voltage:0.2f}")
         #self.send(f"CURR {abs(current_limit):0.3f}")
         self.send(f"VOLT {voltage:0.2f}")
