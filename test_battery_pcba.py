@@ -88,8 +88,8 @@ def test_start_battery_pcba(psu1: M3400, psu2: M3400):
     #psu2.set_current_limit_positive(2.0)
 
     # now we should see a voltage as Input for PSU1 in the next steps.
-    print(psu1.get_all_meas())
-    print(psu2.get_all_meas())
+    print(psu1.get_all_measurements())
+    print(psu2.get_all_measurements())
  
     sleep(2)
     # measure battery
@@ -149,7 +149,7 @@ if __name__ == "__main__":
         m.set_remote_control()
         m.set_sense_state(1)
         m.set_output_state(0)
-        print(m.get_all_meas())
+        print(m.get_all_measurements())
 
     test_start_battery_pcba(m3412[0], m3412[1])
 

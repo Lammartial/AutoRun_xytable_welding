@@ -38,12 +38,12 @@ class Eth2SerialVisaDevice(object):
 
     #----------------------------------------------------------------------------------------------
 
-    def send(self, msg: str, timeout: float = 1000) -> None:
+    def send(self, msg: str, timeout: int = 1500) -> None:
         """_summary_
 
         Args:
             msg (str): _description_
-            timeout (float, optional): _description_. Defaults to 1000ms
+            timeout (float, optional): Timeout to wait for send complete in milliseconds. Defaults to 1500ms
 
         Returns:
             bool: _description_
@@ -54,11 +54,13 @@ class Eth2SerialVisaDevice(object):
             if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
                 self.session.read_termination = '\n'
             self.session.timeout = timeout
-            # In case of use without channel separation
-            chn = ""
             if (self.dev_channel != 0):
-                chn = "CHAN " + str(self.dev_channel) + ";"
-            self.session.write(chn + msg)
+                #_chn = f"CHAN {self.dev_channel};"
+                #_cmd = ";".join([_chn + p for p in msg.split(";")])
+                _cmd = f"CHAN {self.dev_channel};{msg}"
+            else:
+                _cmd = msg
+            self.session.write(_cmd)
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling
             raise
@@ -69,12 +71,12 @@ class Eth2SerialVisaDevice(object):
         finally:
             self.session.close()
 
-    def request(self, msg: str, timeout: float = 3000) -> str:
+    def request(self, msg: str, timeout: int = 5000) -> str:
         """_summary_
 
         Args:
             msg (str): command
-            timeout (float, optional): Defaults to 3000ms
+            timeout (float, optional): Timeout to wait for send and receive result in milliseconds. Defaults to 5000ms
 
         Returns:
             str: result
@@ -87,11 +89,13 @@ class Eth2SerialVisaDevice(object):
             if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
                 self.session.read_termination = '\n'
             self.session.timeout = timeout
-            # In case of use without channel separation
-            chn = ""
             if (self.dev_channel != 0):
-                chn = f"CHAN {self.dev_channel};"
-            result = self.session.query(chn + msg).strip()
+                #_chn = f"CHAN {self.dev_channel};"
+                #_query = ";".join([_chn + p for p in msg.split(";")])
+                _query = f"CHAN {self.dev_channel};{msg}"
+            else:
+                _query = msg
+            result = self.session.query(_query).strip()
             _log.debug(f"Received: {result!r}")
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling

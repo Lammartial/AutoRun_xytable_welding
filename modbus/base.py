@@ -8,6 +8,8 @@ from pymodbus import version as modbus_version
 from pymodbus.client import ModbusTcpClient, ModbusSerialClient
 from pymodbus.payload import BinaryPayloadDecoder, BinaryPayloadBuilder
 from pymodbus.constants import Endian, Defaults
+from pymodbus.bit_read_message import ReadCoilsResponse, ReadDiscreteInputsResponse
+from pymodbus.bit_write_message import WriteMultipleCoilsResponse, WriteSingleCoilResponse
 from pymodbus.register_read_message import ReadHoldingRegistersResponse, ReadInputRegistersResponse
 from pymodbus.register_write_message import WriteMultipleRegistersResponse
 from pymodbus.exceptions import ModbusException
@@ -54,7 +56,7 @@ __version__ = VERSION
 def _check_call(rr):
     """Check modbus call worked generically."""
     assert not isinstance(rr, ExceptionResponse), rr      # Device rejected request
-    assert not rr.isError(), "Error in MODBUS response"   # test that call was OK    
+    assert not rr.isError(), "Error in MODBUS response"   # test that call was OK
     return rr
 
 #--------------------------------------------------------------------------------------------------
@@ -96,7 +98,7 @@ class ModbusClient:
         self.byte_order = byte_order
         self.word_order = word_order
         self.group_by_gateway = group_by_gateway
-
+        self._connection_str = connection_str
         # check, which kind of connection we have:
         # tcp:host:port:unit
         # rtu:lineparameter:unit (unused here!)
@@ -145,6 +147,15 @@ class ModbusClient:
         _log.debug("GATEWAY: %s", self.gateway_str)
         _log.debug("UNIT: %s", self.unit_address)
 
+    def __str__(self) -> str:
+        return f"ModbusClient with client {repr(self.client)}"
+
+    def __repr__(self) -> str:
+        return f"ModbusClient({self._connection_str}, unit_address={self.unit_address}, group_by_gateway={self.group_by_gateway}, byte_order={self.byte_order}, word_order={self.word_order})"
+
+    #----------------------------------------------------------------------------------------------
+
+
     # to provide the with ... statement protector
     def __enter__(self):
         self.open()
@@ -173,10 +184,22 @@ class ModbusClient:
 
     #--------------------------------------------------------------------------------------------------
     # easier to use interface
-    def read_discrete_inputs(self, address: int, count: int, unit_address: int | None = None) -> ReadInputRegistersResponse | Any:
+    def getDecoder(self, registers: Any) -> BinaryPayloadDecoder:
+        return BinaryPayloadDecoder.fromRegisters(registers, byteorder=self.byte_order, wordorder=self.word_order)
+
+    def getEncoder(self) -> BinaryPayloadBuilder:
+        return BinaryPayloadBuilder.fromRegisters(byteorder=self.byte_order, wordorder=self.word_order)
+
+    #--------------------------------------------------------------------------------------------------
+    # easier to use interface
+    def read_coils(self, address: int, count: int, unit_address: int | None = None) -> ReadCoilsResponse | Any:
+        readResponse = _check_call(self.client.read_coils(address, count, slave=unit_address if unit_address is not None else self.unit_address))
+        return readResponse.bits[:count]
+
+    def read_discrete_inputs(self, address: int, count: int, unit_address: int | None = None) -> ReadDiscreteInputsResponse | Any:
         readResponse = _check_call(self.client.read_discrete_inputs(address, count, slave=unit_address if unit_address is not None else self.unit_address))
-        return readResponse.registers
-    
+        return readResponse.bits
+
     def read_input_registers(self, address: int, count: int, unit_address: int | None = None) -> ReadInputRegistersResponse | Any:
         readResponse = _check_call(self.client.read_input_registers(address, count, slave=unit_address if unit_address is not None else self.unit_address))
         return readResponse.registers
@@ -188,16 +211,16 @@ class ModbusClient:
     def write_register(self, address: int, value: int | float | str, unit_address: int | None = None) -> WriteMultipleRegistersResponse | Any:
         writeResponse = _check_call(self.client.write_register(address, value, slave=unit_address if unit_address is not None else self.unit_address))
         return writeResponse
-    
+
     def write_registers(self, address: int, values: List[int | float | str], unit_address: int | None = None) -> WriteMultipleRegistersResponse | Any:
         writeResponse = _check_call(self.client.write_coils(address, values, slave=unit_address if unit_address is not None else self.unit_address))
         return writeResponse
 
-    def write_coil(self, address: int, value: bool, unit_address: int | None = None) -> WriteMultipleRegistersResponse | Any:
+    def write_coil(self, address: int, value: bool, unit_address: int | None = None) -> WriteSingleCoilResponse | Any:
         writeResponse = _check_call(self.client.write_coil(address, value, slave=unit_address if unit_address is not None else self.unit_address))
         return writeResponse
-    
-    def write_coils(self, address: int, values: List[bool], unit_address: int | None = None) -> WriteMultipleRegistersResponse | Any:
+
+    def write_coils(self, address: int, values: List[bool], unit_address: int | None = None) -> WriteMultipleCoilsResponse | Any:
         writeResponse = _check_call(self.client.write_coils(address, values, slave=unit_address if unit_address is not None else self.unit_address))
         return writeResponse
 
