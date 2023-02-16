@@ -816,13 +816,13 @@ class M3900(M3400):
         if self.last_mode != "CURR":
             self.set_output_state(0)            # make sure output is OFF
         self.set_function("CURR")               # CC priority     
-        self.send(f"POW:LIM:NEG {0.0:05.2f}")
-        self.send(f"POW:LIM:POS {power_limit:05.2f}") # always fixed!
-        self.send(f"CURR:LIM:NEG {0.0:06.3f}")
-        self.send(f"CURR:LIM:POS {current_limit:06.3f}") # always fixed!        
-        self.send(f"VOLT:LIM:LOW {0.0:05.2f}") # always fixed!
-        self.send(f"VOLT:LIM:HIGH {voltage_limit_high:05.2f}")
-        self.send(f"CURR {current:06.3f}") 
+        self.send(f"POW:LIM:NEG {(-1)*power_limit:0.2f}")
+        self.send(f"POW:LIM:POS {power_limit:0.2f}") # always fixed!
+        #self.send(f"CURR:LIM:NEG {0.0:06.3f}")
+        #self.send(f"CURR:LIM:POS {current_limit:06.3f}") # always fixed!        
+        self.send(f"VOLT:LIM:LOW {0.0:0.2f}") # always fixed!
+        self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
+        self.send(f"CURR {current:0.2f}") 
         self.send("SINK:RES:STATE 0")
         self.set_output_state(1 if set_output else 0)
 
@@ -836,13 +836,13 @@ class M3900(M3400):
         if self.last_mode != "CURR":
             self.set_output_state(0)            # make sure output is OFF
         self.set_function("CURR")               # CC priority     
-        self.send(f"POW:LIM:NEG {power_limit:05.2f}")
-        self.send(f"POW:LIM:POS {0.0:05.2f}") # always fixed!
-        self.send(f"CURR:LIM:NEG {current_limit:06.3f}")
-        self.send(f"CURR:LIM:POS {0.0:06.3f}") # always fixed!        
+        self.send(f"POW:LIM:NEG {power_limit:0.2f}")
+        self.send(f"POW:LIM:POS {0.0:0.2f}") # always fixed!
+        #self.send(f"CURR:LIM:NEG {current_limit:0.2f}")
+        #self.send(f"CURR:LIM:POS {0.0:0.2f}") # always fixed!        
         self.send(f"VOLT:LIM:LOW {0.0:05.2f}") # always fixed!
         self.send(f"VOLT:LIM:HIGH {voltage_limit_high:05.2f}")
-        self.send(f"CURR {current:06.3f}") 
+        self.send(f"CURR {current:0.2f}") 
         self.send("SINK:RES:STATE 0")
         self.set_output_state(1 if set_output else 0)
 
@@ -854,18 +854,15 @@ class M3900(M3400):
         """
         if self.last_mode != "CURR":
             self.set_output_state(0)            # make sure output is OFF
-        self.set_function("CURR")               # CC priority   
-        param = f"POW:LIM:NEG {0.0:05.2f}"  
-        self.send(param)
-        param = f"POW:LIM:POS {power_limit:05.2f}"
-        self.send(param) # always fixed!
-        param = f"CURR:LIM:NEG {0.0:06.3f}"
-        self.send(param)
-        param = f"CURR:LIM:POS {current_limit:06.3f}"
-        self.send(param) # always fixed!        
-        self.send(f"VOLT:LIM:LOW {0.0:05.2f}") # always fixed!
-        self.send(f"VOLT:LIM:HIGH {voltage_limit_high:05.2f}")
-        self.send(f"CURR {current:06.3f}") 
+        self.set_function("CURR")               # CC priority
+        self.send("POW:LIM:NEG " + f"{(-1)*power_limit:0.2f}")
+        self.send("POW:LIM:POS " + f"{power_limit:0.2f}")       
+        #self.send("CURR:LIM:NEG " + f"{(-1)*current_limit:0.2f}")
+        #self.send("CURR:LIM:POS " + f"{current_limit:0.2f}")         
+        self.send(f"VOLT:LIM:LOW {0.0:0.2f}") 
+        self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
+        param = f"{current:0.3f}"
+        self.send(f"CURR " + param) 
         self.send("SINK:RES:STATE 0")
         self.set_output_state(1 if set_output else 0)
 

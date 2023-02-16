@@ -12,11 +12,16 @@ def test_m3900_modes(m3900: M3900) -> bool:
 
     #========= CHARGE & DISCHARGE MODE =====================================================================
 
-    m3900.configure_wake_up_mode(current= 0.05, current_limit= 0.1, voltage_limit_high= 12.0, power_limit= 80, set_output= True)
-    m3900.configure_wake_up_mode(current= 0.05, current_limit= 0.1, voltage_limit_high= 12.0, power_limit= 80, set_output= False)
+    #m3900.configure_wake_up_mode(current= 0.05, current_limit= 0.1, voltage_limit_high= 12.0, power_limit= 80, set_output= True)
+    #m3900.configure_wake_up_mode(current= 0.05, current_limit= 0.1, voltage_limit_high= 12.0, power_limit= 80, set_output= False)
+
+    m3900.configure_discharge_mode(current= -2.0, current_limit= -2.5, voltage_limit_high= 12.55, power_limit= -150, set_output= True)    
+    m3900.configure_discharge_mode(current= -2.0, current_limit= -2.5, voltage_limit_high= 12.55, power_limit= -150, set_output= False) 
 
     m3900.configure_charge_mode(current= 2.0, current_limit= 2.5, voltage_limit_high= 12.55, power_limit= 150, set_output= True)    
-    m3900.configure_charge_mode(current= 2.0, current_limit= 2.5, voltage_limit_high= 12.55, power_limit= 150, set_output= False)    
+    m3900.configure_charge_mode(current= 2.0, current_limit= 2.5, voltage_limit_high= 12.55, power_limit= 150, set_output= False)
+
+       
 
     #m3900.configure_discharge_mode(voltage_limit= 11.0, curr= -2.0)
 
