@@ -389,10 +389,10 @@ if __name__ == '__main__':
     log_modbus_version()
 
     with AWS3Modbus("tcp:172.21.101.100:502") as dev:
-        test_basic_communication(dev)
+        #test_basic_communication(dev)
         #test_sps_process(dev, program_sequence=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
         #test_sps_process(dev, program_sequence=[1,2,3,4])
-        #test_sps_statemachine(dev, program_sequence=[1,2,3,4])
+        test_sps_statemachine(dev, program_sequence=[1,2,3,4])
 
     _log.info("End test")
 
