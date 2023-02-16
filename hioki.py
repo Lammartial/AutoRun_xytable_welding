@@ -359,7 +359,7 @@ class Hioki_BT3561A(Eth2SerialDevice):
         """
         resp = True
         result = []
-        function_type = self.get_function()
+        function_type = self.get_function().strip()
         #[BT3561A] :READ? Execute single measurement using BT3561A.
         val = self.read()
         try:
@@ -882,7 +882,7 @@ if __name__ == "__main__":
     #BT_PORT = 23                    # BT3561A port
     #SW_IP_STR = "192.168.1.201"     # SW1001 IP addr
     #SW_PORT = 23                    # SW1001 port
-    BT_resource_string = "172.21.101.12:23"
+    BT_resource_string = "172.21.101.44:23"
     #SW_resource_string = "192.168.1.201:23"
 
     # 1. Create an instance of 20 channel MUXER with HIOKI ACIR measurement device class
