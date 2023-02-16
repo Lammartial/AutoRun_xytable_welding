@@ -35,7 +35,8 @@ class AWS3Modbus(ModbusClient):
 
 
     def is_machine_ready(self) -> tuple:
-        return not self.read_coils(65-1, 1, unit_address=3)[0]
+        #return not self.read_coils(65-1, 1, unit_address=3)[0]
+        return self.read_coils(97-1, 1, unit_address=3)[0]
 
     def read_machine_lock_status(self) -> tuple:
         return self.read_coils(45-1, 1, unit_address=3)[0]
@@ -216,6 +217,7 @@ def test_sps_process(dev: AWS3Modbus, program_sequence: List[int] = [1,2,3,4,5])
     next_program_no = program_sequence[program_step]
     _machine_locked = False
     while True:
+        sleep(0.1)  # throttle polling loop
         try:
             if not dev.is_machine_ready():
                 continue
@@ -254,7 +256,6 @@ def test_sps_process(dev: AWS3Modbus, program_sequence: List[int] = [1,2,3,4,5])
             # make sure that the welding machine will be unlocked in any failure cases
             if _machine_locked:
                 dev.unlock_machine_step()
-        sleep(0.055)  # throttle polling loop
 
 
 #--------------------------------------------------------------------------------------------------
@@ -269,7 +270,8 @@ if __name__ == '__main__':
 
     with AWS3Modbus("tcp:172.21.101.100:502") as dev:
         test_basic_communication(dev)
-        test_sps_process(dev, program_sequence=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
+        #test_sps_process(dev, program_sequence=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
+        test_sps_process(dev, program_sequence=[1,2,3,4])
 
     _log.info("End test")
 
