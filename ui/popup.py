@@ -29,7 +29,7 @@ class BatteryPopup:
         #self.popup.wm_title("!")
         #self.popup.tkraise(self.root)  
         self.root.title(title)
-        # create the Widgets and keep them inside our App object
+        # define the geometry for the window or frame
         x_size = int(width)
         y_size = int(height)
         if int(test_socket) < 0:
@@ -37,9 +37,8 @@ class BatteryPopup:
             _y = int((self.root.winfo_screenheight() / 2) - (y_size / 2))
         else:
             _x = 250 + int(test_socket) * (x_size + 20)
-            _y = 100        
+            _y = 100
         self.root.geometry(f"{x_size}x{y_size}+{_x}+{_y}")
-        # define the geometry for the window or frame
         self.root.columnconfigure(0, weight=1)
         # create progress bar
         self.var = StringVar(value=message)

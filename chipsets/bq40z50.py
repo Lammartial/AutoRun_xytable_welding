@@ -1069,27 +1069,24 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             float: calibrated package voltage, Volts.
         """
-        try:
-            pack_voltage = float(pack_voltage) 
-            # 1. average adc bat voltage 
-            # Raw ADC data. 10.8 V == ~14.25  
-            adc_pack_voltage = self.calib_read_adc_pack_voltage(samples=4, shorted=shorted)
-            # 2. calculate bat_gain
-            # adc_pack_voltage == 0 => Exception
-            pack_gain: int = int(pack_voltage/adc_pack_voltage*65536)
-            # 3. write bat_gain
-            block = self.read_flash_block(0x4002, 32, hexi=False)
-            #print(block)  
-            bytes_pack_gain = pack_gain.to_bytes(2, byteorder='little', signed=False)
-            block[0:2] = bytes_pack_gain
-            sleep(0.5)
-            self.write_flash_block(0x4002, block)
-            # 4. Return calibrated cell_voltages
-            self._ms_toggle_helper("cal_test", False, 0x002d)
-            sleep(0.1)
-            dasstat = self.manufacturing_dastatus1(True)
-        except Exception:
-            raise
+        pack_voltage = float(pack_voltage) 
+        # 1. average adc bat voltage 
+        # Raw ADC data. 10.8 V == ~14.25  
+        adc_pack_voltage = self.calib_read_adc_pack_voltage(samples=4, shorted=shorted)
+        # 2. calculate bat_gain
+        # adc_pack_voltage == 0 => Exception
+        pack_gain: int = int(pack_voltage/adc_pack_voltage*65536)
+        # 3. write bat_gain
+        block = self.read_flash_block(0x4002, 32, hexi=False)
+        #print(block)  
+        bytes_pack_gain = pack_gain.to_bytes(2, byteorder='little', signed=False)
+        block[0:2] = bytes_pack_gain
+        sleep(0.5)
+        self.write_flash_block(0x4002, block)
+        # 4. Return calibrated cell_voltages
+        self._ms_toggle_helper("cal_test", False, 0x002d)
+        sleep(0.1)
+        dasstat = self.manufacturing_dastatus1(True)
         return float(dasstat[6])
 
     def calib_read_adc_current(self,  samples: int = 8, shorted: bool = False,  timeout: float = 5.0) -> float:
@@ -1168,6 +1165,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         except Exception:
             raise
         return res
+
 
     def calib_write_temp(self, temp: Tuple[float]) -> Tuple[float]:
         """

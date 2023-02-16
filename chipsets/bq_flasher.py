@@ -59,9 +59,11 @@ class BQStudioFileFlasher:
     flasher.validate_and_program_fw_file()
     """
 
-    def __init__(self, battery: ChipsetTexasInstruments, firmware_file: Path | str = None, show_progressbar: bool = False, color: str = None):
+    def __init__(self, battery: ChipsetTexasInstruments, firmware_file: Path | str = None, 
+                 show_progressbar: bool = False, color: str = None, test_socket: int = -1):
         """Initialize a class instance."""
         self.battery = battery
+        self._test_socket = int(test_socket)
         self._progress = None
         if firmware_file:
             self.set_firmware_file(firmware_file, show_progressbar=show_progressbar, color=color)
@@ -143,7 +145,8 @@ class BQStudioFileFlasher:
         _log.info(f"Using file: \"{_firmware_file}\"")
         self.firmware_file = _firmware_file
         if show_progressbar:
-            self._progress = ProgressWindow(title=f"Program {_firmware_file}", color=color)
+            if self._test_socket >= 0:
+                self._progress = ProgressWindow(title=f"Program {_firmware_file}", color=color, test_socket=self._test_socket)
 
     #----------------------------------------------------------------------------------------------
     def __process_file(self, is_file_validation: bool) -> bool:
@@ -405,11 +408,12 @@ if __name__ == "__main__":
 
     bat = None
     fs_file = Path("C:/Production/Battery-PCBA-Test/filestore/SCD_3412031-04_A_Rubin-B_RRC2020B.bq.fs")
-    flasher = BQStudioFileFlasher(bat, firmware_file=fs_file, show_progressbar=True)
-    #flasher.set_firmware_file(fs_file)
+    for sock in range(3):
+        flasher = BQStudioFileFlasher(bat, firmware_file=fs_file, show_progressbar=True, test_socket=sock)
+        #flasher.set_firmware_file(fs_file)
 
-    validation_result = flasher.validate_file()
-    _log.info(f"Validation result: {validation_result}")
+        validation_result = flasher.validate_file()
+        _log.info(f"Validation result: {validation_result}")
     #if validation_result:
     #    programming_result = flasher.program_fw_file()
     #    _log.info(f"Programming result: {programming_result}")
