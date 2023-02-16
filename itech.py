@@ -611,12 +611,12 @@ class M3400(Eth2SerialVisaDevice):
 
         
     def configure_current_rise_times(self, pos: float| str = "MIN", neg: float | str = "MIN"):
-        self.send(f"CURRENT:SLEW:NEG {neg:0.3f}; SLEW:POS {pos:0.3f}")
-        #self.send(f"CURRENT:SLEW:POS {pos:0.3f}")
+        self.send(f"CURRENT:SLEW:NEG {neg}")
+        self.send(f"CURRENT:SLEW:POS {pos}")
 
     def configure_voltage_rise_times(self, pos: float | str = "MIN", neg: float | str = "MIN"):
-        self.send(f"VOLTAGE:SLEW:NEG {neg:0.3f}; SLEW:POS {pos:0.3f}")
-        #self.send(f"VOLTAGE:SLEW:POS {pos:0.3f}")
+        self.send(f"VOLTAGE:SLEW:NEG {neg}")
+        self.send(f"VOLTAGE:SLEW:POS {pos}")
 
 
     def configure_sink(self, current: float, resistance: float | None,
@@ -683,8 +683,11 @@ class M3900(M3400):
     #----------------------------------------------------------------------------------------------
     # common function repeated as trampoline for TestStand only :-(
 
-    def set_remote_control(self) -> None:
-        super().set_remote_control()
+    #def set_remote_control(self) -> None:
+    #    super().set_remote_control()
+
+    def initialize_device(self) -> None:
+        super().initialize_device()
 
     def send_raw_command(self, cmd: str) -> None:
         super().send_raw_command(cmd)
@@ -695,8 +698,8 @@ class M3900(M3400):
     #def get_ADC_rounded(self, ndigits: int = 3) -> float:
     #    return super.get_ADC_rounded(ndigits=int(ndigits))
 
-    def get_ADC(self) -> float:
-        return super().get_ADC()
+    #def get_ADC(self) -> float:
+    #    return super().get_ADC()
 
     #def get_VDC_rounded(self, ndigits: int = 3) -> float:
     #    return super().get_VDC_rounded(ndigits=int(ndigits))
@@ -725,8 +728,8 @@ class M3900(M3400):
     #def get_current_rounded(self, ndigits: int = 3) -> float:
     #    return super().get_current_rounded(ndigits=int(ndigits))
 
-    #def get_current(self) -> float:
-    #    return super().get_current()
+    def get_current(self) -> float:
+        return super().get_current()
 
     #def set_current_limit_positive(self, curr: float) -> None:
     #    super().set_current_limit_positive(curr)
@@ -752,8 +755,8 @@ class M3900(M3400):
     #def set_voltage(self, volt: float) -> None:
     #    super().set_voltage(volt)
 
-    #def get_voltage(self) -> float:
-    #    return super().get_voltage()
+    def get_voltage(self) -> float:
+        return super().get_voltage()
 
     #def set_voltage_limit_high(self, volt: float) -> None:
     #    super().set_voltage_limit_high(volt)
@@ -804,8 +807,8 @@ class M3900(M3400):
         self.set_function("CURR")  # CC priority
                
 
-    def configure_charge_mode(self, current: float, current_limit: float, 
-                       voltage_limit_high: float, power_limit: float, set_output: bool = False) -> None:
+    def configure_charge_mode(self, current: float, voltage_limit_high: float, voltage_limit_low: float, 
+                              power_limit: float, set_output: bool = False) -> None:
         """
         Use to switch on battery charging mode. CC mode.
         M3900 device only.
@@ -813,19 +816,22 @@ class M3900(M3400):
         if self.last_mode != "CURR":
             self.set_output_state(0)            # make sure output is OFF
         self.set_function("CURR")               # CC priority     
-        self.send(f"POW:LIM:NEG {0.0:05.2f}")
-        self.send(f"POW:LIM:POS {power_limit:05.2f}") # always fixed!
-        self.send(f"CURR:LIM:NEG {0.0:06.3f}")
-        self.send(f"CURR:LIM:POS {current_limit:06.3f}") # always fixed!        
-        self.send(f"VOLT:LIM:LOW {0.0:05.2f}") # always fixed!
-        self.send(f"VOLT:LIM:HIGH {voltage_limit_high:05.2f}")
-        self.send(f"CURR {current:06.3f}") 
+        self.send(f"POW:LIM:NEG {(-1)*power_limit:0.2f}")
+        self.send(f"POW:LIM:POS {power_limit:0.2f}")
+
+        # DO NOT use current limits in CC mode. Causes an internal error of the M3900
+        #self.send(f"CURR:LIM:NEG {0.0:06.3f}")
+        #self.send(f"CURR:LIM:POS {current_limit:06.3f}") 
+               
+        self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}") 
+        self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
+        self.send(f"CURR {current:0.2f}") 
         self.send("SINK:RES:STATE 0")
         self.set_output_state(1 if set_output else 0)
 
 
-    def configure_discharge_mode(self, current: float, current_limit: float, 
-                       voltage_limit_high: float, power_limit: float, set_output: bool = False) -> None:
+    def configure_discharge_mode(self, current: float,  voltage_limit_high: float, voltage_limit_low: float, 
+                                 power_limit: float, set_output: bool = False) -> None:
         """
         Use to switch on battery discharging mode. CC mode.
         M3900 device only.
@@ -833,32 +839,39 @@ class M3900(M3400):
         if self.last_mode != "CURR":
             self.set_output_state(0)            # make sure output is OFF
         self.set_function("CURR")               # CC priority     
-        self.send(f"POW:LIM:NEG {power_limit:05.2f}")
-        self.send(f"POW:LIM:POS {0.0:05.2f}") # always fixed!
-        self.send(f"CURR:LIM:NEG {current_limit:06.3f}")
-        self.send(f"CURR:LIM:POS {0.0:06.3f}") # always fixed!        
-        self.send(f"VOLT:LIM:LOW {0.0:05.2f}") # always fixed!
-        self.send(f"VOLT:LIM:HIGH {voltage_limit_high:05.2f}")
-        self.send(f"CURR {current:06.3f}") 
+        self.send(f"POW:LIM:NEG {power_limit:0.2f}")
+        self.send(f"POW:LIM:POS {0.0:0.2f}")
+
+        # DO NOT use current limits in CC mode. Causes an internal error of the M3900
+        #self.send(f"CURR:LIM:NEG {current_limit:0.2f}")
+        #self.send(f"CURR:LIM:POS {0.0:0.2f}") 
+        #       
+        self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}")
+        self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
+        self.send(f"CURR {current:0.2f}") 
         self.send("SINK:RES:STATE 0")
         self.set_output_state(1 if set_output else 0)
 
-    def configure_wake_up_mode(self, current: float, current_limit: float, 
-                       voltage_limit_high: float, power_limit: float, set_output: bool = False) -> None:
+    def configure_wake_up_mode(self, current: float, voltage_limit_high: float, voltage_limit_low: float,  
+                               power_limit: float, set_output: bool = False) -> None:
         """
         Use to wake up bq40z50 or another bq chip. CV mode.
         M3900 device only.
         """
         if self.last_mode != "CURR":
             self.set_output_state(0)            # make sure output is OFF
-        self.set_function("CURR")               # CC priority     
-        self.send(f"POW:LIM:NEG {0.0:05.2f}")
-        self.send(f"POW:LIM:POS {power_limit:05.2f}") # always fixed!
-        self.send(f"CURR:LIM:NEG {0.0:06.3f}")
-        self.send(f"CURR:LIM:POS {current_limit:06.3f}") # always fixed!        
-        self.send(f"VOLT:LIM:LOW {0.0:05.2f}") # always fixed!
-        self.send(f"VOLT:LIM:HIGH {voltage_limit_high:05.2f}")
-        self.send(f"CURR {current:06.3f}") 
+        self.set_function("CURR")               # CC priority
+        self.send("POW:LIM:NEG " + f"{(-1)*power_limit:0.2f}")
+        self.send("POW:LIM:POS " + f"{power_limit:0.2f}")
+
+        # DO NOT use current limits in CC mode. Causes an internal error of the M3900       
+        #self.send("CURR:LIM:NEG " + f"{(-1)*current_limit:0.2f}")
+        #self.send("CURR:LIM:POS " + f"{current_limit:0.2f}")  
+        #        
+        self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}") 
+        self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
+        param = f"{current:0.2f}"
+        self.send(f"CURR " + param) 
         self.send("SINK:RES:STATE 0")
         self.set_output_state(1 if set_output else 0)
 

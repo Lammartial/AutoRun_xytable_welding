@@ -63,6 +63,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # Note: explicitely replicate the parameters here for having
         # option in teststand to change them on call
         super().__init__(smbus, slvAddress=slvAddress, pec=pec)
+        self._firmware_version = None
         self._operation_status = None  # shadow copy of operation_status() read to avoid redundant reads for seal/unseal checks
         self._manufacturing_status = None  # shadow copy of manufacturing_status()
         self._ccadc_cal = None  # shadow copy
@@ -92,10 +93,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         try:
             self.operation_status() # if other chipset, this read will raise exception
             dev = self.device_type()
-            fw_rev = self.firmware_version()
-            #print(fw_rev)
+            self.firmware_version()            
             if dev == 0x4500: # RRC2054xx, RRC21xx
-                if fw_rev["version"] & 0xff00 == 0x0100: # RRC2054, RRC2054-2, ...
+                if self._firmware_version["version"] & 0xff00 == 0x0100: # RRC2054, RRC2054-2, ...
                     yesno=True
         except BatteryError:
             # not the right chipset
@@ -121,7 +121,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         buf = self.manufacturer_data
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 11):
             raise BatteryError(f"Readings implausible: Unexpected return value {type(buf)}, {len(buf)}")
-        _v = OrderedDict({
+        self._firmware_version = OrderedDict({
             "value": self._maybe_hexlify(buf, hexi),
             # data come big endian - they SUCK!
             "device_number": unpack_from(">H", buf, 0)[0],
@@ -132,8 +132,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "reserved1":     unpack_from(">B", buf, 9)[0],
             "reserved2":     unpack_from(">B", buf, 10)[0],
         })
-        _log.debug(f"FIRMWARE_VERSION: {_v}")
-        return _od2t(_v)
+        _log.debug(f"FIRMWARE_VERSION: {self._firmware_version}")
+        return _od2t(self._firmware_version)
 
     def hardware_version(self) -> int:
         """Returns the chip hardware version."""
@@ -184,7 +184,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         buf = self.manufacturer_data
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 4):
             raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
-        os = int.from_bytes(buf, "little")
+        #os = int.from_bytes(buf, "little")
+        os = unpack("<L", buf)[0]
         self._operation_status = OrderedDict({
             "block"     : self._maybe_hexlify(buf, hexi),
             "value"     : os,
@@ -244,17 +245,18 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         buf = self.manufacturer_data
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 2):
             raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
-        os = int.from_bytes(buf, "little")
+        #os = int.from_bytes(buf, "little")
+        os = unpack("<H", buf)[0]
         self._manufacturing_status = OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             "value": os,
             # bitflags
             "cal_test":  ((os>>15) & 1),
             "lt_test":   ((os>>14) & 1),
-            "reserved4": ((os>>13) & 1),
-            "reserved3": ((os>>12) & 1),
-            "reserved2": ((os>>11) & 1),
-            "reserved1": ((os>>10) & 1),
+            #"reserved4": ((os>>13) & 1),
+            #"reserved3": ((os>>12) & 1),
+            #"reserved2": ((os>>11) & 1),
+            #"reserved1": ((os>>10) & 1),
             "led_en":    ((os>>9) & 1),
             "fuse_en":   ((os>>8) & 1),
             "bbr_en":    ((os>>7) & 1),
@@ -1137,33 +1139,26 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             float: calibrated current, Amps.
         """
-        try: 
-            current = float(current)
-            # 1. average adc current 
-            adc_current = self.calib_read_adc_current(samples=4, shorted=shorted)
-            # 2. calculate current_gain, capacity_gain. 
-            # adc_current == 0 => Exception
-            cc_gain = 3.58422                  # default
-            #cc_gain = float(current/adc_current)
-            capacity_gain = float(cc_gain*298261.6178)
-            # 3. write bat_gain
-            block = self.read_flash_block(0x4006, 32, hexi=False)
-            # old gain
-            #ccg = unpack_from("<f", block, 0)[0]
-            #ccc = unpack_from("<f", block, 4)[0]
-            bytes_cc_gain = bytearray(struct.pack("<f", cc_gain))
-            bytes_cap_gain = bytearray(struct.pack("<f", capacity_gain))
-            print(block)
-            block[0:4] = bytes_cc_gain
-            block[4:8] = bytes_cap_gain
-            print(block)
-            self.write_flash_block(0x4006, block)
-            # 4. Return calibrated current
-            self._ms_toggle_helper("cal_test", False, 0x002d)
-            sleep(0.1)
-            res = self.calib_read_adc_current(samples=1, shorted=shorted)
-        except Exception:
-            raise
+        current = float(current)
+        # 1. average adc current 
+        adc_current = self.calib_read_adc_current(samples=4, shorted=shorted)
+        # 2. calculate current_gain, capacity_gain. 
+        # adc_current == 0 => Exception
+        #cc_gain = 3.58422                  # default
+        cc_gain = float(current/adc_current)
+        capacity_gain = float(cc_gain*298261.6178)
+        # 3. write bat_gain
+        block = self.read_flash_block(0x4006, 32, hexi=False)
+        # old gain
+        bytes_cc_gain = bytearray(struct.pack("<f", cc_gain))
+        bytes_cap_gain = bytearray(struct.pack("<f", capacity_gain))
+        block[0:4] = bytes_cc_gain
+        block[4:8] = bytes_cap_gain
+        self.write_flash_block(0x4006, block)
+        # 4. Return calibrated current
+        self._ms_toggle_helper("cal_test", False, 0x002d)
+        sleep(0.1)
+        res = self.get_current()
         return res
 
 
@@ -1712,7 +1707,6 @@ class BQ40Z50R2(BQ40Z50R1):
         # Note: explicitely replicate the parameters here for having
         # option in teststand to change them on call
         super().__init__(smbus, slvAddress=slvAddress, pec=pec)
-        self._operation_status = None # shadow copy of operation_status() read to avoid redundant reads for seal/unseal checks
 
     #
     # !! NO NEED to overwrite __str__() !!
@@ -1740,10 +1734,9 @@ class BQ40Z50R2(BQ40Z50R1):
         try:
             self.operation_status() # if other chipset, this read will raise exception
             dev = self.device_type()
-            fw_rev = self.firmware_version()
-            #print(fw_rev)
+            self.firmware_version()
             if dev == 0x4500: # RRC2054xx, RRC21xx
-                if fw_rev["version"] & 0xff00 == 0x0200: # RRC2130, RRC2140, ...
+                if self._firmware_version["version"] & 0xff00 == 0x0200: # RRC2130, RRC2140, ...
                     yesno=True
         except BatteryError:
             # not the right chipset

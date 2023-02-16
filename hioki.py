@@ -1,6 +1,7 @@
 from rrc.eth2serial.base import Eth2Serial_SockSingleConnection_Device
 from rrc.eth2serial.base import Eth2SerialDevice
 from time import sleep
+import numpy as np
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
@@ -349,7 +350,7 @@ class Hioki_BT3561A(Eth2SerialDevice):
         except Exception:
             raise
 
-    def measure(self) -> list:
+    def measure(self) -> np.array:
         """
         Measures the voltage or/and impedance.
 
@@ -358,21 +359,23 @@ class Hioki_BT3561A(Eth2SerialDevice):
                   array[1]: float, voltage, V mode
         """
         resp = True
-        result = []
-        function_type = self.get_function()
+        result = np.array([])
+        nplist = []
+        function_type = self.get_function().strip()
         #[BT3561A] :READ? Execute single measurement using BT3561A.
         val = self.read()
         try:
             if (function_type == "RV"):
                 lst = val.split(',')
-                result.append(float(lst[0]))
-                result.append(float(lst[1]))
+                nplist.append(float(lst[0]))
+                nplist.append(float(lst[1]))
             else:
-                result.append(float(resp))
-                result.append(float(0))
+                nplist.append(float(resp))
+                nplist.append(float(0))
         except Exception:
             raise
-        return result
+        result = np.array(nplist)
+        return result 
 
     def set_raw_command(self, msg: str) -> bool:
         """
@@ -882,7 +885,7 @@ if __name__ == "__main__":
     #BT_PORT = 23                    # BT3561A port
     #SW_IP_STR = "192.168.1.201"     # SW1001 IP addr
     #SW_PORT = 23                    # SW1001 port
-    BT_resource_string = "172.21.101.12:23"
+    BT_resource_string = "172.21.101.44:23"
     #SW_resource_string = "192.168.1.201:23"
 
     # 1. Create an instance of 20 channel MUXER with HIOKI ACIR measurement device class
