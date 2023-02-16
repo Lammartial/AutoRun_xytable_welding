@@ -370,10 +370,8 @@ class Hioki_BT3561A(Eth2SerialDevice):
                 nplist.append(float(lst[0]))
                 nplist.append(float(lst[1]))
             else:
-                #nplist.append(float(resp))
-                #nplist.append(float(0))
-                nplist.append(5)
-                nplist.append(10)
+                nplist.append(float(resp))
+                nplist.append(float(0))
         except Exception:
             raise
         result = np.array(nplist)
