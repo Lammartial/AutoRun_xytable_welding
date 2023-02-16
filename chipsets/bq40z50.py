@@ -1146,17 +1146,20 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             adc_current = self.calib_read_adc_current(samples=4, shorted=shorted)
             # 2. calculate current_gain, capacity_gain. 
             # adc_current == 0 => Exception
-            cc_gain = float(current/adc_current)
+            cc_gain = 3.58422                  # default
+            #cc_gain = float(current/adc_current)
             capacity_gain = float(cc_gain*298261.6178)
             # 3. write bat_gain
             block = self.read_flash_block(0x4006, 32, hexi=False)
             # old gain
             #ccg = unpack_from("<f", block, 0)[0]
             #ccc = unpack_from("<f", block, 4)[0]
-            bytes_cc_gain = bytearray(struct.pack("f", cc_gain))
-            bytes_cap_gain = bytearray(struct.pack("f", capacity_gain))
+            bytes_cc_gain = bytearray(struct.pack("<f", cc_gain))
+            bytes_cap_gain = bytearray(struct.pack("<f", capacity_gain))
+            print(block)
             block[0:4] = bytes_cc_gain
-            block[4:4] = bytes_cap_gain
+            block[4:8] = bytes_cap_gain
+            print(block)
             self.write_flash_block(0x4006, block)
             # 4. Return calibrated current
             self._ms_toggle_helper("cal_test", False, 0x002d)
@@ -1770,14 +1773,14 @@ if __name__ == "__main__":
     _log = getLogger(__name__, DEBUG)
 
 
-    i2c_port = I2CPort(resource_str = "172.21.101.31:2101")
+    i2c_port = I2CPort(resource_str = "172.21.101.30:2101")
     busmux = BusMux(i2c_port, address=0x77)
     
     for i in range(1,9):
         busmux.setChannel(i)
         print(i2c_port.i2c_bus_scan())
     
-    auto_muxed_i2cbus = I2CMuxedBus(i2c_port, busmux, 6)
+    auto_muxed_i2cbus = I2CMuxedBus(i2c_port, busmux, 2)
     busmaster = BusMaster(auto_muxed_i2cbus)
     bat = BQ40Z50R2(busmaster)
 
@@ -1785,7 +1788,7 @@ if __name__ == "__main__":
     mib: str = "87654321876543218765432187654321"
     #mib = bat.get_mib(32, True)
     #print(mib)
-    bat.set_mib(data= mib, length= 32, address= 0x4041)
+    #bat.set_mib(data= mib, length= 32, address= 0x4041)
 
     #bat.set_manufacturer_date()
 
@@ -1793,6 +1796,8 @@ if __name__ == "__main__":
 
     #buf = bat.battery_status()
     #print("BatteryStatus:", buf)
+
+    #print(bat.is_sealed())
 
     #t1 = dt.now()
 
@@ -1814,8 +1819,8 @@ if __name__ == "__main__":
     pack_volt = 10.8
     #print(bat.calib_write_pack_voltage_gain(pack_volt, shorted=False))
     # Current calibration
-    curr = 0.01
-    #print(bat.calib_write_current_gain(curr, shorted=False))
+    curr = -2.01
+    print(bat.calib_write_current_gain(curr, shorted=False))
     # Temp calibration
     temp: Tuple = [21.71213214321, 21.71123213123, 21.7112321321321]
     #print(bat.calib_write_temp(temp))
