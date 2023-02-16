@@ -698,8 +698,8 @@ class M3900(M3400):
     #def get_ADC_rounded(self, ndigits: int = 3) -> float:
     #    return super.get_ADC_rounded(ndigits=int(ndigits))
 
-    def get_ADC(self) -> float:
-        return super().get_ADC()
+    #def get_ADC(self) -> float:
+    #    return super().get_ADC()
 
     #def get_VDC_rounded(self, ndigits: int = 3) -> float:
     #    return super().get_VDC_rounded(ndigits=int(ndigits))
@@ -728,8 +728,8 @@ class M3900(M3400):
     #def get_current_rounded(self, ndigits: int = 3) -> float:
     #    return super().get_current_rounded(ndigits=int(ndigits))
 
-    #def get_current(self) -> float:
-    #    return super().get_current()
+    def get_current(self) -> float:
+        return super().get_current()
 
     #def set_current_limit_positive(self, curr: float) -> None:
     #    super().set_current_limit_positive(curr)
@@ -755,8 +755,8 @@ class M3900(M3400):
     #def set_voltage(self, volt: float) -> None:
     #    super().set_voltage(volt)
 
-    #def get_voltage(self) -> float:
-    #    return super().get_voltage()
+    def get_voltage(self) -> float:
+        return super().get_voltage()
 
     #def set_voltage_limit_high(self, volt: float) -> None:
     #    super().set_voltage_limit_high(volt)
@@ -854,11 +854,15 @@ class M3900(M3400):
         """
         if self.last_mode != "CURR":
             self.set_output_state(0)            # make sure output is OFF
-        self.set_function("CURR")               # CC priority     
-        self.send(f"POW:LIM:NEG {0.0:05.2f}")
-        self.send(f"POW:LIM:POS {power_limit:05.2f}") # always fixed!
-        self.send(f"CURR:LIM:NEG {0.0:06.3f}")
-        self.send(f"CURR:LIM:POS {current_limit:06.3f}") # always fixed!        
+        self.set_function("CURR")               # CC priority   
+        param = f"POW:LIM:NEG {0.0:05.2f}"  
+        self.send(param)
+        param = f"POW:LIM:POS {power_limit:05.2f}"
+        self.send(param) # always fixed!
+        param = f"CURR:LIM:NEG {0.0:06.3f}"
+        self.send(param)
+        param = f"CURR:LIM:POS {current_limit:06.3f}"
+        self.send(param) # always fixed!        
         self.send(f"VOLT:LIM:LOW {0.0:05.2f}") # always fixed!
         self.send(f"VOLT:LIM:HIGH {voltage_limit_high:05.2f}")
         self.send(f"CURR {current:06.3f}") 
