@@ -227,8 +227,8 @@ def test_sps_process(dev: AWS3Modbus, program_sequence: List[int] = [1,2,3,4,5])
             counter_ax1 = dev.read_axis_counter(1)
             #counter_ax2 = dev.read_axis_counter(2)
             # 3. check if we have to moved to the  next program step
-            diffcount = last_counter_ax1["counter"] - counter_ax1["counter"]
-            if diffcount >= 0:
+            diffcount = counter_ax1["counter"] - last_counter_ax1["counter"]
+            if diffcount > 0:
                 # yes we have finished a cycle -> move to next program step
                 dev.lock_machine_step()
                 _machine_locked = True
