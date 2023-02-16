@@ -19,6 +19,9 @@ DEBUG = 2
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
+def remove_non_ascii(string: str) -> str:
+    return ''.join(char for char in string if ord(char) < 128)
+
 class AWS3Modbus(ModbusClient):
 
     def __init__(self, connection_str: str, group_by_gateway: bool = True) -> None:
@@ -138,7 +141,7 @@ class AWS3Modbus(ModbusClient):
             "EnableDataLogging": dc.decode_8bit_uint(),
             "LogFileNumber": dc.decode_32bit_int(),
             "CheckReference": dc.decode_8bit_uint(),
-            "LogExternalInfo": dc2.decode_string(16*2).decode("utf-8"),
+            "LogExternalInfo": remove_non_ascii(dc2.decode_string(16*2).decode()),
             "StaticLoadPos0": dc.decode_32bit_float(),
             "StaticLoadPos1": dc.decode_32bit_float(),
         }
@@ -154,14 +157,14 @@ class AWS3Modbus(ModbusClient):
         response = self.read_holding_registers(801-1, n, unit_address=axis)
         dc: BinaryPayloadDecoder = self.getDecoder(response)
         b = dc.decode_string(size=n*2)  # size = bytes not words
-        return b.decode("utf8")
+        return remove_non_ascii(b.decode())
 
     def read_name(self) -> str:
         n = 32  # guessed
         response = self.read_holding_registers(801-1, n, unit_address=3)
         dc: BinaryPayloadDecoder = self.getDecoder(response)
         b = dc.decode_string(size=n*2)  # size = bytes not words
-        return b.decode("utf8")
+        return remove_non_ascii(b.decode())
 
 
 #--------------------------------------------------------------------------------------------------
@@ -386,10 +389,10 @@ if __name__ == '__main__':
     log_modbus_version()
 
     with AWS3Modbus("tcp:172.21.101.100:502") as dev:
-        #test_basic_communication(dev)
+        test_basic_communication(dev)
         #test_sps_process(dev, program_sequence=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
         #test_sps_process(dev, program_sequence=[1,2,3,4])
-        test_sps_statemachine(dev, program_sequence=[1,2,3,4])
+        #test_sps_statemachine(dev, program_sequence=[1,2,3,4])
 
     _log.info("End test")
 
