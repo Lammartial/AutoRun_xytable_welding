@@ -201,7 +201,7 @@ if __name__ == "__main__":
     # using multi-channel communication
     m3902 = M3900(M3902_IP_STR, 0)
     # 2. IMPORTANT! Set remote control mode.
-    print(m3902.set_remote_control())
+    m3902.initialize_device()
     # 3. Do some stuff
     test_m3900_modes(m3902)
 

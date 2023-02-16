@@ -683,8 +683,11 @@ class M3900(M3400):
     #----------------------------------------------------------------------------------------------
     # common function repeated as trampoline for TestStand only :-(
 
-    def set_remote_control(self) -> None:
-        super().set_remote_control()
+    #def set_remote_control(self) -> None:
+    #    super().set_remote_control()
+
+    def initialize_device(self) -> None:
+        super().initialize_device()
 
     def send_raw_command(self, cmd: str) -> None:
         super().send_raw_command(cmd)
