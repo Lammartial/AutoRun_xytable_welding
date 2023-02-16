@@ -1770,7 +1770,7 @@ if __name__ == "__main__":
     _log = getLogger(__name__, DEBUG)
 
 
-    i2c_port = I2CPort(resource_str = "172.21.101.31:2101")
+    i2c_port = I2CPort(resource_str = "172.21.101.30:2101")
     busmux = BusMux(i2c_port, address=0x77)
     
     for i in range(1,9):
@@ -1785,7 +1785,7 @@ if __name__ == "__main__":
     mib: str = "87654321876543218765432187654321"
     #mib = bat.get_mib(32, True)
     #print(mib)
-    bat.set_mib(data= mib, length= 32, address= 0x4041)
+    #bat.set_mib(data= mib, length= 32, address= 0x4041)
 
     #bat.set_manufacturer_date()
 
@@ -1814,8 +1814,8 @@ if __name__ == "__main__":
     pack_volt = 10.8
     #print(bat.calib_write_pack_voltage_gain(pack_volt, shorted=False))
     # Current calibration
-    curr = 0.01
-    #print(bat.calib_write_current_gain(curr, shorted=False))
+    curr = 2.01
+    print(bat.calib_write_current_gain(curr, shorted=False))
     # Temp calibration
     temp: Tuple = [21.71213214321, 21.71123213123, 21.7112321321321]
     #print(bat.calib_write_temp(temp))

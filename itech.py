@@ -118,16 +118,15 @@ class M3400(Eth2SerialVisaDevice):
     # def get_ADC_rounded(self, ndigits: int = 3) -> float:
     #     return round(self.get_ADC(), ndigits=int(ndigits))
 
-    # def get_ADC(self) -> float:
-    #     """
-    #     This command queries the present current measurement.
-    #     IT M3400 and M3900 devices
-
-    #     Returns:
-    #         float: ADC
-    #     """
-    #     cmd = "FETC:CURR?"
-    #     return float(self.request(cmd))
+    def get_ADC(self) -> float:
+         """
+         This command queries the present current measurement.
+         IT M3400 and M3900 devices
+         Returns:
+             float: ADC
+         """
+         cmd = "FETC:CURR?"
+         return float(self.request(cmd))
 
 
     # def get_VDC_rounded(self, ndigits: int = 3) -> float:
@@ -696,8 +695,8 @@ class M3900(M3400):
     #def get_ADC_rounded(self, ndigits: int = 3) -> float:
     #    return super.get_ADC_rounded(ndigits=int(ndigits))
 
-    #def get_ADC(self) -> float:
-    #    return super().get_ADC()
+    def get_ADC(self) -> float:
+        return super().get_ADC()
 
     #def get_VDC_rounded(self, ndigits: int = 3) -> float:
     #    return super().get_VDC_rounded(ndigits=int(ndigits))
@@ -855,8 +854,8 @@ class M3900(M3400):
         self.set_function("CURR")               # CC priority     
         self.send(f"POW:LIM:NEG {0.0:05.2f}")
         self.send(f"POW:LIM:POS {power_limit:05.2f}") # always fixed!
-        #self.send(f"CURR:LIM:NEG {0.0:06.3f}")
-        #self.send(f"CURR:LIM:POS {current_limit:06.3f}") # always fixed!        
+        self.send(f"CURR:LIM:NEG {0.0:06.3f}")
+        self.send(f"CURR:LIM:POS {current_limit:06.3f}") # always fixed!        
         self.send(f"VOLT:LIM:LOW {0.0:05.2f}") # always fixed!
         self.send(f"VOLT:LIM:HIGH {voltage_limit_high:05.2f}")
         self.send(f"CURR {current:06.3f}") 
