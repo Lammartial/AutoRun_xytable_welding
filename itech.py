@@ -611,12 +611,12 @@ class M3400(Eth2SerialVisaDevice):
 
         
     def configure_current_rise_times(self, pos: float| str = "MIN", neg: float | str = "MIN"):
-        self.send(f"CURRENT:SLEW:NEG {neg:0.3f}; SLEW:POS {pos:0.3f}")
-        #self.send(f"CURRENT:SLEW:POS {pos:0.3f}")
+        self.send(f"CURRENT:SLEW:NEG {neg}")
+        self.send(f"CURRENT:SLEW:POS {pos}")
 
     def configure_voltage_rise_times(self, pos: float | str = "MIN", neg: float | str = "MIN"):
-        self.send(f"VOLTAGE:SLEW:NEG {neg:0.3f}; SLEW:POS {pos:0.3f}")
-        #self.send(f"VOLTAGE:SLEW:POS {pos:0.3f}")
+        self.send(f"VOLTAGE:SLEW:NEG {neg}")
+        self.send(f"VOLTAGE:SLEW:POS {pos}")
 
 
     def configure_sink(self, current: float, resistance: float | None,

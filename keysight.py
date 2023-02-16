@@ -199,7 +199,8 @@ class DAQ970A(Eth2SerialVisaDevice):
         assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VDC: Allowed channel range is 1 .. 20.')
         try:
             cmd = "MEAS:VOLT:DC? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
-            return abs(float(self.request(cmd, 5000)))  # we need to clear the sign as some adapters have swapped +/- senses
+            #return abs(float(self.request(cmd, 5000)))  # we need to clear the sign as some adapters have swapped +/- senses
+            return float(self.request(cmd, 5000))
         except Exception as ex:
             #_log.exception(ex)
             raise
