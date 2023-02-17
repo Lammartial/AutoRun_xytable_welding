@@ -48,7 +48,7 @@ class WindowUI(object):
         #_w = root.winfo_width()
         #_h = root.winfo_height()
         _w = 280  # width set manually
-        _h = 480  # height set manually
+        _h = self.root.winfo_screenheight() #480  # height set manually
         _x = int((self.root.winfo_screenwidth() / 2) - (_w / 2))
         _y = int((self.root.winfo_screenheight() / 2) - (_h / 2))
         self.root.geometry(f"{_w}x{_h}+{_x}+{_y}")
@@ -63,12 +63,12 @@ class WindowUI(object):
         #self.mainframe.grid(row=0, column=0, sticky=tk.EW)
         #self.root.grid_columnconfigure(0,weight=1)
         #self.root.grid_rowconfigure(0,weight=1)
-        # Create a Frame for input widgets        
+        # Create a Frame for input widgets
         # self.mainframe.grid(
         #     row=0, column=0, columnspan=2, #rowspan=3, #padx=10, pady=(30, 10),
         #     sticky=tk.NSEW
         # )
-      
+
         # Label
         _row = next(row_itr)
         label0 = ttk.Label(
@@ -107,7 +107,7 @@ class WindowUI(object):
         style.configure('B2.TButton', foreground="green", background='#232323')
         style.map('B2.TButton', background=[("active","#ff0000")])
         #style.configure('TButton', background = 'red', foreground = 'green', width = 20, borderwidth=1, focusthickness=3, focuscolor='none')
-        
+
         step_back_button = ttk.Button(self.mainframe, text="STEP BACK",  style="B1.TButton",
             command=lambda: self.q_cmd.put({"move_counter": -1}))
         step_back_button.grid(row=_row, column=0, ipady=50, ipadx=20, sticky=tk.NSEW)
@@ -236,7 +236,7 @@ class SPSStates(Enum):
 
 class SPSStateMachine(object):
 
-    def __init__(self, dev: AWS3Modbus | str, program_sequence: List[int] = [1]) -> None:        
+    def __init__(self, dev: AWS3Modbus | str, program_sequence: List[int] = [1]) -> None:
         self.state: SPSStates = SPSStates.INIT
         self.program_sequence = program_sequence
         self.counter_base_ax1 = None
@@ -261,7 +261,7 @@ class SPSStateMachine(object):
 
     def _offset_sequence(self, offset: int) -> None:
         self.sequence_pos = (self.sequence_pos + offset) % len(self.program_sequence)
-        
+
     def move_seqence_step(self, step: int) -> None:
         self._offset_sequence(step)
         self.next_program_no = self.program_sequence[self.sequence_pos]
@@ -269,7 +269,7 @@ class SPSStateMachine(object):
 
     def reset_seqence(self) -> None:
         self.sequence_pos = 0
-        self.next_program_no = self.program_sequence[self.sequence_pos]            
+        self.next_program_no = self.program_sequence[self.sequence_pos]
         self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
 
     def do_one_loop(self):
@@ -357,7 +357,8 @@ class SPSStateMachine(object):
         except AssertionError as ex:
             print("Got ERROR to ignore: ", ex)
         except Exception as ex:
-            raise
+            #raise
+            pass  # swallow
         finally:
             # make sure that the welding machine will be unlocked in any failure cases
             if self._machine_locked:
@@ -369,7 +370,7 @@ class SPSStateMachine(object):
 
 class ProcessSPS(multiprocessing.Process):
 
-    def __init__(self, command_queue: multiprocessing.JoinableQueue, response_queue: multiprocessing.Queue, 
+    def __init__(self, command_queue: multiprocessing.JoinableQueue, response_queue: multiprocessing.Queue,
                        resource_str: str, program_sequence: List[int]) -> None:
         multiprocessing.Process.__init__(self)
         global DEBUG
@@ -396,7 +397,7 @@ class ProcessSPS(multiprocessing.Process):
                 if "move_counter" in cmd:
                     #n = n + int(cmd["move_counter"])
                     self.SM.move_seqence_step(int(cmd["move_counter"]))
-                if "reset_counter" in cmd:                    
+                if "reset_counter" in cmd:
                     #n = int(cmd["reset_counter"])
                     self.SM.reset_seqence()
                 answer = "Hallejulia!"
@@ -442,7 +443,7 @@ if __name__ == '__main__':
         # start UI in this process waiting for user input
         w = WindowUI(q_cmd, q_res)
         p.start()
-        w.run_mainloop()        
+        w.run_mainloop()
     except KeyboardInterrupt as kx:
         # user stopped process
         pass
