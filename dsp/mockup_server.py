@@ -122,7 +122,8 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
     global next_serial, lock_next_serial, MOCK_PARTNUMBER
 
     # set the product to test for mockup: "RRC2040B" or "RRC2020B"
-    _product_name = "RRC2020B"
+    #_product_name = "RRC2020B"
+    _product_name = "RRC2040B"
     _mock = MOCK_PARTNUMBER[_product_name]
 
     # #_serial = random.randint(1, 47236513)
