@@ -49,7 +49,8 @@ class WindowUI(object):
         #_h = root.winfo_height()
         _w = 280  # width set manually
         _h = self.root.winfo_screenheight() #480  # height set manually
-        _x = int((self.root.winfo_screenwidth() / 2) - (_w / 2))
+        #_x = int((self.root.winfo_screenwidth() / 2) - (_w / 2))
+        _x = int(self.root.winfo_screenwidth() - _w)
         _y = int((self.root.winfo_screenheight() / 2) - (_h / 2))
         self.root.geometry(f"{_w}x{_h}+{_x}+{_y}")
         # self.root.columnconfigure(0, weight=10)
