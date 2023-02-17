@@ -2,7 +2,7 @@ from rrc.dac_dac53608 import DAC53608
 from rrc.i2cbus import I2CMuxedBus
 
 
-class CellVoltageSource:
+class CellVoltageSimulation:
     """A class to control the RRC Cell Voltage Source (412047) via I2C.
 
     This voltage source can simulate the cell voltages of batteries with up to 7 cells. Each cell's voltage can be
@@ -62,15 +62,15 @@ class CellVoltageSource:
             float: The actual output voltage in Volts after adjusting to resolution of the DAC.
         """
         dac_voltage_V = aux_pin_voltage_V / self.aux_dac_channel_gain
-        return self.dac.set_channel_n_voltage(CellVoltageSource.aux_dac_channel, dac_voltage_V)
+        return self.dac.set_channel_n_voltage(CellVoltageSimulation.aux_dac_channel, dac_voltage_V)
 
     def enable_aux_dac_channel(self):
         """Enable the DAC-channel for the aux pin."""
-        self.dac.enable_channel_n(CellVoltageSource.aux_dac_channel)
+        self.dac.enable_channel_n(CellVoltageSimulation.aux_dac_channel)
 
     def power_down_aux_dac_channel(self):
         """Disable the DAC-channel for the aux pin."""
-        self.dac.disable_channel_n(CellVoltageSource.aux_dac_channel)
+        self.dac.disable_channel_n(CellVoltageSimulation.aux_dac_channel)
 
     def set_all_cell_voltages(self, cell_voltage_V: float) -> float:
         """Set the voltage of all cells to the same voltage.
@@ -82,18 +82,18 @@ class CellVoltageSource:
             float: The actual output voltage in Volts after adjusting to resolution of the DAC.
         """
         set_voltage_V = 0.0
-        for cell in CellVoltageSource.cell_dict:
+        for cell in CellVoltageSimulation.cell_dict:
             set_voltage_V = self.dac.set_channel_n_voltage(cell, cell_voltage_V)
         return set_voltage_V
 
     def enable_all_cell_channels(self):
         """Enable all DAC-channels for the cell pins."""
-        for cell in CellVoltageSource.cell_dict:
+        for cell in CellVoltageSimulation.cell_dict:
             self.dac.enable_channel_n(cell)
 
     def power_down_all_cell_channels(self):
         """Disable all DAC-channels for the cell pins."""
-        for cell in CellVoltageSource.cell_dict:
+        for cell in CellVoltageSimulation.cell_dict:
             self.dac.disable_channel_n(cell)
 
     def set_cell_n_voltage(self, cell_n: int, cell_voltage_V: float) -> float:
@@ -121,7 +121,7 @@ class CellVoltageSource:
         """
         cell_n = int(cell_n)
         self.__validate_cell_number(cell_n)
-        self.dac.enable_channel_n(CellVoltageSource.cell_dict[cell_n])
+        self.dac.enable_channel_n(CellVoltageSimulation.cell_dict[cell_n])
 
     def power_down_cell_n_channel(self, cell_n: int):
         """Disable the DAC-channel for the specified cell pin.
@@ -131,7 +131,7 @@ class CellVoltageSource:
         """
         cell_n = int(cell_n)
         self.__validate_cell_number(cell_n)
-        self.dac.disable_channel_n(CellVoltageSource.cell_dict[cell_n])
+        self.dac.disable_channel_n(CellVoltageSimulation.cell_dict[cell_n])
 
     def __validate_cell_number(self, cell_n: int):
         """Raise a ValueError if the cell index is invalid.
@@ -139,9 +139,9 @@ class CellVoltageSource:
         Raises:
             ValueError: If the cell index is invalid. (< 1 or > 7)
         """
-        if cell_n not in CellVoltageSource.cell_dict.keys():
+        if cell_n not in CellVoltageSimulation.cell_dict.keys():
             raise ValueError(f"Cell number for the {str(self)} must be between "
-                             f"1 to {max(CellVoltageSource.cell_dict.keys())}. You selected {cell_n}.")
+                             f"1 to {max(CellVoltageSimulation.cell_dict.keys())}. You selected {cell_n}.")
 
 
 #--------------------------------------------------------------------------------------------------
@@ -153,7 +153,7 @@ if __name__ == '__main__':
     i2c = I2CPort("172.21.101.21:2101")
     mux = BusMux(i2c, 0x77)
     bus = I2CMuxedBus(i2c, mux, 4)
-    cvs = CellVoltageSource(bus, 0x48)
+    cvs = CellVoltageSimulation(bus, 0x48)
     cvs.initialize()
     cvs.set_aux_voltage(3.141)
     # cvs.set_cell_n_voltage(1, 3.7)
