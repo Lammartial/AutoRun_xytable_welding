@@ -254,7 +254,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
     # Create the Tk root and mainframe.
     root = tk.Tk()
 
-    
+
     def _accept_udi(parent):
         global udi_to_scan, block_accept_udi
         if block_accept_udi: return
@@ -269,15 +269,15 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
         root.destroy()
 
     #---for test only---
-   
+
 
     def validate_entry(entry, action: str, index: str, current: str, change: str, trigger: str) -> bool:
         global block_accept_udi
-        #print(f"{entry},{action},{index},{current},{change},{trigger}")        
+        #print(f"{entry},{action},{index},{current},{change},{trigger}")
         if trigger in ["key", "focusout"]:
             _s = current
             if action == "0":
-                index = int(index)            
+                index = int(index)
                 _s = current[:index] + current[index+len(change):]
             if action == "1":
                 index = int(index)
@@ -286,7 +286,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
             if len(_s)<4:
                 block_accept_udi = True
             else:
-                block_accept_udi = False        
+                block_accept_udi = False
         if trigger == "focusout":
             if block_accept_udi:
                 return False
@@ -309,7 +309,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
     root.title(title)
     # set App icon
     # if we have an ICO file we can simply use this:
-    root.iconbitmap(Path(__file__).resolve().parent / "app-icon.ico")
+    root.iconbitmap(Path(__file__).resolve().parent / "scan-icon.ico")
     # Simply set the theme
     root.tk.call("source", Path(__file__).resolve().parent / "theme_sv.tcl")
     root.tk.call("set_theme", "light")
@@ -356,11 +356,11 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
         if item.name:
             _label = ttk.Label(mainframe, text=item.name)
             _label.grid(row=_row, column=_col, padx=5, pady=(0, 10), sticky="ew")
-            _col += 1    
+            _col += 1
         entry = ttk.Entry(
             mainframe,
             state=tk.NORMAL if allow_manual_edit else tk.DISABLED,
-            textvariable=item.var,            
+            textvariable=item.var,
             font=("-size", 15),
         )
          # valid percent substitutions (from the Tk entry man page)
