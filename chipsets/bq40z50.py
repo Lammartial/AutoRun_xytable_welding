@@ -1413,6 +1413,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def set_led_onoff(self, enable: bool) -> bool:
         return self._os_toggle_helper("led", enable, 0x002b)
 
+    def is_led_on(self) -> bool:
+        self.operation_status() # => update the self._manufacturing_status attribute
+        return bool(self._operation_status["led"])
+
     def reset_device(self):
         self.manufacturer_access = 0x0041
     
