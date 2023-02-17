@@ -1269,7 +1269,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         while (retries >= 0):
             try:
                 self.operation_status()  # => update the self._manufacturing_status attribute
-                if bool(self._operation_status[os_key]) != enable:
+                if bool(self._operation_status[os_key]) != bool(enable):
                     if not _toggle_issued:
                         self.manufacturer_access = ma_cmd  # need to toggle
                         _toggle_issued = True
@@ -1285,7 +1285,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                     sleep(pause_on_retry)
             finally:
                 retries -= 1
-        return (bool(self._operation_status[os_key]) == enable)
+        return (bool(self._operation_status[os_key]) == bool(enable))
 
 
     def toggle_fuse(self) -> None:
