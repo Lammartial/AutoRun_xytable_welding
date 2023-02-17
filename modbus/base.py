@@ -186,7 +186,7 @@ class ModbusClient:
     # easier to use interface
     def getDecoder(self, registers: Any) -> BinaryPayloadDecoder:
         return BinaryPayloadDecoder.fromRegisters(registers, byteorder=self.byte_order, wordorder=self.word_order)
-
+    
     def getEncoder(self) -> BinaryPayloadBuilder:
         return BinaryPayloadBuilder.fromRegisters(byteorder=self.byte_order, wordorder=self.word_order)
 

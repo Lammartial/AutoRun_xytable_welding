@@ -20,14 +20,14 @@ from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
 def remove_non_ascii(string: str) -> str:
-    return ''.join(char for char in string if ord(char) < 128)
+    return ''.join(char for char in string if ord(char) > 0 and ord(char) < 128)
 
 class AWS3Modbus(ModbusClient):
 
     def __init__(self, connection_str: str, group_by_gateway: bool = True) -> None:
         super().__init__(connection_str, group_by_gateway=group_by_gateway, unit_address=None,
                         byte_order=Endian.Big, word_order=Endian.Little)
-        response = self.write_register(9999-1, 3, unit_address=3)  # switch byte order to default
+        self.set_machine_byteorder()  # switch byte order to default
         self.machine_name = self.read_name().strip()
 
     def __str__(self) -> str:
@@ -38,6 +38,8 @@ class AWS3Modbus(ModbusClient):
 
     #----------------------------------------------------------------------------------------------
 
+    def set_machine_byteorder(self, bo: int = 3) -> None:
+        self.write_register(9999-1, bo, unit_address=3) # 3=default, 1=big 
 
     def is_machine_ready(self) -> tuple:
         #return not self.read_coils(65-1, 1, unit_address=3)[0]
@@ -126,7 +128,9 @@ class AWS3Modbus(ModbusClient):
         response = self.read_holding_registers(601-1, 24, unit_address=axis)
         dc: BinaryPayloadDecoder = self.getDecoder(response)
         # read a string
+        self.set_machine_byteorder(1)
         response2 = self.read_holding_registers(833-1, 16, unit_address=axis)
+        self.set_machine_byteorder()
         dc2: BinaryPayloadDecoder = self.getDecoder(response2)
         d = {
             "CounterMode": dc.decode_8bit_uint(),
@@ -154,14 +158,18 @@ class AWS3Modbus(ModbusClient):
     def read_program_name(self, axis: int) -> str:
         assert (axis in [1,2])
         n = 16
+        self.set_machine_byteorder(1)
         response = self.read_holding_registers(801-1, n, unit_address=axis)
+        self.set_machine_byteorder()
         dc: BinaryPayloadDecoder = self.getDecoder(response)
         b = dc.decode_string(size=n*2)  # size = bytes not words
         return remove_non_ascii(b.decode())
 
     def read_name(self) -> str:
         n = 32  # guessed
+        self.set_machine_byteorder(1)
         response = self.read_holding_registers(801-1, n, unit_address=3)
+        self.set_machine_byteorder()
         dc: BinaryPayloadDecoder = self.getDecoder(response)
         b = dc.decode_string(size=n*2)  # size = bytes not words
         return remove_non_ascii(b.decode())
