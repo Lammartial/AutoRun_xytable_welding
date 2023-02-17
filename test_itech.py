@@ -199,7 +199,7 @@ if __name__ == "__main__":
 
 
     # predefined resource ID
-    M3902_IP_STR = "TCPIP0::172.21.101.46::inst0::INSTR"
+    M3902_IP_STR = "TCPIP0::172.21.101.51::inst0::INSTR"
     # 1. Create an instance of ITECH_DEV class
     # using multi-channel communication
     m3902 = M3900(M3902_IP_STR, 0)
