@@ -8,6 +8,7 @@ from time import sleep, perf_counter
 from pathlib import Path
 
 from rrc.modbus.aws3 import AWS3Modbus
+from rrc.dbcon.connection import get_protocol_db_connector
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -382,6 +383,8 @@ class ProcessSPS(multiprocessing.Process):
         self.program_sequence = program_sequence
 
     def run(self) -> None:
+        # get configuration from DSP + DB connection
+        db = get_protocol_db_connector()
         self.SM = SPSStateMachine(self.resource_str, self.program_sequence)
         proc_name = self.name
         n = 0
