@@ -60,7 +60,7 @@ class StationConfiguration:
         return f"Test station configuration by YAML file {self._filename}"
 
     def __repr__(self) -> str:
-        return f"StationConfiguration(filename={self._filename})"
+        return f"StationConfiguration({self.test_type},filename={self._filename})"
 
     #----------------------------------------------------------------------------------------------
 
@@ -69,6 +69,13 @@ class StationConfiguration:
             self._CONFIG = OrderedDict(yaml.safe_load(file))
             # here we could check the YAML file setting of test_type
             self._CONFIG["test_type"] = self.test_type
+
+
+    #---- Interface for SPS -----------------------------------------------------------------------
+
+    def get_resources_for_test_type(self) -> dict:
+        d = self._CONFIG
+        return d[self.test_type]
 
     # --- TestStand Interfaces --------------------------------------------------------------------
 

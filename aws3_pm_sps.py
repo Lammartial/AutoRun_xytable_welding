@@ -7,11 +7,13 @@ import tkinter.ttk as ttk
 from time import sleep, perf_counter
 from pathlib import Path
 
-from rrc.modbus.aws3 import AWS3Modbus
+from rrc.modbus.aws3 import AWS3Modbus, AWS3Modbus_DUMMY
+from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
+from rrc.dsp.interface import DspInterface
 # import SQL managing modules
 import sqlalchemy as sa
 from sqlalchemy.orm import sessionmaker
-from rrc.dbcon.connection import get_protocol_db_connector
+from rrc.dbcon import get_protocol_db_connector
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -34,8 +36,11 @@ class WindowUI(object):
 
         # Create the Tk root and mainframe.
         self.root = tk.Tk()
-        self.var_label_counter = tk.StringVar(self.root, "-1")
-        self.var_label_program = tk.StringVar(self.root, "-1")
+        self.var_label_counter = tk.StringVar(self.root, "")
+        self.var_label_program = tk.StringVar(self.root, "")
+        self.var_label_part_number = tk.StringVar(self.root, "")
+        self.var_label_sequence = tk.StringVar(self.root, "")
+
         self.root.withdraw()  # hide window
         self.root.title(title)
         # set App icon
@@ -151,12 +156,19 @@ class WindowUI(object):
         if not self.q_res.empty():
             a = self.q_res.get()
             #print("UI:", a)
-            if a and "counter" in a:
-                self.var_label_counter.set(a["counter"])
-                self.root.update()
-            if a and "program" in a:
-                self.var_label_program.set(a["program"])
-                self.root.update()
+            if a:
+                if "part_number" in a:
+                    self.var_label_part_number.set(a["part_number"])
+                    self.root.update()
+                if "sequence" in a:
+                    self.var_label_sequence.set(a["sequence"])
+                    self.root.update()
+                if "counter" in a:
+                    self.var_label_counter.set(a["counter"])
+                    self.root.update()
+                if "program" in a:
+                    self.var_label_program.set(a["program"])
+                    self.root.update()
         self._id_after = self.mainframe.after(50, lambda: self.process_command_queue())
 
 
@@ -244,18 +256,45 @@ class SPSStateMachine(object):
     def __init__(self, dev: AWS3Modbus | str, program_sequence: List[int] = [1]) -> None:
         self.state: SPSStates = SPSStates.INIT
         self.program_sequence = program_sequence
-        self.counter_base_ax1 = None
-        self.program_no_base = -1
-        self.sequence_pos = -1
+        self.sequence_pos = 0
+        self.program_no = -1
         self.next_program_no = -1
+        self.counter_base_ax1 = None
         self.last_counter_ax1 = -1
         self._machine_locked = None
         self._throttle_pause = 0.055
         if isinstance(dev, str):
-            self.dev = AWS3Modbus(dev)
+            try:
+                self.dev = AWS3Modbus(dev)
+            except Exception as ex:
+                print(ex)
+                print("Using dummy AWS3 Modbus driver for test purposes.")
+                self.dev = AWS3Modbus_DUMMY(dev)  # this starts a simulation to support testing
         else:
             self.dev = dev
         print(f"Poor man's SPS machine: {self.dev.machine_name}, at {repr(self.dev)}")
+
+
+    def __str__(self) -> str:
+        return f"State Machine for SPS on modbus {repr(self.dev)} with sequence {self.program_sequence}"
+
+    def __repr__(self) -> str:
+        return f"SPSStateMachine({repr(self.dev)}, {self.program_sequence})"
+
+    #----------------------------------------------------------------------------------------------
+
+    # to provide the with ... statement protector
+    def __enter__(self):
+        self.dev.open()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def close(self):
+        self.dev.close()
+
+    #----------------------------------------------------------------------------------------------
 
     def run_loop(self):
         while True:
@@ -292,19 +331,23 @@ class SPSStateMachine(object):
                 case SPSStates.INIT:
                     self.counter_base_ax1 = self.dev.read_axis_counter(1)
                     self._machine_locked = self.dev.read_machine_lock_status()
-                    self.program_no_base = self.dev.read_program_no()
-                    print(f"Base counters: Ax1={self.counter_base_ax1}")
-                    print(f"Base program no: {self.program_no_base}")
-                    self.sequence_pos = 0
-                    self.last_counter_ax1 = self.counter_base_ax1
-                    self.program_no = self.program_no_base
+                    self.program_no = self.dev.read_program_no()
+                    self.counter_ax1 = self.counter_base_ax1
+                    self.last_counter_ax1 = self.counter_ax1
+                    print(f"Counters at init: Ax1={self.counter_ax1}")
+                    print(f"Program no at init: {self.program_no}")
                     self.next_program_no = self.program_sequence[self.sequence_pos]
-                    self.set_state(SPSStates.SHOW_PROGRAM_STEP)
+                    print(f"Next program on sequence on {self.sequence_pos}: {self.next_program_no}")
+                    if self.next_program_no != self.program_no:
+                        self.program_no = self.next_program_no  # to avoid blitting a -1 on UI
+                        self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
+                    else:
+                        self.set_state(SPSStates.SHOW_PROGRAM_STEP)
 
                 case SPSStates.SHOW_PROGRAM_STEP:
                     print(f"Program step: {self.sequence_pos} of {len(self.program_sequence)}")
                     print(f"Program set {self.program_no}")
-                    self.set_state(SPSStates.SYNC_ON_MACHINE_COUNTER)
+                    self.set_state(SPSStates.WAIT_READY_TO_SYNC_ON_MACHINE_COUNTER)
 
                 case SPSStates.WAIT_READY_TO_SYNC_ON_MACHINE_COUNTER:
                     if self.dev.is_machine_ready():
@@ -354,7 +397,7 @@ class SPSStateMachine(object):
                         print(f"Program {self.program_no} already set.")
                     self.dev.unlock_machine_step()
                     self._machine_locked = False
-                    self.set_state(SPSStates.WAIT_READY_TO_SYNC_ON_MACHINE_COUNTER)
+                    self.set_state(SPSStates.SHOW_PROGRAM_STEP)
 
                 case other:
                     self.set_state(SPSStates.WAIT_READY_TO_INIT)
@@ -375,31 +418,74 @@ class SPSStateMachine(object):
 
 class ProcessSPS(multiprocessing.Process):
 
-    def __init__(self, command_queue: multiprocessing.JoinableQueue, response_queue: multiprocessing.Queue,
-                       resource_str: str, program_sequence: List[int]) -> None:
+    def __init__(self, command_queue: multiprocessing.JoinableQueue, response_queue: multiprocessing.Queue) -> None:
         multiprocessing.Process.__init__(self)
         global DEBUG
         self._log = getLogger(__name__, DEBUG)
         self.command_queue = command_queue
         self.response_queue = response_queue
-        self.resource_str = resource_str
-        self.program_sequence = program_sequence
 
-    def run(self) -> None:
-        # get configuration from DSP + DB connection
+    def collect_parameters(self) -> List[int]:
+        """ Read configuration from DSP + DB connection
+
+        Note: this is called from process context,
+              do NOT call it from anywhere else except you want to test this function only!
+
+        Raises:
+            Exception: _description_
+        """
+        # 1. we need the station config
+        cfg = StationConfiguration("WELDER_SPS", filename=CONF_FILENAME_DEV)
+        _, _station_id, _dsp_api_base_url, _line_id, _ = cfg.get_station_configuration()
+        # 2. with station config we can request the part number from DSP
+        print("Fetching part number from DSP...")
+        dsp = DspInterface(_dsp_api_base_url, None)
+        _dsp_info = dsp.get_parameter_for_testrun("COREPACK_TEST", _station_id, _line_id, "0")
+        _part_number = _dsp_info["part_number"]
+        # 3. with station config we can get the IP resource for the welder MODBUS
+        _resources = cfg.get_resource_strings_for_socket(0)
+        _controller_resource_str = _resources[0]
+        print(f"PART NUMBER: {_part_number}")
+        # 4. we need the program sequence of the AWS welder for the given part number
+        print("Requesting database for sequence...")
         srcEngine, SSession = get_protocol_db_connector()
         session = SSession()
-        _part_number = "412096-16"
-        res = session.execute(sa.text(f"SELECT id,program_sequence,parameter FROM `spsconfig` AS sc WHERE sc.part_number='{_part_number}' ORDER BY id DESC"))
-        rows = res.fetchall()
+        #_part_number = "412031-16"  # RRC2020B
+        #_part_number = "412036-16"  # RRC2040B
+        response = session.execute(sa.text(f"SELECT revision,program_sequence,parameter FROM `spsconfig` AS sc WHERE sc.part_number='{_part_number}' ORDER BY revision DESC"))
+        rows = response.fetchall()
+        session.close_all()
         if len(rows) == 0:
             # not found! -> do not proceed
             raise Exception("No Data in Database found, cannot proceed!")
-        self.SM = SPSStateMachine(self.resource_str, self.program_sequence)
+        print(f"Got record: {rows[0]}")
+        return [int(i) for i in rows[0][1].split(",")], _controller_resource_str, _part_number
+
+
+    def run(self) -> None:
+        """
+        This is the process context in which we run the SPS.
+        Create all relevant objects from here!
+        """
+        SM = None
         proc_name = self.name
         n = 0
-        #toc = perf_counter()
         while True:
+            if not SM:
+                # need to create a new State Machine to work with
+                # get configuration from DSP + DB connection
+                program_sequence, resource_str, part_number = self.collect_parameters()
+                print("Create new SPS state machine")
+                SM = SPSStateMachine(resource_str, program_sequence)
+                # let the UI show the correct data
+                self.response_queue.put({
+                    # global infos
+                    "part_number": part_number,
+                    "sequence": program_sequence,
+                    # infos about the current sequence
+                    "counter": SM.sequence_pos,
+                    "program": SM.next_program_no,
+                })
             if not self.command_queue.empty():
                 cmd = self.command_queue.get()
                 if cmd is None:
@@ -409,27 +495,21 @@ class ProcessSPS(multiprocessing.Process):
                     break
                 print(f"{proc_name}: {cmd}")
                 if "move_counter" in cmd:
-                    #n = n + int(cmd["move_counter"])
-                    self.SM.move_seqence_step(int(cmd["move_counter"]))
+                    SM.move_seqence_step(int(cmd["move_counter"]))
                 if "reset_counter" in cmd:
-                    #n = int(cmd["reset_counter"])
-                    self.SM.reset_seqence()
+                    #SM.reset_seqence()
+                    SM.close()
+                    SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
                 answer = "Hallejulia!"
                 self.command_queue.task_done()
                 self.response_queue.put(answer)
             else:
-                self.SM.do_one_loop()
-                if self.SM.state == SPSStates.SET_PROGRAM_ON_MACHINE:
-                    self.response_queue.put({"counter": self.SM.sequence_pos, "program": self.SM.next_program_no})
-                if self.SM.state == SPSStates.SHOW_PROGRAM_STEP:
-                    self.response_queue.put({"counter": self.SM.sequence_pos, "program": self.SM.program_no})
-
-                # tic = perf_counter()
-                # if tic - toc > 1.0:
-                #     toc = perf_counter()
-                #     print("Chhhhr....")
-                #     self.response_queue.put({"counter": self.SM.program_no})
-                #     n += 1
+                # SM is always not None here!
+                SM.do_one_loop()
+                if SM.state == SPSStates.SET_PROGRAM_ON_MACHINE:
+                    self.response_queue.put({"counter": SM.sequence_pos, "program": SM.next_program_no})
+                if SM.state == SPSStates.SHOW_PROGRAM_STEP:
+                    self.response_queue.put({"counter": SM.sequence_pos, "program": SM.program_no})
         return
 
 
@@ -440,6 +520,7 @@ if __name__ == '__main__':
     from rrc.custom_logging import logger_init
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
+
 
     # with AWS3Modbus("tcp:172.21.101.100:502") as dev:
     #     #test_sps_process(dev, program_sequence=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
@@ -453,7 +534,7 @@ if __name__ == '__main__':
         q_cmd = multiprocessing.JoinableQueue()
         q_res = multiprocessing.Queue()
         # start sub-process for SPS
-        p = ProcessSPS(q_cmd, q_res, "tcp:172.21.101.100:502", [1,2,3,4,5])
+        p = ProcessSPS(q_cmd, q_res)
         # start UI in this process waiting for user input
         w = WindowUI(q_cmd, q_res)
         p.start()
