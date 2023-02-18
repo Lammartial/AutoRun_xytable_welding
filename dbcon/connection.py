@@ -83,15 +83,22 @@ def createInternalSession(config, echo=False):
 
 #-------------------------------------------------------------------------------------------------
 # load the default config file (please set the filename for needed connection)
-#CONFIG = load_config_yaml_file("config_postgres")
-CONFIG = load_config_yaml_file("config_mysql")
-USER_ACCESS = load_config_yaml_file("config_db_station_users")
+
+CONFIG = load_config_yaml_file("config_db_stand")
+CFG_PROTOCOL = load_config_yaml_file("config_db_protocol")
+CFG_USER_ACCESS = load_config_yaml_file("config_db_station_users")
 
 def get_teststand_db_connector():
     return createInternalSession(CONFIG, echo=True if DEBUG else False)
 
+
+def get_protocol_db_connector():
+    return createInternalSession(CFG_PROTOCOL, echo=True if DEBUG else False)
+
+
 def get_mockup_useracess_db_connector():
-    return createInternalSession(USER_ACCESS, echo=True if DEBUG else False)
+    return createInternalSession(CFG_USER_ACCESS, echo=True if DEBUG else False)
+
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

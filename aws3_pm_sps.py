@@ -8,6 +8,9 @@ from time import sleep, perf_counter
 from pathlib import Path
 
 from rrc.modbus.aws3 import AWS3Modbus
+# import SQL managing modules
+import sqlalchemy as sa
+from sqlalchemy.orm import sessionmaker
 from rrc.dbcon.connection import get_protocol_db_connector
 
 # --------------------------------------------------------------------------- #
@@ -384,7 +387,14 @@ class ProcessSPS(multiprocessing.Process):
 
     def run(self) -> None:
         # get configuration from DSP + DB connection
-        db = get_protocol_db_connector()
+        srcEngine, SSession = get_protocol_db_connector()
+        session = SSession()
+        _part_number = "412096-16"
+        res = session.execute(sa.text(f"SELECT id,program_sequence,parameter FROM `spsconfig` AS sc WHERE sc.part_number='{_part_number}' ORDER BY id DESC"))
+        rows = res.fetchall()
+        if len(rows) == 0:
+            # not found! -> do not proceed
+            raise Exception("No Data in Database found, cannot proceed!")
         self.SM = SPSStateMachine(self.resource_str, self.program_sequence)
         proc_name = self.name
         n = 0
