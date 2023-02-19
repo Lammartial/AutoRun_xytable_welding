@@ -435,7 +435,7 @@ class ProcessSPS(multiprocessing.Process):
             Exception: _description_
         """
         # 1. we need the station config
-        cfg = StationConfiguration("WELDER_SPS", filename=CONF_FILENAME_DEV)
+        cfg = StationConfiguration("WELDER_SPS") #, filename=CONF_FILENAME_DEV)
         _, _station_id, _dsp_api_base_url, _line_id, _ = cfg.get_station_configuration()
         # 2. with station config we can request the part number from DSP
         print("Fetching part number from DSP...")
@@ -520,12 +520,6 @@ if __name__ == '__main__':
     from rrc.custom_logging import logger_init
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
-
-
-    # with AWS3Modbus("tcp:172.21.101.100:502") as dev:
-    #     #test_sps_process(dev, program_sequence=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
-    #     #test_sps_process(dev, program_sequence=[1,2,3,4])
-    #     test_sps_statemachine(dev, program_sequence=[1,2,3,4])
 
     p = None
     w = None
