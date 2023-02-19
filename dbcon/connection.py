@@ -84,7 +84,7 @@ def createInternalSession(config, echo=False):
 #-------------------------------------------------------------------------------------------------
 # load the default config file (please set the filename for needed connection)
 
-CONFIG = load_config_yaml_file("config_db_stand")
+CONFIG = load_config_yaml_file("config_db_teststand")
 CFG_PROTOCOL = load_config_yaml_file("config_db_protocol")
 CFG_USER_ACCESS = load_config_yaml_file("config_db_station_users")
 
