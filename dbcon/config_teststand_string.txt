@@ -1,5 +1,4 @@
 #
 # This string must be loaded at teststand to connect teststand DB
-# Password: gedoehns!
 #
-"Provider=MSDASQL.1;Persist Security Info=False;User ID=teststand;Data Source=TestStandDB;Initial Catalog=teststand"
+"Provider=MSDASQL.1;Password=gedoehns!;Persist Security Info=True;User ID=teststand;Data Source=TestStandDB;Initial Catalog=teststand"
