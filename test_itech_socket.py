@@ -8,18 +8,24 @@ _log = getLogger(__name__, 2)
 
 try:  
   resourceManager = visa.ResourceManager() 
-  dev = 'TCPIP0::172.21.101.24::5025::SOCKET'
-  dev = 'TCPIP0::172.21.101.24::inst0::INSTR'
-  session = resourceManager.open_resource(dev)
-  session.timeout = 5000
-  print('\n Open Successful!')
-  session.read_termination = '\n'
-  session.write_termination = '\r\n'
-  print('CHAN:' +str(session.write('CHAN 1')))
-  print('CHAN:' +str(session.write('CHAN 2')))
-  print('IDN:' +str(session.query('CHAN 2 ; *IDN?')))
-  print('IDN:' +str(session.write('SYSTEM:REMOTE')))
-  
-  #print('IDN:' +str(session.query('SYSTem:COMMunicate:LAN:RAWSocketport?')))
+  res = resourceManager.list_resources(query='?*')
+  _log.info(res)
+  #dev = 'TCPIP0::172.21.101.24::49000::SOCKET'
+  #dev = 'TCPIP0::172.21.101.24::2049::SOCKET'
+  dev = 'TCPIP0::172.21.101.24::INSTR'
+  with resourceManager.open_resource(dev) as session:  
+    session.timeout = 6000
+    print('\n Open Successful!')
+    session.read_termination = '\n'
+    session.write_termination = '\n'
+    #print('CHAN:' +str(session.write('CHAN 1')))
+    #print('CHAN:' +str(session.write('CHAN 2')))
+    print('IDN:' +str(session.query('CHAN 1; *IDN?')))
+    #print('IDN:' +str(session.write('SYSTEM:REMOTE')))
+    
+    #print('IDN:' +str(session.query('SYSTem:COMMunicate:LAN:RAWSocketport?')))
+    session.close()
 except Exception as e:
   print('[!] Exception:' +str(e))
+finally:
+  resourceManager.close()

@@ -86,10 +86,10 @@ pymysql
 ### For the lazy guys (copy & paste):
 
 PIP:
-`pip wheel typing debugpy numpy==1.23 scipy pandas pytz pymodbus pyvisa pyvisa-py pygpib SQLAlchemy pyodbc pymssql psycopg2 pymysql pyyaml pywin32 requests fastapi[all] humanfriendly pyelftools pyserial pyserial-asyncio`
+`pip wheel typing debugpy numpy==1.23 scipy pandas pytz pymodbus pyvisa SQLAlchemy pyodbc pymssql psycopg2 pymysql pyyaml pywin32 requests fastapi[all] humanfriendly pyelftools pyserial pyserial-asyncio`
 
 CONDA:
-`typing pyyaml debugpy numpy==1.23 scipy pandas pytz pymodbus pyvisa  pyvisa-py pygpib SQLAlchemy pyodbc pymssql psycopg2 pymysql pywin32 requests fastapi[all] humanfriendly pyelftools pyserial pyserial-asyncio`
+`typing pyyaml debugpy numpy==1.23 scipy pandas pytz pymodbus pyvisa SQLAlchemy pyodbc pymssql psycopg2 pymysql pywin32 requests fastapi[all] humanfriendly pyelftools pyserial pyserial-asyncio`
 
 consider: matplotlib, dash
 
