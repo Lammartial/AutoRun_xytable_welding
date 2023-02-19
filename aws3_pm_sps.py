@@ -81,34 +81,30 @@ class WindowUI(object):
 
         # Label
         _row = next(row_itr)
-        label0 = ttk.Label(
-            self.mainframe,
-            text="SEQUENCE POS",
-            justify="center",
-            font=("-size", 10, "-weight", "bold")
-        )
+        label_p0 = ttk.Label(self.mainframe,text="PART NUMBER",justify="center", font=("-size", 10, "-weight", "bold"))
+        label_p0.grid(row=_row, column=0, ipadx=10, ipady=10)
+        label_p = ttk.Label(self.mainframe, 
+                            textvariable=self.var_label_part_number, 
+                            justify="center", font=("-size", 10, "-weight", "bold"))
+        label_p.grid(row=_row, column=1, ipadx=10, ipady=10)
+        # label_s = ttk.Label(self.mainframe, 
+        #                     textvariable=self.var_label_sequence,
+        #                     justify="center", font=("-size", 10, "-weight", "bold"))
+        # label_s.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
+
+        _row = next(row_itr)
+        label0 = ttk.Label(self.mainframe,text="SEQUENCE POS",justify="center", font=("-size", 10, "-weight", "bold"))
         label0.grid(row=_row, column=0, columnspan=2, ipadx=10, ipady=10)
-        label00 = ttk.Label(
-            self.mainframe,
-            textvariable=self.var_label_counter,
-            justify="center",
-            font=("-size", 10, "-weight", "bold"),
-        )
+        label00 = ttk.Label(self.mainframe, 
+                            textvariable=self.var_label_counter, 
+                            justify="center", font=("-size", 10, "-weight", "bold"))
         label00.grid(row=_row, column=1, ipadx=10, ipady=10)
 
-        label1 = ttk.Label(
-            self.mainframe,
-            text="PROGRAM",
-            justify="center",
-            font=("-size", 18, "-weight", "bold"),
-        )
+        label1 = ttk.Label(self.mainframe,text="PROGRAM",justify="center",font=("-size", 18, "-weight", "bold"))
         label1.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
-        label2 = ttk.Label(
-            self.mainframe,
+        label2 = ttk.Label(self.mainframe,
             textvariable=self.var_label_program,
-            justify="center",
-            font=("-size", 32, "-weight", "bold"),
-        )
+            justify="center", font=("-size", 32, "-weight", "bold"))
         label2.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
         # Buttons
         _row = next(row_itr)
