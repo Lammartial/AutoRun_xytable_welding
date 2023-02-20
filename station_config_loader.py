@@ -48,7 +48,7 @@ class StationConfiguration:
                 # RRC VN
                 pass
         if int(self._own_network[2]) > 100:
-            self._line_id = 100 - self._own_network[2]
+            self._line_id = abs(self._own_network[2] - 100)
         else:
             self._line_id = self._own_network[2]  # line 1
         self._CONFIG = None
