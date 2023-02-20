@@ -1,0 +1,4 @@
+#
+# This string must be loaded at teststand to connect teststand DB
+#
+"Provider=MSDASQL.1;Password=gedoehns!;Persist Security Info=True;User ID=teststand;Data Source=TestStandDB;Initial Catalog=teststand"

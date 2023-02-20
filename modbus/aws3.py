@@ -39,7 +39,7 @@ class AWS3Modbus(ModbusClient):
     #----------------------------------------------------------------------------------------------
 
     def set_machine_byteorder(self, bo: int = 3) -> None:
-        self.write_register(9999-1, bo, unit_address=3) # 3=default, 1=big 
+        self.write_register(9999-1, bo, unit_address=3) # 3=default, 1=big
 
     def is_machine_ready(self) -> tuple:
         #return not self.read_coils(65-1, 1, unit_address=3)[0]
@@ -174,6 +174,70 @@ class AWS3Modbus(ModbusClient):
         b = dc.decode_string(size=n*2)  # size = bytes not words
         return remove_non_ascii(b.decode())
 
+#--------------------------------------------------------------------------------------------------
+
+class AWS3Modbus_DUMMY(object):
+
+    def __init__(self, connection_str: str, group_by_gateway: bool = True) -> None:
+        self.dev = connection_str
+        self.machine_name = "DUMMY"
+        self.program_no = -1
+
+    def close(self):
+        pass
+
+    def set_machine_byteorder(self, bo: int = 3):
+        pass
+
+    def is_machine_ready(self) -> tuple:
+        return True
+
+    def read_machine_lock_status(self) -> tuple:
+        return False
+
+    def lock_machine_step(self) -> bool:
+        return True
+
+    def unlock_machine_step(self) -> bool:
+        return True
+
+    def write_program_no(self, number):
+        self.program_no = number
+
+    def read_program_no(self) -> int:
+        return self.program_no
+
+    def read_axis_counter(self, axis: int) -> int:
+        d = {
+            "counter": -1,
+            "program": -1,
+            "program_counter": -1,
+        }
+        return d
+
+    def read_binary_io(self) -> dict:
+        return {}
+
+    def read_measuring_values(self, axis: int):
+        return []
+
+    def read_parameters(self):
+        return {}
+
+    def read_program_parameters(self, axis: int):
+        return []
+
+    def read_global_parameters(self, axis: int):
+        return {}
+
+    def read_system_parameters(self):
+        return []
+
+    def read_program_name(self, axis: int) -> str:
+        return "DUMMY"
+
+    def read_name(self) -> str:
+        pass
 
 #--------------------------------------------------------------------------------------------------
 def test_basic_communication(dev: AWS3Modbus):
@@ -222,7 +286,7 @@ if __name__ == '__main__':
     log_modbus_version()
 
     with AWS3Modbus("tcp:172.21.101.100:502") as dev:
-        test_basic_communication(dev)        
+        test_basic_communication(dev)
 
     _log.info("End test")
 
