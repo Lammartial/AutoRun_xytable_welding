@@ -1143,11 +1143,16 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # 2. calculate current_gain, capacity_gain. 
         # adc_current == 0 => Exception
         #cc_gain = 3.58422                  # default
-        cc_gain = float(current/adc_current)
+        if adc_current != 0:
+            cc_gain = float(current/adc_current)
+        else:
+            cc_gain = 3.58422
         capacity_gain = float(cc_gain*298261.6178)
         # 3. write bat_gain
         block = self.read_flash_block(0x4006, 32, hexi=False)
         # old gain
+        #old_cc_gain = struct.unpack_from("<f", block, 0)[0]
+        #old_capacity_gain = struct.unpack_from("<f", block, 1)[0]
         bytes_cc_gain = bytearray(struct.pack("<f", cc_gain))
         bytes_cap_gain = bytearray(struct.pack("<f", capacity_gain))
         block[0:4] = bytes_cc_gain
