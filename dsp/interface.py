@@ -52,7 +52,8 @@ class DspInterface:
     def get_parameter_for_testrun_r2(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> dict:
         _log = getLogger(__name__, DEBUG)
         response = requests.get(f"{self.API_BASE_URL}/GET_PARAMETER_FOR_TEST_RUN",
-                                params= {"test_type": test_type, "station_id": station_id, "line_id": line_id, "test_socket": test_socket })
+                                params= {"test_type": test_type, "station_id": station_id, "line_id": line_id, "test_socket": test_socket })  # old
+        #response = requests.get(f"{self.API_BASE_URL}/GET_PARAMETER_FOR_STATION", params= {"station_id": station_id, "line_id": line_id})  # new
         # expects JSON of
         # {
         #     sequence_revision = {
