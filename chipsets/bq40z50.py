@@ -26,6 +26,7 @@ from rrc.smartbattery import Cmd
 from rrc.chipsets.bq import ChipsetTexasInstruments
 import struct
 from datetime import datetime
+import numpy as np
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -1127,7 +1128,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         else: adc_curr = 0
         return float(adc_curr)
 
-    def calib_write_current_gain(self, current: float, shorted: bool = False) -> float:
+    def calib_write_current_gain(self, current: float, shorted: bool = False) -> np.array:
         """
         Current Calibration.
 
@@ -1137,7 +1138,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 internal short on the coulomb counter inputs (SRP, SRN). Defaults to False.
 
         Returns:
-            float: calibrated current, Amps.
+            np.array[0]: calibrated current, Amps.
+            np.array[1]: cc_gain
         """
         current = float(current)
         # 1. average adc current 
@@ -1163,8 +1165,14 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # 4. Return calibrated current
         self._ms_toggle_helper("cal_test", False, 0x002d)
         sleep(0.1)
-        res = self.get_current()
-        return res
+        result = np.array([])
+        nplist = []
+        nplist.append(float(self.get_current()))
+        # use BQ Studio scale factor
+        bq_st_cc_gain = 3.714528/cc_gain
+        nplist.append(float(bq_st_cc_gain))
+        result = np.array(nplist)
+        return result
 
 
     def calib_write_temp(self, temp: Tuple[float]) -> Tuple[float]:
