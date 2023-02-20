@@ -718,10 +718,10 @@ class Battery:
         c = self.ds[Cmd.AT_RATE_TIME_TO_EMPTY];    return c.value, "min", "At rate empty", c
 
     def temperature(self):
-        c = self.ds[Cmd.TEMPERATURE];              return c.value * 1e-2, "°C", "Temperature", c
+        c = self.ds[Cmd.TEMPERATURE];              return c.value * 1e-1 - KELVIN_ZERO_DEGC, "°C", "Temperature", c
 
     def temperature_kelvin(self):
-        c = self.ds[Cmd.TEMPERATURE];              return c.value * 1e-2 + KELVIN_ZERO_DEGC, "K", "Temperature", c
+        c = self.ds[Cmd.TEMPERATURE];              return c.value * 1e-1, "K", "Temperature", c
 
     def voltage(self):
         c = self.ds[Cmd.VOLTAGE];                  return c.value * 1e-3, "V", "Voltage", c
