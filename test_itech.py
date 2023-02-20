@@ -198,15 +198,15 @@ if __name__ == "__main__":
     print(rm.list_resources())
 
 
-    # predefined resource ID
-    M3902_IP_STR = "TCPIP0::172.21.101.51::inst0::INSTR"
-    # 1. Create an instance of ITECH_DEV class
-    # using multi-channel communication
-    m3902 = M3900(M3902_IP_STR, 0)
-    # 2. IMPORTANT! Set remote control mode.
-    m3902.initialize_device()
-    # 3. Do some stuff
-    test_m3900_modes(m3902)
+    # # predefined resource ID
+    # M3902_IP_STR = "TCPIP0::172.21.101.51::inst0::INSTR"
+    # # 1. Create an instance of ITECH_DEV class
+    # # using multi-channel communication
+    # m3902 = M3900(M3902_IP_STR, 0)
+    # # 2. IMPORTANT! Set remote control mode.
+    # m3902.initialize_device()
+    # # 3. Do some stuff
+    # test_m3900_modes(m3902)
 
 
 
@@ -216,10 +216,12 @@ if __name__ == "__main__":
     #test_m3400_some(m3412[0])
 
     for m in m3412[:]:
-        m.set_remote_control()
-        m.set_sense_state(1)
-        m.set_output_state(0)
-        print(m.get_all_meas())
+        print('IDN:' +str(m.request('*IDN?')))
+
+        # m.set_remote_control()
+        # m.set_sense_state(1)
+        # m.set_output_state(0)
+        # print(m.get_all_meas())
 
     #test_start_battery_pcba(m3412[0], m3412[1])
 
