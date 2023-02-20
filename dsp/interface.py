@@ -49,6 +49,34 @@ class DspInterface:
 
     #----------------------------------------------------------------------------------------------
 
+    def get_parameter_for_welding(self, station_id: str, line_id: str) -> dict:
+        _log = getLogger(__name__, DEBUG)
+        response = requests.get(f"{self.API_BASE_URL}/GET_PARAMETER_FOR_WELDING", params= {"station_id": station_id, "line_id": line_id})
+        # expects JSON of
+        # {
+        #     station_id: str,          # optional
+        #     line_id: str,             # optional
+        #     sequence_revision: str,   # mandatory
+        #     part_number: str,         # mandatory
+        # }
+        if response.status_code not in [200, 202]:
+            raise DSPInterfaceError(f"DSP controller error, cannot get parameters for test run {response.status_code}: {response.json()}")
+        configuration = response.json()
+        _log.debug(configuration)
+        # pre check the JSON (can be optimized for production)
+        if not all(k in configuration for k in ("sequence_revision","part_number")):
+            raise DSPInterfaceError(f"DSP controller error, wrong parameters for test run {configuration}")
+        # the welder' SPS configuration needs only a revision, not really a program/sequence name
+        runparams = {
+            "station_id": station_id,
+            "line_id": line_id,
+            "sequence_revision": configuration["sequence_revision"],
+            "part_number": configuration["part_number"],
+        }
+        # do NOT combine the runparameters into API
+        return runparams
+
+
     def get_parameter_for_testrun_r2(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> dict:
         _log = getLogger(__name__, DEBUG)
         response = requests.get(f"{self.API_BASE_URL}/GET_PARAMETER_FOR_TEST_RUN",
