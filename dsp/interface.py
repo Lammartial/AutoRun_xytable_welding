@@ -95,8 +95,8 @@ class DspInterface:
             case "EOL_TEST":
                 part_number = configuration["part_number"]["product"]
                 sequence_id = f'{part_number.split("-")[0]}_EOL-Test_{configuration["sequence_revision"]["eol_test"]}'
-            case "CELL_WELDER":
-                # the welder configuration needs only a revision, not really a program/sequence name
+            case "WELDER_SPS":
+                # the welder' SPS configuration needs only a revision, not really a program/sequence name
                 part_number = configuration["part_number"]["pre_assembly"]
                 sequence_id = configuration["sequence_revision"]["cell_welder"]
         runparams = {
@@ -106,8 +106,6 @@ class DspInterface:
             "test_socket": test_socket,
             "test_program_id": sequence_id,
             "part_number": part_number,
-            #"serial_number": _serial,
-            #"serial_number": "",
         }
         # 3. combine the test configuration information into the API for later transfer as result to DSP
         self.api = {**self.api, **runparams}
