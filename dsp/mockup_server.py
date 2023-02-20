@@ -30,21 +30,17 @@ serial_db = {}
 lock_serial_db = asyncio.Lock()
 
 class Item(BaseModel):
-    #name: str
-    #description: str | None = None
-    #price: float
-    #tax: float | None = None
-    #tags: list[str] = []
-    test_type: str                    # str: fixed by PC [CORE_PACK_TEST, ...]
+    test_type: str                    # str: fixed by PC [CELL_TEST, PCBA_TEST, CORE_PACK_TEST, EOL_TEST]
     station_id: str                   # str: fixed by PC (e.g. PC name)
-    line_id: str                      # str: ??? fixed by PC ???
-    test_socket: str                  # str:  -> from TestStand PC before start of sequence, known by TestStand at that time only
+    line_id: str                      # str: fixed by PC / Network line
+    test_socket: str                  # str: -> from TestStand PC before start of sequence, known by TestStand at that time only
     test_program_id: str              # str: <- from MPI Server before start of sequence
     part_number: str | None           # str -> from MPI Server before start of sequence
     serial_number: str | None = None  # str: <- from MPI Server before start of sequence
-    udi: str | None = None      # str: -> from TestStand PC scanned by user to start the sequence
-    #udi_pcba: str | None = None       # str: -> from TestStand PC scanned by user to start the sequence
-    #udi_stack: str | None = None      # str: -> from TestStand PC scanned by user to start the sequence
+    udi: str | None = None            # str: -> from TestStand PC scanned by user or read from the battery to start the sequence
+                                      #         CELL_TEST & PCBA_TEST have one UDI;
+                                      #         CORPACK_TEST sends two UDI split by comma: udi_cell,udi_pcba
+                                      #         EOL_TEST sends string with 3 comma-separated components: serial,udi_cell,pcba_cell
     result: str | None = None         # str: -> from TestStand PC at end of sequence P(ASS)/F(AIL)/A(BORT) as text letter
     execution_time: float | None = None  # float: -> from TestStand PC at end of sequence: sec
     start_datetime: str | None = None    # str: -> from TestStand PC at end of sequence: ISO string
@@ -97,20 +93,20 @@ async def get_serial(test_type, station_id, line_id, test_socket, udi, response:
 async def verify_serial(test_type, station_id, line_id, test_socket, part_number, serial_number, response: Response):
     global serial_db, lock_serial_db
 
-    r = None 
-    async with lock_serial_db:        
+    r = None
+    async with lock_serial_db:
         if serial_number not in serial_db:
             response.status_code = status.HTTP_406_NOT_ACCEPTABLE
-            r = { "error": "Serial number not found in db", "code": 8, 
+            r = { "error": "Serial number not found in db", "code": 8,
                   "serial_number": serial_number, "part_number": part_number }
         # if serial_number in [1,5,7,11]:
         #     response.status_code = status.HTTP_406_NOT_ACCEPTABLE
-        #     r = { "error": "Serial number is blacklisted", "code": 7, 
+        #     r = { "error": "Serial number is blacklisted", "code": 7,
         #           "serial_number": serial_number, "part_number": part_number }
         else:
             r = {
                 "serial_number": serial_number,
-                "part_number": part_number, 
+                "part_number": part_number,
                 "udi": "76378126378163"
             }
     return r
@@ -122,7 +118,8 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
     global next_serial, lock_next_serial, MOCK_PARTNUMBER
 
     # set the product to test for mockup: "RRC2040B" or "RRC2020B"
-    _product_name = "RRC2020B"
+    #_product_name = "RRC2020B"
+    _product_name = "RRC2040B"
     _mock = MOCK_PARTNUMBER[_product_name]
 
     # #_serial = random.randint(1, 47236513)

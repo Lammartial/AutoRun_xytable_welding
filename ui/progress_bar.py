@@ -62,7 +62,7 @@ class ProgressWindow:
         else:
             self.root.title(f"SOCKET {test_socket}: {title}")
             _x = int((self.root.winfo_screenwidth() / 2) - (x_size / 2))
-            _y = 500 + test_socket * (y_size + 20)
+            _y = 500 + test_socket * (y_size + 50)
         self.root.geometry(f"{x_size}x{y_size}+{_x}+{_y}")        
         self.root.columnconfigure(0, weight=1)
         # create progress bar

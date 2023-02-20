@@ -27,7 +27,7 @@ from rrc.serialport import SerialComportDevice
 # # import SQL managing modules
 import sqlalchemy as sa
 from sqlalchemy.orm import sessionmaker
-from rrc.dbcon.connection import get_mockup_useracess_db_connector
+from rrc.dbcon import get_mockup_useracess_db_connector
 
 # --------------------------------------------------------------------------- #
 # Logging

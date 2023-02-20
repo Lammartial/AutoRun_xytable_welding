@@ -155,7 +155,6 @@ class ModbusClient:
 
     #----------------------------------------------------------------------------------------------
 
-
     # to provide the with ... statement protector
     def __enter__(self):
         self.open()
@@ -188,7 +187,7 @@ class ModbusClient:
         return BinaryPayloadDecoder.fromRegisters(registers, byteorder=self.byte_order, wordorder=self.word_order)
 
     def getEncoder(self) -> BinaryPayloadBuilder:
-        return BinaryPayloadBuilder.fromRegisters(byteorder=self.byte_order, wordorder=self.word_order)
+        return BinaryPayloadBuilder(byteorder=self.byte_order, wordorder=self.word_order)
 
     #--------------------------------------------------------------------------------------------------
     # easier to use interface

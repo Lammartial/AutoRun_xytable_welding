@@ -4,7 +4,7 @@ sourceDatabase:
     #servertype: "mysql+mysqldb"  # C-implentation, a maintained fork of MySQL-Python, not avail here
     servertype: "mysql+pymysql" # pure python
     serverhost: "172.22.2.99"
-    database:   "stand"
+    database:   "teststand"
     login:      "teststand"
     password:   "gedoehns!"
     encoding:   "utf8"

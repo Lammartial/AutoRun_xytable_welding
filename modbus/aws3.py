@@ -19,12 +19,15 @@ DEBUG = 2
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
+def remove_non_ascii(string: str) -> str:
+    return ''.join(char for char in string if ord(char) > 0 and ord(char) < 128)
+
 class AWS3Modbus(ModbusClient):
 
     def __init__(self, connection_str: str, group_by_gateway: bool = True) -> None:
         super().__init__(connection_str, group_by_gateway=group_by_gateway, unit_address=None,
                         byte_order=Endian.Big, word_order=Endian.Little)
-        response = self.write_register(9999-1, 3, unit_address=3)  # switch byte order to default
+        self.set_machine_byteorder()  # switch byte order to default
         self.machine_name = self.read_name().strip()
 
     def __str__(self) -> str:
@@ -35,6 +38,8 @@ class AWS3Modbus(ModbusClient):
 
     #----------------------------------------------------------------------------------------------
 
+    def set_machine_byteorder(self, bo: int = 3) -> None:
+        self.write_register(9999-1, bo, unit_address=3) # 3=default, 1=big
 
     def is_machine_ready(self) -> tuple:
         #return not self.read_coils(65-1, 1, unit_address=3)[0]
@@ -123,7 +128,9 @@ class AWS3Modbus(ModbusClient):
         response = self.read_holding_registers(601-1, 24, unit_address=axis)
         dc: BinaryPayloadDecoder = self.getDecoder(response)
         # read a string
+        self.set_machine_byteorder(1)
         response2 = self.read_holding_registers(833-1, 16, unit_address=axis)
+        self.set_machine_byteorder()
         dc2: BinaryPayloadDecoder = self.getDecoder(response2)
         d = {
             "CounterMode": dc.decode_8bit_uint(),
@@ -138,7 +145,7 @@ class AWS3Modbus(ModbusClient):
             "EnableDataLogging": dc.decode_8bit_uint(),
             "LogFileNumber": dc.decode_32bit_int(),
             "CheckReference": dc.decode_8bit_uint(),
-            "LogExternalInfo": dc2.decode_string(16*2).decode("utf-8"),
+            "LogExternalInfo": remove_non_ascii(dc2.decode_string(16*2).decode()),
             "StaticLoadPos0": dc.decode_32bit_float(),
             "StaticLoadPos1": dc.decode_32bit_float(),
         }
@@ -151,18 +158,86 @@ class AWS3Modbus(ModbusClient):
     def read_program_name(self, axis: int) -> str:
         assert (axis in [1,2])
         n = 16
+        self.set_machine_byteorder(1)
         response = self.read_holding_registers(801-1, n, unit_address=axis)
+        self.set_machine_byteorder()
         dc: BinaryPayloadDecoder = self.getDecoder(response)
         b = dc.decode_string(size=n*2)  # size = bytes not words
-        return b.decode("utf8")
+        return remove_non_ascii(b.decode())
 
     def read_name(self) -> str:
         n = 32  # guessed
+        self.set_machine_byteorder(1)
         response = self.read_holding_registers(801-1, n, unit_address=3)
+        self.set_machine_byteorder()
         dc: BinaryPayloadDecoder = self.getDecoder(response)
         b = dc.decode_string(size=n*2)  # size = bytes not words
-        return b.decode("utf8")
+        return remove_non_ascii(b.decode())
 
+#--------------------------------------------------------------------------------------------------
+
+class AWS3Modbus_DUMMY(object):
+
+    def __init__(self, connection_str: str, group_by_gateway: bool = True) -> None:
+        self.dev = connection_str
+        self.machine_name = "DUMMY"
+        self.program_no = -1
+
+    def close(self):
+        pass
+
+    def set_machine_byteorder(self, bo: int = 3):
+        pass
+
+    def is_machine_ready(self) -> tuple:
+        return True
+
+    def read_machine_lock_status(self) -> tuple:
+        return False
+
+    def lock_machine_step(self) -> bool:
+        return True
+
+    def unlock_machine_step(self) -> bool:
+        return True
+
+    def write_program_no(self, number):
+        self.program_no = number
+
+    def read_program_no(self) -> int:
+        return self.program_no
+
+    def read_axis_counter(self, axis: int) -> int:
+        d = {
+            "counter": -1,
+            "program": -1,
+            "program_counter": -1,
+        }
+        return d
+
+    def read_binary_io(self) -> dict:
+        return {}
+
+    def read_measuring_values(self, axis: int):
+        return []
+
+    def read_parameters(self):
+        return {}
+
+    def read_program_parameters(self, axis: int):
+        return []
+
+    def read_global_parameters(self, axis: int):
+        return {}
+
+    def read_system_parameters(self):
+        return []
+
+    def read_program_name(self, axis: int) -> str:
+        return "DUMMY"
+
+    def read_name(self) -> str:
+        pass
 
 #--------------------------------------------------------------------------------------------------
 def test_basic_communication(dev: AWS3Modbus):
@@ -198,181 +273,6 @@ def test_basic_communication(dev: AWS3Modbus):
     print("PROGRAM PARAMETERS AXIS 1: ", d)
 
 
-#--------------------------------------------------------------------------------------------------
-def test_sps_process(dev: AWS3Modbus, program_sequence: List[int] = [1,2,3,4,5]):
-    print(f"Poor man's SPS machine: {dev.machine_name}, at {repr(dev)}")
-    while True:
-        if dev.is_machine_ready():
-            counter_base_ax1 = dev.read_axis_counter(1)
-            counter_base_ax2 = dev.read_axis_counter(2)
-            lock_base = dev.read_machine_lock_status()
-            program_no_base = dev.read_program_no()
-            break
-    print(f"Base counters:")
-    print(f"    Ax1:{counter_base_ax1}\n    Ax2:{counter_base_ax2}")
-    print(f"Base program no: {program_no_base}")
-    #program_sequence = [1,2,3,4,5,6,7,8,9,10]  # demo
-    program_step = 0
-    print(f"Program step: {program_step} of {len(program_sequence)}")
-    last_counter_ax1 = counter_base_ax1
-    last_counter_ax2 = counter_base_ax2
-    program_no = program_no_base
-    next_program_no = program_sequence[program_step]
-    _machine_locked = False
-    while True:
-        sleep(0.1)  # throttle polling loop
-        try:
-            if not dev.is_machine_ready():
-                continue
-            # 1. lock the machine
-            #dev.lock_machine_step()
-            # 2. get the counters
-            counter_ax1 = dev.read_axis_counter(1)
-            #counter_ax2 = dev.read_axis_counter(2)
-            # 3. check if we have to moved to the  next program step
-            diffcount = counter_ax1["counter"] - last_counter_ax1["counter"]
-            if diffcount > 0:
-                # yes we have finished a cycle -> move to next program step
-                dev.lock_machine_step()
-                _machine_locked = True
-                program_step += 1
-                if program_step >= len(program_sequence):
-                    program_step = 0
-                next_program_no = program_sequence[program_step]
-                print(f"Move program step to {program_step} with program no {next_program_no}")
-                last_counter_ax1 = counter_ax1
-                #last_counter_ax2 = counter_ax2
-            # 4. chek if the correct program step is set
-            program_no = dev.read_program_no()
-            if next_program_no != program_no:
-                print(f"Set Program No: {next_program_no}")
-                dev.write_program_no(next_program_no)
-            else:
-                #print(f"PROG NO {program_no} == NEXT NO {next_program_no}")
-                #sleep(0.1)  # throttle polling loop
-                pass
-        except AssertionError as ex:
-            print("Got Error:", ex)
-        except Exception as ex:
-            raise
-        finally:
-            # make sure that the welding machine will be unlocked in any failure cases
-            if _machine_locked:
-                dev.unlock_machine_step()
-
-#--------------------------------------------------------------------------------------------------
-class SPSStates(Enum):
-    WAIT_READY_TO_INIT = 0
-    INIT = 1
-    WAIT_READY_TO_SYNC_ON_MACHINE_COUNTER = 2
-    SYNC_ON_MACHINE_COUNTER = 3
-    SHOW_PROGRAM_STEP = 4
-    FETCH_NEXT_PROGRAM = 5
-    WAIT_READY_TO_SET_PROGRAM = 6
-    SET_PROGRAM_ON_MACHINE = 7
-
-
-def test_sps_statemachine(dev: AWS3Modbus, program_sequence: List[int] = [1,2,3,4,5]):
-    print(f"Poor man's SPS machine: {dev.machine_name}, at {repr(dev)}")
-    state: SPSStates = SPSStates.INIT
-    # introduce "globals"
-    counter_base_ax1 = None
-    program_no_base = -1
-    program_step = -1
-    next_program_no = -1
-    last_counter_ax1 = -1
-    _machine_locked = None
-    _throttle_pause = 0.055
-    while True:
-        try:
-            match state:
-                case SPSStates.WAIT_READY_TO_INIT:
-                    if _machine_locked:
-                        dev.unlock_machine_step()
-                        _machine_locked = False
-                    if dev.is_machine_ready():
-                        state = SPSStates.INIT
-                    else:
-                        sleep(_throttle_pause)  # throttle polling
-
-                case SPSStates.INIT:
-                    counter_base_ax1 = dev.read_axis_counter(1)
-                    _machine_locked = dev.read_machine_lock_status()
-                    program_no_base = dev.read_program_no()
-                    print(f"Base counters: Ax1={counter_base_ax1}")
-                    print(f"Base program no: {program_no_base}")
-                    program_step = 0
-                    last_counter_ax1 = counter_base_ax1
-                    program_no = program_no_base
-                    next_program_no = program_sequence[program_step]
-                    state = SPSStates.SHOW_PROGRAM_STEP
-
-                case SPSStates.SHOW_PROGRAM_STEP:
-                    print(f"Program step: {program_step} of {len(program_sequence)}")
-                    print(f"Program set {program_no}")
-                    state = SPSStates.SYNC_ON_MACHINE_COUNTER
-
-                case SPSStates.WAIT_READY_TO_SYNC_ON_MACHINE_COUNTER:
-                    if dev.is_machine_ready():
-                        state = SPSStates.SYNC_ON_MACHINE_COUNTER
-                    else:
-                        sleep(_throttle_pause)  # throttle polling
-
-                case SPSStates.SYNC_ON_MACHINE_COUNTER:
-                    counter_ax1 = dev.read_axis_counter(1)
-                    #  check if we have to moved to the  next program step
-                    diffcount = counter_ax1["counter"] - last_counter_ax1["counter"]
-                    if diffcount > 0:
-                        state = SPSStates.FETCH_NEXT_PROGRAM
-                    else:
-                        state = SPSStates.WAIT_READY_TO_SYNC_ON_MACHINE_COUNTER
-                        sleep(_throttle_pause)  # throttle polling
-
-                case SPSStates.FETCH_NEXT_PROGRAM:
-                    # yes we have finished a cycle -> move to next program step
-                    _machine_locked = True
-                    program_step += 1
-                    if program_step >= len(program_sequence):
-                        program_step = 0
-                    next_program_no = program_sequence[program_step]
-                    print(f"Move program step to {program_step} with program no {next_program_no}")
-                    last_counter_ax1 = counter_ax1
-                    state = SPSStates.WAIT_READY_TO_SET_PROGRAM
-
-                case SPSStates.WAIT_READY_TO_SET_PROGRAM:
-                    if dev.is_machine_ready():
-                        state = SPSStates.SET_PROGRAM_ON_MACHINE
-                    else:
-                        sleep(_throttle_pause)  # throttle polling
-
-                case SPSStates.SET_PROGRAM_ON_MACHINE:
-                    dev.lock_machine_step()
-                    _machine_locked = True
-                    # check if the correct program step is set
-                    program_no = dev.read_program_no()
-                    if next_program_no != program_no:
-                        print(f"Set program {next_program_no} on machine.")
-                        dev.write_program_no(next_program_no)
-                    else:
-                        print(f"Program {program_no} already set.")
-                    dev.unlock_machine_step()
-                    _machine_locked = False
-                    state = SPSStates.WAIT_READY_TO_SYNC_ON_MACHINE_COUNTER
-
-                case other:
-                    state = SPSStates.WAIT_READY_TO_INIT
-
-        except AssertionError as ex:
-            print("Got ERROR to ignore: ", ex)
-        except Exception as ex:
-            raise
-        finally:
-            # make sure that the welding machine will be unlocked in any failure cases
-            if _machine_locked:
-                dev.unlock_machine_step()
-            # do not change the state here
-
-
 
 
 #--------------------------------------------------------------------------------------------------
@@ -386,10 +286,7 @@ if __name__ == '__main__':
     log_modbus_version()
 
     with AWS3Modbus("tcp:172.21.101.100:502") as dev:
-        #test_basic_communication(dev)
-        #test_sps_process(dev, program_sequence=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
-        #test_sps_process(dev, program_sequence=[1,2,3,4])
-        test_sps_statemachine(dev, program_sequence=[1,2,3,4])
+        test_basic_communication(dev)
 
     _log.info("End test")
 
