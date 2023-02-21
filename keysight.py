@@ -14,6 +14,7 @@ __version__ = VERSION
 DEBUG = 0
 
 from rrc.custom_logging import getLogger, logger_init
+from time import sleep
 
 # --------------------------------------------------------------------------- #
 
