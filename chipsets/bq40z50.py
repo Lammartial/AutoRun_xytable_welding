@@ -779,8 +779,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
         self.manufacturer_access = 0x0071
         buf = self.manufacturer_data
-        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 32):
-            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
+        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 32): 
+            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}, {buf[0]}, {buf[1]}")
         return _od2t(OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
@@ -807,7 +807,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         buf = self.manufacturer_data
         #buf = b"0123456789012345"
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 16):
-            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
+            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}, {buf[0]}, {buf[1]}")
         return _od2t(OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
