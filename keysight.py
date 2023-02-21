@@ -14,7 +14,6 @@ __version__ = VERSION
 DEBUG = 0
 
 from rrc.custom_logging import getLogger, logger_init
-from time import sleep
 
 # --------------------------------------------------------------------------- #
 
@@ -145,8 +144,6 @@ class DAQ970A(Eth2SerialVisaDevice):
         channel = int(channel)
         assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_resistance: Allowed channel range is 1 .. 20.')
         try:
-            # to prevent communication errors in TestStand sequence
-            sleep(0.1)
             cmd = "MEAS:RES? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
             return float(self.request(cmd, 5000))
         except Exception as ex:
@@ -174,8 +171,6 @@ class DAQ970A(Eth2SerialVisaDevice):
         channel = int(channel)
         assert ((channel >= 1) and (channel <= 10)), ValueError('Error, get_4w_resistance: Allowed channel range is 1 .. 10.')
         try:
-            # to prevent communication errors in TestStand sequence
-            sleep(0.1)
             cmd = "MEAS:FRES? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
             return float(self.request(cmd, 5000))
         except Exception as ex:
@@ -203,8 +198,6 @@ class DAQ970A(Eth2SerialVisaDevice):
         channel = int(channel)
         assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VDC: Allowed channel range is 1 .. 20.')
         try:
-            # to prevent communication errors in TestStand sequence
-            sleep(0.1)
             cmd = "MEAS:VOLT:DC? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
             #return abs(float(self.request(cmd, 5000)))  # we need to clear the sign as some adapters have swapped +/- senses
             return float(self.request(cmd, 5000))
@@ -232,8 +225,6 @@ class DAQ970A(Eth2SerialVisaDevice):
         channel = int(channel)
         assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VAC: Allowed channel range is 1 .. 20.')
         try:
-            # to prevent communication errors in TestStand sequence
-            sleep(0.1)
             cmd = "MEAS:VOLT:AC? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
             return float(self.request(cmd, 5000))
         except Exception as ex:
@@ -265,8 +256,6 @@ class DAQ970A(Eth2SerialVisaDevice):
         assert ((channel == 21) or (channel == 22)), ValueError('Invalid channel. Only 21 or 22 allowed.')
         assert(scale in scale_str_list), ValueError('Invalid scale. Check the available scale values in the function description.')
         try:
-            # to prevent communication errors in TestStand sequence
-            sleep(0.1)
             cmd = f"MEAS:CURR:DC? {scale},(@{self._meas_chan(0, channel)})"
             return float(self.request(cmd, 5000).strip())
         except Exception as ex:
@@ -300,8 +289,6 @@ class DAQ970A(Eth2SerialVisaDevice):
         fth_type = int(fth_type)
         assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
         try:
-            # to prevent communication errors in TestStand sequence
-            sleep(0.1)
             match tran_type:
                 case 'TC' | 'DEF':
                     assert (tc_type in ["B", "E", "J", "K", "N", "R", "S", "T"]), ValueError('Error, get_temp: incorrect tc_type parameter')
