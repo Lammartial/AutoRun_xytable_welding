@@ -145,7 +145,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     def chemistry_id(self) -> int:
         """Returns the OCV table chemistry ID of the battery."""
-        self.manufacturer_access = 0x0008
+        self.manufacturer_access = 0x0006
         buf = self.manufacturer_data
         value = unpack("<H", buf)[0]  # data come litte endian
         return value
