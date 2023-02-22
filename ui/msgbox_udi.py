@@ -184,7 +184,7 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
                         item.var.set(_udi)   # set the UDI
                         _valid_udi = True    # avoid pop-up
             if not _valid_udi:
-                showinfo("Window", f"Wrong UDI code type {_udi}")
+                #showinfo("Window", f"Wrong UDI code type {_udi}")                
                 _log.warning(f"Wrong UDI code type {_udi}")
             else:
                 # check if we are complete:
