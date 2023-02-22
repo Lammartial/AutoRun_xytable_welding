@@ -438,7 +438,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
         #root.geometry(f"+{_x-50}+{_y-180}")
         root.geometry(f"+{_x}+{_y}")
     else:
-        _x = 300 + test_socket * (_w + 200)
+        _x = 250 + test_socket * (_w + 100)
         _y = 100
         root.geometry(f"+{_x}+{_y}")
     #root.attributes('-alpha', 1.0)  # now make the main window visible again
