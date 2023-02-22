@@ -376,14 +376,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             dict: decoded lifetime data of block 1 according the datasheet
         """
-        self.manufacturer_block_access = 0x0060 # lifetime data block 1 (32 bytes)
-        data = self.manufacturer_block_access
-        if not isinstance(data, bytearray):
-            raise BatteryError("No correct lifetime data from battery for block {}. Got {} expected bytesarray".format(1, type(data)))
-        if (len(data) != 32 + 2):
-            raise BatteryError("No correct lifetime data from battery for block {}. Got {} bytes expected {}".format(1, len(data), 32+2))
-        # all fine, store the data
-        b1 = data[2:]
+        b1 = self.read_manufacturer_block(command= 0x0060, length= 32)
         return _od2t(OrderedDict({
             "block": self._maybe_hexlify(b1, hexi), # all blocks of bytes as they are - but hexlified as it looks better in JSON files later ...
             # decode block 1
@@ -766,6 +759,28 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         sleep(0.52) # for bq40z50: wait 500ms
         return self.authenticate(new_key) # verify if the new key is installed
 
+    def read_manufacturer_block(self, command: int, length: int) -> bytearray:
+        """
+        Sends a command via Manufacturer Block Access and reads data.
+        Repeats up to 5 times if the command has been sent and recieved are not equal. 
+
+        Args:
+            command (int): command number
+            length (int): length of the data buffer
+
+        Returns:
+            bytearray: data buffer
+        """
+        max_retries = 5
+        for i in range(max_retries):
+            self.manufacturer_block_access = command
+            res = self.manufacturer_block_access
+            rcv_command = struct.unpack("<H", res[:2])[0]
+            res = res[2:]
+            if (rcv_command == command) and (len(res) == length):
+                return res
+        raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(res)}, {len(res)}")
+
     #---HELPER FOR PRODUCTION----------------------------------------------------------------------
 
     def manufacturing_dastatus1(self, hexi: bool | str | None = None) -> tuple:
@@ -777,10 +792,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             OrderedDict: _description_
         """
-        self.manufacturer_access = 0x0071
-        buf = self.manufacturer_data
-        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 32): 
-            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}, {buf[0]}, {buf[1]}")
+        buf = self.read_manufacturer_block(command= 0x0071, length= 32)
         return _od2t(OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
@@ -803,11 +815,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         }))
 
     def manufacturing_dastatus2(self, celsius: bool = True, hexi: bool | str | None = None) -> tuple:
-        self.manufacturer_access = 0x0072
-        buf = self.manufacturer_data
-        #buf = b"0123456789012345"
-        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 16):
-            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}, {buf[0]}, {buf[1]}")
+        buf = self.read_manufacturer_block(command= 0x0072, length= 16)
         return _od2t(OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
@@ -1437,10 +1445,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     #    self.manufacturer_access = 0x0012
 
     def get_afe_register(self, hexi: bool | str | None = None) -> tuple:
-        self.manufacturer_access = 0x0058
-        buf = self.manufacturer_block_access
-        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 32):
-            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
+        buf = self.read_manufacturer_block(command= 0x0058, length= 32)
         return _od2t(OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
@@ -1846,7 +1851,14 @@ if __name__ == "__main__":
         print(block)
         #print(bat.write_flash_block(flash_address=0x4006, block_data=block))
 
-    print("Done.")
+    #print(bat.read_flash_block(0x4041, 32, True))
+    for i in range(50):
+        #block = bat.read_flash_block(flash_address=0x4006, length=32, hexi=True)
+        block = bat.manufacturing_dastatus2(celsius= True, hexi= True)
+        print(block)
+        block = bat.manufacturing_dastatus1(hexi= True)
+        print(block)
+        #print(bat.write_flash_block(flash_address=0x4006, block_data=block))
 
 
 # END OF FILE
