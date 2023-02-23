@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 from enum import Enum
 import multiprocessing
 import itertools
@@ -40,6 +40,8 @@ class WindowUI(object):
         self.var_label_program = tk.StringVar(self.root, "")
         self.var_label_part_number = tk.StringVar(self.root, "")
         self.var_label_sequence = tk.StringVar(self.root, "")
+        self.var_label_sequence_revision = tk.StringVar(self.root, "")
+        self.var_label_resource_str = tk.StringVar(self.root, "")
 
         self.root.withdraw()  # hide window
         self.root.title(title)
@@ -79,33 +81,33 @@ class WindowUI(object):
         #     sticky=tk.NSEW
         # )
 
-        # Label
+        # Labels
         #_row = next(row_itr)
-        label_p0 = ttk.Label(self.mainframe,text="PART NUMBER",justify="center", font=("-size", 10, "-weight", "bold"))
-        label_p0.grid(row=next(row_itr), column=0, columnspan=2 , ipadx=10, ipady=10)
-        label_p = ttk.Label(self.mainframe, 
-                            textvariable=self.var_label_part_number, 
+        label_1 = ttk.Label(self.mainframe,text="PART NUMBER",justify="center", font=("-size", 10))
+        label_1.grid(row=next(row_itr), column=0, columnspan=2 , ipadx=10, ipady=10)
+        label_2 = ttk.Label(self.mainframe,
+                            textvariable=self.var_label_part_number,
                             justify="center", font=("-size", 16, "-weight", "bold"))
-        label_p.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
-        # label_s = ttk.Label(self.mainframe, 
+        label_2.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
+        # label_s = ttk.Label(self.mainframe,
         #                     textvariable=self.var_label_sequence,
         #                     justify="center", font=("-size", 10, "-weight", "bold"))
         # label_s.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
 
         #_row = next(row_itr)
-        label0 = ttk.Label(self.mainframe,text="SEQUENCE POS",justify="center", font=("-size", 10, "-weight", "bold"))
-        label0.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
-        label00 = ttk.Label(self.mainframe, 
-                            textvariable=self.var_label_counter, 
+        label3 = ttk.Label(self.mainframe,text="SEQUENCE POS",justify="center", font=("-size", 10))
+        label3.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
+        label4 = ttk.Label(self.mainframe,
+                            textvariable=self.var_label_counter,
                             justify="center", font=("-size", 20, "-weight", "bold"))
-        label00.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
+        label4.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
 
-        label1 = ttk.Label(self.mainframe,text="PROGRAM",justify="center",font=("-size", 18, "-weight", "bold"))
-        label1.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
-        label2 = ttk.Label(self.mainframe,
+        label5 = ttk.Label(self.mainframe,text="PROGRAM",justify="center",font=("-size", 18))
+        label5.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
+        label6 = ttk.Label(self.mainframe,
             textvariable=self.var_label_program,
             justify="center", font=("-size", 32, "-weight", "bold"))
-        label2.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
+        label6.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
         # Buttons
         _row = next(row_itr)
         style.configure('B1.TButton', foreground="red", background='#232323')
@@ -131,6 +133,17 @@ class WindowUI(object):
         reset_seq_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, sticky=tk.NSEW)
         #ok_button.grid_forget()
 
+
+        # Some more information labels
+        _row = next(row_itr)
+        #label_10 = ttk.Label(self.mainframe,text="Resource",justify="left", font=("-size", 10))
+        #label_10.grid(row=_row, column=0,  ipadx=10, ipady=10)
+        label_11 = ttk.Label(self.mainframe, textvariable=self.var_label_resource_str, font=("-size", 8))
+        label_11.grid(row=_row, column=0, ipady=10)
+        label_12 = ttk.Label(self.mainframe, textvariable=self.var_label_sequence_revision, font=("-size", 8))
+        label_12.grid(row=_row, column=1, ipady=10)
+
+
         # Sizegrip
         #sizegrip = ttk.Sizegrip(self.root)
         #sizegrip.grid(row=100, column=100, padx=(0, 5), pady=(0, 5))
@@ -152,19 +165,28 @@ class WindowUI(object):
         if not self.q_res.empty():
             a = self.q_res.get()
             #print("UI:", a)
+            _do_update = False
             if a:
+                if "resource_str" in a:
+                    self.var_label_resource_str.set(a["resource_str"])
+                    _do_update = True
+                if "revision" in a:
+                    self.var_label_sequence_revision.set(a["revision"])
+                    _do_update = True
                 if "part_number" in a:
                     self.var_label_part_number.set(a["part_number"])
-                    self.root.update()
+                    _do_update = True
                 if "sequence" in a:
                     self.var_label_sequence.set(a["sequence"])
-                    self.root.update()
+                    _do_update = True
                 if "counter" in a:
                     self.var_label_counter.set(a["counter"])
-                    self.root.update()
+                    _do_update = True
                 if "program" in a:
                     self.var_label_program.set(a["program"])
-                    self.root.update()
+                    _do_update = True
+            if _do_update:
+                self.root.update()
         self._id_after = self.mainframe.after(50, lambda: self.process_command_queue())
 
 
@@ -421,7 +443,7 @@ class ProcessSPS(multiprocessing.Process):
         self.command_queue = command_queue
         self.response_queue = response_queue
 
-    def collect_parameters(self) -> List[int]:
+    def collect_parameters(self) -> Tuple[List[int], str, str, str]:
         """ Read configuration from DSP + DB connection
 
         Note: this is called from process context,
@@ -431,7 +453,11 @@ class ProcessSPS(multiprocessing.Process):
             Exception: _description_
         """
         # 1. we need the station config
-        cfg = StationConfiguration("WELDER_SPS") #, filename=CONF_FILENAME_DEV)
+        try:
+            cfg = StationConfiguration("WELDER_SPS") #, filename=CONF_FILENAME_DEV)
+        except FileNotFoundError:
+            # comfort for testing
+            cfg = StationConfiguration("WELDER_SPS", filename=CONF_FILENAME_DEV)
         _, _station_id, _dsp_api_base_url, _line_id, _ = cfg.get_station_configuration()
         # 2. with station config we can request the part number from DSP
         print("Fetching part number from DSP...")
@@ -448,14 +474,16 @@ class ProcessSPS(multiprocessing.Process):
         session = SSession()
         #_part_number = "412031-16"  # RRC2020B
         #_part_number = "412036-16"  # RRC2040B
-        response = session.execute(sa.text(f"SELECT revision,program_sequence,parameter FROM `spsconfig` AS sc WHERE sc.part_number='{_part_number}' ORDER BY revision DESC"))
+        response = session.execute(sa.text(
+                f"SELECT revision,program_sequence,parameter FROM `spsconfig` AS sc WHERE sc.part_number='{_part_number}' ORDER BY revision DESC"
+                ))
         rows = response.fetchall()
         session.close_all()
         if len(rows) == 0:
             # not found! -> do not proceed
             raise Exception("No Data in Database found, cannot proceed!")
         print(f"Got record: {rows[0]}")
-        return [int(i) for i in rows[0][1].split(",")], _controller_resource_str, _part_number
+        return [int(i) for i in rows[0][1].split(",")], str(rows[0][0]), _controller_resource_str, _part_number
 
 
     def run(self) -> None:
@@ -470,14 +498,16 @@ class ProcessSPS(multiprocessing.Process):
             if not SM:
                 # need to create a new State Machine to work with
                 # get configuration from DSP + DB connection
-                program_sequence, resource_str, part_number = self.collect_parameters()
+                program_sequence, sequence_revision, resource_str, part_number = self.collect_parameters()
                 print("Create new SPS state machine")
                 SM = SPSStateMachine(resource_str, program_sequence)
                 # let the UI show the correct data
                 self.response_queue.put({
                     # global infos
+                    "resource_str": SM.dev.get_identification_str(),  # only to inform user about the connected welder
                     "part_number": part_number,
                     "sequence": program_sequence,
+                    "revision": sequence_revision,
                     # infos about the current sequence
                     "counter": SM.sequence_pos,
                     "program": SM.next_program_no,
