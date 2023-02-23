@@ -48,28 +48,33 @@ class Eth2SerialVisaDevice(object):
         Returns:
             bool: _description_
         """
-        try:
-            self.session = self.rm.open_resource(self.resource_str)
-            # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
-            if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
-                self.session.read_termination = '\n'
-            self.session.timeout = timeout
-            if (self.dev_channel != 0):
-                #_chn = f"CHAN {self.dev_channel};"
-                #_cmd = ";".join([_chn + p for p in msg.split(";")])
-                _cmd = f"CHAN {self.dev_channel};{msg}"
-            else:
-                _cmd = msg
-            self.session.write(_cmd)
-        except TimeoutError as ex:
-            # do NOT log, we need this exception being quiet when polling
-            raise
-        # we have exception handler to log this install in custom_logging
-        # except Exception as ex:
-        #     _log.exception(ex)
-        #     raise
-        finally:
-            self.session.close()
+        i = 0
+        max_retries = 5
+        while i < max_retries:
+            try:
+                self.session = self.rm.open_resource(self.resource_str)
+                # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
+                if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
+                    self.session.read_termination = '\n'
+                self.session.timeout = timeout
+                if (self.dev_channel != 0):
+                    #_chn = f"CHAN {self.dev_channel};"
+                    #_cmd = ";".join([_chn + p for p in msg.split(";")])
+                    _cmd = f"CHAN {self.dev_channel};{msg}"
+                else:
+                    _cmd = msg
+                self.session.write(_cmd)
+                break
+            except Exception:
+                # do NOT log, we need this exception being quiet when polling
+                i += 1
+                if (i == max_retries):
+                    raise
+                    # we have exception handler to log this install in custom_logging
+                    # except Exception as ex:
+                    #     _log.exception(ex)
+                    #     raise
+        self.session.close()
 
     def request(self, msg: str, timeout: int = 5000) -> str:
         """_summary_
@@ -83,29 +88,34 @@ class Eth2SerialVisaDevice(object):
         """
 
         _log = getLogger(__name__, DEBUG)
-        try:
-            self.session = self.rm.open_resource(self.resource_str)
-            # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
-            if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
-                self.session.read_termination = '\n'
-            self.session.timeout = timeout
-            if (self.dev_channel != 0):
-                #_chn = f"CHAN {self.dev_channel};"
-                #_query = ";".join([_chn + p for p in msg.split(";")])
-                _query = f"CHAN {self.dev_channel};{msg}"
-            else:
-                _query = msg
-            result = self.session.query(_query).strip()
-            _log.debug(f"Received: {result!r}")
-        except TimeoutError as ex:
-            # do NOT log, we need this exception being quiet when polling
-            raise
-        # we have exception handler to log this install in custom_logging
-        # except Exception as ex:
-        #     _log.exception(ex)
-        #     raise
-        finally:
-            self.session.close()
+        i = 0
+        max_retries = 5
+        while i < max_retries:
+            try:
+                self.session = self.rm.open_resource(self.resource_str)
+                # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
+                if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
+                    self.session.read_termination = '\n'
+                self.session.timeout = timeout
+                if (self.dev_channel != 0):
+                    #_chn = f"CHAN {self.dev_channel};"
+                    #_query = ";".join([_chn + p for p in msg.split(";")])
+                    _query = f"CHAN {self.dev_channel};{msg}"
+                else:
+                    _query = msg
+                result = self.session.query(_query).strip()
+                _log.debug(f"Received: {result!r}")
+                break
+            except Exception:
+                # do NOT log, we need this exception being quiet when polling
+                i += 1
+                if (i == max_retries):
+                    raise
+                # we have exception handler to log this install in custom_logging
+                # except Exception as ex:
+                #     _log.exception(ex)
+                #     raise
+        self.session.close()
         return result
 
 #--------------------------------------------------------------------------------------------------
