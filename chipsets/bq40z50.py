@@ -1864,7 +1864,5 @@ if __name__ == "__main__":
     #if (bat.is_sealed()):
         #bat.unseal(0x8D21FAC3, 0x63DB2CE4)
 
-    bat.get_pf_status()
-
 
 # END OF FILE
