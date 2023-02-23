@@ -334,7 +334,7 @@ if __name__ == "__main__":
     res : float = 0
 
     # predefined resource ID
-    DAQ970A_IP_STR = "TCPIP0::172.21.101.13::inst0::INSTR" #"TCPIP0::169.254.196.86::inst0::INSTR"
+    DAQ970A_IP_STR = "TCPIP0::172.21.101.23::inst0::INSTR" #"TCPIP0::169.254.196.86::inst0::INSTR"
     #DAQ970A_NAME_STR = "TCPIP0::K-DAQ970A-17481.local::inst0::INSTR"
 
     # 1. Create an instance of DAQ970A class
@@ -353,7 +353,10 @@ if __name__ == "__main__":
 
     #print(daq970a.get_VAC(1,4))
 
-    print(daq970a.get_ADC(channel= 22, scale= "1 mA"))
+    for i in range(50):
+        print(daq970a.get_temp(channel=3,tran_type="FRTD", rtd_resist= 1000, fth_type= 0, tc_type=""))
+        print(daq970a.get_ADC(channel= 22, scale= "1 mA"))
+        print(daq970a.get_VDC(channel=20))
 
     #print(daq970a.get_temp(1, 1, "DEF", 0, 0, "B"))
 

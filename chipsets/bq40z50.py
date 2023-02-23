@@ -32,7 +32,7 @@ import numpy as np
 # Logging
 # --------------------------------------------------------------------------- #
 
-DEBUG = 1
+DEBUG = 0
 
 from rrc.custom_logging import getLogger, logger_init
 
@@ -1802,9 +1802,7 @@ if __name__ == "__main__":
     #mib = bat.get_mib(32, True)
     #print(mib)
     #bat.set_mib(data= mib, length= 32, address= 0x4041)
-
     #bat.set_manufacturer_date()
-
     #bat.set_pack_sn("00B4")
 
     #buf = bat.battery_status()
@@ -1833,7 +1831,7 @@ if __name__ == "__main__":
     #print(bat.calib_write_pack_voltage_gain(pack_volt, shorted=False))
     # Current calibration
     curr = -2.01
-    print(bat.calib_write_current_gain(curr, shorted=False))
+    #print(bat.calib_write_current_gain(curr, shorted=False))
     # Temp calibration
     temp: Tuple = [21.71213214321, 21.71123213123, 21.7112321321321]
     #print(bat.calib_write_temp(temp))
@@ -1843,17 +1841,15 @@ if __name__ == "__main__":
     #if (bat.is_sealed()):
         #bat.unseal(0x8D21FAC3, 0x63DB2CE4)
 
+    print(bat.voltage())
 
-    #print(bat.is_sealed())
-
-    #print(bat.get_current())
-
-    #print(bat.Gauge_enable())
-
-    #print(bat.BlackBox_enable())
-
-    #print(bat.check_no_errors())
-    #print(bat.get_rsoc())
+    for i in range(50):
+        #block = bat.read_flash_block(flash_address=0x4006, length=32, hexi=True)
+        block = bat.manufacturing_dastatus2(celsius= True, hexi= True)
+        print(block)
+        block = bat.manufacturing_dastatus1(hexi= True)
+        print(block)
+        #print(bat.write_flash_block(flash_address=0x4006, block_data=block))
 
     #print(bat.read_flash_block(0x4041, 32, True))
     for i in range(50):
