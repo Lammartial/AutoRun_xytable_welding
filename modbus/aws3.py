@@ -38,6 +38,9 @@ class AWS3Modbus(ModbusClient):
 
     #----------------------------------------------------------------------------------------------
 
+    def get_identification_str(self) -> str:
+        return f"{self.machine_name}@{self._connection_str}"
+
     def set_machine_byteorder(self, bo: int = 3) -> None:
         self.write_register(9999-1, bo, unit_address=3) # 3=default, 1=big
 
@@ -179,9 +182,12 @@ class AWS3Modbus(ModbusClient):
 class AWS3Modbus_DUMMY(object):
 
     def __init__(self, connection_str: str, group_by_gateway: bool = True) -> None:
-        self.dev = connection_str
+        self.dev = "SIMULATION"
         self.machine_name = "DUMMY"
         self.program_no = -1
+
+    def get_identification_str(self) -> str:
+        return f"{self.machine_name}@{self.dev}"
 
     def close(self):
         pass
