@@ -759,7 +759,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         sleep(0.52) # for bq40z50: wait 500ms
         return self.authenticate(new_key) # verify if the new key is installed
 
-    def read_manufacturer_block(self, command: int, length: int) -> bytearray:
+    def read_manufacturer_block(self, command: int, length: int, max_retries: int = 5) -> bytearray:
         """
         Sends a command via Manufacturer Block Access and reads data.
         Repeats up to 5 times if the command has been sent and recieved are not equal. 
@@ -771,8 +771,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             bytearray: data buffer
         """
-        max_retries = 5
-        for i in range(max_retries):
+        command = int(command)
+        length = int(length)
+        for i in range(int(max_retries)):
             self.manufacturer_block_access = command
             res = self.manufacturer_block_access
             rcv_command = struct.unpack("<H", res[:2])[0]

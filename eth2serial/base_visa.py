@@ -66,6 +66,7 @@ class Eth2SerialVisaDevice(object):
                 self.session.write(_cmd)
                 break
             except Exception:
+                # two types of exceptions seen VisaIOError and TimeOutError ... 
                 # do NOT log, we need this exception being quiet when polling
                 i += 1
                 if (i == max_retries):
@@ -107,6 +108,7 @@ class Eth2SerialVisaDevice(object):
                 _log.debug(f"Received: {result!r}")
                 break
             except Exception:
+                # two types of exceptions seen VisaIOError and TimeOutError ...
                 # do NOT log, we need this exception being quiet when polling
                 i += 1
                 if (i == max_retries):
