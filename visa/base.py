@@ -78,6 +78,7 @@ class AdhocVisaDevice(object):
             finally:
                 if session:
                     session.close()
+                    session = None
 
 
     def request(self, msg: str, pause_after_write: int | None = None, timeout: int = 3000, retries: int = 1) -> str:
@@ -120,6 +121,7 @@ class AdhocVisaDevice(object):
             finally:
                 if session:
                     session.close()
+                    session = None
         return result
 
 
