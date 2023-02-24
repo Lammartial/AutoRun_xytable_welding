@@ -7,64 +7,65 @@ from time import sleep
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-
 DEBUG = 0
-
 from rrc.custom_logging import getLogger, logger_init
-
 # --------------------------------------------------------------------------- #
 
 
 
 #--------------------------------------------------------------------------------------------------
-class Eth2SerialVisaDevice(object):
+class AdhocVisaDevice(object):
 
-    def __init__(self, resource_str: str, dev_channel: int):
-        """
-        Initialize the object with visa resource string (IP name).
+    def __init__(self, resource_str: str, read_termination: str | None = None, write_termination: str | None = None, pause_on_retry: int | None = 10):
+        """Initialize the object with visa resource string (IP name).
+        
         Example "TCPIP0::192.168.1.101::inst0::INSTR"
 
         Args:
             resource_str (str): visa resource string
+            read_termination (str | None, optional): If None, default setting of PyVISA is used. Defaults to None.
+            write_termination (str | None, optional): If None, default setting of PyVISA is used. Defaults to None.
         """
-        self.rm = ResourceManager()          # auto decision for backend
+        self.rm = ResourceManager()  # auto decision for backend
         self.resource_str = str(resource_str)
-        self.dev_channel = int(dev_channel)
-
+        self.read_termination = read_termination
+        self.write_termination = write_termination
+        self.pause_on_retry = None
+        if pause_on_retry:
+            self.pause_on_retry = pause_on_retry/1000
+    
     def __str__(self) -> str:
-        return f"ETH to VISA bridge at {self.resource_str}:{self.dev_channel}"
+        return f"VISA Device at {self.resource_str}"
 
     def __repr__(self) -> str:
-        return f"Eth2SerialVisaDevice({self.resource_str}, {self.dev_channel})"
+        return f"AdhocVisaDevice({self.resource_str},read_termination={self.read_termination},write_termination={self.write_termination},pause_on_retry={self.pause_on_retry})"
 
     #----------------------------------------------------------------------------------------------
 
-    def send(self, msg: str, timeout: int = 1500, retries: int = 3) -> None:
+    def send(self, msg: str, pause_after_write: int | None = None, timeout: int = 1500, retries: int = 1) -> None:
         """_summary_
 
         Args:
             msg (str): _description_
+            pause_after_write (int, optional):  Timeout after writing the command for a request in milliseconds, None disables it. Defaults to 10.
             timeout (float, optional): Timeout to wait for send complete in milliseconds. Defaults to 1500ms
 
         Returns:
             bool: _description_
         """
         session = None
-        while retries:
+        while retries > 0:
             try:
                 if not session:
                     session = self.rm.open_resource(self.resource_str)
-                # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
-                if session.resource_name.startswith('ASRL') or session.resource_name.endswith('SOCKET'):
-                    session.read_termination = '\n'
+                if self.read_termination:
+                    session.read_termination = self.read_termination
+                if self.write_termination:
+                    session.write_termination = self.write_termination
                 session.timeout = timeout
-                if (self.dev_channel != 0):
-                    #_chn = f"CHAN {self.dev_channel};"
-                    #_cmd = ";".join([_chn + p for p in msg.split(";")])
-                    _cmd = f"CHAN {self.dev_channel};{msg}"
-                else:
-                    _cmd = msg
-                session.write(_cmd)
+                session.write(msg)
+                if pause_after_write:
+                    sleep(pause_after_write/1000)
                 break
             except Exception:
                 # two types of exceptions seen VisaIOError and TimeOutError ... 
@@ -72,21 +73,19 @@ class Eth2SerialVisaDevice(object):
                 retries -= 1
                 if retries <= 0:
                     raise
-                    # we have exception handler to log this install in custom_logging
-                    # except Exception as ex:
-                    #     _log.exception(ex)
-                    #     raise
-                sleep(0.05)
+                if self.pause_on_retry:
+                    sleep(self.pause_on_retry)
             finally:
                 if session:
                     session.close()
 
 
-    def request(self, msg: str, timeout: int = 3000, retries: int = 3) -> str:
+    def request(self, msg: str, pause_after_write: int | None = None, timeout: int = 3000, retries: int = 1) -> str:
         """_summary_
 
         Args:
             msg (str): _description_
+            pause_after_write (int, optional):  Timeout after writing the command for a request in milliseconds, None disables it. Defaults to 10.
             timeout (int, optional):  Timeout to wait for send and receive result in milliseconds. Defaults to 3000.
             retries (int, optional): _description_. Defaults to 3.
 
@@ -94,27 +93,21 @@ class Eth2SerialVisaDevice(object):
             str: result
         """
 
-        _log = getLogger(__name__, DEBUG)
+        #_log = getLogger(__name__, DEBUG)
         session = None
-        while retries:
+        while retries > 0:
             try:
                 if not session:
                     session = self.rm.open_resource(self.resource_str)
-                # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
-                if session.resource_name.startswith('ASRL') or session.resource_name.endswith('SOCKET'):
-                    session.read_termination = '\n'
-                session.timeout = timeout
-                if (self.dev_channel != 0):
-                    #_chn = f"CHAN {self.dev_channel};"
-                    #_query = ";".join([_chn + p for p in msg.split(";")])
-                    _query = f"CHAN {self.dev_channel};{msg}"
-                else:
-                    _query = msg
-                session.write(_query)
-                sleep(0.010)
-                result = session.read().strip()
-                #result = session.query(_query).strip()
-                _log.debug(f"Received: {result!r}")
+                if self.read_termination:
+                    session.read_termination = self.read_termination
+                if self.write_termination:
+                    session.write_termination = self.write_termination
+                session.write(msg)
+                if pause_after_write:
+                    sleep(pause_after_write/1000)
+                result = session.read()
+                #_log.debug(f"Received: {result!r}")
                 break
             except Exception:
                 # two types of exceptions seen VisaIOError and TimeOutError ...
@@ -122,15 +115,13 @@ class Eth2SerialVisaDevice(object):
                 retries -= 1
                 if retries <= 0:
                     raise
-                # we have exception handler to log this install in custom_logging
-                # except Exception as ex:
-                #     _log.exception(ex)
-                #     raise
-                sleep(0.05)
+                if self.pause_on_retry:
+                    sleep(self.pause_on_retry)
             finally:
                 if session:
                     session.close()
         return result
+
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
@@ -141,11 +132,7 @@ if __name__ == "__main__":
     _log = getLogger(__name__, DEBUG)
 
     tic = perf_counter()
-    #_log.info("Own IP: %s", OWN_PRIMARY_IP)
-
-    #c = Eth2SerialDevice("192.168.1.90", 23)
-    #c.send("Hallo Welt!")
-
+    
     # ...
 
     toc = perf_counter()
