@@ -28,6 +28,7 @@ class ProgressWindow:
         def disable_event():
             pass
 
+        self._value = 0
         ROOT = tkinter.Tk()
         ROOT.withdraw()  # hide window
         style = ttk.Style()
@@ -84,8 +85,10 @@ class ProgressWindow:
         self.hidden = False
 
     def set_value(self, value: float):
-        self.progress.config(value=value)
-        self.update()
+        if (value > (self._value*0.05)) or value >= self._value:
+            self._value = value
+            self.progress.config(value=value)
+            self.update()
 
     def update(self):
         self.root.update()
