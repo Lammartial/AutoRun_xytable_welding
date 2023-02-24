@@ -58,7 +58,7 @@ class WindowUI(object):
         # for some reasonm the winfo_width() and _heihgt() do not show correct values here
         #_w = root.winfo_width()
         #_h = root.winfo_height()
-        _w = 300  # width set manually
+        _w = 320  # width set manually
         _h = self.root.winfo_screenheight() #480  # height set manually
         #_x = int((self.root.winfo_screenwidth() / 2) - (_w / 2))
         _x = int(self.root.winfo_screenwidth() - _w)
