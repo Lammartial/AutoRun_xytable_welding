@@ -88,12 +88,18 @@ class M3400(Eth2SerialVisaDevice):
     #----------------------------------------------------------------------------------------------
 
     def initialize_device(self) -> None:        
-        self.send("SYST:REM")     # set remote control ON        
+        self.send("SYST:REM")     # set remote control ON
+        #self.send("OFF:VOLT CONST")  # CONST or ZERO -> for CC priority mode
+        #self.send("FUNC:MODE FIX")   # FIX, LIST, BATT, BEM
         self.send("SENS:STAT 1")  # set sense state ON        
         self.send("OUTP 0")       # set OUTPUT OFF
         sleep(0.25)
 
     #----------------------------------------------------------------------------------------------
+
+    def read_system_error(self) -> str:
+        err = self.request_raw_query("SYSTEM:ERROR?")
+        return err
 
     # def set_remote_control(self) -> None:
     #     """

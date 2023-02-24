@@ -190,8 +190,8 @@ if __name__ == "__main__":
     from pyvisa import ResourceManager
 
     ## Initialize the logging
-    logger_init(filename_base=None)  ## init root logger with different filename
-    _log = getLogger(__name__, DEBUG)
+    #logger_init(filename_base=None)  ## init root logger with different filename
+    #_log = getLogger(__name__, DEBUG)
 
 
     rm = ResourceManager()
@@ -217,7 +217,7 @@ if __name__ == "__main__":
 
     for m in m3412[:]:
         print('IDN:' +str(m.request('*IDN?')))
-
+        print('ERROR', m.read_system_error())
         # m.set_remote_control()
         # m.set_sense_state(1)
         # m.set_output_state(0)
@@ -228,6 +228,8 @@ if __name__ == "__main__":
     for m in m3412:
         m.set_output_state(0)  # switch all outputs OFF
 
- #=============================================================================================
-
     print("DONE.")
+
+#--------------------------------------------------------------------------------------------------
+
+# END OF FILE

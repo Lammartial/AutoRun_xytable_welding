@@ -2,6 +2,7 @@
 Provides basic ETH to SERIAL conversion handling the visa communication.
 """
 from pyvisa import ResourceManager
+from time import sleep
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -38,7 +39,7 @@ class Eth2SerialVisaDevice(object):
 
     #----------------------------------------------------------------------------------------------
 
-    def send(self, msg: str, timeout: int = 1500) -> None:
+    def send(self, msg: str, timeout: int = 1500, retries: int = 3) -> None:
         """_summary_
 
         Args:
@@ -48,76 +49,87 @@ class Eth2SerialVisaDevice(object):
         Returns:
             bool: _description_
         """
-        i = 0
-        max_retries = 5
-        while i < max_retries:
+        session = None
+        while retries:
             try:
-                self.session = self.rm.open_resource(self.resource_str)
+                if not session:
+                    session = self.rm.open_resource(self.resource_str)
                 # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
-                if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
-                    self.session.read_termination = '\n'
-                self.session.timeout = timeout
+                if session.resource_name.startswith('ASRL') or session.resource_name.endswith('SOCKET'):
+                    session.read_termination = '\n'
+                session.timeout = timeout
                 if (self.dev_channel != 0):
                     #_chn = f"CHAN {self.dev_channel};"
                     #_cmd = ";".join([_chn + p for p in msg.split(";")])
                     _cmd = f"CHAN {self.dev_channel};{msg}"
                 else:
                     _cmd = msg
-                self.session.write(_cmd)
+                session.write(_cmd)
                 break
             except Exception:
                 # two types of exceptions seen VisaIOError and TimeOutError ... 
                 # do NOT log, we need this exception being quiet when polling
-                i += 1
-                if (i == max_retries):
+                retries -= 1
+                if retries <= 0:
                     raise
                     # we have exception handler to log this install in custom_logging
                     # except Exception as ex:
                     #     _log.exception(ex)
                     #     raise
-        self.session.close()
+                sleep(0.05)
+            finally:
+                if session:
+                    session.close()
 
-    def request(self, msg: str, timeout: int = 5000) -> str:
+
+    def request(self, msg: str, timeout: int = 3000, retries: int = 3) -> str:
         """_summary_
 
         Args:
-            msg (str): command
-            timeout (float, optional): Timeout to wait for send and receive result in milliseconds. Defaults to 5000ms
+            msg (str): _description_
+            timeout (int, optional):  Timeout to wait for send and receive result in milliseconds. Defaults to 3000.
+            retries (int, optional): _description_. Defaults to 3.
 
         Returns:
             str: result
         """
 
         _log = getLogger(__name__, DEBUG)
-        i = 0
-        max_retries = 5
-        while i < max_retries:
+        session = None
+        while retries:
             try:
-                self.session = self.rm.open_resource(self.resource_str)
+                if not session:
+                    session = self.rm.open_resource(self.resource_str)
                 # For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
-                if self.session.resource_name.startswith('ASRL') or self.session.resource_name.endswith('SOCKET'):
-                    self.session.read_termination = '\n'
-                self.session.timeout = timeout
+                if session.resource_name.startswith('ASRL') or session.resource_name.endswith('SOCKET'):
+                    session.read_termination = '\n'
+                session.timeout = timeout
                 if (self.dev_channel != 0):
                     #_chn = f"CHAN {self.dev_channel};"
                     #_query = ";".join([_chn + p for p in msg.split(";")])
                     _query = f"CHAN {self.dev_channel};{msg}"
                 else:
                     _query = msg
-                result = self.session.query(_query).strip()
+                session.write(_query)
+                sleep(0.010)
+                result = session.read().strip()
+                #result = session.query(_query).strip()
                 _log.debug(f"Received: {result!r}")
                 break
             except Exception:
                 # two types of exceptions seen VisaIOError and TimeOutError ...
                 # do NOT log, we need this exception being quiet when polling
-                i += 1
-                if (i == max_retries):
+                retries -= 1
+                if retries <= 0:
                     raise
                 # we have exception handler to log this install in custom_logging
                 # except Exception as ex:
                 #     _log.exception(ex)
                 #     raise
-        self.session.close()
+                sleep(0.05)
+            finally:
+                if session:
+                    session.close()
         return result
 
 #--------------------------------------------------------------------------------------------------
