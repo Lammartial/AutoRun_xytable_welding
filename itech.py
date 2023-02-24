@@ -627,8 +627,8 @@ class M3400(Eth2SerialVisaDevice):
         self.set_function("CURR")  # CC priority
         self.send(f"POW:LIM:NEG {-abs(power_limit):0.2f}")
         self.send(f"POW:LIM:POS 0.0") # always fixed!
-        self.send(f"CURR:LIM:NEG {-abs(current_limit):0.3f}")
-        self.send(f"CURR:LIM:POS 0.0") # always fixed!        
+        #self.send(f"CURR:LIM:NEG {-abs(current_limit):0.3f}")
+        #self.send(f"CURR:LIM:POS 0.0") # always fixed!        
         self.send(f"VOLT:LIM:LOW 0.0") # always fixed!
         self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
         #self.send(f"VOLT {voltage_limit_high:0.2f}")
