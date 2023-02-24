@@ -1,4 +1,3 @@
-from rrc.eth2serial.base_visa import Eth2SerialVisaDevice
 from rrc.visa import AdhocVisaDevice
 
 #--------------------------------------------------------------------------------------------------
