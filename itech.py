@@ -704,6 +704,21 @@ class M3900(M3400):
         return f"M3900({self.resource_str}, {self.dev_channel})"
 
     #----------------------------------------------------------------------------------------------
+    # insert the channel to message strings for this device
+
+    def send(self, msg: str, timeout: int = 1500) -> None:
+        if (self.dev_channel > 0):
+            #_chn = f"CHAN {self.dev_channel};"
+            #_query = ";".join([_chn + p for p in msg.split(";")])
+            _query = f"CHAN {self.dev_channel};{msg}"
+        super().send(_query, pause_after_write=10, timeout=timeout, retries=3)
+
+    def request(self, msg: str, timeout: int = 3000) -> str:
+        if (self.dev_channel > 0):
+            _query = f"CHAN {self.dev_channel};{msg}"
+        return super().request(_query, pause_after_write=10, timeout=timeout, retries=3).strip()
+
+    #----------------------------------------------------------------------------------------------
     # common function repeated as trampoline for TestStand only :-(
 
     #def set_remote_control(self) -> None:
