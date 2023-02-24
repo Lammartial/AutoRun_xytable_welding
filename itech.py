@@ -1,6 +1,7 @@
 from typing import List
 from time import sleep
-from rrc.eth2serial.base_visa import Eth2SerialVisaDevice
+from rrc.visa import AdhocVisaDevice
+
 import math
 
 #--------------------------------------------------------------------------------------------------
@@ -13,15 +14,14 @@ __version__ = VERSION
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-
 DEBUG = 0
-
 from rrc.custom_logging import getLogger, logger_init
-
 # --------------------------------------------------------------------------- #
+   
+
 
 #--------------------------------------------------------------------------------------------------
-class M3400(Eth2SerialVisaDevice):
+class M3400(AdhocVisaDevice):
     #
     # Currently there are two backends available: The one included in pyvisa,
     # which uses the IVI library (include NI-VISA, Keysight VISA, R&S VISA, tekVISA etc.),
@@ -75,8 +75,9 @@ class M3400(Eth2SerialVisaDevice):
             dev_channel (int, optional): indexes the real PSU behind the gateway, 0=off, 1..6. Defaults to 0.
 
         """
-        super().__init__(resource_str, dev_channel)
+        super().__init__(resource_str, read_termination="\n", write_termination="\n", pause_on_retry=50)  # configure the itech VISA device
         self.last_mode = "??"  # not yet set
+        self.dev_channel = dev_channel
         self.initialize_device()
 
     def __str__(self) -> str:
@@ -84,6 +85,21 @@ class M3400(Eth2SerialVisaDevice):
 
     def __repr__(self) -> str:
         return f"M3400({self.resource_str}, {self.dev_channel})"
+
+    #----------------------------------------------------------------------------------------------
+    # insert the channel to message strings for this device
+
+    def send(self, msg: str, timeout: int = 1500) -> None:
+        if (self.dev_channel > 0):
+            #_chn = f"CHAN {self.dev_channel};"
+            #_query = ";".join([_chn + p for p in msg.split(";")])
+            _query = f"CHAN {self.dev_channel};{msg}"
+        super().send(_query, pause_after_write=10, timeout=timeout, retries=3)
+
+    def request(self, msg: str, timeout: int = 3000) -> str:
+        if (self.dev_channel > 0):
+            _query = f"CHAN {self.dev_channel};{msg}"
+        return super().request(_query, pause_after_write=10, timeout=timeout, retries=3).strip()
 
     #----------------------------------------------------------------------------------------------
 

@@ -1,4 +1,4 @@
-from rrc.eth2serial.base_visa import Eth2SerialVisaDevice
+from rrc.visa import AdhocVisaDevice
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
@@ -18,7 +18,7 @@ from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
 #--------------------------------------------------------------------------------------------------
-class DAQ970A(Eth2SerialVisaDevice):
+class DAQ970A(AdhocVisaDevice):
     #
     # Currently there are two backends available: The one included in pyvisa,
     # which uses the IVI library (include NI-VISA, Keysight VISA, R&S VISA, tekVISA etc.),
@@ -40,26 +40,35 @@ class DAQ970A(Eth2SerialVisaDevice):
     #        print(inst.args)     # arguments stored in .args
     #        print(inst)          # __str__ allows args to be printed directly,
 
-    def __init__(self, resource_str: str, dev_channel: int = 0, card_slot: int = 1):
+    def __init__(self, resource_str: str, card_slot: int = 1):
         """
         Initialize the object with visa resource string (IP name).
         Example "TCPIP0::192.168.1.101::inst0::INSTR"
 
         Args:
             resource_str (str): visa resource string
-            dev_channel (int, optional): 0=off, 1 .. n selects a proprietary dev_channel behind the gateway. Defaults to 0.
             card_slot (int, optional): Selects a measurement channel card on slot 1..3. Defaults to 1 
 
         """
-        super().__init__(resource_str, int(dev_channel))
-        self.change_card_slot(card_slot)
+        super().__init__(resource_str, read_termination="\n", write_termination=None, pause_on_retry=10)  # configure the itech VISA device
+        self.change_card_slot(card_slot)  # also sets the self.card_slot
 
     def __str__(self) -> str:
         return f"DAQ970A VISA device on {super().__str__()}"
 
     def __repr__(self) -> str:
-        return f"DAQ970A({self.resource_str}, {self.dev_channel})"
+        return f"DAQ970A({self.resource_str}, {self.card_slot})"
 
+    #----------------------------------------------------------------------------------------------
+    # insert the channel to message strings for this device
+
+    def send(self, msg: str, timeout: int = 3000) -> None:
+        super().send(msg, pause_after_write=10, timeout=timeout, retries=3)
+
+    def request(self, msg: str, timeout: int = 5000) -> str:
+        return super().request(msg, pause_after_write=10, timeout=timeout, retries=3).strip()
+
+    
     #----------------------------------------------------------------------------------------------
     def selftest(self) -> int:
         """
@@ -69,7 +78,7 @@ class DAQ970A(Eth2SerialVisaDevice):
             int: 0 (pass) or 1 (one or more tests failed)
         """
         cmd = f"*TST?"
-        return int(self.request(cmd, 5000))
+        return int(self.request(cmd))
 
     def selftest_all(self) -> int:
         """
@@ -79,7 +88,7 @@ class DAQ970A(Eth2SerialVisaDevice):
             int: 0 (pass) or 1 (one or more tests failed)
         """
         cmd = f"TEST:ALL?"
-        return int(self.request(cmd, 10000))
+        return int(self.request(cmd, timeout=10000))
 
     def set_raw_request(self, cmd: str):
         """
@@ -91,7 +100,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         Returns:
             str: response
         """
-        return self.request(str(cmd), 2000)
+        return self.request(str(cmd), timeout=2000)
     
     def set_raw_command(self, cmd: str):
         """
@@ -103,7 +112,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         Returns:
             str: response
         """
-        return self.send(str(cmd), 2000)
+        return self.send(str(cmd), timeout=2000)
 
     #----------------------------------------------------------------------------------------------
     
@@ -145,7 +154,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_resistance: Allowed channel range is 1 .. 20.')
         try:
             cmd = "MEAS:RES? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
-            return float(self.request(cmd, 5000))
+            return float(self.request(cmd))
         except Exception as ex:
             #_log.exception(ex)
             raise
@@ -172,7 +181,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         assert ((channel >= 1) and (channel <= 10)), ValueError('Error, get_4w_resistance: Allowed channel range is 1 .. 10.')
         try:
             cmd = "MEAS:FRES? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
-            return float(self.request(cmd, 5000))
+            return float(self.request(cmd))
         except Exception as ex:
             #_log.exception(ex)
             raise
@@ -199,8 +208,8 @@ class DAQ970A(Eth2SerialVisaDevice):
         assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VDC: Allowed channel range is 1 .. 20.')
         try:
             cmd = "MEAS:VOLT:DC? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
-            #return abs(float(self.request(cmd, 5000)))  # we need to clear the sign as some adapters have swapped +/- senses
-            return float(self.request(cmd, 5000))
+            #return abs(float(self.request(cmd)))  # we need to clear the sign as some adapters have swapped +/- senses
+            return float(self.request(cmd))
         except Exception as ex:
             #_log.exception(ex)
             raise
@@ -226,7 +235,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VAC: Allowed channel range is 1 .. 20.')
         try:
             cmd = "MEAS:VOLT:AC? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
-            return float(self.request(cmd, 5000))
+            return float(self.request(cmd))
         except Exception as ex:
             #_log.exception(ex)
             raise
@@ -257,7 +266,7 @@ class DAQ970A(Eth2SerialVisaDevice):
         assert(scale in scale_str_list), ValueError('Invalid scale. Check the available scale values in the function description.')
         try:
             cmd = f"MEAS:CURR:DC? {scale},(@{self._meas_chan(0, channel)})"
-            return float(self.request(cmd, 5000).strip())
+            return float(self.request(cmd))
         except Exception as ex:
             #_log.exception(ex)
             raise
@@ -293,15 +302,15 @@ class DAQ970A(Eth2SerialVisaDevice):
                 case 'TC' | 'DEF':
                     assert (tc_type in ["B", "E", "J", "K", "N", "R", "S", "T"]), ValueError('Error, get_temp: incorrect tc_type parameter')
                     cmd = "MEAS:TEMP:TC?" + " " + tc_type + ",(@" + self._meas_chan(0, channel) + ")"
-                    return float(self.request(cmd, 5000).strip())
+                    return float(self.request(cmd))
                 case 'FTH' | 'THER':
                     assert ((fth_type == 2252) or (fth_type == 5000) or (fth_type == 10000)), ValueError('Error, get_temp: incorrect fth_type parameter')
                     cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(fth_type) + ",(@" + self._meas_chan(0, channel) + ")"
-                    return float(self.request(cmd, 5000).strip())
+                    return float(self.request(cmd))
                 case 'FRTD' | 'RTD':
                     assert((rtd_resist == 100) or (rtd_resist == 1000)), ValueError('Error, get_temp: incorrect rtd_resist parameters')
                     cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(rtd_resist) + ",(@" + self._meas_chan(0, channel) + ")"
-                    return float(self.request(cmd, 5000).strip())
+                    return float(self.request(cmd))
                 case _:
                     raise ValueError('Error, get_temp: unknown parameter')
         except Exception as ex:

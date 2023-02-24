@@ -1,2 +1,1 @@
 from .base import Eth2SerialDevice, Eth2Serial_SockSingleConnection_Device, get_ipv4, tcp_send_and_receive_from_server
-from .base_visa import Eth2SerialVisaDevice
