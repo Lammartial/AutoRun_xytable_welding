@@ -739,6 +739,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """Returns the programmed authentication key."""
         raise NotImplementedError("There is no direct read access to the sha1 key for this chipset.")
 
+
     def change_authentication_key(self, new_key: bytes | bytearray) -> bool:
         """Program a new authentication key.
 
@@ -759,14 +760,15 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         sleep(0.52) # for bq40z50: wait 500ms
         return self.authenticate(new_key) # verify if the new key is installed
 
-    def read_manufacturer_block(self, command: int, length: int, max_retries: int = 5) -> bytearray:
+
+    def read_manufacturer_block(self, command: int, length: int | None, max_retries: int = 5) -> bytearray:
         """
         Sends a command via Manufacturer Block Access and reads data.
         Repeats up to 5 times if the command has been sent and recieved are not equal. 
 
         Args:
             command (int): command number
-            length (int): length of the data buffer
+            length (int): length of the data buffer or None if unknown or may vary
 
         Returns:
             bytearray: data buffer
@@ -778,11 +780,14 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             res = self.manufacturer_block_access
             rcv_command = struct.unpack("<H", res[:2])[0]
             res = res[2:]
-            if (rcv_command == command) and (len(res) == length):
+            # if the expected length may variy you need to pass None to length
+            if (rcv_command == command) and (((length is not None) and (len(res) == length)) or (length is None)):
                 return res
         raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(res)}, {len(res)}")
 
+
     #---HELPER FOR PRODUCTION----------------------------------------------------------------------
+
 
     def manufacturing_dastatus1(self, hexi: bool | str | None = None) -> tuple:
         """Read DAStatus1 and return the registers as they come.
@@ -1713,9 +1718,11 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Resets Black Box Recorder and Permanent Fail Data.
         """
         # Black Box Recorder reset
-        self.manufacturer_access = 0x002A
+        #self.manufacturer_access = 0x002A
+        dummy = self.read_manufacturer_block(command=0x002A, length=None)
         # Permanent Fail Data Reset
-        self.manufacturer_access = 0x0029
+        #self.manufacturer_access = 0x0029
+        dummy = self.read_manufacturer_block(command=0x0029, length=None)
     
     def check_no_errors(self) -> bool:
         """
@@ -1726,14 +1733,17 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
         no_errs = True
         # Safety status
-        self.manufacturer_access = 0x0051
-        buf = self.manufacturer_data
+        
+        #self.manufacturer_access = 0x0051
+        #buf = self.manufacturer_data
+        buf = self.read_manufacturer_block(command=0x0051, length=None)
         for i in range(len(buf)):
             if (buf[i] != 0):
                 no_errs = False
         # PF status
-        self.manufacturer_access = 0x0053
-        buf = self.manufacturer_data
+        #self.manufacturer_access = 0x0053
+        #buf = self.manufacturer_data
+        buf = self.read_manufacturer_block(command=0x0053, length=None)
         for i in range(len(buf)):
             if (buf[i] != 0):
                 no_errs = False
