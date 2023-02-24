@@ -1686,6 +1686,28 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         buf =  self.current()
         return float(buf[0])
     
+    def get_safety_status(self) -> str:
+        """
+        Returns safety status register to log it.
+
+        Returns:
+            str: safety status register
+        """
+        self.manufacturer_access = 0x0051
+        buf = self.manufacturer_data
+        return str(buf)
+
+    def get_pf_status(self) -> str:
+        """
+        Returns PF status register to log it.
+
+        Returns:
+            str: PF status register
+        """
+        self.manufacturer_access = 0x0053
+        buf = self.manufacturer_data
+        return str(buf)        
+    
     def reset_errors(self) -> None:
         """
         Resets Black Box Recorder and Permanent Fail Data.
@@ -1841,25 +1863,6 @@ if __name__ == "__main__":
 
     #if (bat.is_sealed()):
         #bat.unseal(0x8D21FAC3, 0x63DB2CE4)
-
-    print(bat.voltage())
-
-    for i in range(50):
-        #block = bat.read_flash_block(flash_address=0x4006, length=32, hexi=True)
-        block = bat.manufacturing_dastatus2(celsius= True, hexi= True)
-        print(block)
-        block = bat.manufacturing_dastatus1(hexi= True)
-        print(block)
-        #print(bat.write_flash_block(flash_address=0x4006, block_data=block))
-
-    #print(bat.read_flash_block(0x4041, 32, True))
-    for i in range(50):
-        #block = bat.read_flash_block(flash_address=0x4006, length=32, hexi=True)
-        block = bat.manufacturing_dastatus2(celsius= True, hexi= True)
-        print(block)
-        block = bat.manufacturing_dastatus1(hexi= True)
-        print(block)
-        #print(bat.write_flash_block(flash_address=0x4006, block_data=block))
 
 
 # END OF FILE
