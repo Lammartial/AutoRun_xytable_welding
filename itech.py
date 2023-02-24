@@ -717,14 +717,14 @@ class M3900(M3400):
             _query = f"CHAN {self.dev_channel};{msg}"
         else:
             _query = msg
-        super().send(_query, pause_after_write=15, timeout=timeout, retries=3)
+        super().send(_query, timeout=timeout)
 
     def request(self, msg: str, timeout: int = 3000) -> str:
         if (self.dev_channel > 0):
             _query = f"CHAN {self.dev_channel};{msg}"
         else:
             _query = msg
-        return super().request(_query, pause_after_write=30, timeout=timeout, retries=3).strip()
+        return super().request(_query, timeout=timeout).strip()
 
     #----------------------------------------------------------------------------------------------
     # common function repeated as trampoline for TestStand only :-(
