@@ -184,7 +184,7 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
                         item.var.set(_udi)   # set the UDI
                         _valid_udi = True    # avoid pop-up
             if not _valid_udi:
-                #showinfo("Window", f"Wrong UDI code type {_udi}")                
+                #showinfo("Window", f"Wrong UDI code type {_udi}")
                 _log.warning(f"Wrong UDI code type {_udi}")
             else:
                 # check if we are complete:
@@ -446,7 +446,9 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
     root.update()
     root.deiconify()
     print (root.winfo_geometry())
-    root.focus_force()  # this is to activate the window again (important after programmatically closed)
+
+    #root.focus_force()  # this is to activate the window again (important after programmatically closed)
+
     if allow_manual_edit:
         entry_lst[0][1].focus_set()   # now set the focus to the first dialog element
         #ok_button.focus_set()

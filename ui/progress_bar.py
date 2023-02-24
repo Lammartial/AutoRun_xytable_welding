@@ -33,12 +33,12 @@ class ProgressWindow:
         style = ttk.Style()
         #print(style.theme_names())
         style.theme_use("winnative")
-        
+
         # Disable the Close Window Control Icon
         ROOT.protocol("WM_DELETE_WINDOW", disable_event)
         # set App icon
         ROOT.iconbitmap(Path(__file__).resolve().parent / "chip-icon.ico")
-        
+
         self.root = ROOT
         self.hidden = None
         if color and color == "":
@@ -46,7 +46,7 @@ class ProgressWindow:
         if color:
             #global style
             style.configure("ColorProgress.Horizontal.TProgressbar", background=color)
-        test_socket = int(test_socket)     
+        test_socket = int(test_socket)
         # define the geometry for the window or frame
         #x_size = int(self.root.winfo_screenwidth() * 0.60)
         #y_size = int(self.root.winfo_screenheight() * 0.1)
@@ -63,7 +63,7 @@ class ProgressWindow:
             self.root.title(f"SOCKET {test_socket}: {title}")
             _x = int((self.root.winfo_screenwidth() / 2) - (x_size / 2))
             _y = 500 + test_socket * (y_size + 50)
-        self.root.geometry(f"{x_size}x{y_size}+{_x}+{_y}")        
+        self.root.geometry(f"{x_size}x{y_size}+{_x}+{_y}")
         self.root.columnconfigure(0, weight=1)
         # create progress bar
         self.progress = ttk.Progressbar(self.root,
@@ -85,10 +85,11 @@ class ProgressWindow:
 
     def set_value(self, value: float):
         self.progress.config(value=value)
-        self.root.update()
+        self.update()
 
     def update(self):
         self.root.update()
+        self.root.update_idletasks()
 
     def quit(self):
         self.root.quit()
@@ -97,7 +98,7 @@ class ProgressWindow:
 
     def close(self):
         self.root.destroy()
-        
+
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':

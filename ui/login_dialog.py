@@ -434,7 +434,8 @@ def tk_main(resource_string: str, title: str = "MAIN FUNC TITLE"):
     root.update()
     root.deiconify()
 
-    root.focus_force()  # this is to activate the window again (important after programmatically closed)
+    #root.focus_force()  # this is to activate the window again (important after programmatically closed)
+
     if allow_manual_edit:
         entry_lst[0][1].focus_set()   # now set the focus to the first dialog element
     else:
