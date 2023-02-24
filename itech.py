@@ -94,11 +94,15 @@ class M3400(AdhocVisaDevice):
             #_chn = f"CHAN {self.dev_channel};"
             #_query = ";".join([_chn + p for p in msg.split(";")])
             _query = f"CHAN {self.dev_channel};{msg}"
+        else:
+            _query = msg
         super().send(_query, pause_after_write=15, timeout=timeout, retries=3)
 
     def request(self, msg: str, timeout: int = 3000) -> str:
         if (self.dev_channel > 0):
             _query = f"CHAN {self.dev_channel};{msg}"
+        else:
+            _query = msg
         return super().request(_query, pause_after_write=30, timeout=timeout, retries=3).strip()
 
     #----------------------------------------------------------------------------------------------
@@ -711,11 +715,15 @@ class M3900(M3400):
             #_chn = f"CHAN {self.dev_channel};"
             #_query = ";".join([_chn + p for p in msg.split(";")])
             _query = f"CHAN {self.dev_channel};{msg}"
+        else:
+            _query = msg
         super().send(_query, pause_after_write=15, timeout=timeout, retries=3)
 
     def request(self, msg: str, timeout: int = 3000) -> str:
         if (self.dev_channel > 0):
             _query = f"CHAN {self.dev_channel};{msg}"
+        else:
+            _query = msg
         return super().request(_query, pause_after_write=30, timeout=timeout, retries=3).strip()
 
     #----------------------------------------------------------------------------------------------
