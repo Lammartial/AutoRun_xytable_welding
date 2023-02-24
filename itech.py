@@ -17,7 +17,7 @@ __version__ = VERSION
 DEBUG = 0
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
-   
+
 
 
 #--------------------------------------------------------------------------------------------------
@@ -94,20 +94,20 @@ class M3400(AdhocVisaDevice):
             #_chn = f"CHAN {self.dev_channel};"
             #_query = ";".join([_chn + p for p in msg.split(";")])
             _query = f"CHAN {self.dev_channel};{msg}"
-        super().send(_query, pause_after_write=10, timeout=timeout, retries=3)
+        super().send(_query, pause_after_write=15, timeout=timeout, retries=3)
 
     def request(self, msg: str, timeout: int = 3000) -> str:
         if (self.dev_channel > 0):
             _query = f"CHAN {self.dev_channel};{msg}"
-        return super().request(_query, pause_after_write=10, timeout=timeout, retries=3).strip()
+        return super().request(_query, pause_after_write=30, timeout=timeout, retries=3).strip()
 
     #----------------------------------------------------------------------------------------------
 
-    def initialize_device(self) -> None:        
+    def initialize_device(self) -> None:
         self.send("SYST:REM")     # set remote control ON
         #self.send("OFF:VOLT CONST")  # CONST or ZERO -> for CC priority mode
         #self.send("FUNC:MODE FIX")   # FIX, LIST, BATT, BEM
-        self.send("SENS:STAT 1")  # set sense state ON        
+        self.send("SENS:STAT 1")  # set sense state ON
         self.send("OUTP 0")       # set OUTPUT OFF
         sleep(0.25)
 
@@ -166,7 +166,7 @@ class M3400(AdhocVisaDevice):
     def get_voltage(self) -> float:
         """
         This command queries the present measured voltage.
-    
+
         Returns:
             float: VDC
         """
@@ -192,7 +192,7 @@ class M3400(AdhocVisaDevice):
         """
         This command queries the present voltage measurement, current
         measurement and power measurement.
-     
+
         Returns:
             list[5], float:  voltage, current, power, amp-hour, watt-hour
         """
@@ -228,7 +228,7 @@ class M3400(AdhocVisaDevice):
     #         int: state, 1 - On, 0 - Off
     #     """
     #     return int(self.request("OUTP?"))
-    
+
 
     # def set_sense_state(self, state: int) -> None:
     #     """
@@ -236,13 +236,13 @@ class M3400(AdhocVisaDevice):
     #     IT M3400 devices.
 
     #     Args:
-    #         state (int): state: int 1|0 
+    #         state (int): state: int 1|0
 
     #     Raises:
     #         ValueError: invalid parameters
     #     """
     #     # trick to use function in NI Teststand
-        
+
     #     self.send(f"SENS:STAT {1 if int(state) > 0 else 0}")
     #     # _s = 1 if int(state) > 0 else 0
     #     #r = self.request(f"SENS:STAT {_s}; STAT?")
@@ -283,7 +283,7 @@ class M3400(AdhocVisaDevice):
             curr (float): current 'X.XXX' Amp
         """
         self.send(f"CURR {curr:0.3f}")
-        
+
 
     # def get_current_rounded(self, ndigits: int = 3) -> float:
     #     return round(self.get_current(), ndigits=int(ndigits))
@@ -458,7 +458,7 @@ class M3400(AdhocVisaDevice):
         """
         self.send(f"VOLT {volt:0.2f}")
 
-        
+
     # #[SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+>
     # def get_voltage(self) -> float:
     #     """
@@ -631,7 +631,7 @@ class M3400(AdhocVisaDevice):
         #self._helper_wait_for_result("FUNC?", [str(func)])
         return True
 
-        
+
     def configure_current_rise_times(self, pos: float| str = "MIN", neg: float | str = "MIN"):
         self.send(f"CURRENT:SLEW:NEG {neg}")
         self.send(f"CURRENT:SLEW:POS {pos}")
@@ -642,7 +642,7 @@ class M3400(AdhocVisaDevice):
 
 
     def configure_sink(self, current: float, resistance: float | None,
-                       current_limit: float, voltage_limit_high: float, 
+                       current_limit: float, voltage_limit_high: float,
                        power_limit: float, set_output: bool = False) -> None:
         if self.last_mode != "CURR":
             self.set_output_state(0)  # make sure output is OFF
@@ -650,14 +650,14 @@ class M3400(AdhocVisaDevice):
         self.send(f"POW:LIM:NEG {-abs(power_limit):0.2f}")
         self.send(f"POW:LIM:POS 0.0") # always fixed!
         #self.send(f"CURR:LIM:NEG {-abs(current_limit*1.1):0.3f}")
-        #self.send(f"CURR:LIM:POS 0.0") # always fixed!        
+        #self.send(f"CURR:LIM:POS 0.0") # always fixed!
         self.send(f"VOLT:LIM:LOW 0.0") # always fixed!
         self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
         #self.send(f"VOLT {voltage_limit_high:0.2f}")
         self.send(f"CURR {-abs(current):0.3f}")
         if resistance is not None:
             self.send(f"SINK:RES {resistance:0.3f}")
-            self.send("SINK:RES:STATE 1")            
+            self.send("SINK:RES:STATE 1")
         else:
             self.send("SINK:RES:STATE 0")
             #self.send(f"CURR {-abs(current):0.3f}")
@@ -675,7 +675,7 @@ class M3400(AdhocVisaDevice):
         self.send(f"VOLT:LIM:HIGH {voltage:0.2f}")
         #self.send(f"CURR {abs(current_limit):0.3f}")
         self.send(f"VOLT {voltage:0.2f}")
-        self.send("SINK:RES:STATE 0")       
+        self.send("SINK:RES:STATE 0")
         self.set_output_state(1 if set_output else 0)
 
 
@@ -711,12 +711,12 @@ class M3900(M3400):
             #_chn = f"CHAN {self.dev_channel};"
             #_query = ";".join([_chn + p for p in msg.split(";")])
             _query = f"CHAN {self.dev_channel};{msg}"
-        super().send(_query, pause_after_write=10, timeout=timeout, retries=3)
+        super().send(_query, pause_after_write=15, timeout=timeout, retries=3)
 
     def request(self, msg: str, timeout: int = 3000) -> str:
         if (self.dev_channel > 0):
             _query = f"CHAN {self.dev_channel};{msg}"
-        return super().request(_query, pause_after_write=10, timeout=timeout, retries=3).strip()
+        return super().request(_query, pause_after_write=30, timeout=timeout, retries=3).strip()
 
     #----------------------------------------------------------------------------------------------
     # common function repeated as trampoline for TestStand only :-(
@@ -843,9 +843,9 @@ class M3900(M3400):
         if self.last_mode != "CURR":
             self.set_output_state(0)  # make sure output is OFF
         self.set_function("CURR")  # CC priority
-               
 
-    def configure_charge_mode(self, current: float, voltage_limit_high: float, voltage_limit_low: float, 
+
+    def configure_charge_mode(self, current: float, voltage_limit_high: float, voltage_limit_low: float,
                               power_limit: float, set_output: bool = False) -> None:
         """
         Use to switch on battery charging mode. CC mode.
@@ -853,22 +853,22 @@ class M3900(M3400):
         """
         if self.last_mode != "CURR":
             self.set_output_state(0)            # make sure output is OFF
-        self.set_function("CURR")               # CC priority     
+        self.set_function("CURR")               # CC priority
         self.send(f"POW:LIM:NEG {(-1)*power_limit:0.2f}")
         self.send(f"POW:LIM:POS {power_limit:0.2f}")
 
         # DO NOT use current limits in CC mode. Causes an internal error of the M3900
         #self.send(f"CURR:LIM:NEG {0.0:06.3f}")
-        #self.send(f"CURR:LIM:POS {current_limit:06.3f}") 
-               
-        self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}") 
+        #self.send(f"CURR:LIM:POS {current_limit:06.3f}")
+
+        self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}")
         self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
-        self.send(f"CURR {current:0.2f}") 
+        self.send(f"CURR {current:0.2f}")
         self.send("SINK:RES:STATE 0")
         self.set_output_state(1 if set_output else 0)
 
 
-    def configure_discharge_mode(self, current: float,  voltage_limit_high: float, voltage_limit_low: float, 
+    def configure_discharge_mode(self, current: float,  voltage_limit_high: float, voltage_limit_low: float,
                                  power_limit: float, set_output: bool = False) -> None:
         """
         Use to switch on battery discharging mode. CC mode.
@@ -876,21 +876,21 @@ class M3900(M3400):
         """
         if self.last_mode != "CURR":
             self.set_output_state(0)            # make sure output is OFF
-        self.set_function("CURR")               # CC priority     
+        self.set_function("CURR")               # CC priority
         self.send(f"POW:LIM:NEG {power_limit:0.2f}")
         self.send(f"POW:LIM:POS {0.0:0.2f}")
 
         # DO NOT use current limits in CC mode. Causes an internal error of the M3900
         #self.send(f"CURR:LIM:NEG {current_limit:0.2f}")
-        #self.send(f"CURR:LIM:POS {0.0:0.2f}") 
-        #       
+        #self.send(f"CURR:LIM:POS {0.0:0.2f}")
+        #
         self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}")
         self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
-        self.send(f"CURR {current:0.2f}") 
+        self.send(f"CURR {current:0.2f}")
         self.send("SINK:RES:STATE 0")
         self.set_output_state(1 if set_output else 0)
 
-    def configure_wake_up_mode(self, current: float, voltage_limit_high: float, voltage_limit_low: float,  
+    def configure_wake_up_mode(self, current: float, voltage_limit_high: float, voltage_limit_low: float,
                                power_limit: float, set_output: bool = False) -> None:
         """
         Use to wake up bq40z50 or another bq chip. CV mode.
@@ -902,14 +902,14 @@ class M3900(M3400):
         self.send("POW:LIM:NEG " + f"{(-1)*power_limit:0.2f}")
         self.send("POW:LIM:POS " + f"{power_limit:0.2f}")
 
-        # DO NOT use current limits in CC mode. Causes an internal error of the M3900       
+        # DO NOT use current limits in CC mode. Causes an internal error of the M3900
         #self.send("CURR:LIM:NEG " + f"{(-1)*current_limit:0.2f}")
-        #self.send("CURR:LIM:POS " + f"{current_limit:0.2f}")  
-        #        
-        self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}") 
+        #self.send("CURR:LIM:POS " + f"{current_limit:0.2f}")
+        #
+        self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}")
         self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
         param = f"{current:0.2f}"
-        self.send(f"CURR " + param) 
+        self.send(f"CURR " + param)
         self.send("SINK:RES:STATE 0")
         self.set_output_state(1 if set_output else 0)
 
