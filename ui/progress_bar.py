@@ -29,19 +29,15 @@ class ProgressWindow:
             pass
 
         self._value = 0
-        ROOT = tkinter.Tk()
-        ROOT.withdraw()  # hide window
+        self.root = tkinter.Tk()
+        self.hide()  # hide window
         style = ttk.Style()
         #print(style.theme_names())
         style.theme_use("winnative")
-
         # Disable the Close Window Control Icon
-        ROOT.protocol("WM_DELETE_WINDOW", disable_event)
+        self.root.protocol("WM_DELETE_WINDOW", disable_event)
         # set App icon
-        ROOT.iconbitmap(Path(__file__).resolve().parent / "chip-icon.ico")
-
-        self.root = ROOT
-        self.hidden = None
+        self.root.iconbitmap(Path(__file__).resolve().parent / "chip-icon.ico")
         if color and color == "":
             color = None  # TestStand cannot transfer "None"
         if color:
@@ -77,18 +73,28 @@ class ProgressWindow:
 
     def hide(self):
         self.root.withdraw()  # hide window
-        self.hidden = True
+        self.hidden = 1
+
 
     def show(self):
-        self.root.update()
-        self.root.deiconify()
-        self.hidden = False
+        if self.hidden > 0:
+            self.root.deiconify()
+            self.hidden -= 1
+        self.root.update()        
 
+
+    def set_value_threshold(self, value: float, step_threshold: float = 5/100):
+        if ((value - self._value) > step_threshold) or (value >= self._value) or (value == 0):
+            self._value = value
+            self.progress.config(value=value)
+            self.update()
+ 
+    
     def set_value(self, value: float):
-        #if (value > (self._value*0.05)) or value >= self._value:
-        #    self._value = value
+        self._value = value
         self.progress.config(value=value)
         self.update()
+
 
     def update(self):
         self.root.update()

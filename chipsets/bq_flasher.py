@@ -1,7 +1,7 @@
 from typing import Union, Tuple, List
 import sys
 from pathlib import Path
-from time import sleep
+from time import sleep, perf_counter
 from rrc.smartbattery import Battery
 from rrc.chipsets import ChipsetTexasInstruments
 from rrc.ui.progress_bar import ProgressWindow
@@ -78,7 +78,7 @@ class BQStudioFileFlasher:
 
     #----------------------------------------------------------------------------------------------
 
-    def _print_progress_bar(self, value, max_value, label):
+    def _print_progress_bar(self, value, max_value, label: str = "Progress"):
         j = value / max_value
 
         def console():
@@ -91,10 +91,7 @@ class BQStudioFileFlasher:
             sys.stdout.flush()
 
         self._progress.set_value(j*100)
-        if self._progress.hidden:
-            self._progress.show()
-        else:
-            self._progress.update()
+        self._progress.show()
 
 
     def _handle_line(self, line: str, line_number: int) -> Tuple[bool, List[int]]:
@@ -159,13 +156,15 @@ class BQStudioFileFlasher:
             file.seek(0)
             line_number = 0
             _log.info(f"Line count: {line_count}")
+            if self._progress:
+                self._print_progress_bar(line_number, line_count)
             for current_line in file:
                 current_line = current_line.strip()
                 line_number += 1
 
                 # we can open the progress bar only here as we need to know the size 
-                if self._progress:
-                    self._print_progress_bar(line_number, line_count, "Progress")
+                #if self._progress:
+                #    self._print_progress_bar(line_number, line_count)                
 
                 if current_line.startswith(";"):
                     # Line is a comment
@@ -185,10 +184,14 @@ class BQStudioFileFlasher:
                         _log.error(
                             f"Error in line: {line_number}. Could not parse waiting time. Line is: \"{current_line}\"")
                         validation_result = False
+                    # hide the progress bar update in the wait times
+                    t0 = perf_counter()
                     if not is_file_validation:
-                        if time_ms < 25:
-                            continue
-                        sleep(time_ms / 1000.0)
+                        while perf_counter() - t0 < (time_ms / 1000):
+                            if self._progress:
+                                self._print_progress_bar(line_number, line_count)
+                            if time_ms < 25:  # cut this wait
+                                continue                   
                     continue
 
                 elif current_line.startswith("SWB:"):
@@ -312,7 +315,7 @@ class BQStudioFileFlasher:
                     if not is_file_validation:
                         validation_result = int(1)  # ???
                         break
-
+       
         self._progress.close()
         self._progress = None
 
@@ -390,21 +393,8 @@ if __name__ == "__main__":
     from rrc.chipsets.bq40z50 import BQ40Z50R2
 
     ## Initialize the logging
-    #logger_init(filename_base="local_log")  ## init root logger
     logger_init(filename_base=None)  ## init root logger
     _log = getLogger(__name__, DEBUG)
-
-    # i2c_port = I2CPort("192.168.1.56", 2101)
-    # busmux = BusMux(i2c_port, address=0x77)
-    # for i in range(1,9):
-    #     busmux.setChannel(i)
-    #     print(i2c_port.i2c_bus_scan())
-    # #busmux.setChannel(2)
-    # #busmaster = BusMaster(i2c_port)
-    # auto_muxed_i2cbus = I2CMuxedBus(i2c_port, busmux, 2)
-    # busmaster = BusMaster(auto_muxed_i2cbus)
-    # bat = BQ40Z50R2(busmaster)
-    # #print("BatteryStatus:", bat.battery_status())
 
     t1 = dt.now()
 
