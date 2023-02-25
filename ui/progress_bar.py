@@ -85,10 +85,10 @@ class ProgressWindow:
         self.hidden = False
 
     def set_value(self, value: float):
-        if (value > (self._value*0.05)) or value >= self._value:
-            self._value = value
-            self.progress.config(value=value)
-            self.update()
+        #if (value > (self._value*0.05)) or value >= self._value:
+        #    self._value = value
+        self.progress.config(value=value)
+        self.update()
 
     def update(self):
         self.root.update()

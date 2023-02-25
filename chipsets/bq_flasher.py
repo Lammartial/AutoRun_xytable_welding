@@ -91,8 +91,10 @@ class BQStudioFileFlasher:
             sys.stdout.flush()
 
         self._progress.set_value(j*100)
-        self._progress.show()
-        self._progress.update()
+        if self._progress.hidden:
+            self._progress.show()
+        else:
+            self._progress.update()
 
 
     def _handle_line(self, line: str, line_number: int) -> Tuple[bool, List[int]]:
