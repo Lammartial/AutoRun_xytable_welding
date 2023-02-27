@@ -1719,11 +1719,11 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Resets Black Box Recorder and Permanent Fail Data.
         """
         # Black Box Recorder reset
-        #self.manufacturer_access = 0x002A
-        dummy = self.read_manufacturer_block(command=0x002A, length=None)
+        self.manufacturer_access = 0x002A
+        #dummy = self.read_manufacturer_block(command=0x002A, length=None)
         # Permanent Fail Data Reset
-        #self.manufacturer_access = 0x0029
-        dummy = self.read_manufacturer_block(command=0x0029, length=None)
+        self.manufacturer_access = 0x0029
+        #dummy = self.read_manufacturer_block(command=0x0029, length=None)
     
     def check_no_errors(self) -> bool:
         """
