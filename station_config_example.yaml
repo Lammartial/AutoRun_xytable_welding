@@ -3,8 +3,8 @@
 #
 # DSP REST interface
 #
-dsp_api_base_url:  "http://127.0.0.1:8000"  # mockup on localhost
-#dsp_api_base_url:  "http://172.22.2.99:8000"  # mockup on sv-production
+#dsp_api_base_url:  "http://127.0.0.1:8000"  # mockup on localhost
+dsp_api_base_url:  "http://172.22.2.99:8000"  # mockup on sv-production
 #dsp_api_base_url:  "http://172.22.2.40:9925"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
 
 #
@@ -169,7 +169,7 @@ EOL_TEST:
 #------------------------------------------------------------------------------
 #  This is the resource for our POOR MAN's SPS to control the welding sequences
 #
-WELDER_SPS:
+CELL_WELDING:
   #dsp_api_base_url:  "http://172.22.2.40:9927"  # Orbis DSP REST API for PRE-ASSEMBLY / COREPACK_TEST
   test_sockets:
     "0":
