@@ -454,16 +454,16 @@ class ProcessSPS(multiprocessing.Process):
         """
         # 1. we need the station config
         try:
-            cfg = StationConfiguration("WELDER_SPS") #, filename=CONF_FILENAME_DEV)
+            cfg = StationConfiguration("CELL_WELDING") #, filename=CONF_FILENAME_DEV)
         except FileNotFoundError:
             # comfort for testing
-            cfg = StationConfiguration("WELDER_SPS", filename=CONF_FILENAME_DEV)
+            cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
         _, _station_id, _dsp_api_base_url, _line_id, _ = cfg.get_station_configuration()
         # 2. with station config we can request the part number from DSP
         print("Fetching part number from DSP...")
         dsp = DspInterface(_dsp_api_base_url, None)
-        _dsp_info = dsp.get_parameter_for_testrun("COREPACK_TEST", _station_id, _line_id, "0")
-        _part_number = _dsp_info["part_number"]
+        _dsp_info = dsp.get_parameter_for_testrun("CELL_WELDING", _station_id, _line_id, "0")
+        _part_number = _dsp_info["part_number"][1]
         # 3. with station config we can get the IP resource for the welder MODBUS
         _resources = cfg.get_resource_strings_for_socket(0)
         _controller_resource_str = _resources[0]
