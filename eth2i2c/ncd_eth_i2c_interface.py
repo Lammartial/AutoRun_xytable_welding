@@ -90,7 +90,8 @@ class I2CPort(I2CBase):
     def open(self) -> None:
         self.__connect_socket()
         self.__data_exchange = self.__ethernet_exchange_wrapper
-        self.self_test()  # raises if anything wrong
+        self.soft_reset()  # add to prevent any side effects from failed tests
+        self.self_test()   # raises if anything wrong
 
     def close(self) -> None:
         try:
