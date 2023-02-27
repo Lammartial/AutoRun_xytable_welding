@@ -774,7 +774,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             bytearray: data buffer
         """
         command = int(command)
-        length = int(length)
+        if (length is not None):
+            length = int(length)
         for i in range(int(max_retries)):
             self.manufacturer_block_access = command
             res = self.manufacturer_block_access
