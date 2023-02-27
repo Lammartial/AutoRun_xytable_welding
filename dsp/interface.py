@@ -1,3 +1,9 @@
+"""
+
+
+
+"""
+
 from typing import Tuple
 import json
 import requests
@@ -280,7 +286,8 @@ class DspInterface:
         d = self.get_parameter_for_testrun(test_type, station_id, int(line_id), int(test_socket))
         order = ["test_program_id", "part_number"]
         #order = ["test_program_id"]
-        return tuple([(d[field] if d[field] is not None else "") for field in order])
+        # expect test_program_id and part_number being tuples
+        return tuple([(d[field][1] if d[field][1] is not None else "") for field in order])
 
     #--------------------------------------------------------------------------------------------------
 
@@ -371,7 +378,7 @@ def test_teststand_interface(dsp: DspInterface, test_type: str, udi: str ):
         _log.info(f"SERIAL: {serial}")
 
     dsp.ts_send_result_for_testrun(
-        "A",               # result
+        "P",               # result
         datetime.utcnow().isoformat(),  # start_datetime e.g. 2022-12-24T17:28:23.382748
         3.465,             # execution_time
         udi,               # udi, scanned string
@@ -398,8 +405,9 @@ if __name__ == "__main__":
 
     #test_interface(dsp)
     test_teststand_interface(dsp, "CELLSTACK_TEST", "1CELL163512635")
-    #test_teststand_interface(dsp, "PCBA_TEST", "1PCBA163512635")
-    #test_teststand_interface(dsp, "COREPACK_TEST", "1CELL163512635,1PCBA163512635")
-    #test_teststand_interface(dsp, "EOL_TEST", "7")
+    test_teststand_interface(dsp, "PCBA_TEST", "1PCBA163512635")
+    test_teststand_interface(dsp, "COREPACK_TEST", "1CELL163512635,1PCBA163512635")
+    test_teststand_interface(dsp, "EOL_TEST", "7")
 
+    test_teststand_interface(dsp, "CELL_WELDING", "1CELL163512635")
 # END OF FILE

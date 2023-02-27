@@ -437,7 +437,7 @@ class SPSStateMachine(object):
 class ProcessSPS(multiprocessing.Process):
 
     def __init__(self, command_queue: multiprocessing.JoinableQueue, response_queue: multiprocessing.Queue) -> None:
-        super().__init__(self)
+        multiprocessing.Process.__init__(self)
         global DEBUG
         self._log = getLogger(__name__, DEBUG)
         self.command_queue = command_queue

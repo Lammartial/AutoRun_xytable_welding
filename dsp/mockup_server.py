@@ -14,7 +14,7 @@ Start with:
     uvicorn mockup_server:app --reload
 
 """
-
+from typing import List, Tuple
 import random
 import asyncio
 from fastapi import FastAPI, Response, Path, status
@@ -34,8 +34,8 @@ class Item(BaseModel):
     station_id: str                   # str: fixed by PC (e.g. PC name)
     line_id: str                      # str: fixed by PC / Network line
     test_socket: str                  # str: -> from TestStand PC before start of sequence, known by TestStand at that time only
-    test_program_id: str              # str: <- from MPI Server before start of sequence
-    part_number: str | None           # str -> from MPI Server before start of sequence
+    test_program_id: List[str]        # str: <- from MPI Server before start of sequence
+    part_number: List[str] | None     # str -> from MPI Server before start of sequence
     serial_number: str | None = None  # str: <- from MPI Server before start of sequence
     udi: str | None = None            # str: -> from TestStand PC scanned by user or read from the battery to start the sequence
                                       #         CELL_TEST & PCBA_TEST have one UDI;
@@ -61,6 +61,76 @@ MOCK_PARTNUMBER = {
         "pcba":           "411829-05",
     }
 }
+
+
+#
+# Parameters in the form key:value -> key:payload
+#  (z.B. “CT-SQ_2020B” mit dann der maximal 40-stelligen Payload in der PRT Description)
+#
+PART_INFORMATION = {
+    #
+    # RRC2020B
+    #
+    "RRC2020B": {
+        "CELL_TEST": {
+            # Cell Test PRT IDs
+            "sequence_id": ("CT-SQ_2020B", "412031_RRC2020B_Cell-Test_A"),
+            "part_number": ("CT-PN_2020B", "412031-16"),  # using the pre-assembly PN
+        },
+        "CELL_WELDING": {
+            # Cell Welding PRT IDs:
+            "sequence_id": ("CW-SQ_2020B", "A"),
+            "part_number": ("CW-PN_2020B", "412031-16"),  # using the pre-assembly PN
+        },
+        "PCBA_TEST": {
+            # PCBA Test PRT IDs:
+            "sequence_id": ("PT-SQ_2020B", "411828_RRC2020B_PCBA-Test_A"),
+            "part_number": ("PT-PN_2020B", "411828-05"),  # using the pcba part number PN
+        },
+        "COREPACK_TEST": {
+            # Core Pack Test PRT IDs:
+            "sequence_id": ("CP-SQ_2020B", "412031_RRC2020B_Corepack-Test_A"),
+            "part_number": ("CP-PN_2020B", "412031-16"),  # using the pre-assembly PN
+        },
+        "EOL_TEST": {
+            # Hard Pack (End-Of-Line) Test PRT IDs:
+            "sequence_id": ("HP-SQ_2020B", "100496_RRC2020B_EOL-Test_A"),
+            "part_number": ("HP-PN_2020B", "100496-17"),  # using the product number PN
+        }
+    },
+    #
+    # RRC2040B
+    #
+    "RRC2040B": {
+        "CELL_TEST": {
+            # Cell Test PRT IDs
+            "sequence_id": ("CT-SQ_2040B", "412036_RRC2040B_Cell-Test_A"),
+            "part_number": ("CT-PN_2040B", "412036-16"),
+        },
+        "CELL_WELDING": {
+            # Cell Welding PRT IDs:
+            "sequence_id": ("CW-SQ_2040B", "A"),
+            "part_number": ("CW-PN_2040B", "412036-16"),
+        },
+        "PCBA_TEST": {
+            # PCBA Test PRT IDs:
+            "sequence_id": ("PT-SQ_2040B", "411829_RRC2040B_PCBA-Test_A"),
+            "part_number": ("PT-PN_2040B", "411829-05"),
+        },
+        "COREPACK_TEST": {
+            # Core Pack Test PRT IDs:
+            "sequence_id": ("CP-SQ_2040B", "412036_RRC2040B_Corepack-Test_A"),
+            "part_number": ("CP-PN_2040B", "412036-16"),
+        },
+        "EOL_TEST": {
+            # Hard Pack (End-Of-Line) Test PRT IDs:
+            "sequence_id": ("HP-SQ_2040B", "100498_RRC2040B_EOL-Test_A"),
+            "part_number": ("HP-PN_2040B", "100498-17"),
+        }
+    }
+}
+
+
 
 
 @app.get("/GET_SERIAL_NUMBER_FOR_UDI", status_code=status.HTTP_200_OK)
@@ -120,7 +190,8 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
     # set the product to test for mockup: "RRC2040B" or "RRC2020B"
     #_product_name = "RRC2020B"
     _product_name = "RRC2040B"
-    _mock = MOCK_PARTNUMBER[_product_name]
+    #_mock = MOCK_PARTNUMBER[_product_name]
+    _mock = PART_INFORMATION[_product_name]
 
     # #_serial = random.randint(1, 47236513)
     # async with lock_next_serial:
@@ -130,30 +201,34 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
 
     # _serial = None
     match test_type:
-        case "PCBA_TEST":
-            _testprogram = f"{_mock['pcba'].split('-')[0]}_{_product_name}_PCBA-Test_A"
-            _part_number = _mock["pcba"]
         case "CELLSTACK_TEST":
-            _testprogram = f"{_product_name}_Cell-Test_A"
-            _part_number = f"{_product_name}_CELLSTACK"
+            #_testprogram = f"{_product_name}_Cell-Test_A"
+            #_part_number = f"{_product_name}_CELLSTACK"
+            _fhm = _mock["CELL_TEST"]
+        case "CELL_TEST":
+            _fhm = _mock["CELL_TEST"]
+        case "PCBA_TEST":
+            _fhm = _mock["PCBA_TEST"]
         case "COREPACK_TEST":
-            _testprogram = f"{_mock['pre_assembly'].split('-')[0]}_{_product_name}_Corepack-Test_A"
-            _part_number = _mock["pre_assembly"]
-            #_serial = _locked_serial
+            _fhm = _mock["COREPACK_TEST"]
         case "EOL_TEST":
-            _testprogram = f"{_mock['product'].split('-')[0]}_{_product_name}_EOL-Test_A"
-            _part_number = _mock["product"]
-            #_serial = _locked_serial
+            _fhm = _mock["EOL_TEST"]
+        case "HARDPACK_TEST":
+            _fhm = _mock["EOL_TEST"]
+        case "CELL_WELDING":
+            _fhm = _mock["CELL_WELDING"]
         case _:
-            _testprogram = "UNKNOWW"
-            _part_number = None
+            _fhm = {
+                "sequence_id": ("FULLY", "UNKNOWW"),
+                "part_number": (None, None)
+            }
     return {
         "test_type": test_type,
         "station_id": station_id,
         "line_id": line_id,
         "test_socket": test_socket,
-        "test_program_id": _testprogram,
-        "part_number": _part_number,
+        "test_program_id": _fhm["sequence_id"],  # tuple
+        "part_number": _fhm["part_number"],      # tuple
         #"serial_number": _serial,
         #"serial_number": "",
     }
