@@ -1735,16 +1735,14 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         no_errs = True
         # Safety status
         
-        #self.manufacturer_access = 0x0051
-        #buf = self.manufacturer_data
-        buf = self.read_manufacturer_block(command=0x0051, length=None)
+        self.manufacturer_access = 0x0051
+        buf = self.manufacturer_data
         for i in range(len(buf)):
             if (buf[i] != 0):
                 no_errs = False
         # PF status
-        #self.manufacturer_access = 0x0053
-        #buf = self.manufacturer_data
-        buf = self.read_manufacturer_block(command=0x0053, length=None)
+        self.manufacturer_access = 0x0053
+        buf = self.manufacturer_data
         for i in range(len(buf)):
             if (buf[i] != 0):
                 no_errs = False
