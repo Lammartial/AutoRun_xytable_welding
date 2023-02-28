@@ -8,23 +8,22 @@ class BatteryPopup:
     def __init__(self, message: str, title: str = "Check for Battery presence", textcolor: str = "darkblue", 
                  fontsize: int = 18, width: int = 375, height: int = 275, 
                  show: bool = True, test_socket: int = -1) -> None:
-        ROOT = Tk()
-        ROOT.withdraw()  # hide window
+        
+        def disable_event():
+            pass
+
+        self.root = Tk()
+        self.hide()  # hide window
         self.hidden = True
         style = ttk.Style()
         #print(style.theme_names())
         style.theme_use("winnative")
-
-        def disable_event():
-            pass
-
+        
         # Disable the Close Window Control Icon
-        ROOT.protocol("WM_DELETE_WINDOW", disable_event)
+        self.root.protocol("WM_DELETE_WINDOW", disable_event)
         # set App icon
-        ROOT.iconbitmap(Path(__file__).resolve().parent / "battery-icon.ico")
-        
-        self.root = ROOT
-        
+        self.root.iconbitmap(Path(__file__).resolve().parent / "battery-icon.ico")
+
         #self.popup = tkinter.Toplevel(self.root)
         #self.popup.wm_title("!")
         #self.popup.tkraise(self.root)  
@@ -51,13 +50,13 @@ class BatteryPopup:
 
     def hide(self):
         self.root.withdraw()  # hide window
-        self.hidden = True
+        self.hidden = 1
 
     def show(self):
+        if self.hidden > 0:
+            self.root.deiconify()
+            self.hidden = 0
         self.root.update()
-        self.root.deiconify()
-        self.root.update()
-        self.hidden = False
 
     # Note: for TestStand access its better to have get/set functions intead of property/setter
     def get_text(self) -> str:

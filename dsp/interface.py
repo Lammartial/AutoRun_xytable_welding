@@ -159,7 +159,7 @@ class DspInterface:
         #    "test_program_id": a valid subsequence name which will be called,
         #    "part_number": a valid part number matching the test_program_id,
         # }
-        if response.status_code != 200:
+        if response.status_code not in [200, 202]:
             raise DSPInterfaceError(f"DSP controller error, cannot get parameters for test run {response.status_code}: {response.json()}")
         runparams = response.json()
         _log.debug(runparams)
