@@ -170,7 +170,7 @@ EOL_TEST:
 #  This is the resource for our POOR MAN's SPS to control the welding sequences
 #
 CELL_WELDING:
-  #dsp_api_base_url:  "http://172.22.2.40:9927"  # Orbis DSP REST API for PRE-ASSEMBLY / COREPACK_TEST
+  #dsp_api_base_url:  "http://172.22.2.40:9929"  # Orbis DSP REST API for PRE-ASSEMBLY / COREPACK_TEST
   test_sockets:
     "0":
       resource_strings:

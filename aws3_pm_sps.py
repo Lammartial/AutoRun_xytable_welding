@@ -279,6 +279,7 @@ class SPSStates(Enum):
     FETCH_NEXT_PROGRAM = 5
     WAIT_READY_TO_SET_PROGRAM = 6
     SET_PROGRAM_ON_MACHINE = 7
+    LOCK_MACHINE = 8
 
 
 class SPSStateMachine(object):
@@ -350,9 +351,16 @@ class SPSStateMachine(object):
         self.next_program_no = self.program_sequence[self.sequence_pos]
         self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
 
+    def locked_machine(self) -> None:
+        self.set_state(SPSStates.LOCK_MACHINE)
+
+    def unlock_machine(self) -> None:
+        self.set_state(SPSStates.WAIT_READY_TO_INIT)
+
     def do_one_loop(self):
         try:
             match self.state:
+
                 case SPSStates.WAIT_READY_TO_INIT:
                     if self._machine_locked:
                         self.dev.unlock_machine_step()
@@ -433,6 +441,18 @@ class SPSStateMachine(object):
                     self._machine_locked = False
                     self.set_state(SPSStates.SHOW_PROGRAM_STEP)
 
+                case SPSStates.LOCK_MACHINE:
+                    if self.dev.is_machine_ready():
+                        if not self._machine_locked:
+                            self.dev.lock_machine_step()
+                            self._machine_locked = False
+                            #
+                            # wait for being lock-released from OUTSIDE
+                            # by switching state to SPSStates.WAIT_READY_TO_INIT
+                            #
+                    else:
+                        sleep(self._throttle_pause)  # throttle polling
+
                 case other:
                     self.set_state(SPSStates.WAIT_READY_TO_INIT)
 
@@ -480,7 +500,7 @@ class ProcessSPS(mp.Process):
         print("Fetching part number from DSP...")
         dsp = DspInterface(_dsp_api_base_url, None)
         _dsp_info = dsp.get_parameter_for_testrun("CELL_WELDING", _station_id, _line_id, "0")
-        _part_number = _dsp_info["part_number"][1]
+        _part_number = _dsp_info["part_number"]
         # 3. with station config we can get the IP resource for the welder MODBUS
         _resources = cfg.get_resource_strings_for_socket(0)
         _controller_resource_str = _resources[0]

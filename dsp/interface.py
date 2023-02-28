@@ -198,7 +198,8 @@ class DspInterface:
         # we send only first part of a combined UDI to get the serial number
         #  "1CELL1296237,1PCBA2713282" -> "1CELL1296237"
         # but we may not store it back into our self.api object
-        _udi_cleaned = udi.split(",")[0]
+        #_udi_cleaned = udi.split(",")[0]
+        _udi_cleaned = udi
         response = requests.get(f"{self.API_BASE_URL}/GET_SERIAL_NUMBER_FOR_UDI",
                                 params= {"test_type": test_type, "station_id": station_id, "line_id": line_id, "test_socket": test_socket, "udi": _udi_cleaned})
         # expects JSON of
@@ -327,7 +328,7 @@ class DspInterface:
                                    udi: str, serial_number: str) -> None:
         self.api["result"] = result[:1].upper()  # only first letter
         self.api["start_datetime"] = start_datetime
-        self.api["execution_time"] = str(execution_time)
+        self.api["execution_time"] = float(execution_time)
         self.api["udi"] = udi
         self.api["serial_number"] = serial_number
         result_list = self.load_result_list_from_json()
@@ -414,17 +415,17 @@ if __name__ == "__main__":
 
     # define the route
     #api_url = "https://production-network.rrc/testcontrol"
-    API_URL = "http://127.0.0.1:8000"
-    #API_URL = "http://172.22.2.40:9925"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
+    #API_URL = "http://127.0.0.1:8000"
+    API_URL = "http://172.22.2.40:9925"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
 
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
     dsp = DspInterface(API_URL, None)
 
     #test_interface(dsp)
-    test_teststand_interface(dsp, "CELLSTACK_TEST", "1CELL163512635")
-    test_teststand_interface(dsp, "PCBA_TEST", "1PCBA163512635")
+    #test_teststand_interface(dsp, "CELLSTACK_TEST", "1CELL163512635")
+    #test_teststand_interface(dsp, "PCBA_TEST", "1PCBA163512635")
     test_teststand_interface(dsp, "COREPACK_TEST", "1CELL163512635,1PCBA163512635")
-    test_teststand_interface(dsp, "EOL_TEST", "7")
+    #test_teststand_interface(dsp, "EOL_TEST", "7")
 
-    test_teststand_interface(dsp, "CELL_WELDING", "1CELL163512635")
+    #test_teststand_interface(dsp, "CELL_WELDING", "1CELL163512635")
 # END OF FILE
