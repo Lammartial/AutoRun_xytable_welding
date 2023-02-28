@@ -6,6 +6,7 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from time import sleep, perf_counter
 from pathlib import Path
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from rrc.modbus.aws3 import AWS3Modbus, AWS3Modbus_DUMMY
 from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
@@ -23,13 +24,33 @@ DEBUG = 0   # set to 0 for production
 from rrc.custom_logging import getLogger
 # --------------------------------------------------------------------------- #
 
-ENABLE_UDI_SCAN = 0
+ENABLE_UDI_SCAN = 0  # is being overwritten by argument
 
+
+#--------------------------------------------------------------------------------------------------
+
+import random
+import string
+
+def get_random_letter_string(length):
+    # choose from all lowercase letter
+    letters = string.ascii_lowercase
+    numbers = string.digits
+    return "".join(random.choice(letters) for i in range(length))
+
+def get_random_digits_string(length):
+    # choose from all digits
+    numbers = string.digits
+    return "".join(random.choice(numbers) for i in range(length))
+
+
+#--------------------------------------------------------------------------------------------------
 
 class WindowUI(object):
 
     def __init__(self, command_queue: mp.JoinableQueue, response_queue: mp.Queue, title: str = "POOR MAN'S SPS"):
         global DEBUG, ENABLE_UDI_SCAN
+
         self._log = getLogger(__name__, DEBUG)
         self.q_cmd = command_queue
         self.q_res = response_queue
@@ -38,7 +59,7 @@ class WindowUI(object):
         # Create the Tk root and mainframe.
         self.root = tk.Tk()
 
-        self.UDI_SCAN_TEXT = "--- SCAN NEXT UDI ---"
+        self.UDI_SCAN_TEXT = "SCAN NEXT UDI"
         self.var_label_counter = tk.StringVar(self.root, "")
         self.var_label_program = tk.StringVar(self.root, "")
         self.var_label_part_number = tk.StringVar(self.root, "")
@@ -57,90 +78,116 @@ class WindowUI(object):
         self.root.tk.call("set_theme", "light")
         style = ttk.Style()
         #style.theme_use("alt")
-        # Set a minsize for the window, and place it in the middle
-        self.root.minsize(self.root.winfo_width(), self.root.winfo_height())
+
         # for some reasonm the winfo_width() and _heihgt() do not show correct values here
         #_w = root.winfo_width()
         #_h = root.winfo_height()
+        _padall = 8
         _w = 300  # width set manually
         _h = self.root.winfo_screenheight() #480  # height set manually
+        # Set a minsize for the window
+        self.root.minsize(self.root.winfo_width(), self.root.winfo_height())
+        self.root.minsize(_w, int(_h/2))
         #_x = int((self.root.winfo_screenwidth() / 2) - (_w / 2))
-        _x = int(self.root.winfo_screenwidth() - _w)
+        _x = int(self.root.winfo_screenwidth() - _w - _padall)
         _y = int((self.root.winfo_screenheight() / 2) - (_h / 2))
         self.root.geometry(f"{_w}x{_h}+{_x}+{_y}")
         #
         # setup widgets
         #
-        self.mainframe = ttk.Frame(self.root, pad=(15,15,15,15), takefocus=True)
-        self.mainframe.pack(fill=tk.BOTH)
+        #self.mainframe = self.root
+        self.mainframe = ttk.Frame(self.root, pad=(_padall,_padall,_padall,_padall), takefocus=True)
+
+        #self.mainframe.pack(fill=tk.BOTH)
+        # configure the column width equally to center everything nicely
+
+        self.mainframe.grid(row=0, column=0, sticky="NESW")
+        #self.mainframe.grid_rowconfigure(0, weight=1)
+        self.mainframe.grid_columnconfigure(0, weight=1)
+        self.mainframe.grid_columnconfigure(1, weight=1)
+        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
+
+
         # Labels
 
+        _colspan = 2
         #_row = next(row_itr)
         label_1 = ttk.Label(self.mainframe,text="PART NUMBER",justify="center", font=("-size", 10))
-        label_1.grid(row=next(row_itr), column=0, columnspan=2 , ipady=5)
+        label_1.grid(row=next(row_itr), column=0, columnspan=_colspan , ipady=5)
         label_2 = ttk.Label(self.mainframe,
                             textvariable=self.var_label_part_number,
                             justify="center", font=("-size", 16, "-weight", "bold"))
-        label_2.grid(row=next(row_itr), column=0, columnspan=2, ipady=5)
+        label_2.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
         # label_s = ttk.Label(self.mainframe,
         #                     textvariable=self.var_label_sequence,
         #                     justify="center", font=("-size", 10, "-weight", "bold"))
         # label_s.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
         if ENABLE_UDI_SCAN:
-            label_udi = ttk.Label(self.mainframe,
-                                textvariable=self.var_label_udi,
-                                justify="center", font=("-size", 12, "-weight", "bold"))
-            label_udi.grid(row=next(row_itr), column=0, columnspan=2, ipady=20)
+            self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center",
+                                       font=("-size", 14, "-weight", "bold"), background="blue", foreground="white")
+            self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=50, sticky="ew")
+        else:
+            self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center", font=("-size", 12))
+            self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5, sticky="ew")
+        # if ENABLE_UDI_SCAN:
+        #     self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=50, sticky="ew")
+        # else:
+        #     self.label_udi.grid_forget()
 
         #_row = next(row_itr)
         label3 = ttk.Label(self.mainframe,text="SEQUENCE POS",justify="center", font=("-size", 10))
-        label3.grid(row=next(row_itr), column=0, columnspan=2, ipady=5)
+        label3.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
         label4 = ttk.Label(self.mainframe,
                             textvariable=self.var_label_counter,
                             justify="center", font=("-size", 20, "-weight", "bold"))
-        label4.grid(row=next(row_itr), column=0, columnspan=2, ipady=5)
+        label4.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
 
         label5 = ttk.Label(self.mainframe,text="PROGRAM",justify="center",font=("-size", 18))
-        label5.grid(row=next(row_itr), column=0, columnspan=2, ipady=10)
+        label5.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
         label6 = ttk.Label(self.mainframe,
             textvariable=self.var_label_program,
             justify="center", font=("-size", 32, "-weight", "bold"))
-        label6.grid(row=next(row_itr), column=0, columnspan=2, ipady=10)
-        # Buttons
-        _row = next(row_itr)
-        style.configure('B1.TButton', foreground="red", background='#232323')
-        style.map('B1.TButton', background=[("active","#ff0000")])
-        style.configure('B2.TButton', foreground="green", background='#232323')
-        style.map('B2.TButton', background=[("active","#ff0000")])
-        #style.configure('TButton', background = 'red', foreground = 'green', width = 20, borderwidth=1, focusthickness=3, focuscolor='none')
+        label6.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
 
-        step_back_button = ttk.Button(self.mainframe, text="STEP BACK",  style="B1.TButton",
-            command=lambda: self.q_cmd.put({"move_counter": -1}))
-        step_back_button.grid(row=_row, column=0, ipady=50, ipadx=20, sticky=tk.NSEW)
+        if not ENABLE_UDI_SCAN:
+            # Buttons
+            _row = next(row_itr)
+            style.configure('B1.TButton', foreground="red", background='#232323')
+            style.map('B1.TButton', background=[("active","#ff0000")])
+            style.configure('B2.TButton', foreground="green", background='#232323')
+            style.map('B2.TButton', background=[("active","#ff0000")])
+            #style.configure('TButton', background = 'red', foreground = 'green', width = 20, borderwidth=1, focusthickness=3, focuscolor='none')
 
-        step_forward_button = ttk.Button(self.mainframe, text="STEP FORWARD",  style="B2.TButton",
-            command=lambda: self.q_cmd.put({"move_counter": +1}))
-        step_forward_button.grid(row=_row, column=1, ipady=50, ipadx=5, sticky=tk.NSEW)
+            step_back_button = ttk.Button(self.mainframe, text="STEP BACK",  style="B1.TButton",
+                command=lambda: self.q_cmd.put({"move_counter": -1}))
+            step_back_button.grid(row=_row, column=0, ipady=50, ipadx=20, sticky=tk.NSEW)
 
-        # separator = ttk.Separator(self.mainframe)
-        # separator.grid(row=next(row_itr), column=0, columnspan=2, padx=(20, 10), pady=10, sticky="ew")
-        reset_seq_button = ttk.Button(self.mainframe, text="RESET SEQUENCE",
-            command=lambda: self.q_cmd.put({"reset_counter": 0}))
-        #ok_button.bind("<Return>", _accept_udi)
-        #ok_button.bind("<Key-Escape>", _cancel)
-        reset_seq_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, sticky=tk.NSEW)
-        #ok_button.grid_forget()
+            step_forward_button = ttk.Button(self.mainframe, text="STEP FORWARD",  style="B2.TButton",
+                command=lambda: self.q_cmd.put({"move_counter": +1}))
+            step_forward_button.grid(row=_row, column=1, ipady=50, ipadx=5, sticky=tk.NSEW)
+
+            # separator = ttk.Separator(self.mainframe)
+            # separator.grid(row=next(row_itr), column=0, columnspan=2, padx=(20, 10), pady=10, sticky="ew")
+            reset_seq_button = ttk.Button(self.mainframe, text="RESET SEQUENCE",
+                command=lambda: self.q_cmd.put({"reset_counter": 0}))
+            #ok_button.bind("<Return>", _accept_udi)
+            #ok_button.bind("<Key-Escape>", _cancel)
+            reset_seq_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, sticky=tk.NSEW)
+            #ok_button.grid_forget()
 
 
         # Some more information labels
         _row = next(row_itr)
-        #label_10 = ttk.Label(self.mainframe,text="Resource",justify="left", font=("-size", 10))
-        #label_10.grid(row=_row, column=0,  ipadx=10, ipady=10)
-        label_11 = ttk.Label(self.mainframe, textvariable=self.var_label_resource_str, font=("-size", 8))
-        label_11.grid(row=_row, column=0, ipady=10)
-        label_12 = ttk.Label(self.mainframe, textvariable=self.var_label_sequence_revision, font=("-size", 8))
-        label_12.grid(row=_row, column=1, ipady=10)
+        #label_10 = ttk.Label(self.mainframe, textvariable=self.var_label_sequence, font=("-size", 8))
+        #label_10.grid(row=_row, column=0,  ipady=10)
+        label_10 = ttk.Label(self.mainframe, anchor=tk.CENTER, text="Sequence Rev. ", font=("-size", 8))
+        label_10.grid(row=_row, column=0,  ipady=10, sticky="e")
+        label_11 = ttk.Label(self.mainframe, anchor=tk.CENTER, textvariable=self.var_label_sequence_revision, font=("-size", 8))
+        label_11.grid(row=_row, column=1, ipady=10, sticky="w")
 
+        label_12 = ttk.Label(self.mainframe, textvariable=self.var_label_resource_str, font=("-size", 8))
+        label_12.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
 
         # Sizegrip
         #sizegrip = ttk.Sizegrip(self.root)
@@ -156,7 +203,9 @@ class WindowUI(object):
         self.root.update()
         self.root.deiconify()
         self.root.focus_force()  # this is to activate the window again (important after programmatically closed)
-        reset_seq_button.focus_set()
+
+        if not ENABLE_UDI_SCAN:
+            reset_seq_button.focus_set()
 
 
     def process_command_queue(self):
@@ -182,18 +231,22 @@ class WindowUI(object):
                     #print("UPDATE SEQUENCE")
                     _do_update = True
                 if "counter" in a:
-                    self.var_label_counter.set(a["counter"])
+                    _txt = a["counter"]
+                    self.var_label_counter.set(_txt if _txt != -1 else "")
                     #print("UPDATE COUNTER")
                     _do_update = True
                 if "program" in a:
-                    self.var_label_program.set(a["program"])
+                    _txt = a["program"]
+                    self.var_label_program.set(_txt if _txt != -1 else "")
                     #print("UPDATE PROGRAM")
                     _do_update = True
                 if "udi_scanned" in a:
+                    self.label_udi.config(background="gray", foreground="black")
                     self.var_label_udi.set(a["udi_scanned"])
                     print("UPDATE UDI")
                     _do_update = True
                 if "reset_udi" in a:
+                    self.label_udi.config(background="blue", foreground="white")
                     self.var_label_udi.set(self.UDI_SCAN_TEXT)
                     print("RESET UDI")
                     _do_update = True
@@ -296,12 +349,12 @@ class SPSStateMachine(object):
         self._machine_locked = None
         self._throttle_pause = 0.055
         if isinstance(dev, str):
-            try:
-                self.dev = AWS3Modbus(dev)
-            except Exception as ex:
-                print(ex)
-                print("Using dummy AWS3 Modbus driver for test purposes.")
-                self.dev = AWS3Modbus_DUMMY(dev)  # this starts a simulation to support testing
+            # try:
+            #     self.dev = AWS3Modbus(dev)
+            # except Exception as ex:
+            #     print(ex)
+            print("Using dummy AWS3 Modbus driver for test purposes.")
+            self.dev = AWS3Modbus_DUMMY(dev)  # this starts a simulation to support testing
         else:
             self.dev = dev
         print(f"Poor man's SPS machine: {self.dev.machine_name}, at {repr(self.dev)}")
@@ -565,8 +618,8 @@ class ProcessSPS(mp.Process):
                     _udi = cmd["udi_scanned"]
                     self.response_queue.put({"udi_scanned": _udi})
                     # need to reset the sequence
-                    SM.close()
-                    SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
+                    #SM.close()
+                    #SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
                     answer = "OK"
                 if "move_counter" in cmd:
                     if ENABLE_UDI_SCAN:
@@ -579,6 +632,8 @@ class ProcessSPS(mp.Process):
                                 else:
                                     answer = "OK"
                             else:
+
+
                                 answer = "SEQUENCE DONE"
                         else:
                             answer = "MSSING UDI"
@@ -641,21 +696,29 @@ class ProcessScanner(mp.Process):
 
         while True:
             _udi = None
-            try:
-                _udi = scanner.request(None, timeout=10.0)
-            except TimeoutError:
-                pass  # this is ok to keep the loop running
-            except Exception as ex:
-                # this is a real failure to stop this process
-                print(f"Cannot connect scanner {resource_str}: {ex}")
-                print(f"{proc_name}:End")
-                return
-            #sleep(10.0)
-            #_udi = "1UDI21312324234"
-            if _udi:
-                msg = {"udi_scanned": _udi}
-                #self.ui_queue.put(msg)  # this goes to the UI process
-                self.sps_queue.put(msg)   # this goes to the SPS process
+            # try:
+            #     _udi = scanner.request(None, timeout=10.0)
+            # except TimeoutError:
+            #     pass  # this is ok to keep the loop running
+            # except Exception as ex:
+            #     # this is a real failure to stop this process
+            #     print(f"Cannot connect scanner {resource_str}: {ex}")
+            #     print(f"{proc_name}:End")
+            #     return
+            # if _udi:
+            #     msg = {"udi_scanned": _udi}
+            #     #self.ui_queue.put(msg)  # this goes to the UI process
+            #     self.sps_queue.put(msg)   # this goes to the SPS process
+
+            # ********** Simulationsprofil *************
+            sleep(5.0)
+            _udi = "1CELL" + get_random_digits_string(12)
+            self.sps_queue.put({"udi_scanned": _udi})
+            for n in range(19):
+                sleep(0.5)
+                self.sps_queue.put({"move_counter": 1})
+            # *******************************************
+
         return
 
 
@@ -666,6 +729,12 @@ if __name__ == '__main__':
     from rrc.custom_logging import logger_init
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
+
+    parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--development", action="store_true", help="Activate development mode.")
+    args = parser.parse_args()
+
+    ENABLE_UDI_SCAN = 0 if args.development else 1
 
     p = None
     w = None
@@ -678,7 +747,7 @@ if __name__ == '__main__':
         p = ProcessSPS(q_cmd, q_res)
         # start UI in this process waiting for user input
         w = WindowUI(q_cmd, q_res)
-        if ENABLE_UDI_SCAN:
+        if ENABLE_UDI_SCAN or not ENABLE_UDI_SCAN:
             # start sub-process for scanner
             s = ProcessScanner(q_cmd, q_res)
             s.start()
