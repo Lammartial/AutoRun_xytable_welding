@@ -151,6 +151,7 @@ class BQStudioFileFlasher:
     def __process_file(self, is_file_validation: bool) -> bool:
         _log = getLogger(__name__, DEBUG)
         validation_result = True
+        result: bool = True
         with open(self.firmware_file, "r") as file:
             line_count = len(file.readlines())  # Get the number of line in the file. Only needed for the progress bar
             file.seek(0)
@@ -365,6 +366,22 @@ class BQStudioFileFlasher:
             _log.info(f"Battery name: {self.battery.device_name()[0]} is unsealed and in full access mode.")
             result = self.__process_file(is_file_validation=False)
             return result
+        else:
+            _log.error("No firmware file specified. Use the set_firmware_file() method to select a firmware file.")
+            return False
+        
+    def recover_fw_file(self) -> bool:
+        """Prepare the battery and program it with the given fw file.
+
+        Does NOT perform file validation.
+
+        Returns:
+            bool: Result of the fw programming.
+        """
+        result: bool = False 
+        _log = getLogger(__name__, DEBUG)
+        if self.firmware_file is not None:
+            return self.__process_file(is_file_validation=False)
         else:
             _log.error("No firmware file specified. Use the set_firmware_file() method to select a firmware file.")
             return False
