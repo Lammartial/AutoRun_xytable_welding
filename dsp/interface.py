@@ -304,7 +304,7 @@ class DspInterface:
         order = ["test_program_id", "part_number"]
         #order = ["test_program_id"]
         # expect test_program_id and part_number being tuples
-        return tuple([(d[field][1] if d[field][1] is not None else "") for field in order])
+        return tuple([(d[field] if d[field] is not None else "") for field in order])
 
     #--------------------------------------------------------------------------------------------------
 

@@ -34,8 +34,8 @@ class Item(BaseModel):
     station_id: str                   # str: fixed by PC (e.g. PC name)
     line_id: str                      # str: fixed by PC / Network line
     test_socket: str                  # str: -> from TestStand PC before start of sequence, known by TestStand at that time only
-    test_program_id: List[str]        # str: <- from MPI Server before start of sequence
-    part_number: List[str] | None     # str -> from MPI Server before start of sequence
+    test_program_id: str              # str: <- from MPI Server before start of sequence
+    part_number: str | None           # str -> from MPI Server before start of sequence
     serial_number: str | None = None  # str: <- from MPI Server before start of sequence
     udi: str | None = None            # str: -> from TestStand PC scanned by user or read from the battery to start the sequence
                                       #         CELL_TEST & PCBA_TEST have one UDI;
@@ -219,16 +219,16 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
             _fhm = _mock["CELL_WELDING"]
         case _:
             _fhm = {
-                "sequence_id": ("FULLY", "UNKNOWW"),
-                "part_number": (None, None)
+                "sequence_id": ("FULLY", "UNKNOWN"),
+                "part_number": ("REALLY", "UNKNOWN")
             }
     return {
         "test_type": test_type,
         "station_id": station_id,
         "line_id": line_id,
         "test_socket": test_socket,
-        "test_program_id": _fhm["sequence_id"],  # tuple
-        "part_number": _fhm["part_number"],      # tuple
+        "test_program_id": _fhm["sequence_id"][1],  # str
+        "part_number": _fhm["part_number"][1],      # str
         #"serial_number": _serial,
         #"serial_number": "",
     }
