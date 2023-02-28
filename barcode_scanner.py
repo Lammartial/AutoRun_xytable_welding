@@ -25,7 +25,6 @@ def create_barcode_scanner(resource_string: str) -> Eth2SerialDevice | SerialCom
         dev = SerialComportDevice(resource_string, termination="\r")  # COM port
     else:
         dev = Eth2SerialDevice(resource_string, termination="\r\n")   # socket port
-
     return dev
 
 #--------------------------------------------------------------------------------------------------

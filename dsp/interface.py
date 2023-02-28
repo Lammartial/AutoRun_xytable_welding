@@ -224,6 +224,23 @@ class DspInterface:
 
     #--------------------------------------------------------------------------------------------------
 
+    def send_udi_upfront(self, udi: str) -> None:
+        _log = getLogger(__name__, DEBUG)
+        data = {
+            "test_type": self.api.test_type,
+            "station_id": self.api.station_id,
+            "line_id": self.api.line_id,
+            "part_number": self.api.part_number,
+            "udi": udi
+        }
+        response = requests.post(f"{self.API_BASE_URL}/SEND_UDI", json=data)
+        _log.debug(response)
+        if response.status_code not in [200, 202]:
+            raise DSPInterfaceError(f"DSP controller error, cannot update UDI {response.status_code}: {response.json()}")
+        return
+
+    #--------------------------------------------------------------------------------------------------
+
     def send_result_of_testrun(self, result_list: list[dict]) -> list[dict]:
         _log = getLogger(__name__, DEBUG)
         _remaining_list = []

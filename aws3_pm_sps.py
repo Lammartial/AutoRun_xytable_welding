@@ -1,6 +1,6 @@
 from typing import List, Tuple
 from enum import Enum
-import multiprocessing
+import multiprocessing as mp
 import itertools
 import tkinter as tk
 import tkinter.ttk as ttk
@@ -14,21 +14,22 @@ from rrc.dsp.interface import DspInterface
 import sqlalchemy as sa
 from sqlalchemy.orm import sessionmaker
 from rrc.dbcon import get_protocol_db_connector
+from rrc.barcode_scanner import create_barcode_scanner, Eth2SerialDevice, SerialComportDevice
 
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-
 DEBUG = 0   # set to 0 for production
-
 from rrc.custom_logging import getLogger
-
 # --------------------------------------------------------------------------- #
+
+ENABLE_UDI_SCAN = 0
+
 
 class WindowUI(object):
 
-    def __init__(self, command_queue: multiprocessing.JoinableQueue, response_queue: multiprocessing.Queue, title: str = "POOR MAN'S SPS"):
-        global DEBUG
+    def __init__(self, command_queue: mp.JoinableQueue, response_queue: mp.Queue, title: str = "POOR MAN'S SPS"):
+        global DEBUG, ENABLE_UDI_SCAN
         self._log = getLogger(__name__, DEBUG)
         self.q_cmd = command_queue
         self.q_res = response_queue
@@ -36,12 +37,15 @@ class WindowUI(object):
 
         # Create the Tk root and mainframe.
         self.root = tk.Tk()
+
+        self.UDI_SCAN_TEXT = "--- SCAN NEXT UDI ---"
         self.var_label_counter = tk.StringVar(self.root, "")
         self.var_label_program = tk.StringVar(self.root, "")
         self.var_label_part_number = tk.StringVar(self.root, "")
         self.var_label_sequence = tk.StringVar(self.root, "")
         self.var_label_sequence_revision = tk.StringVar(self.root, "")
         self.var_label_resource_str = tk.StringVar(self.root, "")
+        self.var_label_udi = tk.StringVar(self.root, self.UDI_SCAN_TEXT)
 
         self.root.withdraw()  # hide window
         self.root.title(title)
@@ -64,50 +68,44 @@ class WindowUI(object):
         _x = int(self.root.winfo_screenwidth() - _w)
         _y = int((self.root.winfo_screenheight() / 2) - (_h / 2))
         self.root.geometry(f"{_w}x{_h}+{_x}+{_y}")
-        # self.root.columnconfigure(0, weight=10)
-        # self.root.columnconfigure(1, weight=1)
-        # self.root.columnconfigure(2, weight=1)
         #
         # setup widgets
         #
         self.mainframe = ttk.Frame(self.root, pad=(15,15,15,15), takefocus=True)
         self.mainframe.pack(fill=tk.BOTH)
-        #self.mainframe.grid(row=0, column=0, sticky=tk.EW)
-        #self.root.grid_columnconfigure(0,weight=1)
-        #self.root.grid_rowconfigure(0,weight=1)
-        # Create a Frame for input widgets
-        # self.mainframe.grid(
-        #     row=0, column=0, columnspan=2, #rowspan=3, #padx=10, pady=(30, 10),
-        #     sticky=tk.NSEW
-        # )
-
         # Labels
+
         #_row = next(row_itr)
         label_1 = ttk.Label(self.mainframe,text="PART NUMBER",justify="center", font=("-size", 10))
-        label_1.grid(row=next(row_itr), column=0, columnspan=2 , ipadx=10, ipady=10)
+        label_1.grid(row=next(row_itr), column=0, columnspan=2 , ipady=5)
         label_2 = ttk.Label(self.mainframe,
                             textvariable=self.var_label_part_number,
                             justify="center", font=("-size", 16, "-weight", "bold"))
-        label_2.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
+        label_2.grid(row=next(row_itr), column=0, columnspan=2, ipady=5)
         # label_s = ttk.Label(self.mainframe,
         #                     textvariable=self.var_label_sequence,
         #                     justify="center", font=("-size", 10, "-weight", "bold"))
         # label_s.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
+        if ENABLE_UDI_SCAN:
+            label_udi = ttk.Label(self.mainframe,
+                                textvariable=self.var_label_udi,
+                                justify="center", font=("-size", 12, "-weight", "bold"))
+            label_udi.grid(row=next(row_itr), column=0, columnspan=2, ipady=20)
 
         #_row = next(row_itr)
         label3 = ttk.Label(self.mainframe,text="SEQUENCE POS",justify="center", font=("-size", 10))
-        label3.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
+        label3.grid(row=next(row_itr), column=0, columnspan=2, ipady=5)
         label4 = ttk.Label(self.mainframe,
                             textvariable=self.var_label_counter,
                             justify="center", font=("-size", 20, "-weight", "bold"))
-        label4.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
+        label4.grid(row=next(row_itr), column=0, columnspan=2, ipady=5)
 
         label5 = ttk.Label(self.mainframe,text="PROGRAM",justify="center",font=("-size", 18))
-        label5.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
+        label5.grid(row=next(row_itr), column=0, columnspan=2, ipady=10)
         label6 = ttk.Label(self.mainframe,
             textvariable=self.var_label_program,
             justify="center", font=("-size", 32, "-weight", "bold"))
-        label6.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
+        label6.grid(row=next(row_itr), column=0, columnspan=2, ipady=10)
         # Buttons
         _row = next(row_itr)
         style.configure('B1.TButton', foreground="red", background='#232323')
@@ -169,21 +167,35 @@ class WindowUI(object):
             if a:
                 if "resource_str" in a:
                     self.var_label_resource_str.set(a["resource_str"])
+                    #print("UPDATE RESOURCE")
                     _do_update = True
                 if "revision" in a:
                     self.var_label_sequence_revision.set(a["revision"])
+                    #print("UPDATE REVISION")
                     _do_update = True
                 if "part_number" in a:
                     self.var_label_part_number.set(a["part_number"])
+                    #print("UPDATE PART NUMBER")
                     _do_update = True
                 if "sequence" in a:
                     self.var_label_sequence.set(a["sequence"])
+                    #print("UPDATE SEQUENCE")
                     _do_update = True
                 if "counter" in a:
                     self.var_label_counter.set(a["counter"])
+                    #print("UPDATE COUNTER")
                     _do_update = True
                 if "program" in a:
                     self.var_label_program.set(a["program"])
+                    #print("UPDATE PROGRAM")
+                    _do_update = True
+                if "udi_scanned" in a:
+                    self.var_label_udi.set(a["udi_scanned"])
+                    print("UPDATE UDI")
+                    _do_update = True
+                if "reset_udi" in a:
+                    self.var_label_udi.set(self.UDI_SCAN_TEXT)
+                    print("RESET UDI")
                     _do_update = True
             if _do_update:
                 self.root.update()
@@ -275,6 +287,7 @@ class SPSStateMachine(object):
         self.state: SPSStates = SPSStates.INIT
         self.program_sequence = program_sequence
         self.sequence_pos = 0
+        self.is_sequence_done = False
         self.program_no = -1
         self.next_program_no = -1
         self.counter_base_ax1 = None
@@ -326,11 +339,14 @@ class SPSStateMachine(object):
 
     def move_seqence_step(self, step: int) -> None:
         self._offset_sequence(step)
+        if self.sequence_pos == 0:
+            self.is_sequence_done = True
         self.next_program_no = self.program_sequence[self.sequence_pos]
         self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
 
     def reset_seqence(self) -> None:
         self.sequence_pos = 0
+        self.is_sequence_done = False
         self.next_program_no = self.program_sequence[self.sequence_pos]
         self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
 
@@ -433,11 +449,12 @@ class SPSStateMachine(object):
 
 
 #--------------------------------------------------------------------------------------------------
+# *** SPS ***
+#
+class ProcessSPS(mp.Process):
 
-class ProcessSPS(multiprocessing.Process):
-
-    def __init__(self, command_queue: multiprocessing.JoinableQueue, response_queue: multiprocessing.Queue) -> None:
-        multiprocessing.Process.__init__(self)
+    def __init__(self, command_queue: mp.JoinableQueue, response_queue: mp.Queue) -> None:
+        mp.Process.__init__(self)
         global DEBUG
         self._log = getLogger(__name__, DEBUG)
         self.command_queue = command_queue
@@ -491,9 +508,12 @@ class ProcessSPS(multiprocessing.Process):
         This is the process context in which we run the SPS.
         Create all relevant objects from here!
         """
+        global ENABLE_UDI_SCAN
+
         SM = None
         proc_name = self.name
         n = 0
+        _udi = None
         while True:
             if not SM:
                 # need to create a new State Machine to work with
@@ -520,13 +540,37 @@ class ProcessSPS(multiprocessing.Process):
                     self.command_queue.task_done()
                     break
                 print(f"{proc_name}: {cmd}")
+                if "udi_scanned" in cmd:
+                    # forward the UDI to the UI
+                    _udi = cmd["udi_scanned"]
+                    self.response_queue.put({"udi_scanned": _udi})
+                    # need to reset the sequence
+                    SM.close()
+                    SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
+                    answer = "OK"
                 if "move_counter" in cmd:
-                    SM.move_seqence_step(int(cmd["move_counter"]))
+                    if ENABLE_UDI_SCAN:
+                        if _udi:
+                            if not SM.is_sequence_done:
+                                SM.move_seqence_step(int(cmd["move_counter"]))
+                                if SM.is_sequence_done == True:
+                                    _udi = None
+                                    answer = {"reset_udi": True}
+                                else:
+                                    answer = "OK"
+                            else:
+                                answer = "SEQUENCE DONE"
+                        else:
+                            answer = "MSSING UDI"
+                    else:
+                        # no UDI control
+                        SM.move_seqence_step(int(cmd["move_counter"]))
+                        answer = "OK"
                 if "reset_counter" in cmd:
                     #SM.reset_seqence()
                     SM.close()
                     SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
-                answer = "Hallejulia!"
+                    answer = "OK"
                 self.command_queue.task_done()
                 self.response_queue.put(answer)
             else:
@@ -540,6 +584,62 @@ class ProcessSPS(multiprocessing.Process):
 
 
 #--------------------------------------------------------------------------------------------------
+# *** SCANNER ***
+#
+class ProcessScanner(mp.Process):
+
+    def __init__(self, sps_queue: mp.Queue, ui_queue: mp.Queue) -> None:
+        mp.Process.__init__(self)
+        global DEBUG
+        self._log = getLogger(__name__, DEBUG)
+        self.sps_queue = sps_queue
+        self.ui_queue = ui_queue
+
+    def collect_parameters(self) -> str:
+        """ Read configuration for scanner resource.
+
+        Note: this is called from process context,
+              do NOT call it from anywhere else except you want to test this function only!
+
+        """
+        try:
+            cfg = StationConfiguration("CELL_WELDING") #, filename=CONF_FILENAME_DEV)
+        except FileNotFoundError:
+            # comfort for test & development
+            cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
+        welder, scanner = cfg.get_resource_strings_for_socket(0)
+        return scanner
+
+    def run(self) -> None:
+        """
+        This is the process context in which we run the scanner.
+        Create all relevant objects from here!
+        """
+        proc_name = self.name
+        resource_str = self.collect_parameters()
+        scanner = create_barcode_scanner(resource_str)
+
+        while True:
+            _udi = None
+            try:
+                _udi = scanner.request(None, timeout=10.0)
+            except TimeoutError:
+                pass  # this is ok to keep the loop running
+            except Exception as ex:
+                # this is a real failure to stop this process
+                print(f"Cannot connect scanner {resource_str}: {ex}")
+                print(f"{proc_name}:End")
+                return
+            #sleep(10.0)
+            #_udi = "1UDI21312324234"
+            if _udi:
+                msg = {"udi_scanned": _udi}
+                #self.ui_queue.put(msg)  # this goes to the UI process
+                self.sps_queue.put(msg)   # this goes to the SPS process
+        return
+
+
+#--------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
     ## Initialize the logging
@@ -549,24 +649,31 @@ if __name__ == '__main__':
 
     p = None
     w = None
+    s = None
     try:
         # Establish communication queues
-        q_cmd = multiprocessing.JoinableQueue()
-        q_res = multiprocessing.Queue()
+        q_cmd = mp.JoinableQueue()
+        q_res = mp.Queue()
         # start sub-process for SPS
         p = ProcessSPS(q_cmd, q_res)
         # start UI in this process waiting for user input
         w = WindowUI(q_cmd, q_res)
+        if ENABLE_UDI_SCAN:
+            # start sub-process for scanner
+            s = ProcessScanner(q_cmd, q_res)
+            s.start()
         p.start()
         w.run_mainloop()
     except KeyboardInterrupt as kx:
         # user stopped process
         pass
     finally:
+        if s and s.is_alive():
+            s.terminate()
+            s.join(timeout=0.5)  # short process ...
         if p and p.is_alive():
             # Add a poison pill for SPS process
             q_cmd.put(None)
-            # Wait for SPS process to finish
+            # Wait for SPS process to finish smoothly
             q_cmd.join()
-
 # END OF FILE

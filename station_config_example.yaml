@@ -3,8 +3,8 @@
 #
 # DSP REST interface
 #
-#dsp_api_base_url:  "http://127.0.0.1:8000"  # mockup on localhost
-dsp_api_base_url:  "http://172.22.2.99:8000"  # mockup on sv-production
+dsp_api_base_url:  "http://127.0.0.1:8000"  # mockup on localhost
+#dsp_api_base_url:  "http://172.22.2.99:8000"  # mockup on sv-production
 #dsp_api_base_url:  "http://172.22.2.40:9925"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
 
 #
@@ -176,6 +176,6 @@ CELL_WELDING:
       resource_strings:
         # this is a MODBUS resource string
         aws3_controller:  "tcp:172.21.101.100:502"
-
+        scanner:          "COM3,9600,8N1"
 
 # END OF FILE
