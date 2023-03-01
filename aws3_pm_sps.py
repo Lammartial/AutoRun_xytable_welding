@@ -374,7 +374,8 @@ class SPSStateMachineBase(object):
             self.dev = AWS3Modbus_DUMMY(dev)  # this starts a simulation to support testing
         else:
             self.dev = dev
-        self._machine_locked = self.dev.read_machine_lock_status()
+        #self._machine_locked = self.dev.read_machine_lock_status()
+        self._machine_locked = None
         print(f"Poor man's SPS machine: {self.dev.machine_name}, at {repr(self.dev)}")
 
 
@@ -399,9 +400,25 @@ class SPSStateMachineBase(object):
 
     #----------------------------------------------------------------------------------------------
 
+    def set_state(self, new_state: SPSStates) -> None:
+        self.state = new_state
+
+    def _offset_sequence(self, offset: int) -> None:
+        self.sequence_pos = (self.sequence_pos + offset) % len(self.program_sequence)
+
     def run_loop(self):
         while True:
             self.do_one_loop()
+
+    def lock_machine(self) -> None:
+        if not self._machine_locked:
+            self.dev.lock_machine_step()
+            self._machine_locked = True
+
+    def unlock_machine(self) -> None:
+        #if self._machine_locked:
+        self.dev.unlock_machine_step()
+        self._machine_locked = False
 
 #--------------------------------------------------------------------------------------------------
 
@@ -424,13 +441,7 @@ class SPSStateMachine(SPSStateMachineBase):
         return f"SPSStateMachine({repr(self.dev)}, {self.program_sequence})"
 
     #----------------------------------------------------------------------------------------------
-
-    def set_state(self, new_state: SPSStates) -> None:
-        self.state = new_state
-
-    def _offset_sequence(self, offset: int) -> None:
-        self.sequence_pos = (self.sequence_pos + offset) % len(self.program_sequence)
-
+    
     def move_seqence_step(self, step: int) -> bool:
         if self.sequence_pos + step >= len(self.program_sequence):
             self.is_sequence_done = True
@@ -448,31 +459,22 @@ class SPSStateMachine(SPSStateMachineBase):
             self.set_state(SPSStates.LOCK_MACHINE)
             return False
 
+
     def reset_seqence(self) -> None:
         self.sequence_pos = 0
         self.is_sequence_done = False
         self.next_program_no = self.program_sequence[self.sequence_pos]
         self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
 
-    def lock_machine(self) -> None:
-        if self._machine_locked:
-            self.dev.lock_machine_step()
-            self._machine_locked = True
-        #self.set_state(SPSStates.LOCK_MACHINE)
-
-    def unlock_machine(self) -> None:
-        if self._machine_locked:
-            self.dev.unlock_machine_step()
-            self._machine_locked = False
-        #self.set_state(SPSStates.START)
 
     # locked production loop
     def do_one_loop(self):
         try:
             match self.state:
 
-                case SPSStates.START: # locked
+                case SPSStates.START: # locked                    
                     if self.dev.is_machine_ready():
+                        self._machine_locked = self.dev.read_machine_lock_status()
                         self.lock_machine()
                         self.set_state(SPSStates.INIT)
                     else:
@@ -480,7 +482,6 @@ class SPSStateMachine(SPSStateMachineBase):
 
                 case SPSStates.INIT:
                     self.counter_base_ax1 = self.dev.read_axis_counter(1)
-                    self._machine_locked = self.dev.read_machine_lock_status()
                     self.program_no = self.dev.read_program_no()
                     self.counter_ax1 = self.counter_base_ax1
                     self.last_counter_ax1 = self.counter_ax1
@@ -575,12 +576,6 @@ class SPSStateMachineRotating(SPSStateMachineBase):
 
     #----------------------------------------------------------------------------------------------
 
-    def set_state(self, new_state: SPSStates) -> None:
-        self.state = new_state
-
-    def _offset_sequence(self, offset: int) -> None:
-        self.sequence_pos = (self.sequence_pos + offset) % len(self.program_sequence)
-
     def move_seqence_step(self, step: int) -> bool:
         if self.sequence_pos + step >= len(self.program_sequence):
             self.is_sequence_done = True
@@ -604,150 +599,13 @@ class SPSStateMachineRotating(SPSStateMachineBase):
         self.next_program_no = self.program_sequence[self.sequence_pos]
         self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
 
-    def lock_machine(self) -> None:
-        if self._machine_locked:
-            self.dev.lock_machine_step()
-            self._machine_locked = True
-        #self.set_state(SPSStates.LOCK_MACHINE)
-
-    def unlock_machine(self) -> None:
-        if self._machine_locked:
-            self.dev.unlock_machine_step()
-            self._machine_locked = False
-        #self.set_state(SPSStates.START)
-
     # --- Rotating loop ---
     def do_one_loop(self):
         try:
             match self.state:
 
                 case SPSStates.START:
-                    self.unlock_machine()
-                    if self.dev.is_machine_ready():
-                        self.set_state(SPSStates.INIT)
-                    else:
-                        sleep(self._throttle_pause)  # throttle polling
-
-                case SPSStates.START_LOCKED:
-                    if self.dev.is_machine_ready():
-                        self.lock_machine()
-                        self.set_state(SPSStates.INIT)
-                    else:
-                        sleep(self._throttle_pause)  # throttle polling
-
-                case SPSStates.INIT:
-                    self.counter_base_ax1 = self.dev.read_axis_counter(1)
-                    self._machine_locked = self.dev.read_machine_lock_status()
-                    self.program_no = self.dev.read_program_no()
-                    self.counter_ax1 = self.counter_base_ax1
-                    self.last_counter_ax1 = self.counter_ax1
-                    print(f"Counters at init: Ax1={self.counter_ax1}")
-                    print(f"Program no at init: {self.program_no}")
-                    self.next_program_no = self.program_sequence[self.sequence_pos]
-                    print(f"Next program on sequence on {self.sequence_pos}: {self.next_program_no}")
-                    if self.next_program_no != self.program_no:
-                        self.program_no = self.next_program_no  # to avoid blitting a -1 on UI
-                        self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
-                    else:
-                        self.set_state(SPSStates.SHOW_PROGRAM_STEP)
-
-                case SPSStates.SHOW_PROGRAM_STEP:
-                    print(f"Program step: {self.sequence_pos} of {len(self.program_sequence)}")
-                    print(f"Program set {self.program_no}")
-                    self.set_state(SPSStates.SYNC_ON_MACHINE_COUNTER)
-
-                case SPSStates.SYNC_ON_MACHINE_COUNTER:
-                    if self._machine_locked or self.dev.is_machine_ready():
-                        self.counter_ax1 = self.dev.read_axis_counter(1)
-                        #  check if we have to moved to the  next program step
-                        diffcount = self.counter_ax1["counter"] - self.last_counter_ax1["counter"]
-                        if diffcount > 0:
-                            self.last_counter_ax1 = self.counter_ax1
-                            self.set_state(SPSStates.SHOW_RESULT)
-                        else:
-                            sleep(self._throttle_pause)  # throttle polling
-                    else:
-                        sleep(self._throttle_pause)  # throttle polling
-
-                case SPSStates.SHOW_RESULT:
-                    print(f"Result: ???")
-                    self.set_state(SPSStates.FETCH_NEXT_PROGRAM)
-
-                case SPSStates.FETCH_NEXT_PROGRAM:
-                    # yes we have finished a cycle -> move to next program step
-                    self.move_seqence_step(+1)  # the next state is being set in this function
-
-                case SPSStates.WAIT_READY_TO_SET_PROGRAM:
-                    if self.dev.is_machine_ready():
-                        self.set_state(SPSStates.SET_PROGRAM_ON_MACHINE)
-                    else:
-                        sleep(self._throttle_pause)  # throttle polling
-
-                case SPSStates.SET_PROGRAM_ON_MACHINE:
-                    self.lock_machine()
-                    # check if the correct program step is set
-                    self.program_no = self.dev.read_program_no()
-                    if self.next_program_no != self.program_no:
-                        print(f"Set program {self.next_program_no} on machine.")
-                        self.dev.write_program_no(self.next_program_no)
-                        self.program_no = self.dev.read_program_no()
-                        # ??? check ???
-                    else:
-                        print(f"Program {self.program_no} already set.")
-                    self.unlock_machine()
-                    self.set_state(SPSStates.SHOW_PROGRAM_STEP)
-
-                case SPSStates.LOCK_MACHINE:
-                    if self.dev.is_machine_ready():
-                        self.lock_machine()
-                        #
-                        # wait for being lock-released from OUTSIDE
-                        # by switching state to SPSStates.START again
-                        #
-                        self.set_state(SPSStates.SHOW_RESULT)
-                    else:
-                        sleep(self._throttle_pause)  # throttle polling
-
-                case SPSStates.SHOW_RESULT:
-                    print(f"Result: ???")
-                    self.set_state(SPSStates.STOP)
-                
-                case SPSStates.STOP:
-                    #
-                    # need to be switched back to START from outside
-                    #
-                    pass
-
-                case other:
-                    self.set_state(SPSStates.START)
-
-        except AssertionError as ex:
-            print("Got ERROR to ignore: ", ex)
-            pass  # swallow
-        except Exception as ex:
-            pass  # swallow
-        finally:
-            # make sure that the welding machine will be unlocked in any failure cases
-            self.unlock_machine() # verifies the _machine_locked state
-            # do not change the state here
-            pass
-
-    #--------------------------
-    #------ DEV MODE ----------
-    #--------------------------
-    def do_one_loop_rotating(self):
-        try:
-            match self.state:
-
-                case SPSStates.START:
-                    self.unlock_machine()
-                    if self.dev.is_machine_ready():
-                        self.set_state(SPSStates.INIT)
-                    else:
-                        sleep(self._throttle_pause)  # throttle polling
-
-                case SPSStates.START_LOCKED:  # same as START here!
-                    self.unlock_machine()
+                    self.unlock_machine()                    
                     if self.dev.is_machine_ready():
                         self.set_state(SPSStates.INIT)
                     else:
@@ -775,7 +633,7 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                     self.set_state(SPSStates.SYNC_ON_MACHINE_COUNTER)
 
                 case SPSStates.SYNC_ON_MACHINE_COUNTER:
-                    if self._machine_locked or self.dev.is_machine_ready():
+                    if self.dev.is_machine_ready():
                         self.counter_ax1 = self.dev.read_axis_counter(1)
                         #  check if we have to moved to the  next program step
                         diffcount = self.counter_ax1["counter"] - self.last_counter_ax1["counter"]
@@ -792,7 +650,7 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                     self.move_seqence_step(+1)  # the next state is being set in this function
 
                 case SPSStates.WAIT_READY_TO_SET_PROGRAM:
-                    if self._machine_locked or self.dev.is_machine_ready():
+                    if self.dev.is_machine_ready():
                         self.set_state(SPSStates.SET_PROGRAM_ON_MACHINE)
                     else:
                         sleep(self._throttle_pause)  # throttle polling
@@ -811,45 +669,21 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                     self.unlock_machine()
                     self.set_state(SPSStates.SHOW_PROGRAM_STEP)
 
-                case SPSStates.LOCK_MACHINE:
-                    if self.dev.is_machine_ready():
-                        self.lock_machine()
-                        #
-                        # wait for being lock-released from OUTSIDE
-                        # by switching state to SPSStates.START again
-                        #
-                        self.set_state(SPSStates.SHOW_RESULT)
-                    else:
-                        sleep(self._throttle_pause)  # throttle polling
-
-                case SPSStates.SHOW_RESULT:
-                    print(f"Result: ???")
-                    self.set_state(SPSStates.STOP)
-
-                    #
-                    # need to be switched back to START from outside
-                    #
-                    pass
-
                 case other:
                     self.set_state(SPSStates.START)
 
         except AssertionError as ex:
             print("Got ERROR to ignore: ", ex)
-            self.unlock_machine()
             pass  # swallow
         except Exception as ex:
-            self.unlock_machine()
             pass  # swallow
         finally:
             # make sure that the welding machine will be unlocked in any failure cases
-            #if self._machine_locked and (self.state != SPSStates.STOP):
-               #self.dev.unlock_machine_step()
-            #if (self.state != SPSStates.STOP):
-            #   self.unlock_machine()
+            self.unlock_machine() # verifies the _machine_locked state
             # do not change the state here
             pass
 
+   
 
 
 #--------------------------------------------------------------------------------------------------
