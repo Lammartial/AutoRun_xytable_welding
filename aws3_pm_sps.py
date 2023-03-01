@@ -339,7 +339,6 @@ def test_sps_process(dev: AWS3Modbus, program_sequence: List[int] = [1,2,3,4,5])
 
 class SPSStates(Enum):
     START = 0
-    START_LOCKED = 1
     INIT = 2
     SYNC_ON_MACHINE_COUNTER = 3
     SHOW_PROGRAM_STEP = 4
@@ -348,7 +347,10 @@ class SPSStates(Enum):
     SET_PROGRAM_ON_MACHINE = 7
     LOCK_MACHINE = 8
     SHOW_RESULT = 9
-    STOP = 10
+    CHECK_WELDING_RESULT = 10
+    FAILED = 77
+    PASSED = 88
+    STOP = 99
 
 #--------------------------------------------------------------------------------------------------
 
@@ -386,7 +388,7 @@ class SPSStateMachineBase(object):
         return f"SPSStateMachineBase({repr(self.dev)}, {self.program_sequence})"
 
     #----------------------------------------------------------------------------------------------
-    
+
     # to provide the with ... statement protector
     def __enter__(self):
         self.dev.open()
@@ -430,9 +432,8 @@ class SPSStateMachine(SPSStateMachineBase):
     """
     def __init__(self, dev: AWS3Modbus | str, program_sequence: List[int] = [1]) -> None:
         super().__init__(dev, program_sequence=program_sequence)
-        self.state: SPSStates = SPSStates.START_LOCKED
         self.sequence_rotation = False
-        
+
 
     def __str__(self) -> str:
         return f"State Machine for SPS on modbus {repr(self.dev)} with sequence {self.program_sequence}"
@@ -441,7 +442,7 @@ class SPSStateMachine(SPSStateMachineBase):
         return f"SPSStateMachine({repr(self.dev)}, {self.program_sequence})"
 
     #----------------------------------------------------------------------------------------------
-    
+
     def move_seqence_step(self, step: int) -> bool:
         if self.sequence_pos + step >= len(self.program_sequence):
             self.is_sequence_done = True
@@ -467,12 +468,12 @@ class SPSStateMachine(SPSStateMachineBase):
         self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
 
 
-    # locked production loop
+    # --- locked production loop ---
     def do_one_loop(self):
         try:
             match self.state:
 
-                case SPSStates.START: # locked                    
+                case SPSStates.START: # locked
                     if self.dev.is_machine_ready():
                         self._machine_locked = self.dev.read_machine_lock_status()
                         self.lock_machine()
@@ -503,25 +504,45 @@ class SPSStateMachine(SPSStateMachineBase):
                 case SPSStates.SYNC_ON_MACHINE_COUNTER:
                     if self._machine_locked or self.dev.is_machine_ready():
                         self.counter_ax1 = self.dev.read_axis_counter(1)
-                        #  check if we have to moved to the  next program step
+                        #  check if welding is done and
+                        #     pass so that we have to moved to the next program step
+                        #  or
+                        #     fail so that we stop here
                         diffcount = self.counter_ax1["counter"] - self.last_counter_ax1["counter"]
                         if diffcount > 0:
+                            # welding completed
                             self.last_counter_ax1 = self.counter_ax1
-                            self.set_state(SPSStates.SHOW_RESULT)
+                            self.set_state(SPSStates.CHECK_WELDING_RESULT)
                         else:
                             sleep(self._throttle_pause)  # throttle polling
                     else:
                         sleep(self._throttle_pause)  # throttle polling
 
-                case SPSStates.SHOW_RESULT:
-                    print(f"Result: ???")
-                    self.set_state(SPSStates.FETCH_NEXT_PROGRAM)
+                case SPSStates.CHECK_WELDING_RESULT:
+                    self.lock_machine()
+                    # ...
+                    if 1:
+                        self.set_state(SPSStates.FAILED)  # keep machine locked
+                    else:
+                        self.set_state(SPSStates.FETCH_NEXT_PROGRAM) # go to next position's program
+
+                case SPSStates.FAILED:
+                    print(f"FAILED at position {self.sequence_pos}")
+                    self.set_state(SPSStates.STOP)
+
+                case SPSStates.PASSED:
+                    print(f"Sequence PASSED")
+                    self.set_state(SPSStates.STOP)
 
                 case SPSStates.FETCH_NEXT_PROGRAM:
                     # yes we have finished a cycle -> move to next program step
-                    self.move_seqence_step(+1)  # the next state is being set in this function
+                    self.move_seqence_step(+1)
+                    # !!! the next state is being set in the function above !!!
 
                 case SPSStates.WAIT_READY_TO_SET_PROGRAM:
+                    #
+                    # next welding to be prepared
+                    #
                     if self.dev.is_machine_ready():
                         self.set_state(SPSStates.SET_PROGRAM_ON_MACHINE)
                     else:
@@ -540,7 +561,9 @@ class SPSStateMachine(SPSStateMachineBase):
                         print(f"Program {self.program_no} already set.")
                     self.unlock_machine()
                     self.set_state(SPSStates.SHOW_PROGRAM_STEP)
-                
+
+                case SPSStates.STOP:
+                    self.lock_machine()  # Note: issues a MODBUS only if not locked
 
                 case other:
                     self.set_state(SPSStates.START)
@@ -557,7 +580,7 @@ class SPSStateMachine(SPSStateMachineBase):
             # do not change the state here
             pass
 
-    
+
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 
@@ -566,7 +589,7 @@ class SPSStateMachineRotating(SPSStateMachineBase):
     def __init__(self, dev: AWS3Modbus | str, program_sequence: List[int] = [1]) -> None:
         super().__init__(dev, program_sequence=program_sequence)
         self.sequence_rotation = True
-        
+
 
     def __str__(self) -> str:
         return f"Rotating State Machine for SPS on modbus {repr(self.dev)} with sequence {self.program_sequence}"
@@ -605,7 +628,7 @@ class SPSStateMachineRotating(SPSStateMachineBase):
             match self.state:
 
                 case SPSStates.START:
-                    self.unlock_machine()                    
+                    self.unlock_machine()
                     if self.dev.is_machine_ready():
                         self.set_state(SPSStates.INIT)
                     else:
@@ -669,6 +692,9 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                     self.unlock_machine()
                     self.set_state(SPSStates.SHOW_PROGRAM_STEP)
 
+                #
+                # Note: here we do not have a STOP
+                #
                 case other:
                     self.set_state(SPSStates.START)
 
@@ -683,7 +709,7 @@ class SPSStateMachineRotating(SPSStateMachineBase):
             # do not change the state here
             pass
 
-   
+
 
 
 #--------------------------------------------------------------------------------------------------
@@ -760,12 +786,12 @@ class ProcessSPS(mp.Process):
                 program_sequence, sequence_revision, resource_str, part_number = self.collect_parameters()
                 print("Create new SPS state machine")
                 if self.enable_udi_scan:
-                    # production version must be started by UDI scan 
+                    # production version must be started by UDI scan
                     # and can run only once
                     SM = SPSStateMachine(resource_str, program_sequence)
                 else:
                     # we use a development state-machine here
-                    SM = SPSStateMachineRotating(resource_str, program_sequence)                
+                    SM = SPSStateMachineRotating(resource_str, program_sequence)
                 print(f"STATE-MACHINE: {repr(SM)}")
                 # let the UI show the correct data
                 self.response_queue.put({
@@ -868,28 +894,30 @@ class ProcessScanner(mp.Process):
 
         while True:
             _udi = None
-            try:
-                _udi = scanner.request(None, timeout=10.0)
-            except TimeoutError:
-                pass  # this is ok to keep the loop running
-            except Exception as ex:
-                # this is a real failure to stop this process
-                print(f"Cannot connect scanner {resource_str}: {ex}")
-                print(f"{proc_name}:End")
-                return
-            if _udi:
-                msg = {"udi_scanned": _udi}
-                #self.ui_queue.put(msg)  # this goes to the UI process
-                self.sps_queue.put(msg)   # this goes to the SPS process
+            if 0:
+                try:
+                    _udi = scanner.request(None, timeout=10.0)
+                except TimeoutError:
+                    pass  # this is ok to keep the loop running
+                except Exception as ex:
+                    # this is a real failure to stop this process
+                    print(f"Cannot connect scanner {resource_str}: {ex}")
+                    print(f"{proc_name}:End")
+                    return
+                if _udi:
+                    msg = {"udi_scanned": _udi}
+                    #self.ui_queue.put(msg)  # this goes to the UI process
+                    self.sps_queue.put(msg)   # this goes to the SPS process
 
-            # # ********** Simulationsprofil *************
-            # sleep(5.0)
-            # _udi = "1CELL" + get_random_digits_string(12)
-            # self.sps_queue.put({"udi_scanned": _udi})
-            # for n in range(19):
-            #     sleep(0.5)
-            #     self.sps_queue.put({"move_counter": 1})
-            # # *******************************************
+            if 1:
+                # ********** Simulationsprofil *************
+                sleep(5.0)
+                _udi = "1CELL" + get_random_digits_string(12)
+                self.sps_queue.put({"udi_scanned": _udi})
+                for n in range(19):
+                    sleep(0.5)
+                    self.sps_queue.put({"move_counter": 1})
+                # *******************************************
 
         return
 
@@ -907,7 +935,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     ENABLE_UDI_SCAN = 0 if args.development else 1
-    ENABLE_UDI_SCAN = 0
+    #ENABLE_UDI_SCAN = 0
 
     p = None
     w = None
