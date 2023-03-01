@@ -329,8 +329,8 @@ class DspInterface:
         self.api["result"] = result[:1].upper()  # only first letter
         self.api["start_datetime"] = start_datetime
         self.api["execution_time"] = float(execution_time)
-        self.api["udi"] = udi
-        self.api["serial_number"] = serial_number
+        self.api["udi"] = udi  # do not translate to None
+        self.api["serial_number"] = serial_number if (serial_number != "") else None  # meed to translate to None for DSP
         result_list = self.load_result_list_from_json()
         result_list.append(self.api)
         remaining_list = self.send_result_of_testrun(result_list)
