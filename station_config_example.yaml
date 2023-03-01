@@ -176,6 +176,6 @@ CELL_WELDING:
       resource_strings:
         # this is a MODBUS resource string
         aws3_controller:  "tcp:172.21.101.100:502"
-        scanner:          "COM3,9600,8N1"
+        scanner:          "172.21.101.31:2000"
 
 # END OF FILE

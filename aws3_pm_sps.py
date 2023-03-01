@@ -368,12 +368,12 @@ class SPSStateMachineBase(object):
         self.last_counter_ax1 = -1
         self._throttle_pause = 0.055
         if isinstance(dev, str):
-            # try:
-            #     self.dev = AWS3Modbus(dev)
-            # except Exception as ex:
-            #     print(ex)
-            print("Using dummy AWS3 Modbus driver for test purposes.")
-            self.dev = AWS3Modbus_DUMMY(dev)  # this starts a simulation to support testing
+            try:
+                self.dev = AWS3Modbus(dev)
+            except Exception as ex:
+                print(ex)
+            #print("Using dummy AWS3 Modbus driver for test purposes.")
+            #self.dev = AWS3Modbus_DUMMY(dev)  # this starts a simulation to support testing
         else:
             self.dev = dev
         #self._machine_locked = self.dev.read_machine_lock_status()
@@ -476,7 +476,7 @@ class SPSStateMachine(SPSStateMachineBase):
                 case SPSStates.START: # locked
                     if self.dev.is_machine_ready():
                         self._machine_locked = self.dev.read_machine_lock_status()
-                        self.lock_machine()
+                        self.unlock_machine()
                         self.set_state(SPSStates.INIT)
                     else:
                         sleep(self._throttle_pause)  # throttle polling
@@ -520,9 +520,11 @@ class SPSStateMachine(SPSStateMachineBase):
 
                 case SPSStates.CHECK_WELDING_RESULT:
                     self.lock_machine()
-                    # ...
-                    if 1:
+                    _, status = self.dev.is_machine_ready()
+                    if status["reject"] > 0:
                         self.set_state(SPSStates.FAILED)  # keep machine locked
+                    elif status["ok"] > 0:
+                        self.set_state(SPSStates.FETCH_NEXT_PROGRAM) # go to next position's program
                     else:
                         self.set_state(SPSStates.FETCH_NEXT_PROGRAM) # go to next position's program
 
@@ -735,12 +737,12 @@ class ProcessSPS(mp.Process):
             Exception: _description_
         """
         # 1. we need the station config
-        # try:
-        #     cfg = StationConfiguration("CELL_WELDING") #, filename=CONF_FILENAME_DEV)
-        # except FileNotFoundError:
-        #     # comfort for testing
-        #     cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
-        cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
+        try:
+            cfg = StationConfiguration("CELL_WELDING") #, filename=CONF_FILENAME_DEV)
+        except FileNotFoundError:
+            # comfort for testing
+            cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
+        #cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
         _, _station_id, _dsp_api_base_url, _line_id, _ = cfg.get_station_configuration()
         # 2. with station config we can request the part number from DSP
         print("Fetching part number from DSP...")
@@ -874,12 +876,12 @@ class ProcessScanner(mp.Process):
               do NOT call it from anywhere else except you want to test this function only!
 
         """
-        # try:
-        #     cfg = StationConfiguration("CELL_WELDING") #, filename=CONF_FILENAME_DEV)
-        # except FileNotFoundError:
-        #     # comfort for test & development
-        #     cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
-        cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
+        try:
+            cfg = StationConfiguration("CELL_WELDING") #, filename=CONF_FILENAME_DEV)
+        except FileNotFoundError:
+            # comfort for test & development
+            cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
+        #cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
         welder, scanner = cfg.get_resource_strings_for_socket(0)
         return scanner
 
@@ -894,7 +896,7 @@ class ProcessScanner(mp.Process):
 
         while True:
             _udi = None
-            if 0:
+            if 1:
                 try:
                     _udi = scanner.request(None, timeout=10.0)
                 except TimeoutError:
@@ -909,7 +911,7 @@ class ProcessScanner(mp.Process):
                     #self.ui_queue.put(msg)  # this goes to the UI process
                     self.sps_queue.put(msg)   # this goes to the SPS process
 
-            if 1:
+            if 0:
                 # ********** Simulationsprofil *************
                 sleep(5.0)
                 _udi = "1CELL" + get_random_digits_string(12)

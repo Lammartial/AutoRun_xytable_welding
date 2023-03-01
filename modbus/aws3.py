@@ -46,7 +46,16 @@ class AWS3Modbus(ModbusClient):
 
     def is_machine_ready(self) -> tuple:
         #return not self.read_coils(65-1, 1, unit_address=3)[0]
-        return self.read_coils(97-1, 1, unit_address=3)[0]
+        #return self.read_coils(97-1, 8, unit_address=3)[0]
+        bits = self.read_coils(97-1, 8, unit_address=3)
+        d = {
+            "ready": 1 if bits[0] else 0,
+            "operational_mode": 1 if bits[1] else 0,  # 0=auto, 1=step
+            "reject": 1 if bits[4] else 0,
+            "hfi_device_fault": 1 if bits[5] else 0,
+            "ok": 1 if bits[6] else 0
+        }
+        return bits[0], d
 
     def read_machine_lock_status(self) -> tuple:
         return self.read_coils(45-1, 1, unit_address=3)[0]
@@ -126,7 +135,7 @@ class AWS3Modbus(ModbusClient):
         pc1 = self.read_holding_registers(446-1, 2, unit_address=axis)
         return response1 + response2 + ["COUNTER "] + pc1
 
-    def read_global_parameters(self, axis: int):
+    def read_global_parameters(self, axis: int) -> dict:
         assert (axis in [1,2])
         response = self.read_holding_registers(601-1, 24, unit_address=axis)
         dc: BinaryPayloadDecoder = self.getDecoder(response)
@@ -177,6 +186,14 @@ class AWS3Modbus(ModbusClient):
         b = dc.decode_string(size=n*2)  # size = bytes not words
         return remove_non_ascii(b.decode())
 
+    def read_ext_status(self, axis: int) -> dict:
+        n = 2
+        #self.set_machine_byteorder(1)
+        #response = self.read_input_registers(101-1, n, unit_address=1)
+        response = self.read_holding_registers(101-1, n, unit_address=1)
+        return response
+
+
 #--------------------------------------------------------------------------------------------------
 
 class AWS3Modbus_DUMMY(object):
@@ -196,7 +213,7 @@ class AWS3Modbus_DUMMY(object):
         pass
 
     def is_machine_ready(self) -> tuple:
-        return True
+        return True, {"ready": 1, "ok": 1, "reject": 0}
 
     def read_machine_lock_status(self) -> tuple:
         return False
@@ -255,6 +272,14 @@ def test_basic_communication(dev: AWS3Modbus):
     # print(d)
     # d = dev.read_program_name(2)
     # print(d)
+    #d = dev.read_ext_status(1)
+    #print(d)
+    #d = dev.read_ext_status(2)
+    #print(d)
+    d = dev.is_machine_ready()
+    print(d)
+    return
+
     d = dev.read_axis_counter(1)
     print("AXIS1 COUNTER:", d)
     d = dev.read_axis_counter(2)
