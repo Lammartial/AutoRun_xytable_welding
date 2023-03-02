@@ -200,7 +200,7 @@ class WindowUI(object):
 
 
 #--------------------------------------------------------------------------------------------------
-def identify_user(scanner_resource_str: str, allow_manual_edit:bool = False) -> Tuple[bool, str]:
+def identify_user(allow_manual_edit:bool = False) -> Tuple[bool, str, str]:
     """Login user to TestStand using context IDispatch interface (block of data)
 
     Args:
@@ -212,7 +212,8 @@ def identify_user(scanner_resource_str: str, allow_manual_edit:bool = False) -> 
     
     _log = getLogger(__name__, DEBUG)
 
-    _user = { "username": "NOBODY", "pwd": None }
+    _user = { "username": "", "pwd": "" }
+    _login = False
     p = None
     w = None
     s = None
@@ -220,14 +221,16 @@ def identify_user(scanner_resource_str: str, allow_manual_edit:bool = False) -> 
         w = WindowUI(title="TestStand - Login", allow_manual_edit=allow_manual_edit)
         w.run_mainloop()
         # in w.USER are the user information; if None, nobody is logged in
-        _user = w.USER
+        if w.USER:
+            _user = w.USER
+            _login = True
     except KeyboardInterrupt as kx:
         # user stopped process        
         pass
     finally:
         pass
     
-    return (True,) + (_user,)
+    return _login, _user["username"], _user["pwd"]
     
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
@@ -240,7 +243,7 @@ if __name__ == "__main__":
         res = session.execute(sa.text("SELECT * FROM `mockup_user_access` AS mu"))
         print(res.fetchall())
 
-    res = identify_user("COM24,9600,8N1", allow_manual_edit=True)
+    res = identify_user(allow_manual_edit=True)
     print(res)
 
 
