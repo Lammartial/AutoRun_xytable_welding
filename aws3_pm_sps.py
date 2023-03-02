@@ -7,13 +7,14 @@ import tkinter.ttk as ttk
 from time import sleep, perf_counter
 from pathlib import Path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from datetime import timezone, datetime
 
 from rrc.modbus.aws3 import AWS3Modbus, AWS3Modbus_DUMMY
 from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
 from rrc.dsp.interface import DspInterface
 # import SQL managing modules
-import sqlalchemy as sa
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 from rrc.dbcon import get_protocol_db_connector
 from rrc.barcode_scanner import create_barcode_scanner, Eth2SerialDevice, SerialComportDevice
 
@@ -719,7 +720,32 @@ class ProcessSPS(mp.Process):
         self.response_queue = response_queue
         self.enable_udi_scan = ENABLE_UDI_SCAN
 
-    def collect_parameters(self) -> Tuple[List[int], str, str, str]:
+    def create_interfaces(self) -> Tuple[StationConfiguration, DspInterface, Session]:
+        """Creates the interfaces for configuration, DSP and protocol database.
+
+        Note: this is called from process context,
+              do NOT call it from anywhere else except you want to test this function only!
+
+        Returns:
+            Tuple[StationConfiguration, DspInterface, Any]: _description_
+        """
+
+        # 1. we need the station config
+        try:
+            cfg = StationConfiguration("CELL_WELDING") #, filename=CONF_FILENAME_DEV)
+        except FileNotFoundError:
+            # comfort for testing
+            cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
+        #cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
+        _, __, _dsp_api_base_url, _, _ = cfg.get_station_configuration()
+        # 2. we can create the DSP interface
+        dsp = DspInterface(_dsp_api_base_url, None)
+        # 3. create the database interface
+        srcEngine, makeSessions = get_protocol_db_connector()
+        return cfg, dsp, makeSessions
+
+
+    def collect_parameters(self, cfg: StationConfiguration, dsp: DspInterface, db: Session) -> Tuple[List[int], str, str, str]:
         """ Read configuration from DSP + DB connection
 
         Note: this is called from process context,
@@ -728,17 +754,11 @@ class ProcessSPS(mp.Process):
         Raises:
             Exception: _description_
         """
+
         # 1. we need the station config
-        try:
-            cfg = StationConfiguration("CELL_WELDING") #, filename=CONF_FILENAME_DEV)
-        except FileNotFoundError:
-            # comfort for testing
-            cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
-        #cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
         _, _station_id, _dsp_api_base_url, _line_id, _ = cfg.get_station_configuration()
         # 2. with station config we can request the part number from DSP
         print("Fetching part number from DSP...")
-        dsp = DspInterface(_dsp_api_base_url, None)
         _dsp_info = dsp.get_parameter_for_testrun("CELL_WELDING", _station_id, _line_id, "0")
         _part_number = _dsp_info["part_number"]
         # 3. with station config we can get the IP resource for the welder MODBUS
@@ -747,15 +767,14 @@ class ProcessSPS(mp.Process):
         print(f"PART NUMBER: {_part_number}")
         # 4. we need the program sequence of the AWS welder for the given part number
         print("Requesting database for sequence...")
-        srcEngine, SSession = get_protocol_db_connector()
-        session = SSession()
         #_part_number = "412031-16"  # RRC2020B
         #_part_number = "412036-16"  # RRC2040B
-        response = session.execute(sa.text(
-                f"SELECT revision,program_sequence,parameter FROM `spsconfig` AS sc WHERE sc.part_number='{_part_number}' ORDER BY revision DESC"
-                ))
-        rows = response.fetchall()
-        session.close_all()
+        with db() as session:
+            response = session.execute(text(
+                    f"SELECT revision,program_sequence,parameter FROM `spsconfig` AS sc WHERE sc.part_number='{_part_number}' ORDER BY revision DESC"
+                    ))
+            rows = response.fetchall()
+            #session.close_all()
         if len(rows) == 0:
             # not found! -> do not proceed
             raise Exception("No Data in Database found, cannot proceed!")
@@ -769,15 +788,22 @@ class ProcessSPS(mp.Process):
         Create all relevant objects from here!
         """
 
+        # we need to keep the _dsp interface for UDI presentation and result transmission
+        _cfg, _dsp, _db = self.create_interfaces()
+
         SM = None
-        proc_name = self.name
+        proc_name: str = self.name
         n = 0
-        _udi = None
+        _start_datetime: datetime = datetime.now(timezone.utc)
+        _execution_start: float = 0
+        _udi: str = None
         while True:
             if not SM:
+                _start_datetime = datetime.now(timezone.utc)
+                _execution_start = perf_counter()  # we use _execution_time as start timestamp
                 # need to create a new State Machine to work with
                 # get configuration from DSP + DB connection
-                program_sequence, sequence_revision, resource_str, part_number = self.collect_parameters()
+                program_sequence, sequence_revision, resource_str, part_number = self.collect_parameters(_cfg, _dsp, _db)
                 print("Create new SPS state machine")
                 if self.enable_udi_scan:
                     # production version must be started by UDI scan
@@ -808,9 +834,14 @@ class ProcessSPS(mp.Process):
                 match SM.state:
                     case SPSStates.FAILED:
                         self.response_queue.put({"result": "failed", "udi": _udi})
+                        #_dsp.set_result("failed")
+                        _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                         _udi = None  # finished
                     case SPSStates.PASSED:
                         self.response_queue.put({"result": "passed", "udi": _udi})
+                        #_dsp.set_result("passed")
+                        _dsp.send_result_of_testrun()
+                        _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                         _udi = None  # finished
                         #SM.close()
                         #SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
@@ -826,7 +857,12 @@ class ProcessSPS(mp.Process):
                 if cmd is None:
                     # Poison pill means shutdown
                     print(f"{proc_name}: Exiting")
-                    if SM: SM.dev.unlock_machine_step()  # make sure the Welder is unlocked
+                    if SM:
+                        SM.dev.unlock_machine_step()  # make sure the Welder is unlocked
+                    if _udi:
+                        # inform the DSP that the process has been aborted
+                        #_dsp.set_result("abort")
+                        _dsp.ts_send_result_for_testrun("aborted", _start_datetime, perf_counter() - _execution_start, _udi, None)
                     self.command_queue.task_done()
                     break
                 print(f"{proc_name}: {cmd}")
@@ -837,6 +873,7 @@ class ProcessSPS(mp.Process):
                     # need to reset the sequence
                     SM.close()
                     SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
+                    _dsp.send_udi_upfront(_udi)
                     answer = "OK"
                 if "move_counter" in cmd:
                     if ENABLE_UDI_SCAN:

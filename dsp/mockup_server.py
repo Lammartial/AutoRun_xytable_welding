@@ -45,6 +45,15 @@ class Item(BaseModel):
     execution_time: float | None = None  # float: -> from TestStand PC at end of sequence: sec
     start_datetime: str | None = None    # str: -> from TestStand PC at end of sequence: ISO string
 
+
+class UdiItem(BaseModel):
+    test_type: str                    # str:
+    station_id: str                   # str: fixed by PC (e.g. PC name)
+    line_id: str                      # str: fixed by PC / Network line
+    part_number: str | None           # str -> from MPI Server before start of sequence
+    udi: str
+
+
 @app.get("/")
 async def root():
     return {"message": "Hallo Welt!"}
@@ -181,6 +190,14 @@ async def verify_serial(test_type, station_id, line_id, test_socket, part_number
             }
     return r
 
+
+@app.post("/SEND_UDI", status_code=status.HTTP_202_ACCEPTED)
+async def send_udi(item: UdiItem, response: Response):
+    getLogger(__name__, 2).debug(f"Accepted UDI: {item}")
+    if 0:
+        response.status_code = status.HTTP_406_NOT_ACCEPTABLE
+        return { "error": "UDI blacklisted", "code": 8,
+                 "udi": item.udi, "part_number": item.part_number }
 
 
 @app.get("/GET_PARAMETER_FOR_TEST_RUN", status_code=status.HTTP_200_OK)

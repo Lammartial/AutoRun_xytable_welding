@@ -27,8 +27,7 @@ class DSPInterfaceError(Exception):
 
 class DspInterface:
 
-    # data scheme
-    api = {
+    api = {  # data scheme
         "test_type": None,        # str: fixed by PC [CORE_PACK_TEST, ...]
         "station_id": None,       # str: fixed by PC (e.g. PC name)
         "line_id": None,          # str: fixed by PC [1,2,3,...]
@@ -43,7 +42,9 @@ class DspInterface:
     }
 
     #--------------------------------------------------------------------------------------------------
+
     def __init__(self, api_base_url: str, local_result_file: str | Path ) -> None:
+
         self.API_BASE_URL = api_base_url
         self.LOCAL_RESULT_FILE = Path(local_result_file) if local_result_file else None
 
@@ -54,6 +55,10 @@ class DspInterface:
         return f"DspInterface({self.API_BASE_URL},{self.LOCAL_RESULT_FILE})"
 
     #----------------------------------------------------------------------------------------------
+
+    def set_result(self, result: str):
+        self.api["result"] = result[:1].upper()  # only first letter
+
 
     def get_parameter_for_welding(self, station_id: str, line_id: str) -> dict:
         _log = getLogger(__name__, DEBUG)
@@ -149,7 +154,7 @@ class DspInterface:
     def get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> dict:
         _log = getLogger(__name__, DEBUG)
         response = requests.get(f"{self.API_BASE_URL}/GET_PARAMETER_FOR_TEST_RUN",
-                                params= {"test_type": test_type, "station_id": station_id, "line_id": line_id, "test_socket": test_socket })
+                                params={"test_type": test_type, "station_id": station_id, "line_id": line_id, "test_socket": test_socket })
         # expects JSON of
         # {
         #    "test_type": test_type,
@@ -171,8 +176,8 @@ class DspInterface:
     def verify_serial_number(self, test_type: str, station_id: str, line_id: str, test_socket: str, part_number:str, serial_number: str) -> Tuple[bool, dict]:
         _log = getLogger(__name__, DEBUG)
         response = requests.get(f"{self.API_BASE_URL}/VERIFY_SERIAL_NUMBER",
-                                params= {"test_type": test_type, "station_id": station_id, "line_id": line_id, "test_socket": test_socket,
-                                         "serial_number": serial_number, "part_number": part_number})
+                                params={"test_type": test_type, "station_id": station_id, "line_id": line_id, "test_socket": test_socket,
+                                        "serial_number": serial_number, "part_number": part_number})
         # expects JSON of
         # {
         #    "serial_number": serial_number,
@@ -201,7 +206,7 @@ class DspInterface:
         #_udi_cleaned = udi.split(",")[0]
         _udi_cleaned = udi
         response = requests.get(f"{self.API_BASE_URL}/GET_SERIAL_NUMBER_FOR_UDI",
-                                params= {"test_type": test_type, "station_id": station_id, "line_id": line_id, "test_socket": test_socket, "udi": _udi_cleaned})
+                                params={"test_type": test_type, "station_id": station_id, "line_id": line_id, "test_socket": test_socket, "udi": _udi_cleaned})
         # expects JSON of
         # {
         #    "udi": _udi_cleaned,
@@ -228,10 +233,10 @@ class DspInterface:
     def send_udi_upfront(self, udi: str) -> None:
         _log = getLogger(__name__, DEBUG)
         data = {
-            "test_type": self.api.test_type,
-            "station_id": self.api.station_id,
-            "line_id": self.api.line_id,
-            "part_number": self.api.part_number,
+            "test_type": self.api["test_type"],
+            "station_id": self.api["station_id"],
+            "line_id": self.api["line_id"],
+            "part_number": self.api["part_number"],
             "udi": udi
         }
         response = requests.post(f"{self.API_BASE_URL}/SEND_UDI", json=data)
