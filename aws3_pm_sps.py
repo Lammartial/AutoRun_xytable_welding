@@ -229,7 +229,7 @@ class WindowUI(object):
                     _do_update = True
                 if "sequence" in a:
                     self.var_label_sequence.set(a["sequence"])
-                    self.var_label_sequence_length.set(f'Count: {len(a["sequence"])}')
+                    self.var_label_sequence_length.set(f'Seq. length: {len(a["sequence"])}')
                     #print("UPDATE SEQUENCE")
                     _do_update = True
                 if "counter" in a:
@@ -848,7 +848,6 @@ class ProcessSPS(mp.Process):
                     case SPSStates.PASSED:
                         self.response_queue.put({"result": "passed", "udi": _udi})
                         #_dsp.set_result("passed")
-                        _dsp.send_result_of_testrun()
                         _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                         _udi = None  # finished
                         #SM.close()
@@ -875,20 +874,25 @@ class ProcessSPS(mp.Process):
                     break
                 print(f"{proc_name}: {cmd}")
                 if "udi_scanned" in cmd:
-                    # forward the UDI to the UI
-                    _verify_udi = cmd["udi_scanned"]
-                    if "CELL" in _verify_udi:
-                        _udi = _verify_udi
-                        self.response_queue.put({"udi_scanned": _udi})
-                        # need to reset the sequence
-                        SM.close()
-                        SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
-                        _dsp.send_udi_upfront(_udi)
-                        answer = "OK"
+                    # check if we are NOT in the middle of a sequence or at start position:
+                    if _udi is None or (SM.sequence_pos == 0):
+                        # forward the UDI to the UI
+                        _verify_udi = cmd["udi_scanned"]
+                        if "CELL" in _verify_udi:
+                            _udi = _verify_udi
+                            self.response_queue.put({"udi_scanned": _udi})
+                            # need to reset the sequence
+                            SM.close()
+                            SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
+                            _dsp.send_udi_upfront(_udi)
+                            answer = "OK"
+                        else:
+                            # false UDI -> popup ?
+                            _udi = None
+                            self.response_queue.put({"udi_rejected": _udi})
+                            answer = "NOT OK"
                     else:
-                        # false UDI -> popup ?
-                        _udi = None
-                        self.response_queue.put({"udi_rejected": _udi})
+                        # we are in the middle of a sequence
                         answer = "NOT OK"
                 if "move_counter" in cmd:
                     if ENABLE_UDI_SCAN:
