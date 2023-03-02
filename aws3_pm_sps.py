@@ -717,14 +717,14 @@ class SPSStateMachine(SPSStateMachineBase):
 # *** SPS ***
 #
 
-def _create_interfaces() -> Tuple[StationConfiguration, DspInterface, Session]:
-    """Creates the interfaces for configuration, DSP and protocol database.
+def _create_interfaces() -> Tuple[StationConfiguration, DspInterface]:
+    """Creates the interfaces for configuration and DSP.
 
     Note: this is called from process context,
             do NOT call it from anywhere else except you want to test this function only!
 
     Returns:
-        Tuple[StationConfiguration, DspInterface, Any]: _description_
+        Tuple[StationConfiguration, DspInterface]: _description_
     """
 
     # 1. we need the station config
@@ -735,10 +735,8 @@ def _create_interfaces() -> Tuple[StationConfiguration, DspInterface, Session]:
         cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
     _, __, _dsp_api_base_url, _, _ = cfg.get_station_configuration()
     # 2. we can create the DSP interface
-    dsp = DspInterface(_dsp_api_base_url, None)
-    # 3. create the database interface
-    srcEngine, makeSessions = get_protocol_db_connector()
-    return cfg, dsp, makeSessions
+    dsp = DspInterface(_dsp_api_base_url, None)    
+    return cfg, dsp
 
 
 
@@ -753,7 +751,7 @@ class ProcessSPS(mp.Process):
         self.enable_udi_scan = ENABLE_UDI_SCAN
 
 
-    def collect_parameters(self, cfg: StationConfiguration, dsp: DspInterface, db: Session) -> Tuple[List[int], str, str, str]:
+    def collect_parameters(self, cfg: StationConfiguration, dsp: DspInterface) -> Tuple[List[int], str, str, str]:
         """ Read configuration from DSP + DB connection
 
         Note: this is called from process context,
@@ -774,15 +772,14 @@ class ProcessSPS(mp.Process):
         _controller_resource_str = _resources[0]
         print(f"PART NUMBER: {_part_number}")
         # 4. we need the program sequence of the AWS welder for the given part number
-        print("Requesting database for sequence...")
-        #_part_number = "412031-16"  # RRC2020B
-        #_part_number = "412036-16"  # RRC2040B
-        with db() as session:
+        print("Requesting database for sequence...")        
+        # 3. create the database interface (recreate it here as the connecton could time-out otherwise)
+        srcEngine, sessionMaker = get_protocol_db_connector()
+        with sessionMaker() as session:
             response = session.execute(text(
                     f"SELECT revision,program_sequence,parameter FROM `spsconfig` AS sc WHERE sc.part_number='{_part_number}' ORDER BY revision DESC"
                     ))
-            rows = response.fetchall()
-            #session.close_all()
+            rows = response.fetchall()        
         if len(rows) == 0:
             # not found! -> do not proceed
             raise Exception("No Data in Database found, cannot proceed!")
@@ -797,7 +794,7 @@ class ProcessSPS(mp.Process):
         """
 
         # we need to keep the _dsp interface for UDI presentation and result transmission
-        _cfg, _dsp, _db = _create_interfaces()
+        _cfg, _dsp = _create_interfaces()
 
         SM = None
         proc_name: str = self.name
@@ -811,7 +808,7 @@ class ProcessSPS(mp.Process):
                 _execution_start = perf_counter()  # we use _execution_time as start timestamp
                 # need to create a new State Machine to work with
                 # get configuration from DSP + DB connection
-                program_sequence, sequence_revision, resource_str, part_number = self.collect_parameters(_cfg, _dsp, _db)
+                program_sequence, sequence_revision, resource_str, part_number = self.collect_parameters(_cfg, _dsp)
                 print("Create new SPS state machine")
                 if self.enable_udi_scan:
                     # production version must be started by UDI scan
@@ -926,21 +923,6 @@ class ProcessScanner(mp.Process):
         self.sps_queue = sps_queue
         self.ui_queue = ui_queue
 
-    def collect_parameters(self, cfg) -> str:
-        """ Read configuration for scanner resource.
-
-        Note: this is called from process context,
-              do NOT call it from anywhere else except you want to test this function only!
-
-        """
-        try:
-            cfg = StationConfiguration("CELL_WELDING") #, filename=CONF_FILENAME_DEV)
-        except FileNotFoundError:
-            # comfort for test & development
-            cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
-        welder, scanner = cfg.get_resource_strings_for_socket(0)
-        return scanner
-
     def run(self) -> None:
         """
         This is the process context in which we run the scanner.
@@ -948,7 +930,7 @@ class ProcessScanner(mp.Process):
         """
 
         proc_name = self.name
-        _cfg, _dsp, _db = _create_interfaces()
+        _cfg, _dsp = _create_interfaces()
         _, resource_str = _cfg.get_resource_strings_for_socket(0)
         scanner = create_barcode_scanner(resource_str)
         while True:
