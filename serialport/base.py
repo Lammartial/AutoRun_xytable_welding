@@ -70,7 +70,7 @@ class SerialComportDevice(object):
         finally:
             _s.close()
 
-    def request(self, msg: str | None, timeout: float = 3.0, limit: int = 0, encoding: str = "utf-8") -> str:
+    def request(self, msg: str | None, timeout: float | None = 3.0, limit: int = 0, encoding: str = "utf-8") -> str:
         """_summary_
 
         Args:

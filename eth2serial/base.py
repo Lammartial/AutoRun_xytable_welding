@@ -197,7 +197,7 @@ class Eth2SerialDevice(object):
 
     #----------------------------------------------------------------------------------------------
 
-    def request(self, msg: str | None, timeout: float = 3.0, limit: int = 0, encoding: str = "utf-8") -> str:
+    def request(self, msg: str | None, timeout: float | None = 3.0, limit: int = 0, encoding: str = "utf-8") -> str:
         """_summary_
 
         Args:
@@ -211,7 +211,8 @@ class Eth2SerialDevice(object):
         _log = getLogger(__name__, DEBUG)
         try:
             _s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            _s.settimeout(timeout)
+            if timeout:
+                _s.settimeout(timeout)
             _s.connect((self.host, self.port))
             if msg:
                 _s.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)

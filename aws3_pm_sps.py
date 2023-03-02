@@ -59,17 +59,14 @@ class WindowUI(object):
         # Create the Tk root and mainframe.
         self.root = tk.Tk()
 
-        if ENABLE_UDI_SCAN:
-            self.UDI_SCAN_TEXT = "SCAN NEXT UDI"
-        else:
-            self.UDI_SCAN_TEXT = "NO UDI"
         self.var_label_counter = tk.StringVar(self.root, "")
         self.var_label_program = tk.StringVar(self.root, "")
         self.var_label_part_number = tk.StringVar(self.root, "")
         self.var_label_sequence = tk.StringVar(self.root, "")
         self.var_label_sequence_revision = tk.StringVar(self.root, "")
+        self.var_label_sequence_length = tk.StringVar(self.root, "")
         self.var_label_resource_str = tk.StringVar(self.root, "")
-        self.var_label_udi = tk.StringVar(self.root, self.UDI_SCAN_TEXT)
+        self.var_label_udi = tk.StringVar(self.root, "")
 
         self.root.withdraw()  # hide window
         self.root.title(title)
@@ -128,7 +125,7 @@ class WindowUI(object):
         # label_s.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
         if ENABLE_UDI_SCAN:
             self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center",
-                                       font=("-size", 14, "-weight", "bold"), background="blue", foreground="white")
+                                       font=("-size", 14, "-weight", "bold"), background="gray", foreground="black")
             self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=50, sticky="ew")
         else:
             self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center", font=("-size", 12))
@@ -184,10 +181,10 @@ class WindowUI(object):
         _row = next(row_itr)
         #label_10 = ttk.Label(self.mainframe, textvariable=self.var_label_sequence, font=("-size", 8))
         #label_10.grid(row=_row, column=0,  ipady=10)
-        label_10 = ttk.Label(self.mainframe, anchor=tk.CENTER, text="Sequence Rev. ", font=("-size", 8))
-        label_10.grid(row=_row, column=0,  ipady=10, sticky="e")
+        label_10 = ttk.Label(self.mainframe, anchor=tk.CENTER, textvariable=self.var_label_sequence_length, font=("-size", 8))
+        label_10.grid(row=_row, column=0,  ipady=10, sticky="ew")
         label_11 = ttk.Label(self.mainframe, anchor=tk.CENTER, textvariable=self.var_label_sequence_revision, font=("-size", 8))
-        label_11.grid(row=_row, column=1, ipady=10, sticky="w")
+        label_11.grid(row=_row, column=1, ipady=10, sticky="ew")
 
         label_12 = ttk.Label(self.mainframe, textvariable=self.var_label_resource_str, font=("-size", 8))
         label_12.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
@@ -222,7 +219,7 @@ class WindowUI(object):
                     #print("UPDATE RESOURCE")
                     _do_update = True
                 if "revision" in a:
-                    self.var_label_sequence_revision.set(a["revision"])
+                    self.var_label_sequence_revision.set(f'Rev.: {a["revision"]}')
                     #print("UPDATE REVISION")
                     _do_update = True
                 if "part_number" in a:
@@ -231,6 +228,7 @@ class WindowUI(object):
                     _do_update = True
                 if "sequence" in a:
                     self.var_label_sequence.set(a["sequence"])
+                    self.var_label_sequence_length.set(f'Count: {len(a["sequence"])}')
                     #print("UPDATE SEQUENCE")
                     _do_update = True
                 if "counter" in a:
@@ -243,15 +241,19 @@ class WindowUI(object):
                     self.var_label_program.set(_txt if _txt != -1 else "")
                     #print("UPDATE PROGRAM")
                     _do_update = True
+                if "udi" in a:
+                    if a["udi"] is None:
+                        self.label_udi.config(background="gray", foreground="black")
+                        self.var_label_udi.set("PLEASE SCAN UDI")
+                        print("RESET UDI")
+                    else:
+                        self.label_udi.config(background="blue", foreground="white")
+                        self.var_label_udi.set(a["udi"])
+                    _do_update = True
                 if "udi_scanned" in a:
-                    self.label_udi.config(background="gray", foreground="black")
+                    self.label_udi.config(background="lightblue", foreground="black")
                     self.var_label_udi.set(a["udi_scanned"])
                     print("UPDATE UDI")
-                    _do_update = True
-                if "udi_reset" in a:
-                    self.label_udi.config(background="blue", foreground="white")
-                    self.var_label_udi.set(self.UDI_SCAN_TEXT)
-                    print("RESET UDI")
                     _do_update = True
                 if "result" in a:
                     if "passed" in a["result"]:
@@ -260,11 +262,6 @@ class WindowUI(object):
                         self.label_udi.config(background="red", foreground="black")
                     self.var_label_udi.set(a["udi"])
                     print("RESULT")
-                    _do_update = True
-                if "reset_udi" in a:
-                    self.label_udi.config(background="blue", foreground="white")
-                    self.var_label_udi.set(self.UDI_SCAN_TEXT)
-                    print("RESET UDI")
                     _do_update = True
             if _do_update:
                 self.root.update()
@@ -570,6 +567,14 @@ class SPSStateMachine(SPSStateMachineBase):
 
     #----------------------------------------------------------------------------------------------
 
+    def close(self):
+        self.dev.lock_machine_step()
+        self.dev.close()
+
+    #----------------------------------------------------------------------------------------------
+
+
+
     def move_seqence_step(self, step: int) -> SPSStates:
         if self.sequence_pos + step >= len(self.program_sequence):
             # sequence is done, do not proceed by wrap around
@@ -801,8 +806,6 @@ class ProcessSPS(mp.Process):
                     #SM.set_state(SPSStates.LOCK_MACHINE)
                 # check actions depending on state
                 match SM.state:
-                    #case SPSStates.INIT:
-                    #    self.response_queue.put({"udi_reset": True})
                     case SPSStates.FAILED:
                         self.response_queue.put({"result": "failed", "udi": _udi})
                         _udi = None  # finished
@@ -894,9 +897,9 @@ class ProcessScanner(mp.Process):
 
         while True:
             _udi = None
-            if 0:
+            if 1:
                 try:
-                    _udi = scanner.request(None, timeout=10.0)
+                    _udi = scanner.request(None, timeout=None)
                 except TimeoutError:
                     pass  # this is ok to keep the loop running
                 except Exception as ex:
@@ -909,7 +912,7 @@ class ProcessScanner(mp.Process):
                     #self.ui_queue.put(msg)  # this goes to the UI process
                     self.sps_queue.put(msg)   # this goes to the SPS process
 
-            if 1:
+            if 0:
                 # ********** Simulationsprofil *************
                 sleep(5.0)
                 _udi = "1CELL" + get_random_digits_string(12)
