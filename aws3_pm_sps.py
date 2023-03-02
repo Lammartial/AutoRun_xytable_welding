@@ -256,6 +256,12 @@ class WindowUI(object):
                     self.var_label_udi.set(a["udi_scanned"])
                     print("UPDATE UDI")
                     _do_update = True
+                if "udi_rejected" in a:
+                    self.label_udi.config(background="orange", foreground="black")
+                    self.var_label_udi.set("UDI REJECTED")
+                    print("REJECTED UDI")
+                    _do_update = True
+                    pass
                 if "result" in a:
                     if "passed" in a["result"]:
                         self.label_udi.config(background="green", foreground="black")
@@ -710,6 +716,32 @@ class SPSStateMachine(SPSStateMachineBase):
 #--------------------------------------------------------------------------------------------------
 # *** SPS ***
 #
+
+def _create_interfaces() -> Tuple[StationConfiguration, DspInterface, Session]:
+    """Creates the interfaces for configuration, DSP and protocol database.
+
+    Note: this is called from process context,
+            do NOT call it from anywhere else except you want to test this function only!
+
+    Returns:
+        Tuple[StationConfiguration, DspInterface, Any]: _description_
+    """
+
+    # 1. we need the station config
+    try:
+        cfg = StationConfiguration("CELL_WELDING") #, filename=CONF_FILENAME_DEV)
+    except FileNotFoundError:
+        # comfort for testing
+        cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
+    _, __, _dsp_api_base_url, _, _ = cfg.get_station_configuration()
+    # 2. we can create the DSP interface
+    dsp = DspInterface(_dsp_api_base_url, None)
+    # 3. create the database interface
+    srcEngine, makeSessions = get_protocol_db_connector()
+    return cfg, dsp, makeSessions
+
+
+
 class ProcessSPS(mp.Process):
 
     def __init__(self, command_queue: mp.JoinableQueue, response_queue: mp.Queue) -> None:
@@ -719,30 +751,6 @@ class ProcessSPS(mp.Process):
         self.command_queue = command_queue
         self.response_queue = response_queue
         self.enable_udi_scan = ENABLE_UDI_SCAN
-
-    def create_interfaces(self) -> Tuple[StationConfiguration, DspInterface, Session]:
-        """Creates the interfaces for configuration, DSP and protocol database.
-
-        Note: this is called from process context,
-              do NOT call it from anywhere else except you want to test this function only!
-
-        Returns:
-            Tuple[StationConfiguration, DspInterface, Any]: _description_
-        """
-
-        # 1. we need the station config
-        try:
-            cfg = StationConfiguration("CELL_WELDING") #, filename=CONF_FILENAME_DEV)
-        except FileNotFoundError:
-            # comfort for testing
-            cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
-        #cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
-        _, __, _dsp_api_base_url, _, _ = cfg.get_station_configuration()
-        # 2. we can create the DSP interface
-        dsp = DspInterface(_dsp_api_base_url, None)
-        # 3. create the database interface
-        srcEngine, makeSessions = get_protocol_db_connector()
-        return cfg, dsp, makeSessions
 
 
     def collect_parameters(self, cfg: StationConfiguration, dsp: DspInterface, db: Session) -> Tuple[List[int], str, str, str]:
@@ -789,7 +797,7 @@ class ProcessSPS(mp.Process):
         """
 
         # we need to keep the _dsp interface for UDI presentation and result transmission
-        _cfg, _dsp, _db = self.create_interfaces()
+        _cfg, _dsp, _db = _create_interfaces()
 
         SM = None
         proc_name: str = self.name
@@ -868,13 +876,20 @@ class ProcessSPS(mp.Process):
                 print(f"{proc_name}: {cmd}")
                 if "udi_scanned" in cmd:
                     # forward the UDI to the UI
-                    _udi = cmd["udi_scanned"]
-                    self.response_queue.put({"udi_scanned": _udi})
-                    # need to reset the sequence
-                    SM.close()
-                    SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
-                    _dsp.send_udi_upfront(_udi)
-                    answer = "OK"
+                    _verify_udi = cmd["udi_scanned"]
+                    if "CELL" in _verify_udi:
+                        _udi = _verify_udi
+                        self.response_queue.put({"udi_scanned": _udi})
+                        # need to reset the sequence
+                        SM.close()
+                        SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
+                        _dsp.send_udi_upfront(_udi)
+                        answer = "OK"
+                    else:
+                        # false UDI -> popup ?
+                        _udi = None
+                        self.response_queue.put({"udi_rejected": _udi})
+                        answer = "NOT OK"
                 if "move_counter" in cmd:
                     if ENABLE_UDI_SCAN:
                         if _udi:
@@ -907,7 +922,7 @@ class ProcessScanner(mp.Process):
         self.sps_queue = sps_queue
         self.ui_queue = ui_queue
 
-    def collect_parameters(self) -> str:
+    def collect_parameters(self, cfg) -> str:
         """ Read configuration for scanner resource.
 
         Note: this is called from process context,
@@ -919,7 +934,6 @@ class ProcessScanner(mp.Process):
         except FileNotFoundError:
             # comfort for test & development
             cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
-        #cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
         welder, scanner = cfg.get_resource_strings_for_socket(0)
         return scanner
 
@@ -928,10 +942,11 @@ class ProcessScanner(mp.Process):
         This is the process context in which we run the scanner.
         Create all relevant objects from here!
         """
-        proc_name = self.name
-        resource_str = self.collect_parameters()
-        scanner = create_barcode_scanner(resource_str)
 
+        proc_name = self.name
+        _cfg, _dsp, _db = _create_interfaces()
+        _, resource_str = _cfg.get_resource_strings_for_socket(0)
+        scanner = create_barcode_scanner(resource_str)
         while True:
             _udi = None
             if 1:
