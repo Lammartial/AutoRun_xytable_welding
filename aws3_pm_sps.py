@@ -794,12 +794,12 @@ class ProcessSPS(mp.Process):
         SM = None
         proc_name: str = self.name
         n = 0
-        _start_datetime: datetime = datetime.now(timezone.utc)
+        _start_datetime: str = ""
         _execution_start: float = 0
         _udi: str = None
         while True:
             if not SM:
-                _start_datetime = datetime.now(timezone.utc)
+                _start_datetime = datetime.utcnow().isoformat()
                 _execution_start = perf_counter()  # we use _execution_time as start timestamp
                 # need to create a new State Machine to work with
                 # get configuration from DSP + DB connection
