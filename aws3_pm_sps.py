@@ -9,6 +9,7 @@ from pathlib import Path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from datetime import timezone, datetime
 
+from pymodbus.exceptions import ModbusException
 from rrc.modbus.aws3 import AWS3Modbus, AWS3Modbus_DUMMY
 from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
 from rrc.dsp.interface import DspInterface
@@ -60,7 +61,7 @@ class WindowUI(object):
         # Create the Tk root and mainframe.
         self.root = tk.Tk()
 
-        self.var_label_counter = tk.StringVar(self.root, "")
+        self.var_label_position = tk.StringVar(self.root, "")
         self.var_label_program = tk.StringVar(self.root, "")
         self.var_label_part_number = tk.StringVar(self.root, "")
         self.var_label_sequence = tk.StringVar(self.root, "")
@@ -140,7 +141,7 @@ class WindowUI(object):
         label3 = ttk.Label(self.mainframe,text="SEQUENCE POS",justify="center", font=("-size", 10))
         label3.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
         label4 = ttk.Label(self.mainframe,
-                            textvariable=self.var_label_counter,
+                            textvariable=self.var_label_position,
                             justify="center", font=("-size", 20, "-weight", "bold"))
         label4.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
 
@@ -232,9 +233,12 @@ class WindowUI(object):
                     self.var_label_sequence_length.set(f'Seq. length: {len(a["sequence"])}')
                     #print("UPDATE SEQUENCE")
                     _do_update = True
-                if "counter" in a:
-                    _txt = a["counter"]
-                    self.var_label_counter.set(_txt if _txt != -1 else "")
+                if "position" in a:
+                    _txt = a["position"]
+                    # !!!
+                    # WE show Postion 1-based (!ROBERT)
+                    # !!!
+                    self.var_label_position.set((_txt + 1) if _txt != -1 else "")
                     #print("UPDATE COUNTER")
                     _do_update = True
                 if "program" in a:
@@ -278,69 +282,6 @@ class WindowUI(object):
     def run_mainloop(self):
         self.root.mainloop()
 
-#--------------------------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------------------
-
-def test_sps_process(dev: AWS3Modbus, program_sequence: List[int] = [1,2,3,4,5]):
-    print(f"Poor man's SPS machine: {dev.machine_name}, at {repr(dev)}")
-    while True:
-        if dev.is_machine_ready():
-            counter_base_ax1 = dev.read_axis_counter(1)
-            counter_base_ax2 = dev.read_axis_counter(2)
-            lock_base = dev.read_machine_lock_status()
-            program_no_base = dev.read_program_no()
-            break
-    print(f"Base counters:")
-    print(f"    Ax1:{counter_base_ax1}\n    Ax2:{counter_base_ax2}")
-    print(f"Base program no: {program_no_base}")
-    #program_sequence = [1,2,3,4,5,6,7,8,9,10]  # demo
-    program_step = 0
-    print(f"Program step: {program_step} of {len(program_sequence)}")
-    last_counter_ax1 = counter_base_ax1
-    last_counter_ax2 = counter_base_ax2
-    program_no = program_no_base
-    next_program_no = program_sequence[program_step]
-    _machine_locked = False
-    while True:
-        sleep(0.1)  # throttle polling loop
-        try:
-            if not dev.is_machine_ready():
-                continue
-            # 1. lock the machine
-            #dev.lock_machine_step()
-            # 2. get the counters
-            counter_ax1 = dev.read_axis_counter(1)
-            #counter_ax2 = dev.read_axis_counter(2)
-            # 3. check if we have to moved to the  next program step
-            diffcount = counter_ax1["counter"] - last_counter_ax1["counter"]
-            if diffcount > 0:
-                # yes we have finished a cycle -> move to next program step
-                dev.lock_machine_step()
-                _machine_locked = True
-                program_step += 1
-                if program_step >= len(program_sequence):
-                    program_step = 0
-                next_program_no = program_sequence[program_step]
-                print(f"Move program step to {program_step} with program no {next_program_no}")
-                last_counter_ax1 = counter_ax1
-                #last_counter_ax2 = counter_ax2
-            # 4. chek if the correct program step is set
-            program_no = dev.read_program_no()
-            if next_program_no != program_no:
-                print(f"Set Program No: {next_program_no}")
-                dev.write_program_no(next_program_no)
-            else:
-                #print(f"PROG NO {program_no} == NEXT NO {next_program_no}")
-                #sleep(0.1)  # throttle polling loop
-                pass
-        except AssertionError as ex:
-            print("Got Error:", ex)
-        except Exception as ex:
-            raise
-        finally:
-            # make sure that the welding machine will be unlocked in any failure cases
-            if _machine_locked:
-                dev.unlock_machine_step()
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
@@ -373,10 +314,13 @@ class SPSStateMachineBase(object):
         self.counter_base_ax1 = None
         self.counter_ax1 = None
         self.last_counter_ax1 = -1
-        self._throttle_pause = 0.055
+        self._throttle_pause = 0.125  # need to be negotiated with DSP
         if isinstance(dev, str):
             try:
                 self.dev = AWS3Modbus(dev)
+                self.dev.open()
+                self.dev.setup_device()
+                # keep open
             except Exception as ex:
                 print(ex)
                 print("Using dummy AWS3 Modbus driver for test purposes.")
@@ -425,7 +369,6 @@ class SPSStateMachineBase(object):
             self._machine_locked = True
 
     def unlock_machine(self) -> None:
-        #if self._machine_locked:
         self.dev.unlock_machine_step()
         self._machine_locked = False
 
@@ -504,6 +447,7 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                         diffcount = self.counter_ax1["counter"] - self.last_counter_ax1["counter"]
                         if diffcount > 0:
                             self.last_counter_ax1 = self.counter_ax1
+                            print(f"Counters: Ax1={self.counter_ax1}")
                             self.set_state(SPSStates.FETCH_NEXT_PROGRAM)
                         else:
                             sleep(self._throttle_pause)  # throttle polling
@@ -540,10 +484,14 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                 case other:
                     self.set_state(SPSStates.START)
 
+        except ModbusException as ex:
+            print(f"SPS: {ex}")
+            pass  # swallow
         except AssertionError as ex:
-            print("Got ERROR to ignore: ", ex)
+            print(f"SPS ignores: {ex}")
             pass  # swallow
         except Exception as ex:
+            print(f"SPS complains: {type(ex)}:{ex}")
             pass  # swallow
         finally:
             # make sure that the welding machine will be unlocked in any failure cases
@@ -576,7 +524,7 @@ class SPSStateMachine(SPSStateMachineBase):
 
     def close(self):
         self.dev.lock_machine_step()
-        self.dev.close()
+        super().close()
 
     #----------------------------------------------------------------------------------------------
 
@@ -635,6 +583,7 @@ class SPSStateMachine(SPSStateMachineBase):
                     self.set_state(SPSStates.SYNC_ON_MACHINE_COUNTER)
 
                 case SPSStates.SYNC_ON_MACHINE_COUNTER:
+                    _do_pause = True
                     if self._machine_locked or self.dev.is_machine_ready():
                         self.counter_ax1 = self.dev.read_axis_counter(1)
                         #  check if welding is done and
@@ -645,14 +594,15 @@ class SPSStateMachine(SPSStateMachineBase):
                         if diffcount > 0:
                             # welding completed
                             self.last_counter_ax1 = self.counter_ax1
+                            print(f"Counters: Ax1={self.counter_ax1}")
                             self.set_state(SPSStates.CHECK_WELDING_RESULT)
-                        else:
-                            sleep(self._throttle_pause)  # throttle polling
-                    else:
+                            _do_pause = False
+                    if _do_pause:
                         sleep(self._throttle_pause)  # throttle polling
 
                 case SPSStates.CHECK_WELDING_RESULT:
                     self.lock_machine()
+                    sleep(self._throttle_pause)  # throttle polling
                     _, status = self.dev.is_machine_ready()
                     if status["reject"] > 0:
                         self.set_state(SPSStates.FAILED)  # keep machine locked
@@ -687,25 +637,30 @@ class SPSStateMachine(SPSStateMachineBase):
                     if self.next_program_no != self.program_no:
                         print(f"Set program {self.next_program_no} on machine.")
                         self.dev.write_program_no(self.next_program_no)
+                        #sleep(self._throttle_pause)  # throttle polling
                         self.program_no = self.dev.read_program_no()
                         # ??? check ???
                     else:
                         print(f"Program {self.program_no} already set.")
                     self.unlock_machine()
+                    sleep(self._throttle_pause)  # throttle polling
                     self.set_state(SPSStates.SHOW_PROGRAM_STEP)
 
                 case SPSStates.STOP:
                     self.lock_machine()  # Note: issues a MODBUS only if not locked
+                    sleep(self._throttle_pause)  # throttle polling
 
                 case other:
                     self.set_state(SPSStates.START)
 
+        except ModbusException as ex:
+            print(f"SPS: {ex}")
+            pass  # swallow
         except AssertionError as ex:
-            print("Got ERROR to ignore: ", ex)
-            #self.unlock_machine()
+            print(f"SPS ignores: {ex}")
             pass  # swallow
         except Exception as ex:
-            #self.unlock_machine()
+            print(f"SPS complains: {type(ex)}:{ex}")
             pass  # swallow
         finally:
             # make sure that the welding machine will be unlocked in any failure cases
@@ -735,7 +690,7 @@ def _create_interfaces() -> Tuple[StationConfiguration, DspInterface]:
         cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
     _, __, _dsp_api_base_url, _, _ = cfg.get_station_configuration()
     # 2. we can create the DSP interface
-    dsp = DspInterface(_dsp_api_base_url, None)    
+    dsp = DspInterface(_dsp_api_base_url, None)
     return cfg, dsp
 
 
@@ -772,14 +727,14 @@ class ProcessSPS(mp.Process):
         _controller_resource_str = _resources[0]
         print(f"PART NUMBER: {_part_number}")
         # 4. we need the program sequence of the AWS welder for the given part number
-        print("Requesting database for sequence...")        
+        print("Requesting database for sequence...")
         # 3. create the database interface (recreate it here as the connecton could time-out otherwise)
         srcEngine, sessionMaker = get_protocol_db_connector()
         with sessionMaker() as session:
             response = session.execute(text(
                     f"SELECT revision,program_sequence,parameter FROM `spsconfig` AS sc WHERE sc.part_number='{_part_number}' ORDER BY revision DESC"
                     ))
-            rows = response.fetchall()        
+            rows = response.fetchall()
         if len(rows) == 0:
             # not found! -> do not proceed
             raise Exception("No Data in Database found, cannot proceed!")
@@ -826,7 +781,7 @@ class ProcessSPS(mp.Process):
                     "sequence": program_sequence,
                     "revision": sequence_revision,
                     # infos about the current sequence
-                    "counter": SM.sequence_pos,
+                    "position": SM.sequence_pos,
                     "program": SM.next_program_no,
                     "udi": _udi,
                 })
@@ -839,20 +794,16 @@ class ProcessSPS(mp.Process):
                 match SM.state:
                     case SPSStates.FAILED:
                         self.response_queue.put({"result": "failed", "udi": _udi})
-                        #_dsp.set_result("failed")
                         _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                         _udi = None  # finished
                     case SPSStates.PASSED:
                         self.response_queue.put({"result": "passed", "udi": _udi})
-                        #_dsp.set_result("passed")
                         _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                         _udi = None  # finished
-                        #SM.close()
-                        #SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
                     case SPSStates.SET_PROGRAM_ON_MACHINE:
-                        self.response_queue.put({"counter": SM.sequence_pos, "program": SM.next_program_no})
+                        self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no})
                     case SPSStates.SHOW_PROGRAM_STEP:
-                        self.response_queue.put({"counter": SM.sequence_pos, "program": SM.program_no})
+                        self.response_queue.put({"position": SM.sequence_pos, "program": SM.program_no})
                 # execute the state-machine
                 SM.do_one_loop()
             # check for incomming commands
@@ -862,10 +813,10 @@ class ProcessSPS(mp.Process):
                     # Poison pill means shutdown
                     print(f"{proc_name}: Exiting")
                     if SM:
-                        SM.dev.unlock_machine_step()  # make sure the Welder is unlocked
+                        SM.close()
+                        SM = None
                     if _udi:
                         # inform the DSP that the process has been aborted
-                        #_dsp.set_result("abort")
                         _dsp.ts_send_result_for_testrun("aborted", _start_datetime, perf_counter() - _execution_start, _udi, None)
                     self.command_queue.task_done()
                     break
@@ -878,10 +829,10 @@ class ProcessSPS(mp.Process):
                         if "CELL" in _verify_udi:
                             _udi = _verify_udi
                             self.response_queue.put({"udi_scanned": _udi})
+                            _dsp.send_udi_upfront(_udi)
                             # need to reset the sequence
                             SM.close()
                             SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
-                            _dsp.send_udi_upfront(_udi)
                             answer = "OK"
                         else:
                             # false UDI -> popup ?

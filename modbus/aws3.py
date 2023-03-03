@@ -27,8 +27,7 @@ class AWS3Modbus(ModbusClient):
     def __init__(self, connection_str: str, group_by_gateway: bool = True) -> None:
         super().__init__(connection_str, group_by_gateway=group_by_gateway, unit_address=None,
                         byte_order=Endian.Big, word_order=Endian.Little)
-        self.set_machine_byteorder()  # switch byte order to default
-        self.machine_name = self.read_name().strip()
+        self.machine_name = None
 
     def __str__(self) -> str:
         return f"AWS3 Welder Modbus connection on {repr(self.client)}"
@@ -37,6 +36,9 @@ class AWS3Modbus(ModbusClient):
         return f"AWS3Modbus({self._connection_str}, group_by_gateway={self.group_by_gateway}"
 
     #----------------------------------------------------------------------------------------------
+    def setup_device(self):
+        self.set_machine_byteorder()  # switch byte order to default
+        self.machine_name = self.read_name().strip()
 
     def get_identification_str(self) -> str:
         return f"{self.machine_name}@{self._connection_str}"
@@ -60,10 +62,10 @@ class AWS3Modbus(ModbusClient):
     def read_machine_lock_status(self) -> tuple:
         return self.read_coils(45-1, 1, unit_address=3)[0]
 
-    def lock_machine_step(self):
+    def lock_machine_step(self) -> bool:
         return self.write_coil(45-1, True, unit_address=3)
 
-    def unlock_machine_step(self):
+    def unlock_machine_step(self) -> bool:
         return self.write_coil(45-1, False, unit_address=3)
 
     def write_program_no(self, number):
@@ -207,6 +209,9 @@ class AWS3Modbus_DUMMY(object):
         return f"{self.machine_name}@{self.dev}"
 
     def close(self):
+        pass
+
+    def setup_device(self):
         pass
 
     def set_machine_byteorder(self, bo: int = 3):

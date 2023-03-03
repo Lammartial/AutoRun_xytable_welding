@@ -53,10 +53,18 @@ __version__ = VERSION
 # Generic error handling, to avoid duplicating code
 # -------------------------------------------------
 
+def _check_callx(rr):
+    """Check modbus call worked generically."""
+    assert not isinstance(rr, ExceptionResponse), rr             # Device rejected request
+    assert not rr.isError(), f"Error in MODBUS response: {rr}"   # test that call was OK
+    return rr
+
 def _check_call(rr):
     """Check modbus call worked generically."""
-    assert not isinstance(rr, ExceptionResponse), rr      # Device rejected request
-    assert not rr.isError(), "Error in MODBUS response"   # test that call was OK
+    if isinstance(rr, ExceptionResponse):
+        raise ModbusException(f"Device rejected request: {rr}")
+    if rr.isError():
+        raise ModbusException(rr)
     return rr
 
 #--------------------------------------------------------------------------------------------------
@@ -129,7 +137,13 @@ class ModbusClient:
         if (not group_by_gateway) or (self.gateway_str not in self.connection_dict):
             # need to create a new connection
             if cna[0] == "tcp":
-                self.client = ModbusTcpClient(self.host, port=self.port, timeout=self.timeout)  # create a new connection
+                self.client = ModbusTcpClient(self.host, port=self.port, timeout=self.timeout,
+                    # following goes to client.params
+                    retries=7,                  # default = 3
+                    retry_on_empty=True,        # default = False
+                    reconnect_delay=1000,       # default = 100
+                    reconnect_delay_max=30000,  # default = 300000
+                )  # create a new connection
             else:
                 self.client = ModbusSerialClient(method="rtu",
                     port=self.port,

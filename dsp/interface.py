@@ -342,6 +342,13 @@ class DspInterface:
         self.save_result_list_to_json(remaining_list)
 
 #--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+
+class DspInterface_SIMULATION(DspInterface):
+    pass
+
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 
 def test_interface(dsp: DspInterface):
     # 1. request information from MPI to start the correct test & UDI:
@@ -407,6 +414,7 @@ def test_teststand_interface(dsp: DspInterface, test_type: str, udi: str ):
         udi,               # udi, scanned string
         serial             # serial number
     )
+
 
 #--------------------------------------------------------------------------------------------------
 
