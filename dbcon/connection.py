@@ -96,6 +96,9 @@ def get_protocol_db_connector():
     return createInternalSession(CFG_PROTOCOL, echo=True if DEBUG else False)
 
 
+def get_teststand_users_db_connector():
+    return createInternalSession(CFG_USER_ACCESS, echo=True if DEBUG else False)
+
 def get_mockup_useracess_db_connector():
     return createInternalSession(CFG_USER_ACCESS, echo=True if DEBUG else False)
 

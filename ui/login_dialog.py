@@ -41,7 +41,7 @@ from rrc.custom_logging import getLogger
 
 # global engine and session generator to share access in the callbacks later
 srcEngine, makeSessions = get_mockup_useracess_db_connector()
-    
+
 #--------------------------------------------------------------------------------------------------
 
 def validate_user_id(card_id: str) -> Tuple[bool, dict]:
@@ -49,12 +49,12 @@ def validate_user_id(card_id: str) -> Tuple[bool, dict]:
 
     print(f"CHECK ID {card_id}")
     with makeSessions() as session:
-        res = session.execute(sa.text(f"SELECT username,pwd,access FROM `mockup_user_access` AS mu WHERE id='{card_id}'"))
+        res = session.execute(sa.text(f"SELECT username,pwd,access FROM `teststand_users` AS mu WHERE card_id='{card_id}'"))
         rows = res.fetchall()
         if len(rows) == 0:
             # not found! -> do not login
             showinfo("WARNING", f"User login not found in database.")
-            return False, {}        
+            return False, {}
         user = {
             "username": rows[0][0],
             "pwd": rows[0][1],
@@ -63,7 +63,7 @@ def validate_user_id(card_id: str) -> Tuple[bool, dict]:
         if user["access"] == 0:
             # has no access!
             showinfo("WARNING", f'User {user["username"]} is not allowed to login.')
-            return False, user    
+            return False, user
     return True, user
 
 #--------------------------------------------------------------------------------------------------
@@ -74,16 +74,16 @@ class WindowUI(object):
         global DEBUG
 
         self._log = getLogger(__name__, DEBUG)
-        
+
         self.USER = None
         self.allow_manual_edit = allow_manual_edit
         row_itr = itertools.count()
 
         # Create the Tk root and mainframe.
         self.root = tk.Tk()
-       
+
         self.var_login = tk.StringVar(value="")
-        
+
         self.root.withdraw()  # hide window
         self.root.title(title)
         # set App icon
@@ -143,21 +143,22 @@ class WindowUI(object):
             #validate='focusout',
             #validatecommand=(validate_udi_handle, '%W', '%s', '%S'),
             #invalidcommand=(invalidate_udi_hanlde, '%W', '%s', '%S'),
-            foreground="white", # user cannot read
+            show="*",  # user cannot read
+            #foreground="white", # user cannot read
             font=("-size", 15),
         )
         entry.insert(0, "")
         entry.bind("<Return>", lambda x: self._accept_udi(None) )
         entry.bind("<Key-Escape>", lambda x: self._cancel(None) )
         entry.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10) # sticky="ns")
-        
+
 
         # Buttons
         style.configure('B1.TButton', foreground="blue", background='#232323')
         style.map('B1.TButton', background=[("active","#ff0000")])
         style.configure('B2.TButton', foreground="red", background='#232323')
         style.map('B2.TButton', background=[("active","#ff0000")])
-        
+
         # # Ok-Button
         # ok_button = ttk.Button(self.mainframe, text="Login", style="B1.TButton", command=lambda x: _accept_udi(None))
         # ok_button.bind("<Return>", _accept_udi)
@@ -174,7 +175,7 @@ class WindowUI(object):
         cancel_button.bind("<Key-Escape>", lambda x: self._cancel(None))
         cancel_button.grid(row=next(row_itr), column=0, columnspan=2, sticky="nesw")
 
-      
+
         # schedule queue processing callback
         #self._id_after = self.mainframe.after(0, lambda: self.process_command_queue())
 
@@ -193,7 +194,7 @@ class WindowUI(object):
 
     def _cancel(self, parent):
         self.USER = None
-        self.root.destroy() 
+        self.root.destroy()
 
     def run_mainloop(self):
         self.root.mainloop()
@@ -209,7 +210,7 @@ def identify_user(allow_manual_edit:bool = False) -> Tuple[bool, str, str]:
     Returns:
         Tuple[bool, str]: return values to a TestStand container that expects two types in this order.
     """
-    
+
     _log = getLogger(__name__, DEBUG)
 
     _user = { "username": "", "pwd": "" }
@@ -225,13 +226,13 @@ def identify_user(allow_manual_edit:bool = False) -> Tuple[bool, str, str]:
             _user = w.USER
             _login = True
     except KeyboardInterrupt as kx:
-        # user stopped process        
+        # user stopped process
         pass
     finally:
         pass
-    
+
     return _login, _user["username"], _user["pwd"]
-    
+
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     ## Initialize the logging
@@ -240,7 +241,7 @@ if __name__ == "__main__":
     _log = getLogger(__name__, DEBUG)
 
     with makeSessions() as session:
-        res = session.execute(sa.text("SELECT * FROM `mockup_user_access` AS mu"))
+        res = session.execute(sa.text("SELECT * FROM `teststand_users` AS mu"))
         print(res.fetchall())
 
     res = identify_user(allow_manual_edit=True)
