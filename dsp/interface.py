@@ -343,7 +343,7 @@ class DspInterface:
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
-from .mockup_information import PART_INFORMATION
+from rrc.dsp.mockup_information import PART_INFORMATION
 
 class DspInterface_SIMULATION(DspInterface):
 

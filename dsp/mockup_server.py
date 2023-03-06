@@ -54,8 +54,8 @@ class UdiItem(BaseModel):
     udi: str
 
 
-from .mockup_information import MOCK_PARTNUMBER
-from .mockup_information import PART_INFORMATION
+from rrc.dsp.mockup_information import MOCK_PARTNUMBER
+from rrc.dsp.mockup_information import PART_INFORMATION
 
 
 @app.get("/")
@@ -126,8 +126,8 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
     global next_serial, lock_next_serial
 
     # set the product to test for mockup: "RRC2040B" or "RRC2020B"
-    #_product_name = "RRC2020B"
-    _product_name = "RRC2040B"
+    _product_name = "RRC2020B"
+    #_product_name = "RRC2040B"
     #_mock = MOCK_PARTNUMBER[_product_name]
     _mock = PART_INFORMATION[_product_name]
 
