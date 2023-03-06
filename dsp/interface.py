@@ -464,6 +464,19 @@ def test_teststand_interface(dsp: DspInterface, test_type: str, udi: str ):
         serial             # serial number
     )
 
+def test_welder_interface(dsp: DspInterface, udi: str ):
+    ts_test_run = dsp.ts_get_parameter_for_testrun("CELL_WELDING", "PDPC1302", 1, 0)
+    _log.info(f"TESTRUN: {ts_test_run}")
+
+    # dsp.ts_send_result_for_testrun(
+    #     "P",               # result
+    #     datetime.utcnow().isoformat(),  # start_datetime e.g. 2022-12-24T17:28:23.382748
+    #     3.465,             # execution_time
+    #     udi,               # udi, scanned string
+    #     serial             # serial number
+    # )
+
+
 
 #--------------------------------------------------------------------------------------------------
 
@@ -478,7 +491,8 @@ if __name__ == "__main__":
     # define the route
     #api_url = "https://production-network.rrc/testcontrol"
     #API_URL = "http://127.0.0.1:8000"
-    API_URL = "http://172.22.2.40:9925"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
+    #API_URL = "http://172.22.2.40:9925"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
+    API_URL = "http://172.21.101.8:9929"  # Orbis DSP REST API Local-PC
 
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
     dsp = DspInterface(API_URL, None)
@@ -486,8 +500,10 @@ if __name__ == "__main__":
     #test_interface(dsp)
     #test_teststand_interface(dsp, "CELLSTACK_TEST", "1CELL163512635")
     #test_teststand_interface(dsp, "PCBA_TEST", "1PCBA163512635")
-    test_teststand_interface(dsp, "COREPACK_TEST", "1CELL163512635,1PCBA163512635")
+    #test_teststand_interface(dsp, "COREPACK_TEST", "1CELL163512635,1PCBA163512635")
     #test_teststand_interface(dsp, "EOL_TEST", "7")
 
     #test_teststand_interface(dsp, "CELL_WELDING", "1CELL163512635")
+
+    test_welder_interface(dsp, "1CELL163512635")
 # END OF FILE
