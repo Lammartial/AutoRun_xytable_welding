@@ -120,6 +120,23 @@ async def send_udi(item: UdiItem, response: Response):
         return { "error": "UDI blacklisted", "code": 8,
                  "udi": item.udi, "part_number": item.part_number }
 
+@app.get("/GET_PARAMETER_FOR_WELDING", status_code=status.HTTP_200_OK)
+async def get_parameter_for_test_run(station_id, line_id):
+
+    # set the product to test for mockup: "RRC2040B" or "RRC2020B"
+    _product_name = "RRC2020B"
+    #_product_name = "RRC2040B"
+    #_mock = MOCK_PARTNUMBER[_product_name]
+    _mock = PART_INFORMATION[_product_name]
+
+    _fhm = _mock["CELL_WELDING"]
+    return {
+        "station_id": station_id,
+        "line_id": line_id,
+        "sequence_revision": _fhm["sequence_id"][1],  # str
+        "part_number": _fhm["part_number"][1],        # str
+    }
+
 
 @app.get("/GET_PARAMETER_FOR_TEST_RUN", status_code=status.HTTP_200_OK)
 async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket):
