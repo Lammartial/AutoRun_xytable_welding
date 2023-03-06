@@ -15,13 +15,13 @@ from pymodbus.register_write_message import WriteMultipleRegistersResponse
 from pymodbus.exceptions import ModbusException
 from pymodbus.pdu import ExceptionResponse
 
-
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-DEBUG = 1
+DEBUG = 2
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
+
 
 # ----------------------------------------------------------------------- #
 # This will send the error messages in the specified namespace to a file.
@@ -33,9 +33,18 @@ from rrc.custom_logging import getLogger, logger_init
 # * pymodbus.protocol.* - all logging messages inside the protocol layer
 # ----------------------------------------------------------------------- #
 import logging
-logging.getLogger("pymodbus.client").setLevel(logging.INFO)
-logging.getLogger("pymodbus.protocol").setLevel(logging.INFO)
-logging.getLogger("pymodbus").setLevel(logging.INFO)
+#logging.basicConfig()
+logging.getLogger("pymodbus.client").setLevel(logging.DEBUG)
+logging.getLogger("pymodbus.protocol").setLevel(logging.DEBUG)
+logging.getLogger("pymodbus").setLevel(logging.DEBUG)
+
+# log_pymodbus_client = logging.getLogger("pymodbus.client")
+# log_pymodbus_protocol = logging.getLogger("pymodbus.protocol")
+# log_pymodbus = logging.getLogger("pymodbus")
+
+# log_pymodbus_client.setLevel(logging.DEBUG)
+# log_pymodbus_protocol.setLevel(logging.DEBUG)
+# log_pymodbus.setLevel(logging.DEBUG)
 
 
 
@@ -139,10 +148,10 @@ class ModbusClient:
             if cna[0] == "tcp":
                 self.client = ModbusTcpClient(self.host, port=self.port, timeout=self.timeout,
                     # following goes to client.params
-                    retries=7,                  # default = 3
-                    retry_on_empty=True,        # default = False
-                    reconnect_delay=1000,       # default = 100
-                    reconnect_delay_max=30000,  # default = 300000
+                    retries=7,                   # default = 3
+                    retry_on_empty=True,         # default = False
+                    reconnect_delay=100,         # default = 100 ms
+                    reconnect_delay_max=300000,  # default = 300000 ms
                 )  # create a new connection
             else:
                 self.client = ModbusSerialClient(method="rtu",

@@ -36,8 +36,10 @@ class AWS3Modbus(ModbusClient):
         super().__init__(connection_str, group_by_gateway=group_by_gateway, unit_address=None,
                         byte_order=Endian.Big, word_order=Endian.Little)
         self.machine_name = None
-        self.last_modbus_access = perf_counter()
-        self.modbus_time_threshold = 0.02  # wait time between two modbus access in s
+        self._last_modbus_access = perf_counter()
+        self._wait_after_read = 0.020
+        self._wait_after_write = 0.130
+        self._wait_threshold_s = 0  # we start without having to wait before next modbus
 
     def __str__(self) -> str:
         return f"AWS3 Welder Modbus connection on {repr(self.client)}"
@@ -50,12 +52,22 @@ class AWS3Modbus(ModbusClient):
     def get_identification_str(self) -> str:
         return f"{self.machine_name}@{self._connection_str}"
 
-    def _sync_modbus_timing(self):
+    def _sync_modbus_timing(self, next_wait_s: float = None):
+        """To generate a defined wait between two modbus accesses.
+
+        Args:
+            threshold_s (float, optional): Time to Wait between two modbus access in s. Defaults to 0.02.
+        """
         while True:
             t0 = perf_counter()
-            if t0 - self.last_modbus_access > self.modbus_time_threshold:
+            if t0 - self._last_modbus_access > self._wait_threshold_s:
+                #print(f"P:{t0 - self._last_modbus_access}")
                 break
-        self.last_modbus_access = t0  # timestamp for sync of next access
+        self._last_modbus_access = t0  # timestamp for sync of next access
+        if next_wait_s:
+            self._wait_threshold_s = next_wait_s
+        else:  # set the standard (minimum wait)
+            self._wait_threshold_s = self._wait_after_read
 
     def setup_device(self):
         self.set_machine_byteorder()  # switch byte order to default
@@ -63,7 +75,9 @@ class AWS3Modbus(ModbusClient):
 
     def set_machine_byteorder(self, bo: int = 3) -> None:
         self._sync_modbus_timing()
+        self._wait_threshold_s = self._wait_after_write
         self.write_register(9999-1, bo, unit_address=3) # 3=default, 1=big
+
 
     def is_machine_ready(self) -> tuple:
         self._sync_modbus_timing()
@@ -84,15 +98,15 @@ class AWS3Modbus(ModbusClient):
         return self.read_coils(45-1, 1, unit_address=3)[0]
 
     def lock_machine_step(self) -> bool:
-        self._sync_modbus_timing()
+        self._sync_modbus_timing(next_wait_s=self._wait_after_write)
         return self.write_coil(45-1, True, unit_address=3)
 
     def unlock_machine_step(self) -> bool:
-        self._sync_modbus_timing()
+        self._sync_modbus_timing(next_wait_s=self._wait_after_write)
         return self.write_coil(45-1, False, unit_address=3)
 
     def write_program_no(self, number):
-        self._sync_modbus_timing()
+        self._sync_modbus_timing(next_wait_s=self._wait_after_write)
         #ec: BinaryPayloadBuilder = self.getEncoder()
         #ec.add_16bit_uint(number)
         #self.write_registers(200-1, ec.to_registers(), unit_address=3)
@@ -110,13 +124,21 @@ class AWS3Modbus(ModbusClient):
         self._sync_modbus_timing()
         response1 = self.read_holding_registers(1-1, 2, unit_address=axis)
         dc1: BinaryPayloadDecoder = self.getDecoder(response1)
+        # self._sync_modbus_timing()
+        # response2 = self.read_holding_registers(73-1, 4, unit_address=axis)
+        # dc2: BinaryPayloadDecoder = self.getDecoder(response2)
+        # d = {
+        #     "counter": dc1.decode_32bit_uint(),
+        #     "program": dc2.decode_32bit_int(),
+        #     "program_counter": dc2.decode_32bit_int(),
+        # }
         self._sync_modbus_timing()
         response2 = self.read_holding_registers(73-1, 4, unit_address=axis)
         dc2: BinaryPayloadDecoder = self.getDecoder(response2)
         d = {
             "counter": dc1.decode_32bit_uint(),
-            "program": dc2.decode_32bit_int(),
-            "program_counter": dc2.decode_32bit_int(),
+            "program": None,
+            "program_counter": None,
         }
         return d
 
@@ -232,6 +254,30 @@ class AWS3Modbus(ModbusClient):
         return response
 
 
+    def read_waveform_data(self, axis: int) -> dict:
+        _dt = [(19,"I"), (20,"U"), (3,"P"), (7,"s3"), (8,"F"), (9,"p")]
+        d = {}
+        for c, u in _dt:
+            self.write_register(1001-1, c, unit_address=axis)
+            #self._sync_modbus_timing(next_wait_s=self._wait_after_write)
+            response = self.read_holding_registers(1002-1, 6, unit_address=axis)
+            dc: BinaryPayloadDecoder = self.getDecoder(response)
+            d[u] = {
+                "waveform_sample_time": dc.decode_32bit_uint(),
+                "waveform_points": dc.decode_32bit_uint(),
+                "waveform_resolution": dc.decode_32bit_float(),
+                "points": [],
+            }
+            m = ()
+            for i in range(4):
+                #self._sync_modbus_timing()
+                response = self.read_holding_registers(1008+124*i-1, 124, unit_address=axis)
+                dc: BinaryPayloadDecoder = self.getDecoder(response)
+                for n in range(int(124/2)):
+                    m = m + (dc.decode_32bit_float(),)
+            d[u]["points"] = list(m)
+        return d
+
 #--------------------------------------------------------------------------------------------------
 
 class AWS3Modbus_DUMMY(object):
@@ -305,6 +351,8 @@ class AWS3Modbus_DUMMY(object):
 
 #--------------------------------------------------------------------------------------------------
 def test_basic_communication(dev: AWS3Modbus):
+    import json
+
     d = dev.read_machine_lock_status()
     print(d)
     d = dev.read_name()
@@ -319,6 +367,16 @@ def test_basic_communication(dev: AWS3Modbus):
     #print(d)
     d = dev.is_machine_ready()
     print(d)
+    t0 = perf_counter()
+    d = dev.read_waveform_data(1)
+    with open("axis1_waveforms.json", "wt") as file:
+        file.write(json.dumps(d))
+    print(d)
+    print("TIME:", perf_counter()-t0)
+    # d = dev.read_waveform_data(2)
+    # with open("axis2_waveforms.json", "wt") as file:
+    #     file.write(json.dumps(d))
+    # print(d)
     return
 
     d = dev.read_axis_counter(1)

@@ -364,13 +364,21 @@ class SPSStateMachineBase(object):
             self.do_one_loop()
 
     def lock_machine(self) -> None:
-        if not self._machine_locked:
-            self.dev.lock_machine_step()
-            self._machine_locked = True
+        try:
+            if not self._machine_locked:
+                self.dev.lock_machine_step()
+                self._machine_locked = True
+        except ModbusException as ex:
+            print(f"SPS-lock: {ex}")
+            pass  # ignore
 
     def unlock_machine(self) -> None:
-        self.dev.unlock_machine_step()
-        self._machine_locked = False
+        try:
+            self.dev.unlock_machine_step()
+            self._machine_locked = False
+        except ModbusException as ex:
+            print(f"SPS-unlock: {ex}")
+            pass  # ignore
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
@@ -496,7 +504,8 @@ class SPSStateMachineRotating(SPSStateMachineBase):
             pass  # swallow
         finally:
             # make sure that the welding machine will be unlocked in any failure cases
-            self.unlock_machine() # verifies the _machine_locked state
+            if self._machine_locked:
+                self.unlock_machine() # verifies the _machine_locked state
             # do not change the state here
             pass
 
@@ -524,7 +533,11 @@ class SPSStateMachine(SPSStateMachineBase):
     #----------------------------------------------------------------------------------------------
 
     def close(self):
-        self.dev.lock_machine_step()
+        try:
+            self.dev.lock_machine_step()
+        except ModbusException as ex:
+            print(f"SPS-close: {ex}")
+            pass
         super().close()
 
     #----------------------------------------------------------------------------------------------
@@ -557,8 +570,8 @@ class SPSStateMachine(SPSStateMachineBase):
 
                 case SPSStates.START: # locked
                     if self.dev.is_machine_ready():
-                        self._machine_locked = self.dev.read_machine_lock_status()
                         self.unlock_machine()
+                        self._machine_locked = self.dev.read_machine_lock_status()
                         self.set_state(SPSStates.INIT)
                     else:
                         sleep(self._throttle_pause)  # throttle polling
@@ -727,8 +740,10 @@ class ProcessSPS(mp.Process):
         _, _station_id, _dsp_api_base_url, _line_id, _ = cfg.get_station_configuration()
         # 2. with station config we can request the part number from DSP
         print("Fetching part number from DSP...")
-        _dsp_info = dsp.get_parameter_for_testrun("CELL_WELDING", _station_id, _line_id, "0")
+        #_dsp_info = dsp.get_parameter_for_testrun("CELL_WELDING", _station_id, _line_id, "0")
+        _dsp_info = dsp.get_parameter_for_welding(_station_id, _line_id)
         _part_number = _dsp_info["part_number"]
+        _sequence_revision = _dsp_info["test_program_id"]
         # 3. with station config we can get the IP resource for the welder MODBUS
         _resources = cfg.get_resource_strings_for_socket(0)
         _controller_resource_str = _resources[0]
@@ -794,7 +809,7 @@ class ProcessSPS(mp.Process):
                 })
             else:
                 # execute the state-machine if configured
-                if not _udi:
+                if not _udi and self.enable_udi_scan:
                     SM.lock_machine()
                     #SM.set_state(SPSStates.LOCK_MACHINE)
                 # check actions depending on state
@@ -850,7 +865,7 @@ class ProcessSPS(mp.Process):
                         # we are in the middle of a sequence
                         answer = "NOT OK"
                 if "move_counter" in cmd:
-                    if ENABLE_UDI_SCAN:
+                    if self.enable_udi_scan:
                         if _udi:
                             SM.set_state(SM.move_seqence_step(int(cmd["move_counter"])))
                         answer = "OK"
@@ -926,9 +941,11 @@ class ProcessScanner(mp.Process):
 
 if __name__ == '__main__':
     ## Initialize the logging
-    from rrc.custom_logging import logger_init
-    logger_init(filename_base=None)  ## init root logger with different filename
-    _log = getLogger(__name__, DEBUG)
+    #from rrc.custom_logging import logger_init
+    #logger_init(filename_base=None)  ## init root logger with different filename
+    #_log = getLogger(__name__, DEBUG)
+    import logging
+    logging.basicConfig()
 
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("--development", action="store_true", help="Activate development mode.")

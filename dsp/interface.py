@@ -62,7 +62,7 @@ class DspInterface:
 
     def get_parameter_for_welding(self, station_id: str, line_id: str) -> dict:
         _log = getLogger(__name__, DEBUG)
-        response = requests.get(f"{self.API_BASE_URL}/GET_PARAMETER_FOR_WELDING", params= {"station_id": station_id, "line_id": line_id})
+        response = requests.get(f"{self.API_BASE_URL}/GET_PARAMETER_FOR_WELDING", params={"station_id": station_id, "line_id": line_id})
         # expects JSON of
         # {
         #     station_id: str,          # optional
@@ -79,12 +79,14 @@ class DspInterface:
             raise DSPInterfaceError(f"DSP controller error, wrong parameters for test run {configuration}")
         # the welder' SPS configuration needs only a revision, not really a program/sequence name
         runparams = {
+            "test_type": "CELL_WELDING",
+            "test_socket": 0,  # dummy
             "station_id": station_id,
             "line_id": line_id,
-            "sequence_revision": configuration["sequence_revision"],
+            "test_program_id": configuration["sequence_revision"],
             "part_number": configuration["part_number"],
         }
-        # do NOT combine the runparameters into API
+        self.api = {**self.api, **runparams}
         return runparams
 
 
@@ -230,7 +232,16 @@ class DspInterface:
 
     #--------------------------------------------------------------------------------------------------
 
-    def send_udi_upfront(self, udi: str) -> None:
+    # def send_udi_upfront(self, test_type: str, station_id: str, line_id: str, part_number: str, udi: str) -> Tuple[bool, dict]:
+    #     _log = getLogger(__name__, DEBUG)
+    #     data = {
+    #         "test_type": test_type, #self.api["test_type"],
+    #         "station_id": station_id, #self.api["station_id"],
+    #         "line_id": line_id, #self.api["line_id"],
+    #         "part_number": part_number, #self.api["part_number"],
+    #         "udi": udi
+    #     }
+    def send_udi_upfront(self, udi: str) -> Tuple[bool, dict]:
         _log = getLogger(__name__, DEBUG)
         data = {
             "test_type": self.api["test_type"],
@@ -241,9 +252,13 @@ class DspInterface:
         }
         response = requests.post(f"{self.API_BASE_URL}/SEND_UDI", json=data)
         _log.debug(response)
-        if response.status_code not in [200, 202]:
+        if response.status_code not in [200, 202, 406]:
             raise DSPInterfaceError(f"DSP controller error, cannot update UDI {response.status_code}: {response.json()}")
-        return
+        if response.status_code == 406:  # not acceptable!
+            # Serial number black listed or any other failer with it
+            _log.warning(response.json())
+            return False, response.json()
+        return True, response
 
     #--------------------------------------------------------------------------------------------------
 
@@ -465,17 +480,34 @@ def test_teststand_interface(dsp: DspInterface, test_type: str, udi: str ):
     )
 
 def test_welder_interface(dsp: DspInterface, udi: str ):
-    ts_test_run = dsp.ts_get_parameter_for_testrun("CELL_WELDING", "PDPC1302", 1, 0)
-    _log.info(f"TESTRUN: {ts_test_run}")
+    test_run = dsp.get_parameter_for_welding("PDPC1302", 1)
+    #ts_test_run = dsp.ts_get_parameter_for_testrun("CELL_WELDING", "PDPC1302", 1, 0)
+    _log.info(f"TESTRUN: {test_run}")
+    #ok, response  = dsp.send_udi_upfront("CELL_WELDING", "PDPC1302", 1, test_run["part_number"], udi )
+    ok, response  = dsp.send_udi_upfront(udi)
+    _log.info(f"UDI: {ok}/{response}")
 
-    # dsp.ts_send_result_for_testrun(
-    #     "P",               # result
-    #     datetime.utcnow().isoformat(),  # start_datetime e.g. 2022-12-24T17:28:23.382748
-    #     3.465,             # execution_time
-    #     udi,               # udi, scanned string
-    #     serial             # serial number
-    # )
-
+    dsp.ts_send_result_for_testrun(
+        "Passed",          # result PASS
+        datetime.utcnow().isoformat(),  # start_datetime e.g. 2022-12-24T17:28:23.382748
+        3.465,             # execution_time
+        udi,               # udi, scanned string
+        ""                 # serial number
+    )
+    dsp.ts_send_result_for_testrun(
+        "Failed",          # result PASS
+        datetime.utcnow().isoformat(),  # start_datetime e.g. 2022-12-24T17:28:23.382748
+        2.465,             # execution_time
+        udi,               # udi, scanned string
+        ""                 # serial number
+    )
+    dsp.ts_send_result_for_testrun(
+        "Aborted",         # result Terminate or Abort
+        datetime.utcnow().isoformat(),  # start_datetime e.g. 2022-12-24T17:28:23.382748
+        1.465,             # execution_time
+        udi,               # udi, scanned string
+        ""                 # serial number
+    )
 
 
 #--------------------------------------------------------------------------------------------------
