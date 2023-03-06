@@ -1,6 +1,7 @@
 from typing import Any, List
 from struct import pack, unpack, unpack_from
 from enum import Enum
+from time import perf_counter
 from pymodbus import version as modbus_version
 from pymodbus.client import ModbusTcpClient, ModbusSerialClient
 from pymodbus.payload import BinaryPayloadDecoder, BinaryPayloadBuilder
@@ -22,12 +23,21 @@ from rrc.custom_logging import getLogger, logger_init
 def remove_non_ascii(string: str) -> str:
     return ''.join(char for char in string if ord(char) > 0 and ord(char) < 128)
 
+def swap_byte_pairs_to_string(s: bytes | bytearray) -> str:
+    t = list(s)
+    t[::2], t[1::2] = t[1::2], t[::2]
+    return ''.join(t)
+
+#int.to_bytes(2, byteorder='big')
+
 class AWS3Modbus(ModbusClient):
 
     def __init__(self, connection_str: str, group_by_gateway: bool = True) -> None:
         super().__init__(connection_str, group_by_gateway=group_by_gateway, unit_address=None,
                         byte_order=Endian.Big, word_order=Endian.Little)
         self.machine_name = None
+        self.last_modbus_access = perf_counter()
+        self.modbus_time_threshold = 0.02  # wait time between two modbus access in s
 
     def __str__(self) -> str:
         return f"AWS3 Welder Modbus connection on {repr(self.client)}"
@@ -36,17 +46,27 @@ class AWS3Modbus(ModbusClient):
         return f"AWS3Modbus({self._connection_str}, group_by_gateway={self.group_by_gateway}"
 
     #----------------------------------------------------------------------------------------------
-    def setup_device(self):
-        self.set_machine_byteorder()  # switch byte order to default
-        self.machine_name = self.read_name().strip()
 
     def get_identification_str(self) -> str:
         return f"{self.machine_name}@{self._connection_str}"
 
+    def _sync_modbus_timing(self):
+        while True:
+            t0 = perf_counter()
+            if t0 - self.last_modbus_access > self.modbus_time_threshold:
+                break
+        self.last_modbus_access = t0  # timestamp for sync of next access
+
+    def setup_device(self):
+        self.set_machine_byteorder()  # switch byte order to default
+        self.machine_name = self.read_name().strip()
+
     def set_machine_byteorder(self, bo: int = 3) -> None:
+        self._sync_modbus_timing()
         self.write_register(9999-1, bo, unit_address=3) # 3=default, 1=big
 
     def is_machine_ready(self) -> tuple:
+        self._sync_modbus_timing()
         #return not self.read_coils(65-1, 1, unit_address=3)[0]
         #return self.read_coils(97-1, 8, unit_address=3)[0]
         bits = self.read_coils(97-1, 8, unit_address=3)
@@ -60,15 +80,19 @@ class AWS3Modbus(ModbusClient):
         return bits[0], d
 
     def read_machine_lock_status(self) -> tuple:
+        self._sync_modbus_timing()
         return self.read_coils(45-1, 1, unit_address=3)[0]
 
     def lock_machine_step(self) -> bool:
+        self._sync_modbus_timing()
         return self.write_coil(45-1, True, unit_address=3)
 
     def unlock_machine_step(self) -> bool:
+        self._sync_modbus_timing()
         return self.write_coil(45-1, False, unit_address=3)
 
     def write_program_no(self, number):
+        self._sync_modbus_timing()
         #ec: BinaryPayloadBuilder = self.getEncoder()
         #ec.add_16bit_uint(number)
         #self.write_registers(200-1, ec.to_registers(), unit_address=3)
@@ -76,14 +100,17 @@ class AWS3Modbus(ModbusClient):
         self.write_register(200-1, number, unit_address=3)
 
     def read_program_no(self) -> int:
+        self._sync_modbus_timing()
         response = self.read_holding_registers(200-1, 1, unit_address=3)
         dc: BinaryPayloadDecoder = self.getDecoder(response)#
         return dc.decode_16bit_uint()
 
     def read_axis_counter(self, axis: int) -> int:
         assert (axis in [1,2])
+        self._sync_modbus_timing()
         response1 = self.read_holding_registers(1-1, 2, unit_address=axis)
         dc1: BinaryPayloadDecoder = self.getDecoder(response1)
+        self._sync_modbus_timing()
         response2 = self.read_holding_registers(73-1, 4, unit_address=axis)
         dc2: BinaryPayloadDecoder = self.getDecoder(response2)
         d = {
@@ -95,6 +122,7 @@ class AWS3Modbus(ModbusClient):
 
 
     def read_binary_io(self) -> dict:
+        self._sync_modbus_timing()
         response = self.read_holding_registers(412-1, 8, unit_address=3)
         dc: BinaryPayloadDecoder = self.getDecoder(response)
         d = {
@@ -108,11 +136,13 @@ class AWS3Modbus(ModbusClient):
 
     def read_measuring_values(self, axis: int):
         assert (axis in [1,2])
+        self._sync_modbus_timing()
         response = self.read_holding_registers(1-1, 76, unit_address=axis)
         return response
 
 
     def read_parameters(self):
+        self._sync_modbus_timing()
         response = self.read_holding_registers(200-1, 10, unit_address=3)
         dc: BinaryPayloadDecoder = self.getDecoder(response)
         d = {
@@ -131,20 +161,24 @@ class AWS3Modbus(ModbusClient):
 
     def read_program_parameters(self, axis: int):
         assert (axis in [1,2])
+        self._sync_modbus_timing()
         response1 = self.read_holding_registers(301-1, 120, unit_address=axis)
-
+        self._sync_modbus_timing()
         response2 = self.read_holding_registers(420-1, 120, unit_address=axis)
+        self._sync_modbus_timing()
         pc1 = self.read_holding_registers(446-1, 2, unit_address=axis)
         return response1 + response2 + ["COUNTER "] + pc1
 
     def read_global_parameters(self, axis: int) -> dict:
         assert (axis in [1,2])
+        self._sync_modbus_timing()
         response = self.read_holding_registers(601-1, 24, unit_address=axis)
         dc: BinaryPayloadDecoder = self.getDecoder(response)
         # read a string
-        self.set_machine_byteorder(1)
+        #self.set_machine_byteorder(1)
+        self._sync_modbus_timing()
         response2 = self.read_holding_registers(833-1, 16, unit_address=axis)
-        self.set_machine_byteorder()
+        #self.set_machine_byteorder()
         dc2: BinaryPayloadDecoder = self.getDecoder(response2)
         d = {
             "CounterMode": dc.decode_8bit_uint(),
@@ -159,39 +193,41 @@ class AWS3Modbus(ModbusClient):
             "EnableDataLogging": dc.decode_8bit_uint(),
             "LogFileNumber": dc.decode_32bit_int(),
             "CheckReference": dc.decode_8bit_uint(),
-            "LogExternalInfo": remove_non_ascii(dc2.decode_string(16*2).decode()),
+            "LogExternalInfo": remove_non_ascii(swap_byte_pairs_to_string(dc2.decode_string(16*2).decode())),
             "StaticLoadPos0": dc.decode_32bit_float(),
             "StaticLoadPos1": dc.decode_32bit_float(),
         }
         return d
 
     def read_system_parameters(self):
+        self._sync_modbus_timing()
         response = self.read_holding_registers(501-1, 125, unit_address=3)
         return response
 
     def read_program_name(self, axis: int) -> str:
         assert (axis in [1,2])
         n = 16
-        self.set_machine_byteorder(1)
+        #self.set_machine_byteorder(1)
+        self._sync_modbus_timing()
         response = self.read_holding_registers(801-1, n, unit_address=axis)
-        self.set_machine_byteorder()
+        #self.set_machine_byteorder()
         dc: BinaryPayloadDecoder = self.getDecoder(response)
         b = dc.decode_string(size=n*2)  # size = bytes not words
-        return remove_non_ascii(b.decode())
+        return remove_non_ascii(swap_byte_pairs_to_string(b.decode()))
 
     def read_name(self) -> str:
         n = 32  # guessed
-        self.set_machine_byteorder(1)
+        #self.set_machine_byteorder(1)
+        self._sync_modbus_timing()
         response = self.read_holding_registers(801-1, n, unit_address=3)
-        self.set_machine_byteorder()
+        #self.set_machine_byteorder()
         dc: BinaryPayloadDecoder = self.getDecoder(response)
         b = dc.decode_string(size=n*2)  # size = bytes not words
-        return remove_non_ascii(b.decode())
+        return remove_non_ascii(swap_byte_pairs_to_string(b.decode()))
 
     def read_ext_status(self, axis: int) -> dict:
         n = 2
-        #self.set_machine_byteorder(1)
-        #response = self.read_input_registers(101-1, n, unit_address=1)
+        self._sync_modbus_timing()
         response = self.read_holding_registers(101-1, n, unit_address=1)
         return response
 
