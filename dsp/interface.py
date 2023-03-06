@@ -329,8 +329,7 @@ class DspInterface:
 
     #--------------------------------------------------------------------------------------------------
 
-    def ts_send_result_for_testrun(self, result: str, start_datetime: str, execution_time: float,
-                                   udi: str, serial_number: str) -> None:
+    def ts_send_result_for_testrun(self, result: str, start_datetime: str, execution_time: float, udi: str, serial_number: str) -> None:
         self.api["result"] = result[:1].upper()  # only first letter
         self.api["start_datetime"] = start_datetime
         self.api["execution_time"] = float(execution_time)
@@ -341,11 +340,61 @@ class DspInterface:
         remaining_list = self.send_result_of_testrun(result_list)
         self.save_result_list_to_json(remaining_list)
 
+
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
+from .mockup_information import PART_INFORMATION
 
 class DspInterface_SIMULATION(DspInterface):
-    pass
+
+    def __init__(self, api_base_url: str, local_result_file: str | Path ) -> None:
+        # using api_base_url as simulation selector:
+        #
+        # "RRC2020B" or "RRC2040B"
+        #
+        self.SIMULATED_PART = api_base_url
+
+    def set_result(self, result: str):
+        pass
+
+    def get_parameter_for_welding(self, station_id: str, line_id: str) -> dict:
+        pass
+
+    def get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> dict:
+        d = PART_INFORMATION[self.SIMULATED_PART][test_type]
+        for k,v in d.items():
+            if isinstance(v, tuple):
+                d[k] = v[1]  # we do not need the tuples
+        return d
+
+    def verify_serial_number(self, test_type: str, station_id: str, line_id: str, test_socket: str, part_number:str, serial_number: str) -> Tuple[bool, dict]:
+        pass
+
+    def get_serial_number_for_udi(self, test_type: str, station_id: str, line_id: str, test_socket: str, udi: str) -> Tuple[bool, dict]:
+        pass
+
+    def send_udi_upfront(self, udi: str) -> None:
+        pass
+
+    def ts_get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: int, test_socket: int) -> tuple:
+        d = self.get_parameter_for_testrun(None,None,None,None)
+        order = ["test_program_id", "part_number"]
+        return tuple([(d[field][1] if d[field][1] is not None else "") for field in order])
+
+    def ts_get_serial_number_for_udi(self, udi: str) -> str:
+        pass
+
+    def ts_send_result_for_testrun(self, result: str, start_datetime: str, execution_time: float, udi: str, serial_number: str) -> None:
+        pass
+
+    def send_result_of_testrun(self, result_list: list[dict]) -> list[dict]:
+        pass
+
+    def save_result_list_to_json(self, result_list: list[dict]) -> None:
+        pass
+
+    def load_result_list_from_json(self) -> list[dict]:
+        pass
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------

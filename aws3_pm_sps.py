@@ -12,7 +12,7 @@ from datetime import timezone, datetime
 from pymodbus.exceptions import ModbusException
 from rrc.modbus.aws3 import AWS3Modbus, AWS3Modbus_DUMMY
 from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
-from rrc.dsp.interface import DspInterface
+from rrc.dsp.interface import DspInterface, DspInterface_SIMULATION
 # import SQL managing modules
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -26,8 +26,8 @@ DEBUG = 0   # set to 0 for production
 from rrc.custom_logging import getLogger
 # --------------------------------------------------------------------------- #
 
-ENABLE_UDI_SCAN = None  # is being overwritten by argument
-
+ENABLE_UDI_SCAN: int = None  # is being overwritten by argument
+SIMULATED_DSP_PRODUCT: str = None # is being overwritten by argument
 
 #--------------------------------------------------------------------------------------------------
 
@@ -392,13 +392,14 @@ class SPSStateMachineRotating(SPSStateMachineBase):
     def move_seqence_step(self, step: int) -> SPSStates:
         if self.sequence_pos + step >= len(self.program_sequence):
             # sequence is done
+            # (here in Rotating StateMachine its only a hint but will not block further counting)
             self.is_sequence_done = True
         else:
             self.is_sequence_done = False
-            self._offset_sequence(step)
-            self.next_program_no = self.program_sequence[self.sequence_pos]
-            print(f"Move program step to {self.sequence_pos} with program no {self.next_program_no}")
-            self.last_counter_ax1 = self.counter_ax1
+        self._offset_sequence(step)
+        self.next_program_no = self.program_sequence[self.sequence_pos]
+        print(f"Move program step to {self.sequence_pos} with program no {self.next_program_no}")
+        self.last_counter_ax1 = self.counter_ax1
         return SPSStates.WAIT_READY_TO_SET_PROGRAM
 
     def reset_seqence(self) -> None:
@@ -441,6 +442,7 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                     self.set_state(SPSStates.SYNC_ON_MACHINE_COUNTER)
 
                 case SPSStates.SYNC_ON_MACHINE_COUNTER:
+                    _do_pause = True
                     if self.dev.is_machine_ready():
                         self.counter_ax1 = self.dev.read_axis_counter(1)
                         #  check if we have to moved to the  next program step
@@ -449,9 +451,8 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                             self.last_counter_ax1 = self.counter_ax1
                             print(f"Counters: Ax1={self.counter_ax1}")
                             self.set_state(SPSStates.FETCH_NEXT_PROGRAM)
-                        else:
-                            sleep(self._throttle_pause)  # throttle polling
-                    else:
+                            _do_pause = False
+                    if _do_pause:
                         sleep(self._throttle_pause)  # throttle polling
 
                 case SPSStates.FETCH_NEXT_PROGRAM:
@@ -672,7 +673,7 @@ class SPSStateMachine(SPSStateMachineBase):
 # *** SPS ***
 #
 
-def _create_interfaces() -> Tuple[StationConfiguration, DspInterface]:
+def _create_interfaces(simulation: None | str = None) -> Tuple[StationConfiguration, DspInterface]:
     """Creates the interfaces for configuration and DSP.
 
     Note: this is called from process context,
@@ -686,11 +687,15 @@ def _create_interfaces() -> Tuple[StationConfiguration, DspInterface]:
     try:
         cfg = StationConfiguration("CELL_WELDING") #, filename=CONF_FILENAME_DEV)
     except FileNotFoundError:
-        # comfort for testing
+        # comfort for testing: using the development configuration
         cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
     _, __, _dsp_api_base_url, _, _ = cfg.get_station_configuration()
     # 2. we can create the DSP interface
-    dsp = DspInterface(_dsp_api_base_url, None)
+    if simulation:
+        print(f"Use simulation for DSP interface configured {simulation}")
+        dsp = DspInterface_SIMULATION(simulation, None)
+    else:
+        dsp = DspInterface(_dsp_api_base_url, None)
     return cfg, dsp
 
 
@@ -699,11 +704,13 @@ class ProcessSPS(mp.Process):
 
     def __init__(self, command_queue: mp.JoinableQueue, response_queue: mp.Queue) -> None:
         mp.Process.__init__(self)
-        global DEBUG, ENABLE_UDI_SCAN
+        global DEBUG, ENABLE_UDI_SCAN, SIMULATED_DSP_PRODUCT
+
         self._log = getLogger(__name__, DEBUG)
         self.command_queue = command_queue
         self.response_queue = response_queue
         self.enable_udi_scan = ENABLE_UDI_SCAN
+        self.simulated_dsp_product = SIMULATED_DSP_PRODUCT
 
 
     def collect_parameters(self, cfg: StationConfiguration, dsp: DspInterface) -> Tuple[List[int], str, str, str]:
@@ -749,7 +756,7 @@ class ProcessSPS(mp.Process):
         """
 
         # we need to keep the _dsp interface for UDI presentation and result transmission
-        _cfg, _dsp = _create_interfaces()
+        _cfg, _dsp = _create_interfaces(self.simulated_dsp_product if (not self.enable_udi_scan) else None)
 
         SM = None
         proc_name: str = self.name
@@ -925,10 +932,12 @@ if __name__ == '__main__':
 
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("--development", action="store_true", help="Activate development mode.")
+    parser.add_argument("--product", choices=["RRC2020B", "RRC2040B"], action="store", default="RRC2020B", help="Set a product for simulated DSP interface.")
+
     args = parser.parse_args()
 
     ENABLE_UDI_SCAN = 0 if args.development else 1
-    #ENABLE_UDI_SCAN = 0
+    SIMULATED_DSP_PRODUCT = args.product
 
     p = None
     w = None
