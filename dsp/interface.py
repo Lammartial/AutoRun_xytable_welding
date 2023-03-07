@@ -1,6 +1,7 @@
 """
+Interface to DSP of MES system.
 
-
+Implemented as REST API
 
 """
 
@@ -13,11 +14,8 @@ from pathlib import Path
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-
-DEBUG = 2
-
+DEBUG = 0
 from rrc.custom_logging import getLogger, logger_init
-
 # --------------------------------------------------------------------------- #
 
 __version__ = "0.5.0"
@@ -61,7 +59,9 @@ class DspInterface:
 
 
     def get_parameter_for_welding(self, station_id: str, line_id: str) -> dict:
+        global DEBUG
         _log = getLogger(__name__, DEBUG)
+        #_log.info("WELDING PARAMETERS FOR ", station_id, line_id)
         response = requests.get(f"{self.API_BASE_URL}/GET_PARAMETER_FOR_WELDING", params={"station_id": station_id, "line_id": line_id})
         # expects JSON of
         # {
@@ -242,6 +242,7 @@ class DspInterface:
     #         "udi": udi
     #     }
     def send_udi_upfront(self, udi: str) -> Tuple[bool, dict]:
+        global DEBUG
         _log = getLogger(__name__, DEBUG)
         data = {
             "test_type": self.api["test_type"],
@@ -373,7 +374,11 @@ class DspInterface_SIMULATION(DspInterface):
         pass
 
     def get_parameter_for_welding(self, station_id: str, line_id: str) -> dict:
-        pass
+        d = PART_INFORMATION[self.SIMULATED_PART]["CELL_WELDING"]
+        for k,v in d.items():
+            if isinstance(v, tuple):
+                d[k] = v[1]  # we do not need the tuples
+        return d
 
     def get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> dict:
         d = PART_INFORMATION[self.SIMULATED_PART][test_type]

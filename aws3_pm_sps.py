@@ -22,7 +22,7 @@ from rrc.barcode_scanner import create_barcode_scanner, Eth2SerialDevice, Serial
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-DEBUG = 0   # set to 0 for production
+DEBUG = 2   # set to 0 for production
 from rrc.custom_logging import getLogger
 # --------------------------------------------------------------------------- #
 
@@ -266,6 +266,12 @@ class WindowUI(object):
                     print("REJECTED UDI")
                     _do_update = True
                     pass
+                if "udi_not_confirmed" in a:
+                    self.label_udi.config(background="orange", foreground="red")
+                    self.var_label_udi.set(a["udi_not_confirmed"])
+                    print("BLACKLISTED UDI")
+                    _do_update = True
+                    pass                
                 if "result" in a:
                     if "passed" in a["result"]:
                         self.label_udi.config(background="green", foreground="black")
@@ -759,7 +765,7 @@ class ProcessSPS(mp.Process):
             rows = response.fetchall()
         if len(rows) == 0:
             # not found! -> do not proceed
-            raise Exception("No Data in Database found, cannot proceed!")
+            raise Exception(f"No Data in Database for part {_part_number} found, cannot proceed!")
         print(f"Got record: {rows[0]}")
         return [int(i) for i in rows[0][1].split(",")], str(rows[0][0]), _controller_resource_str, _part_number
 
@@ -771,7 +777,7 @@ class ProcessSPS(mp.Process):
         """
 
         # we need to keep the _dsp interface for UDI presentation and result transmission
-        _cfg, _dsp = _create_interfaces(self.simulated_dsp_product if (not self.enable_udi_scan) else None)
+        _cfg, _dsp = _create_interfaces(None if self.enable_udi_scan>0 else self.simulated_dsp_product)
 
         SM = None
         proc_name: str = self.name
@@ -834,12 +840,12 @@ class ProcessSPS(mp.Process):
                 if cmd is None:
                     # Poison pill means shutdown
                     print(f"{proc_name}: Exiting")
+                    if _udi:
+                        # inform the DSP that the process has been aborted
+                        _dsp.ts_send_result_for_testrun("aborted", _start_datetime, perf_counter() - _execution_start, _udi, None)                    
                     if SM:
                         SM.close()
                         SM = None
-                    if _udi:
-                        # inform the DSP that the process has been aborted
-                        _dsp.ts_send_result_for_testrun("aborted", _start_datetime, perf_counter() - _execution_start, _udi, None)
                     self.command_queue.task_done()
                     break
                 print(f"{proc_name}: {cmd}")
@@ -851,11 +857,17 @@ class ProcessSPS(mp.Process):
                         if "CELL" in _verify_udi:
                             _udi = _verify_udi
                             self.response_queue.put({"udi_scanned": _udi})
-                            _dsp.send_udi_upfront(_udi)
-                            # need to reset the sequence
-                            SM.close()
-                            SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
-                            answer = "OK"
+                            ok, _response = _dsp.send_udi_upfront(_udi)
+                            if ok:
+                                # need to reset the sequence
+                                SM.close()
+                                SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
+                                answer = "OK"
+                            else:
+                                _udi = None                                
+                                self.response_queue.put({"udi_not_confirmed": "MES rejects UDI"})
+                                print(f"Response from MES: {_response}")
+                                answer = "NOT OK"    
                         else:
                             # false UDI -> popup ?
                             _udi = None
@@ -910,7 +922,7 @@ class ProcessScanner(mp.Process):
             _udi = None
             if 1:
                 try:
-                    _udi = scanner.request(None, timeout=None)
+                    _udi = scanner.request(None, timeout=None).strip()
                 except TimeoutError:
                     pass  # this is ok to keep the loop running
                 except Exception as ex:
@@ -940,13 +952,11 @@ class ProcessScanner(mp.Process):
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
-    ## Initialize the logging
-    #from rrc.custom_logging import logger_init
-    #logger_init(filename_base=None)  ## init root logger with different filename
-    #_log = getLogger(__name__, DEBUG)
-    import logging
-    logging.basicConfig()
-
+    # Initialize the logging
+    from rrc.custom_logging import logger_init
+    logger_init(filename_base=None)  ## init root logger with different filename
+    _log = getLogger(__name__, DEBUG)
+    
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("--development", action="store_true", help="Activate development mode.")
     parser.add_argument("--product", choices=["RRC2020B", "RRC2040B"], action="store", default="RRC2020B", help="Set a product for simulated DSP interface.")
