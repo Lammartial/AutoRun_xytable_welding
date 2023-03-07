@@ -18,7 +18,7 @@ from pymodbus.pdu import ExceptionResponse
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-DEBUG = 1
+DEBUG = 2
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
@@ -35,7 +35,10 @@ from rrc.custom_logging import getLogger, logger_init
 import logging
 logging.getLogger("pymodbus.client").setLevel(logging.DEBUG if DEBUG>1 else logging.INFO)
 logging.getLogger("pymodbus.protocol").setLevel(logging.DEBUG if DEBUG>1 else logging.INFO)
+logging.getLogger("pymodbus.payload").setLevel(logging.INFO)  # payload logging takes too long
+#logging.getLogger("pymodbus.transaction").setLevel(logging.DEBUG)
 logging.getLogger("pymodbus").setLevel(logging.DEBUG if DEBUG>1 else logging.INFO)
+
 
 
 #--------------------------------------------------------------------------------------------------

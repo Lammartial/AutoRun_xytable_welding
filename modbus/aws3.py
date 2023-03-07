@@ -269,7 +269,8 @@ class AWS3Modbus(ModbusClient):
 
     def read_ext_status(self, axis: int) -> dict:
         self._sync_modbus_timing()
-        response = self.read_holding_registers(101-1, 2, unit_address=axis)
+        #response = self.read_holding_registers(101-1, int(26/2), unit_address=axis)
+        response = self.read_input_registers(101-1, int(26/2), unit_address=axis)
         return response
 
     def read_program_name(self, axis: int) -> str:
@@ -314,7 +315,7 @@ class AWS3Modbus(ModbusClient):
             m = ()
             k: int = 0
             while k < p:
-                r = min(64, p - k)
+                r = min(124, p - k)
                 #self._sync_modbus_timing()
                 response = self.read_holding_registers(1008 - 1 + k, r, unit_address=axis)
                 dc: BinaryPayloadDecoder = self.getDecoder(response)
@@ -406,13 +407,13 @@ class AWS3Modbus_DUMMY(object):
 def test_basic_communication(dev: AWS3Modbus):
     import json
 
-    d = dev.read_machine_lock_status()
-    print("LOCK STATUS:", d)
-    d = dev.read_ext_status(1)
-    print(d)
+    #d = dev.read_ext_status(1)
+    #print(d)
 
     d = dev.read_name()
     print("NAME: ", d)
+    d = dev.read_machine_lock_status()
+    print("LOCK STATUS:", d)    
     d = dev.is_machine_ready()
     print("MACHINE READY: ", d)
     d = dev.read_axis_counter(1)
@@ -445,11 +446,12 @@ def test_basic_communication(dev: AWS3Modbus):
 
 
 #--------------------------------------------------------------------------------------------------
-if __name__ == '__main__':
+if __name__ == '__main__':    
     from time import sleep
+    from pathlib import Path
 
     ## Initialize the logging
-    logger_init(filename_base=None)  ## init root logger with different filename
+    logger_init(filename_base=Path(__file__).parent / "aws3")  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
     log_modbus_version()
