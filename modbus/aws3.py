@@ -266,6 +266,12 @@ class AWS3Modbus(ModbusClient):
         response = self.read_holding_registers(501-1, 125, unit_address=3)
         return response
 
+
+    def read_ext_status(self, axis: int) -> dict:
+        self._sync_modbus_timing()
+        response = self.read_holding_registers(101-1, 2, unit_address=axis)
+        return response
+
     def read_program_name(self, axis: int) -> str:
         assert (axis in [1,2])
         n = 16
@@ -286,13 +292,6 @@ class AWS3Modbus(ModbusClient):
         dc: BinaryPayloadDecoder = self.getDecoder(response)
         b = dc.decode_string(size=n*2)  # size = bytes not words
         return remove_non_ascii(swap_byte_pairs_to_string(b.decode()))
-
-    def read_ext_status(self, axis: int) -> dict:
-        n = 2
-        self._sync_modbus_timing()
-        response = self.read_holding_registers(101-1, n, unit_address=1)
-        return response
-
 
     def read_waveform_data(self, axis: int) -> dict:
         global DEBUG
@@ -408,19 +407,14 @@ def test_basic_communication(dev: AWS3Modbus):
     import json
 
     d = dev.read_machine_lock_status()
+    print("LOCK STATUS:", d)
+    d = dev.read_ext_status(1)
     print(d)
+
     d = dev.read_name()
-    # print(d)
-    # d = dev.read_program_name(1)
-    # print(d)
-    # d = dev.read_program_name(2)
-    # print(d)
-    #d = dev.read_ext_status(1)
-    #print(d)
-    #d = dev.read_ext_status(2)
-    #print(d)
+    print("NAME: ", d)
     d = dev.is_machine_ready()
-    print(d)
+    print("MACHINE READY: ", d)
     d = dev.read_axis_counter(1)
     print("AXIS1 COUNTER:", d)
     d = dev.read_axis_counter(2)
@@ -433,6 +427,8 @@ def test_basic_communication(dev: AWS3Modbus):
     print("SYSTEM PARAMETERS: ", d)
 
     for axis in (1,2):
+        d = dev.read_program_name(axis)
+        print(f"PROGRAM NAME AXIS {axis}: ", d)
         d = dev.read_global_parameters(axis)
         print(f"GLOBAL PARAMETERS AXIS {axis}: ", d)
         d = dev.read_measuring_values(axis)
