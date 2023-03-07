@@ -16,7 +16,7 @@ from rrc.modbus.base import ModbusClient, log_modbus_version
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-DEBUG = 0
+DEBUG = 2
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
@@ -255,26 +255,34 @@ class AWS3Modbus(ModbusClient):
 
 
     def read_waveform_data(self, axis: int) -> dict:
+        global DEBUG
+        _log = getLogger(__name__, DEBUG)
         _dt = [(19,"I"), (20,"U"), (3,"P"), (7,"s3"), (8,"F"), (9,"p")]
         d = {}
         for c, u in _dt:
+            _log.debug(f"Activate Waveform {u}")
             self.write_register(1001-1, c, unit_address=axis)
             #self._sync_modbus_timing(next_wait_s=self._wait_after_write)
             response = self.read_holding_registers(1002-1, 6, unit_address=axis)
             dc: BinaryPayloadDecoder = self.getDecoder(response)
             d[u] = {
-                "waveform_sample_time": dc.decode_32bit_uint(),
-                "waveform_points": dc.decode_32bit_uint(),
-                "waveform_resolution": dc.decode_32bit_float(),
+                "WaveformSampleTime": dc.decode_32bit_uint(),
+                "WaveformPoints": dc.decode_32bit_uint(),
+                "WaveformResolution": dc.decode_32bit_float(),
                 "points": [],
-            }
+            }            
+            p = d[u]["WaveformPoints"]
             m = ()
-            for i in range(4):
+            k: int = 0
+            while k < p:
+                r = min(64, p - k)            
                 #self._sync_modbus_timing()
-                response = self.read_holding_registers(1008+124*i-1, 124, unit_address=axis)
+                response = self.read_holding_registers(1008 - 1 + k, r, unit_address=axis)
                 dc: BinaryPayloadDecoder = self.getDecoder(response)
-                for n in range(int(124/2)):
+                for n in range(int(r/2)):
                     m = m + (dc.decode_32bit_float(),)
+                k += r
+            _log.debug(f"Data Points: {len(m)}")
             d[u]["points"] = list(m)
         return d
 
@@ -348,6 +356,12 @@ class AWS3Modbus_DUMMY(object):
 
     def read_name(self) -> str:
         pass
+
+    def read_name(self) -> str:
+        return "DUMMY-MACHINE"
+
+    def read_waveform_data(self, axis: int) -> dict:
+        return {}
 
 #--------------------------------------------------------------------------------------------------
 def test_basic_communication(dev: AWS3Modbus):
