@@ -116,7 +116,7 @@ class AWS3Modbus(ModbusClient):
     def read_program_no(self) -> int:
         self._sync_modbus_timing()
         response = self.read_holding_registers(200-1, 1, unit_address=3)
-        dc: BinaryPayloadDecoder = self.getDecoder(response)#
+        dc: BinaryPayloadDecoder = self.getDecoder(response)
         return dc.decode_16bit_uint()
 
     def read_axis_counter(self, axis: int) -> int:
@@ -132,9 +132,8 @@ class AWS3Modbus(ModbusClient):
         #     "program": dc2.decode_32bit_int(),
         #     "program_counter": dc2.decode_32bit_int(),
         # }
-        self._sync_modbus_timing()
-        response2 = self.read_holding_registers(73-1, 4, unit_address=axis)
-        dc2: BinaryPayloadDecoder = self.getDecoder(response2)
+
+        # this is optimizing modbusbus access to only the counter
         d = {
             "counter": dc1.decode_32bit_uint(),
             "program": None,
@@ -156,11 +155,52 @@ class AWS3Modbus(ModbusClient):
         return d
 
 
-    def read_measuring_values(self, axis: int):
+    def read_measuring_values(self, axis: int) -> dict:
         assert (axis in [1,2])
         self._sync_modbus_timing()
         response = self.read_holding_registers(1-1, 76, unit_address=axis)
-        return response
+        dc: BinaryPayloadDecoder = self.getDecoder(response)
+        d = {
+            "Counter": dc.decode_32bit_uint(),
+            "PeakCurrent_P1-Ipk": dc.decode_32bit_float(),
+            "PeakVoltage_P1-Upk": dc.decode_32bit_float(),
+            "EffectiveCurrent_P1-Irms": dc.decode_32bit_float(),
+            "EffectiveVoltage_P1_Urms": dc.decode_32bit_float(),
+            "Power_P1-P": dc.decode_32bit_float(),
+            "Energy_P1-W": dc.decode_32bit_float(),
+            "Resistance_P1-R": dc.decode_32bit_float(),
+            "WeldTime_P1-tw": dc.decode_32bit_float(),
+            "WeldPeriods_P1-tw~": dc.decode_32bit_float(),
+            "Displacement_P1-s3": dc.decode_32bit_float(),
+            "Force_P1-F/Ax1_Pressure_P1-p": dc.decode_32bit_float(),
+            "Value_P1-v": dc.decode_32bit_float(),
+            "PeakCurrent_P2-Ipk": dc.decode_32bit_float(),
+            "PeakVoltage_P2-Upk": dc.decode_32bit_float(),
+            "EffectiveCurrent_P2-Irms": dc.decode_32bit_float(),
+            "EffectiveVoltage_P2-Urms": dc.decode_32bit_float(),
+            "Power_P2-P": dc.decode_32bit_float(),
+            "Energy_P2-W": dc.decode_32bit_float(),
+            "Resistance_P2-R": dc.decode_32bit_float(),
+            "WeldTime_P2-tw": dc.decode_32bit_float(),
+            "WeldPeriods_P2-tw~": dc.decode_32bit_float(),
+            "Displacement_P2-s3": dc.decode_32bit_float(),
+            "Force_P2-F/Ax1_Pressure_P2-p": dc.decode_32bit_float(),
+            "Value_P2-v": dc.decode_32bit_float(),
+            "PeakCurrent_P3-Ipk": dc.decode_32bit_float(),
+            "PeakVoltage_P3-Upk": dc.decode_32bit_float(),
+            "EffectiveCurrent_P3-Irms": dc.decode_32bit_float(),
+            "EffectiveVoltage_P3-Urms": dc.decode_32bit_float(),
+            "Power_P3-P": dc.decode_32bit_float(),
+            "Energy_P3-W": dc.decode_32bit_float(),
+            "Resistance_P3-R": dc.decode_32bit_float(),
+            "WeldTime_P3-tw": dc.decode_32bit_float(),
+            "WeldPeriods_P3-tw~": dc.decode_32bit_float(),
+            "PartRecognition_Fs-s1": dc.decode_32bit_float(),
+            "PartRecognition_Fw-s1": dc.decode_32bit_float(),
+            "Program": dc.decode_32bit_int(),
+            "ProgramCounter": dc.decode_32bit_int(),
+        }
+        return d
 
 
     def read_parameters(self):
@@ -270,12 +310,12 @@ class AWS3Modbus(ModbusClient):
                 "WaveformPoints": dc.decode_32bit_uint(),
                 "WaveformResolution": dc.decode_32bit_float(),
                 "points": [],
-            }            
+            }
             p = d[u]["WaveformPoints"]
             m = ()
             k: int = 0
             while k < p:
-                r = min(64, p - k)            
+                r = min(64, p - k)
                 #self._sync_modbus_timing()
                 response = self.read_holding_registers(1008 - 1 + k, r, unit_address=axis)
                 dc: BinaryPayloadDecoder = self.getDecoder(response)
@@ -381,18 +421,6 @@ def test_basic_communication(dev: AWS3Modbus):
     #print(d)
     d = dev.is_machine_ready()
     print(d)
-    t0 = perf_counter()
-    d = dev.read_waveform_data(1)
-    with open("axis1_waveforms.json", "wt") as file:
-        file.write(json.dumps(d))
-    print(d)
-    print("TIME:", perf_counter()-t0)
-    # d = dev.read_waveform_data(2)
-    # with open("axis2_waveforms.json", "wt") as file:
-    #     file.write(json.dumps(d))
-    # print(d)
-    return
-
     d = dev.read_axis_counter(1)
     print("AXIS1 COUNTER:", d)
     d = dev.read_axis_counter(2)
@@ -403,20 +431,21 @@ def test_basic_communication(dev: AWS3Modbus):
     print("PARAMETERS:", d)
     d = dev.read_system_parameters()
     print("SYSTEM PARAMETERS: ", d)
-    d = dev.read_global_parameters(1)
-    print("GLOBAL PARAMETERS AXIS 1:", d)
-    d = dev.read_global_parameters(2)
-    print("GLOBAL PARAMETERS AXIS 1:", d)
-    d = dev.read_measuring_values(1)
-    print("MEASURING AXIS 1: ", d)
-    d = dev.read_measuring_values(2)
-    print("MEASURING AXIS 2: ",d)
-    d = dev.read_program_parameters(1)
-    print("PROGRAM PARAMETERS AXIS 1: ",d)
-    d = dev.read_program_parameters(2)
-    print("PROGRAM PARAMETERS AXIS 1: ", d)
 
-
+    for axis in (1,2):
+        d = dev.read_global_parameters(axis)
+        print(f"GLOBAL PARAMETERS AXIS {axis}: ", d)
+        d = dev.read_measuring_values(axis)
+        print(f"MEASURING AXIS {axis}: ", d)
+        d = dev.read_program_parameters(axis)
+        print(f"PROGRAM PARAMETERS AXIS {axis}: ", d)
+        t0 = perf_counter()
+        d = dev.read_waveform_data(1)
+        with open(f"axis{axis}_waveforms.json", "wt") as file:
+            file.write(json.dumps(d))
+        print(f"WAVEFORM DATA AXIS {axis}:", d)
+        print("TIME:", perf_counter()-t0)
+    return
 
 
 #--------------------------------------------------------------------------------------------------
