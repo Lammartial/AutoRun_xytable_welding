@@ -39,19 +39,25 @@ def logger_init(filename_base: str | None = "C:/Production/station_test") -> Non
 
     """
 
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+        logger.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
     ## get root logger
     # Do NOT use logger = logging.getLogger(__name__) here
     logger = logging.getLogger() ## root logger
 
     # check if we have already handlers set
-    if len(logger.handlers)>0:
+    if sys.excepthook == handle_exception:
         logger.debug(f"Logger already set.")
         return
 
     #print("print in logging.logger_init()")
     #print("print logging.py __name__: " +__name__)
     logger.setLevel(logging.NOTSET)
-
+        
     # File handler
     if filename_base:
         logfilepath = f"{filename_base}_{datetime.utcnow().strftime('%Y%m%d')}.log"
@@ -69,12 +75,6 @@ def logger_init(filename_base: str | None = "C:/Production/station_test") -> Non
     logger.addHandler(stream)  # activate handler
 
     # now add a handler for all uncaugt exceptions to find programming errors
-    def handle_exception(exc_type, exc_value, exc_traceback):
-        if issubclass(exc_type, KeyboardInterrupt):
-            sys.__excepthook__(exc_type, exc_value, exc_traceback)
-            return
-        logger.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
-
     sys.excepthook = handle_exception
     return
 
