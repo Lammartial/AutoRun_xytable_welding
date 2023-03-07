@@ -18,7 +18,7 @@ from pymodbus.pdu import ExceptionResponse
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-DEBUG = 2
+DEBUG = 1
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
@@ -33,19 +33,9 @@ from rrc.custom_logging import getLogger, logger_init
 # * pymodbus.protocol.* - all logging messages inside the protocol layer
 # ----------------------------------------------------------------------- #
 import logging
-#logging.basicConfig()
-logging.getLogger("pymodbus.client").setLevel(logging.DEBUG)
-logging.getLogger("pymodbus.protocol").setLevel(logging.DEBUG)
-logging.getLogger("pymodbus").setLevel(logging.DEBUG)
-
-# log_pymodbus_client = logging.getLogger("pymodbus.client")
-# log_pymodbus_protocol = logging.getLogger("pymodbus.protocol")
-# log_pymodbus = logging.getLogger("pymodbus")
-
-# log_pymodbus_client.setLevel(logging.DEBUG)
-# log_pymodbus_protocol.setLevel(logging.DEBUG)
-# log_pymodbus.setLevel(logging.DEBUG)
-
+logging.getLogger("pymodbus.client").setLevel(logging.DEBUG if DEBUG>1 else logging.INFO)
+logging.getLogger("pymodbus.protocol").setLevel(logging.DEBUG if DEBUG>1 else logging.INFO)
+logging.getLogger("pymodbus").setLevel(logging.DEBUG if DEBUG>1 else logging.INFO)
 
 
 #--------------------------------------------------------------------------------------------------

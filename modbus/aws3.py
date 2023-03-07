@@ -16,7 +16,7 @@ from rrc.modbus.base import ModbusClient, log_modbus_version
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-DEBUG = 2
+DEBUG = 0
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
