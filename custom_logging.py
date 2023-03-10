@@ -54,10 +54,11 @@ def logger_init(filename_base: str | None = "C:/Production/station_test") -> Non
         logger.debug(f"Logger already set.")
         return
 
+    logging.disable(logging.NOTSET)  # enable ALL levels
     #print("print in logging.logger_init()")
     #print("print logging.py __name__: " +__name__)
     logger.setLevel(logging.NOTSET)
-        
+
     # File handler
     if filename_base:
         logfilepath = f"{filename_base}_{datetime.utcnow().strftime('%Y%m%d')}.log"
