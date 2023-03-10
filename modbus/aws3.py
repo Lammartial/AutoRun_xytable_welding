@@ -16,7 +16,7 @@ from rrc.modbus.base import ModbusClient, log_modbus_version
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-DEBUG = 2
+DEBUG = 1
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
@@ -37,8 +37,8 @@ class AWS3Modbus(ModbusClient):
                         byte_order=Endian.Big, word_order=Endian.Little)
         self.machine_name = None
         self._last_modbus_access = perf_counter()
-        self._wait_after_read = 0.020
-        self._wait_after_write = 0.130
+        self._wait_after_read = 0.001
+        self._wait_after_write = 0.001
         self._wait_threshold_s = 0  # we start without having to wait before next modbus
 
     def __str__(self) -> str:
@@ -122,25 +122,9 @@ class AWS3Modbus(ModbusClient):
     def read_axis_counter(self, axis: int) -> int:
         assert (axis in [1,2])
         self._sync_modbus_timing()
-        response1 = self.read_holding_registers(1-1, 2, unit_address=axis)
-        dc1: BinaryPayloadDecoder = self.getDecoder(response1)
-        # self._sync_modbus_timing()
-        # response2 = self.read_holding_registers(73-1, 4, unit_address=axis)
-        # dc2: BinaryPayloadDecoder = self.getDecoder(response2)
-        # d = {
-        #     "counter": dc1.decode_32bit_uint(),
-        #     "program": dc2.decode_32bit_int(),
-        #     "program_counter": dc2.decode_32bit_int(),
-        # }
-
-        # this is optimizing modbusbus access to only the counter
-        d = {
-            "counter": dc1.decode_32bit_uint(),
-            "program": None,
-            "program_counter": None,
-        }
-        return d
-
+        response = self.read_holding_registers(1-1, 2, unit_address=axis)
+        dc: BinaryPayloadDecoder = self.getDecoder(response)
+        return dc.decode_32bit_uint()
 
     def read_binary_io(self) -> dict:
         self._sync_modbus_timing()
@@ -155,11 +139,7 @@ class AWS3Modbus(ModbusClient):
         return d
 
 
-    def read_measuring_values(self, axis: int) -> dict:
-        assert (axis in [1,2])
-        self._sync_modbus_timing()
-        response = self.read_holding_registers(1-1, 76, unit_address=axis)
-        dc: BinaryPayloadDecoder = self.getDecoder(response)
+    def _decode_measuring_values(self, dc: BinaryPayloadDecoder) -> dict:
         d = {
             "Counter": dc.decode_32bit_uint(),
             "PeakCurrent_P1-Ipk": dc.decode_32bit_float(),
@@ -203,6 +183,13 @@ class AWS3Modbus(ModbusClient):
         return d
 
 
+    def read_measuring_values(self, axis: int) -> dict:
+        assert (axis in [1,2])
+        self._sync_modbus_timing()
+        response = self.read_holding_registers(1-1, 76, unit_address=axis)
+        return self._decode_measuring_values(self.getDecoder(response))
+
+
     def read_parameters(self):
         self._sync_modbus_timing()
         response = self.read_holding_registers(200-1, 10, unit_address=3)
@@ -221,6 +208,7 @@ class AWS3Modbus(ModbusClient):
         }
         return d
 
+
     def read_program_parameters(self, axis: int):
         assert (axis in [1,2])
         self._sync_modbus_timing()
@@ -231,17 +219,17 @@ class AWS3Modbus(ModbusClient):
         pc1 = self.read_holding_registers(446-1, 2, unit_address=axis)
         return response1 + response2 + ["COUNTER "] + pc1
 
+
     def read_global_parameters(self, axis: int) -> dict:
         assert (axis in [1,2])
         self._sync_modbus_timing()
         response = self.read_holding_registers(601-1, 24, unit_address=axis)
         dc: BinaryPayloadDecoder = self.getDecoder(response)
         # read a string
-        #self.set_machine_byteorder(1)
         self._sync_modbus_timing()
         response2 = self.read_holding_registers(833-1, 16, unit_address=axis)
-        #self.set_machine_byteorder()
-        dc2: BinaryPayloadDecoder = self.getDecoder(response2)
+        payload_str = b"".join(pack("<H", x) for x in response2)  # need to convert strings as little endian
+        #dc2 = BinaryPayloadDecoder(payload_str, byteorder=Endian.Big, wordorder=Endian.Big)
         d = {
             "CounterMode": dc.decode_8bit_uint(),
             "ElectrodeRefMode": dc.decode_8bit_uint(),
@@ -255,44 +243,101 @@ class AWS3Modbus(ModbusClient):
             "EnableDataLogging": dc.decode_8bit_uint(),
             "LogFileNumber": dc.decode_32bit_int(),
             "CheckReference": dc.decode_8bit_uint(),
-            "LogExternalInfo": remove_non_ascii(swap_byte_pairs_to_string(dc2.decode_string(16*2).decode())),
+            #"LogExternalInfo": remove_non_ascii(swap_byte_pairs_to_string(dc2.decode_string(16*2).decode())),
+            "LogExternalInfo": remove_non_ascii(payload_str.decode()),
             "StaticLoadPos0": dc.decode_32bit_float(),
             "StaticLoadPos1": dc.decode_32bit_float(),
         }
         return d
 
-    def read_system_parameters(self):
-        self._sync_modbus_timing()
-        response = self.read_holding_registers(501-1, 125, unit_address=3)
-        return response
+
+    def _decode_process_parameter(self, dc: BinaryPayloadDecoder) -> dict:
+        # must be provided in little endian byte order
+        d = {
+            "ControlMode_P1": dc.decode_8bit_uint(),  #  1 Byte 0xFF (Regulation Mode Pulse 1: 0 - I, 1 - U, 2 - P)
+            "ControlMode_P2": dc.decode_8bit_uint(),  #  1 Byte 0xFF (Regulation Mode Pulse 2: 0 - I, 1 - U, 2 - P)
+            "Mon1LimitsMode_P1": dc.decode_8bit_uint(),  #  1 Byte 0xFF (Monitoring Mode selectable Quantity 1 Pulse 1: 0 - Ipk,1 - Irms, 2 - Upk, 3 - Urms, 4 - P, 5 - W, 6 - R)
+            "Mon2LimitsMode_P1": dc.decode_8bit_uint(),  #  1 Byte 0xFF (Monitoring Mode selectable Quantity 2 Pulse 1: 0 - Ipk,1 - Irms, 2 - Upk, 3 - Urms, 4 - P, 5 - W, 6 - R)
+            "Mon1LimitsMode_P2": dc.decode_8bit_uint(),  #  1 Byte 0xFF (Monitoring Mode selectable Quantity 1 Pulse 2: 0 - Ipk,1 - Irms, 2 - Upk, 3 - Urms, 4 - P, 5 - W, 6 - R)
+            "Mon2LimitsMode_P2": dc.decode_8bit_uint(),  #  1 Byte 0xFF (Monitoring Mode selectable Quantity 2 Pulse 2: 0 - Ipk,1 - Irms, 2 - Upk, 3 - Urms, 4 - P, 5 - W, 6 - R)
+            "MonRTLimitsMode_P1": dc.decode_8bit_uint(),  #  1 Byte 0xFF (Real-Time Monitoring Mode Pulse 1: 0 - I, 1 - U, 2 - P, 3-W)
+            "MonRTLimitsMode_P2": dc.decode_8bit_uint(),  #  1 Byte 0xFF (Real-Time Monitoring Mode Pulse 2: 0 - I, 1 - U, 2 - P, 3-W)
+            "ToolsAPC_P1": dc.decode_8bit_uint(),  #  1 Byte 0xFF (Tools/APC Pulse 1)
+            "ToolsAPC_P2": dc.decode_8bit_uint(),  #  1 Byte 0xFF (Tools/APC Pulse 2)
+            "DplMode": dc.decode_8bit_uint(),  #  1 Byte 0xFF (Displacement Mode: 0 - abs, 1 - ref, 2 - rel)
+            "RepeatPulse": dc.decode_8bit_uint(),  #  1 Byte 0xFF (Repeat Pulse 2)
+            "Amplitude_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Amplitude Pulse 1)
+            "Amplitude_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Amplitude Pulse 2)
+            "TimeSearch/TimeClose": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Search Time 1..9999 / Valve Closing Time 1..9999)
+            "TimeSqueeze": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Squeeze Time 1..9999)
+            "TimeUp_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Up-Slope Time Pulse 1 0.1..620)
+            "TimeWeld_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Weld Time Pulse 1 0.1..620)
+            "TimeDown_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Down-Slope Time Pulse 1 0.1..620)
+            "TimeCool": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Cool-Down Time 1..9999)
+            "TimeUp_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Up-Slope Time Pulse 2 0.1..620)
+            "TimeWeld_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Weld Time Pulse 2 0.1..620)
+            "TimeDown_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Down-Slope Time Pulse 2 0.1..620)
+            "TimeHold": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Hold Time 1..9999)
+            "LimitMon1Upper_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Upper Limit selectable monitoring Quantity 1 Pulse 1)
+            "LimitMon1Lower_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Lower Limit selectable monitoring Quantity 1 Pulse 1)
+            "LimitMon2Upper_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Upper Limit selectable monitoring Quantity 2 Pulse 1)
+            "LimitMon2Lower_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Lower Limit selectable monitoring Quantity 2 Pulse 1)
+            "LimitTwUpper_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Upper Limit Weld Time Pulse 1)
+            "LimitTwLower_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Lower Limit Weld Time Pulse 1)
+            "LimitFUpper_P1/LimitPrsUpper_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Upper Limit Force/Pressure Pulse 1)
+            "LimitFLower_P1/LimitPrsLower_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Lower Limit Force/Pressure Pulse 1)
+            "LimitMon1Upper_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Upper Limit selectable monitoring Quantity 1 Pulse 2)
+            "LimitMon1Lower_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Lower Limit selectable monitoring Quantity 1 Pulse 2)
+            "LimitMon2Upper_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Upper Limit selectable monitoring Quantity 2 Pulse 2)
+            "LimitMon2Lower_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Lower Limit selectable monitoring Quantity 2 Pulse 2)
+            "LimitTwUpper_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Upper Limit Weld Time Pulse 2)
+            "LimitTwLower_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Lower Limit Weld Time Pulse 2)
+            "LimitFUpper_P2/LimitPrsUpper_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Upper Limit Force/Pressure Pulse 2)
+            "LimitFLower_P2/LimitPrsLower_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Lower Limit Force/Pressure Pulse 2)
+            "LimitRTMonUpper_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Upper Limit Real-Time monitoring Quantity Pulse 1)
+            "TbegRTMonUpper_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Begin Interval Upper Limit Real-Time monitoringQuantity Pulse 1)
+            "TendRTMonUpper_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (End Interval Upper Limit Real-Time monitoring QuantityPulse 1)
+            "LimitRTMonLower_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Lower Limit Real-Time monitoring Quantity Pulse 1)
+            "TbegRTMonLower_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Begin Interval Lower Limit Real-Time monitoringQuantity Pulse 1)
+            "TendRTMonLower_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (End Interval Lower Limit Real-Time monitoring QuantityPulse 1)
+            "LimitRTMonUpper_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Upper Limit Real-Time monitoring Quantity Pulse 2)
+            "TbegRTMonUpper_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Begin Interval Upper Limit Real-Time monitoringQuantity Pulse 2)
+            "TendRTMonUpper_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (End Interval Upper Limit Real-Time monitoring QuantityPulse 2)
+            "LimitRTMonLower_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Lower Limit Real-Time monitoring Quantity Pulse 2)
+            "TbegRTMonLower_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Begin Interval Lower Limit Real-Time monitoringQuantity Pulse 2)
+            "TendRTMonLower_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (End Interval Lower Limit Real-Time monitoring QuantityPulse 2)
+            "LimitS1Upper": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Upper Limit Part Recognition)
+            "LimitS1Lower": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Lower Limit Part Recognition)
+            "PosS2WeldTo_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Current Switch-Off Position Pulse 1)
+            "PosS2WeldTo_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Current Switch-Off Positon Pulse 2)
+            "LimitS3Upper_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Upper Limit Displacement Pulse 1)
+            "LimitS3Lower_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Lower Limit Displacement Pulse 1)
+            "LimitS3Upper_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Upper Limit Displacement Pulse 2)
+            "LimitS3Lower_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Lower Limit Displacement Pulse 2)
+            "ForceSearch": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Search Force)
+            "ForceWeld_P1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Weld Force Pulse 1)
+            "ForceWeld_P2": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Weld Force Pulse 2)
+            "ForceHold": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Hold Force)
+            "WaitFollowUp/PressureClose": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Wait Time Apply Follow-Up Force / Closing Pressure)
+            "TimeFollowUp/PressureWeld": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Duration Apply Follow-Up Force / Weld Pressure)
+            "PosWait": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Wait Position)
+            "PosSearch": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Search Position)
+            "OffsetS1": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Offset S1)
+            "DplTimeCool": dc.decode_16bit_uint(),  #  2 Byte 0xFFFF (Cooling Time for measuring s3)
+            "TimeRepeat": dc.decode_32bit_float(),  #  4 Byte 0x80000000 (Repeat Time Pulse 2 0..9999)
+        }
+        return d
 
 
-    def read_ext_status(self, axis: int) -> dict:
-        self._sync_modbus_timing()
-        #response = self.read_holding_registers(101-1, int(26/2), unit_address=axis)
-        response = self.read_input_registers(101-1, int(26/2), unit_address=axis)
-        return response
-
-    def read_program_name(self, axis: int) -> str:
+    def read_process_parameter(self, axis: int) -> dict:
         assert (axis in [1,2])
-        n = 16
-        #self.set_machine_byteorder(1)
+        n = 123  # 123 holdings -> 246 bytes
         self._sync_modbus_timing()
-        response = self.read_holding_registers(801-1, n, unit_address=axis)
-        #self.set_machine_byteorder()
-        dc: BinaryPayloadDecoder = self.getDecoder(response)
-        b = dc.decode_string(size=n*2)  # size = bytes not words
-        return remove_non_ascii(swap_byte_pairs_to_string(b.decode()))
+        response = self.read_holding_registers(5001 - 1, n, unit_address=axis)
+        payload = b"".join(pack("<H", x) for x in response)
+        dc: BinaryPayloadDecoder = BinaryPayloadDecoder(payload, byteorder=Endian.Little, wordorder=Endian.Big)
+        return self._decode_process_parameter(dc)
 
-    def read_name(self) -> str:
-        n = 32  # guessed
-        #self.set_machine_byteorder(1)
-        self._sync_modbus_timing()
-        response = self.read_holding_registers(801-1, n, unit_address=3)
-        #self.set_machine_byteorder()
-        dc: BinaryPayloadDecoder = self.getDecoder(response)
-        b = dc.decode_string(size=n*2)  # size = bytes not words
-        return remove_non_ascii(swap_byte_pairs_to_string(b.decode()))
 
     def read_waveform_data(self, axis: int) -> dict:
         global DEBUG
@@ -302,7 +347,7 @@ class AWS3Modbus(ModbusClient):
         for c, u in _dt:
             _log.debug(f"Activate Waveform {u}")
             self.write_register(1001-1, c, unit_address=axis)
-            #self._sync_modbus_timing(next_wait_s=self._wait_after_write)
+            self._sync_modbus_timing(next_wait_s=self._wait_after_write)
             response = self.read_holding_registers(1002-1, 6, unit_address=axis)
             dc: BinaryPayloadDecoder = self.getDecoder(response)
             d[u] = {
@@ -315,8 +360,8 @@ class AWS3Modbus(ModbusClient):
             m = ()
             k: int = 0
             while k < p:
-                r = min(124, p - k)
-                #self._sync_modbus_timing()
+                r = min(120, p - k)  # the new manual doc says: 60 measurement points (float, 32bits) => 120 holdings
+                self._sync_modbus_timing()
                 response = self.read_holding_registers(1008 - 1 + k, r, unit_address=axis)
                 dc: BinaryPayloadDecoder = self.getDecoder(response)
                 for n in range(int(r/2)):
@@ -325,6 +370,70 @@ class AWS3Modbus(ModbusClient):
             _log.debug(f"Data Points: {len(m)}")
             d[u]["points"] = list(m)
         return d
+
+
+    def read_ext_measurement_status(self, axis: int) -> dict:
+        # New docu says: 93 holdings, not 13; delivers ALWAYS 93 holdings!
+        self._sync_modbus_timing()
+        response = self.read_holding_registers(4001-1, 93, unit_address=axis)
+        # as the endianess does not depend on the network transmission, we cannot rely on .fromRegisters() method of BinaryPayloadDecoder
+        # instead, we need to convert little endian words to bytes
+        payload = b"".join(pack("<H", x) for x in response[:13])
+        dc: BinaryPayloadDecoder = BinaryPayloadDecoder(payload, byteorder=Endian.Little, wordorder=Endian.Big)
+        d1 = {
+            "TimeStamp_Year": dc.decode_8bit_uint(),  # (Offset beginning from Year 2000)
+            "TimeStamp_Month": dc.decode_8bit_uint(),
+            "TimeStamp_Day": dc.decode_8bit_uint(),
+            "TimeStamp_Hour": dc.decode_8bit_uint(),
+            "TimeStamp_Minute": dc.decode_8bit_uint(),
+            "TimeStamp_Second": dc.decode_8bit_uint(),
+            "TimeStamp_0.01s": dc.decode_8bit_uint(),
+            "Measurement_Status": dc.decode_8bit_uint(),
+            "OutOfEnvelope/OutOfRealTimeLimits": dc.decode_8bit_uint(),
+            "Weld_Current_Abort": dc.decode_8bit_uint(),
+            "QuanityRealTimeLimitPulse_1": dc.decode_8bit_uint(),
+            "QuanityRealTimeLimitPulse_2": dc.decode_8bit_uint(),
+            "QuanityEnvelope_1_Monitoring": dc.decode_8bit_uint(),
+            "QuanityEnvelope_2_Monitoring": dc.decode_8bit_uint(),
+            "MeasurementSpecificStatus_Ipk": dc.decode_8bit_uint(),
+            "MeasurementSpecificStatus_Irms": dc.decode_8bit_uint(),
+            "MeasurementSpecificStatus_Upk": dc.decode_8bit_uint(),
+            "MeasurementSpecificStatus_Urms": dc.decode_8bit_uint(),
+            "MeasurementSpecificStatus_P": dc.decode_8bit_uint(),
+            "MeasurementSpecificStatus_W": dc.decode_8bit_uint(),
+            "MeasurementSpecificStatus_R": dc.decode_8bit_uint(),
+            "MeasurementSpecificStatus_tw": dc.decode_8bit_uint(),
+            "MeasurementSpecificStatus_s1": dc.decode_8bit_uint(),
+            "MeasurementSpecificStatus_s3": dc.decode_8bit_uint(),
+            "MeasurementSpecificStatus_F": dc.decode_8bit_uint(),
+            "MeasurementSpecificStatus_p": dc.decode_8bit_uint(),
+        }
+        # add also the rest of measuring values by standard decoder
+        d2 = self._decode_measuring_values(self.getDecoder(response[13:]))
+        return {**d1, **d2}
+
+
+    def read_program_name(self, axis: int) -> str:
+        assert (axis in [1,2])
+        n = 8
+        self._sync_modbus_timing()
+        response = self.read_holding_registers(801-1, n, unit_address=axis)
+        payload_str = b"".join(pack("<H", x) for x in response)  # need to convert strings as little endian
+        return remove_non_ascii(payload_str.decode())
+
+
+    def read_name(self) -> str:
+        """Read name of Machine.
+
+        Returns:
+            str: _description_
+        """
+        n = 16  # guess'd
+        self._sync_modbus_timing()
+        response = self.read_holding_registers(801-1, n, unit_address=3)
+        payload_str = b"".join(pack("<H", x) for x in response)  # need to convert strings as little endian
+        return remove_non_ascii(payload_str.decode())
+
 
 #--------------------------------------------------------------------------------------------------
 
@@ -366,12 +475,7 @@ class AWS3Modbus_DUMMY(object):
         return self.program_no
 
     def read_axis_counter(self, axis: int) -> int:
-        d = {
-            "counter": -1,
-            "program": -1,
-            "program_counter": -1,
-        }
-        return d
+        return -1
 
     def read_binary_io(self) -> dict:
         return {}
@@ -391,6 +495,9 @@ class AWS3Modbus_DUMMY(object):
     def read_system_parameters(self):
         return []
 
+    def read_ext_status(self, axis: int) -> dict:
+        pass
+
     def read_program_name(self, axis: int) -> str:
         return "DUMMY"
 
@@ -405,59 +512,98 @@ class AWS3Modbus_DUMMY(object):
 
 #--------------------------------------------------------------------------------------------------
 def test_basic_communication(dev: AWS3Modbus):
-    import json
+    m = {}
 
-    #d = dev.read_ext_status(1)
-    #print(d)
+    #d = dev.write_program_no(6)
+    #d = dev.read_program_no()
+    #d = dev.write_program_no(6)
+    #return
 
     d = dev.read_name()
     print("NAME: ", d)
+    m["name"] = d
     d = dev.read_machine_lock_status()
-    print("LOCK STATUS:", d)    
+    print("LOCK STATUS:", d)
     d = dev.is_machine_ready()
     print("MACHINE READY: ", d)
     d = dev.read_axis_counter(1)
     print("AXIS1 COUNTER:", d)
+    m["counter_ax1"] = d
     d = dev.read_axis_counter(2)
     print("AXIS2 COUNTER:", d)
+    m["counter_ax2"] = d
     d = dev.read_binary_io()
     print("BINARY IO:", d)
+    m["binary_io"] = d
     d = dev.read_parameters()
     print("PARAMETERS:", d)
-    d = dev.read_system_parameters()
-    print("SYSTEM PARAMETERS: ", d)
+    m["parameters"] = d
 
+    m["axis"] = {}
     for axis in (1,2):
+        a = m["axis"][axis] = {}
         d = dev.read_program_name(axis)
         print(f"PROGRAM NAME AXIS {axis}: ", d)
+        a["program_name"] = d
         d = dev.read_global_parameters(axis)
         print(f"GLOBAL PARAMETERS AXIS {axis}: ", d)
-        d = dev.read_measuring_values(axis)
-        print(f"MEASURING AXIS {axis}: ", d)
-        d = dev.read_program_parameters(axis)
-        print(f"PROGRAM PARAMETERS AXIS {axis}: ", d)
+        a["global_parameters"] = d
+
         t0 = perf_counter()
-        d = dev.read_waveform_data(1)
-        with open(f"axis{axis}_waveforms.json", "wt") as file:
-            file.write(json.dumps(d))
+        d = dev.read_process_parameter(axis)
+        t = perf_counter()-t0
+        print(f"PROCESS PARAMETERS AXIS {axis}: ", d)
+        a["process_parameters"] = d
+        print("-->TIME:", t)
+
+        # t0 = perf_counter()
+        # d = dev.read_program_parameters(axis)
+        # t = perf_counter()-t0
+        # print(f"PROGRAM PARAMETERS AXIS {axis}: ", d)
+        # a["program_parameters"] = d
+        # print("-->TIME:", t)
+
+        t0 = perf_counter()
+        d = dev.read_measuring_values(axis)
+        t = perf_counter()-t0
+        print(f"MEASURING AXIS {axis}: ", d)
+        a["measuring_values"] = d
+        print("-->TIME:", t)
+
+        t0 = perf_counter()
+        d = dev.read_ext_measurement_status(1)
+        t = perf_counter()-t0
+        print(f"EXT MEASUREMENT STATUS {axis}:", d)
+        a["extended_measurement_status"] = d
+        print("-->TIME:", t)
+
+        t0 = perf_counter()
+        d = dev.read_waveform_data(axis)
+        t = perf_counter()-t0
         print(f"WAVEFORM DATA AXIS {axis}:", d)
-        print("TIME:", perf_counter()-t0)
-    return
+        a["waveform_data"] = d
+        print("-->TIME:", t)
+
+    return m
 
 
 #--------------------------------------------------------------------------------------------------
-if __name__ == '__main__':    
+if __name__ == '__main__':
+    from json import dumps
     from time import sleep
     from pathlib import Path
 
     ## Initialize the logging
-    logger_init(filename_base=Path(__file__).parent / "aws3")  ## init root logger with different filename
+    _log_fp = Path(__file__).parent / "../../.." / "logs"
+    logger_init(filename_base=_log_fp / "aws3")  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
     log_modbus_version()
 
     with AWS3Modbus("tcp:172.21.101.100:502") as dev:
-        test_basic_communication(dev)
+        d = test_basic_communication(dev)
+        with open(_log_fp / f"aws_readings_{d['counter_ax1']}.json", "wt") as file:
+            file.write(dumps(d))
 
     _log.info("End test")
 

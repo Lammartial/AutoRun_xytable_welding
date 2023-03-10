@@ -271,7 +271,7 @@ class WindowUI(object):
                     self.var_label_udi.set(a["udi_not_confirmed"])
                     print("BLACKLISTED UDI")
                     _do_update = True
-                    pass                
+                    pass
                 if "result" in a:
                     if "passed" in a["result"]:
                         self.label_udi.config(background="green", foreground="black")
@@ -460,7 +460,7 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                     if self.dev.is_machine_ready():
                         self.counter_ax1 = self.dev.read_axis_counter(1)
                         #  check if we have to moved to the  next program step
-                        diffcount = self.counter_ax1["counter"] - self.last_counter_ax1["counter"]
+                        diffcount = self.counter_ax1 - self.last_counter_ax1
                         if diffcount > 0:
                             self.last_counter_ax1 = self.counter_ax1
                             print(f"Counters: Ax1={self.counter_ax1}")
@@ -610,7 +610,7 @@ class SPSStateMachine(SPSStateMachineBase):
                         #     pass so that we have to moved to the next program step
                         #  or
                         #     fail so that we stop here
-                        diffcount = self.counter_ax1["counter"] - self.last_counter_ax1["counter"]
+                        diffcount = self.counter_ax1 - self.last_counter_ax1
                         if diffcount > 0:
                             # welding completed
                             self.last_counter_ax1 = self.counter_ax1
@@ -842,7 +842,7 @@ class ProcessSPS(mp.Process):
                     print(f"{proc_name}: Exiting")
                     if _udi:
                         # inform the DSP that the process has been aborted
-                        _dsp.ts_send_result_for_testrun("aborted", _start_datetime, perf_counter() - _execution_start, _udi, None)                    
+                        _dsp.ts_send_result_for_testrun("aborted", _start_datetime, perf_counter() - _execution_start, _udi, None)
                     if SM:
                         SM.close()
                         SM = None
@@ -864,10 +864,10 @@ class ProcessSPS(mp.Process):
                                 SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
                                 answer = "OK"
                             else:
-                                _udi = None                                
+                                _udi = None
                                 self.response_queue.put({"udi_not_confirmed": "MES rejects UDI"})
                                 print(f"Response from MES: {_response}")
-                                answer = "NOT OK"    
+                                answer = "NOT OK"
                         else:
                             # false UDI -> popup ?
                             _udi = None
@@ -956,7 +956,7 @@ if __name__ == '__main__':
     from rrc.custom_logging import logger_init
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
-    
+
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("--development", action="store_true", help="Activate development mode.")
     parser.add_argument("--product", choices=["RRC2020B", "RRC2040B"], action="store", default="RRC2020B", help="Set a product for simulated DSP interface.")

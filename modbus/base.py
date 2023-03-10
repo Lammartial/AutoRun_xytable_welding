@@ -18,7 +18,7 @@ from pymodbus.pdu import ExceptionResponse
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-DEBUG = 2
+DEBUG = 0
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
@@ -33,11 +33,13 @@ from rrc.custom_logging import getLogger, logger_init
 # * pymodbus.protocol.* - all logging messages inside the protocol layer
 # ----------------------------------------------------------------------- #
 import logging
+#logging.disable(logging.NOTSET)
 logging.getLogger("pymodbus.client").setLevel(logging.DEBUG if DEBUG>1 else logging.INFO)
 logging.getLogger("pymodbus.protocol").setLevel(logging.DEBUG if DEBUG>1 else logging.INFO)
-logging.getLogger("pymodbus.payload").setLevel(logging.INFO)  # payload logging takes too long
-#logging.getLogger("pymodbus.transaction").setLevel(logging.DEBUG)
+logging.getLogger("pymodbus.payload").setLevel(logging.DEBUG)  # payload logging takes too long
+logging.getLogger("pymodbus.transaction").setLevel(logging.DEBUG)
 logging.getLogger("pymodbus").setLevel(logging.DEBUG if DEBUG>1 else logging.INFO)
+
 
 
 
@@ -72,7 +74,11 @@ def _check_call(rr):
 #--------------------------------------------------------------------------------------------------
 def log_modbus_version():
     _log = getLogger(__name__, DEBUG)
-    _log.info(f"PyModbus version: {modbus_version.version.short()}")
+    if hasattr(modbus_version, "version"):
+        _v = modbus_version.version.short()
+    else:
+        _v = modbus_version.short()
+    _log.info(f"PyModbus version: {_v}")
 
 #--------------------------------------------------------------------------------------------------
 def extract_c_string(bytes_array):
