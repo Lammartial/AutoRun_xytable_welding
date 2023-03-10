@@ -251,7 +251,7 @@ class AWS3Modbus(ModbusClient):
         return d
 
 
-    def _decode_process_parameter(self, dc: BinaryPayloadDecoder) -> dict:
+    def _decode_process_parameters(self, dc: BinaryPayloadDecoder) -> dict:
         # must be provided in little endian byte order
         d = {
             "ControlMode_P1": dc.decode_8bit_uint(),  #  1 Byte 0xFF (Regulation Mode Pulse 1: 0 - I, 1 - U, 2 - P)
@@ -329,14 +329,14 @@ class AWS3Modbus(ModbusClient):
         return d
 
 
-    def read_process_parameter(self, axis: int) -> dict:
+    def read_process_parameters(self, axis: int) -> dict:
         assert (axis in [1,2])
         n = 123  # 123 holdings -> 246 bytes
         self._sync_modbus_timing()
         response = self.read_holding_registers(5001 - 1, n, unit_address=axis)
         payload = b"".join(pack("<H", x) for x in response)
-        dc: BinaryPayloadDecoder = BinaryPayloadDecoder(payload, byteorder=Endian.Little, wordorder=Endian.Big)
-        return self._decode_process_parameter(dc)
+        dc: BinaryPayloadDecoder = BinaryPayloadDecoder(payload, byteorder=Endian.Little, wordorder=Endian.Little)
+        return self._decode_process_parameters(dc)
 
 
     def read_waveform_data(self, axis: int) -> dict:
@@ -378,8 +378,9 @@ class AWS3Modbus(ModbusClient):
         response = self.read_holding_registers(4001-1, 93, unit_address=axis)
         # as the endianess does not depend on the network transmission, we cannot rely on .fromRegisters() method of BinaryPayloadDecoder
         # instead, we need to convert little endian words to bytes
-        payload = b"".join(pack("<H", x) for x in response[:13])
-        dc: BinaryPayloadDecoder = BinaryPayloadDecoder(payload, byteorder=Endian.Little, wordorder=Endian.Big)
+        #payload = b"".join(pack("<H", x) for x in response[:13])
+        payload = b"".join(pack("<H", x) for x in response)
+        dc = BinaryPayloadDecoder(payload, byteorder=Endian.Little, wordorder=Endian.Little)
         d1 = {
             "TimeStamp_Year": dc.decode_8bit_uint(),  # (Offset beginning from Year 2000)
             "TimeStamp_Month": dc.decode_8bit_uint(),
@@ -409,7 +410,8 @@ class AWS3Modbus(ModbusClient):
             "MeasurementSpecificStatus_p": dc.decode_8bit_uint(),
         }
         # add also the rest of measuring values by standard decoder
-        d2 = self._decode_measuring_values(self.getDecoder(response[13:]))
+        #d2 = self._decode_measuring_values(self.getDecoder(response[13:]))
+        d2 = self._decode_measuring_values(dc)
         return {**d1, **d2}
 
 
@@ -492,10 +494,7 @@ class AWS3Modbus_DUMMY(object):
     def read_global_parameters(self, axis: int):
         return {}
 
-    def read_system_parameters(self):
-        return []
-
-    def read_ext_status(self, axis: int) -> dict:
+    def read_ext_measurement_status(self, axis: int) -> dict:
         pass
 
     def read_program_name(self, axis: int) -> str:
@@ -507,17 +506,64 @@ class AWS3Modbus_DUMMY(object):
     def read_name(self) -> str:
         return "DUMMY-MACHINE"
 
+    def read_process_parameters(self, axis: int) -> dict:
+        return {}
+
     def read_waveform_data(self, axis: int) -> dict:
         return {}
+
+#--------------------------------------------------------------------------------------------------
+
+
+def read_welder_parameters(dev: AWS3Modbus) -> dict:
+    m = {
+        "name": dev.read_name(),
+        "parameters": dev.read_parameters(),
+        "program_name": {
+            1: dev.read_program_name(1),
+            2: dev.read_program_name(2),
+        },
+        "global_parameters": {
+            1: dev.read_global_parameters(1),
+            2:  dev.read_global_parameters(2),
+        },
+        "process_parameters": {
+            1: dev.read_process_parameters(1),
+            2: dev.read_process_parameters(2),
+        },
+    }
+    return m
+
+
+def read_welder_measurements(dev: AWS3Modbus) -> dict:
+    p = {
+        "binary_io": dev.read_binary_io(),
+        "measuring_values": {
+            1: dev.read_measuring_values(1),
+            2: dev.read_measuring_values(2),
+        },
+        "extended_measurement_status": {
+            1: dev.read_ext_measurement_status(1),
+            2: dev.read_ext_measurement_status(2),
+        },
+    }
+    return p
+
+
+def read_welder_waveforms(dev: AWS3Modbus) -> dict:
+    w = {
+        "waveform_data": dev.read_waveform_data(1)  # only axis 1 useful
+    }
+    return w
+
 
 #--------------------------------------------------------------------------------------------------
 def test_basic_communication(dev: AWS3Modbus):
     m = {}
 
-    #d = dev.write_program_no(6)
-    #d = dev.read_program_no()
-    #d = dev.write_program_no(6)
-    #return
+    d = dev.write_program_no(6)
+    d = dev.read_program_no()
+    print(f"PROGRAM: {d}")
 
     d = dev.read_name()
     print("NAME: ", d)
@@ -550,7 +596,7 @@ def test_basic_communication(dev: AWS3Modbus):
         a["global_parameters"] = d
 
         t0 = perf_counter()
-        d = dev.read_process_parameter(axis)
+        d = dev.read_process_parameters(axis)
         t = perf_counter()-t0
         print(f"PROCESS PARAMETERS AXIS {axis}: ", d)
         a["process_parameters"] = d
@@ -589,6 +635,7 @@ def test_basic_communication(dev: AWS3Modbus):
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
+    from yaml import load, dump, Loader, Dumper
     from json import dumps
     from time import sleep
     from pathlib import Path
@@ -601,9 +648,25 @@ if __name__ == '__main__':
     log_modbus_version()
 
     with AWS3Modbus("tcp:172.21.101.100:502") as dev:
-        d = test_basic_communication(dev)
-        with open(_log_fp / f"aws_readings_{d['counter_ax1']}.json", "wt") as file:
-            file.write(dumps(d))
+        #d = test_basic_communication(dev)
+        t0 = perf_counter()
+        counter = dev.read_axis_counter(1)
+        d = {
+            **read_welder_parameters(dev),
+            **read_welder_measurements(dev),
+            #**read_welder_waveforms(dev),
+        }
+        t = perf_counter()-t0
+        with open(_log_fp / f"aws_readings_{counter}.yaml", "wt") as file:
+            file.write(dump(d, Dumper=Dumper))
+        print("-->TIME:", t)
+
+        t0 = perf_counter()
+        d = read_welder_waveforms(dev)
+        t = perf_counter()-t0
+        with open(_log_fp / f"aws_waveforms_{counter}.yaml", "wt") as file:
+            file.write(dump(d, Dumper=Dumper))
+        print("-->TIME:", t)
 
     _log.info("End test")
 
