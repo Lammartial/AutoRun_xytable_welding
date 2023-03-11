@@ -649,6 +649,10 @@ if __name__ == '__main__':
 
     with AWS3Modbus("tcp:172.21.101.100:502") as dev:
         #d = test_basic_communication(dev)
+        #d = dev.write_program_no(5)
+        d = dev.read_program_no()
+        print(f"PROGRAM: {d}")
+
         t0 = perf_counter()
         counter = dev.read_axis_counter(1)
         d = {
