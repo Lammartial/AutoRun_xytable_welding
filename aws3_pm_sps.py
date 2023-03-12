@@ -4,6 +4,8 @@ import multiprocessing as mp
 import itertools
 import tkinter as tk
 import tkinter.ttk as ttk
+import json
+from hashlib import sha256
 from time import sleep, perf_counter
 from pathlib import Path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
@@ -304,6 +306,7 @@ class SPSStates(Enum):
     SEQUENCE_DONE = 8
     CHECK_WELDING_RESULT = 10
     FAILED = 77
+    POSITION_PASSED = 87
     PASSED = 88
     STOP = 99
 
@@ -311,7 +314,7 @@ class SPSStates(Enum):
 
 class SPSStateMachineBase(object):
 
-    def __init__(self, dev: AWS3Modbus | str, program_sequence: List[int] = [1]) -> None:
+    def __init__(self, dev: AWS3Modbus | str, program_sequence: List[int] = [1], have_read_measurements: bool = False) -> None:
         self.state: SPSStates = SPSStates.START
         self.program_sequence = program_sequence
         self.sequence_pos = 0
@@ -321,6 +324,14 @@ class SPSStateMachineBase(object):
         self.counter_ax1 = None
         self.last_counter_ax1 = -1
         self._throttle_pause = 0.125  # need to be negotiated with DSP
+        # Option to read measurements - need to be implemented in the derived classes as needed
+        # e.g. the Rotating version does write files, the Production version writes to DB
+        self.have_read_measurements = have_read_measurements
+        self.welding_status = None
+        self.welding_parameters = None
+        self.welding_measurements = None
+        self.welding_waveforms = None
+        # MODBUS communication - either real or DUMMY
         if isinstance(dev, str):
             try:
                 self.dev = AWS3Modbus(dev)
@@ -527,8 +538,9 @@ class SPSStateMachine(SPSStateMachineBase):
     Args:
         SPSStateMachineBase (_type_): _description_
     """
-    def __init__(self, dev: AWS3Modbus | str, program_sequence: List[int] = [1]) -> None:
-        super().__init__(dev, program_sequence=program_sequence)
+    def __init__(self, dev: AWS3Modbus | str, program_sequence: List[int] = [1], have_read_measurements: bool = True) -> None:
+        super().__init__(dev, program_sequence=program_sequence, have_read_measurements=have_read_measurements)
+
 
     def __str__(self) -> str:
         return f"State Machine for SPS on modbus {repr(self.dev)} with sequence {self.program_sequence}"
@@ -547,8 +559,6 @@ class SPSStateMachine(SPSStateMachineBase):
         super().close()
 
     #----------------------------------------------------------------------------------------------
-
-
 
     def move_seqence_step(self, step: int) -> SPSStates:
         if self.sequence_pos + step >= len(self.program_sequence):
@@ -624,22 +634,36 @@ class SPSStateMachine(SPSStateMachineBase):
                     self.lock_machine()
                     sleep(self._throttle_pause)  # throttle polling
                     _, status = self.dev.is_machine_ready()
-                    #
-                    # get the machine's measurements if required
-                    #
-                    self.dev.fetch_welding_parameters()
-                    self.dev.fetch_welding_measurements()
-                    #self.dev.fetch_welding_waveforms()
-
-                    if status["reject"] > 0:
-                        self.set_state(SPSStates.FAILED)  # keep machine locked
-                    elif status["ok"] > 0:
-                        self.set_state(SPSStates.FETCH_NEXT_PROGRAM) # get next position's program
+                    self.welding_status = status  # store always
+                    if self.have_read_measurements:
+                        # get the machine's measurements if required
+                        # and store 'em into protocol database
+                        self.welding_measurements = self.dev.fetch_welding_measurements()
+                        self.welding_waveforms = None  # reset to avoid false database storage
+                    if status["ok"] > 0:
+                        self.set_state(SPSStates.POSITION_PASSED)
                     else:
-                        self.set_state(SPSStates.FETCH_NEXT_PROGRAM) # get next position's program
+                        if status["reject"] > 0:
+                            # should we do more here ?
+                            pass
+                        else:
+                            # we got neither a pass nor fail - what's up here ?
+                            pass
+                        self.set_state(SPSStates.FAILED)  # keep machine locked
+
+                case SPSStates.POSITION_PASSED:
+                    # This state is to let the outer loop do write the measurement data
+                    # for a PASS position.
+                    # Then Get next position's program or PASS on end of sequence
+                    self.set_state(SPSStates.FETCH_NEXT_PROGRAM)
 
                 case SPSStates.FAILED:
                     print(f"FAILED at position {self.sequence_pos}")
+                    if self.have_read_measurements:
+                        # On fail, we read the waveforms, too to store into database.
+                        # We do this task here to have quick feedback on UI before the
+                        # long task for read the information begins.
+                        self.welding_waveforms = self.dev.read_waveform_data(1, ("I","s3","p"))
                     self.set_state(SPSStates.STOP)
 
                 case SPSStates.FETCH_NEXT_PROGRAM:
@@ -666,8 +690,17 @@ class SPSStateMachine(SPSStateMachineBase):
                         self.dev.write_program_no(self.next_program_no)
                         #sleep(self._throttle_pause)  # throttle polling
                         self.program_no = self.dev.read_program_no()
-                        # ??? check ???
+                        if self.program_no != self.next_program_no:
+                            #
+                            # ??? consequence ???
+                            #
+                            pass
+                        if self.have_read_measurements:
+                            # read the parameters of the current program
+                            # to be able to write them on "SHOW_PROGRAM" step
+                            self.welding_parameters = self.dev.fetch_welding_parameters()
                     else:
+                        #self.welding_parameters = None  # signal not to store ths set again
                         print(f"Program {self.program_no} already set.")
                     self.unlock_machine()
                     sleep(self._throttle_pause)  # throttle polling
@@ -764,8 +797,8 @@ class ProcessSPS(mp.Process):
         # 4. we need the program sequence of the AWS welder for the given part number
         print("Requesting database for sequence...")
         # 3. create the database interface (recreate it here as the connecton could time-out otherwise)
-        srcEngine, sessionMaker = get_protocol_db_connector()
-        with sessionMaker() as session:
+        engine, session_maker = get_protocol_db_connector()
+        with session_maker() as session:
             response = session.execute(text(
                     f"SELECT revision,program_sequence,parameter FROM `spsconfig` AS sc WHERE sc.part_number='{_part_number}' ORDER BY revision DESC"
                     ))
@@ -774,7 +807,7 @@ class ProcessSPS(mp.Process):
             # not found! -> do not proceed
             raise Exception(f"No Data in Database for part {_part_number} found, cannot proceed!")
         print(f"Got record: {rows[0]}")
-        return [int(i) for i in rows[0][1].split(",")], str(rows[0][0]), _controller_resource_str, _part_number
+        return [int(i) for i in rows[0][1].split(",")], str(rows[0][0]), _controller_resource_str, _part_number, session_maker
 
 
     def run(self) -> None:
@@ -782,6 +815,33 @@ class ProcessSPS(mp.Process):
         This is the process context in which we run the SPS.
         Create all relevant objects from here!
         """
+
+        def store_db(udi: str, part_number: str, SM: SPSStateMachine, db_session_maker: Session):
+            _wp = json.dumps(SM.welding_parameters, sort_keys=True, ensure_ascii=True)  # create a JSON to store in db and generate a HASH
+            _wm = json.dumps(SM.welding_measurements)  # create a JSON to store in db
+            _ww = json.dumps(SM.welding_waveforms)  # create a JSON to store in db
+            _status = SM.welding_status
+            _counter = SM.counter_ax1
+            with self.db_session_maker() as session:
+                if _wp:
+                    # store a new parameter-set; linked by a hash over the set which keeps it unique
+                    _wp_str = json.dumps(_wp, sort_keys=True, ensure_ascii=True)  # create a JSON to store in db and generate a HASH
+                    _hash_params = sha256(_wp_str).hexdigest()
+                    _sql = text(f"INSERT INTO `welding_parameters` (hash,parameter_set) VALUES ({_hash_params},{_wp_str})")
+                    response = session.execute(_sql)
+                if _ww:
+                    # Store waveforms. linked by (udi,counter) index to "measurments" table
+                    _ww_str = json.dumps(_ww)
+                    _sql = text(f"INSERT INTO `welding_waveforms` (ref_measurement,waveforms) VALUES (({udi},{_counter}),{_ww_str})")
+                    response = session.execute(_sql)
+                # always store the measurement data; (udi,counter) is primary key
+                _wm_str = json.dumps(_wp)
+                _sql = text(f"INSERT INTO `welding_measurements` (udi,count,status,ref_parameter,measurements) VALUES ({udi},{_counter},{_status},{_hash_params},{_wm_str})")
+                response = session.execute(_sql)
+                session.commit()
+
+        def store_file(udi: str, part_number: str, SM: SPSStateMachine, fp_pattern: Path):
+            pass
 
         # we need to keep the _dsp interface for UDI presentation and result transmission
         _cfg, _dsp = _create_interfaces(None if self.enable_udi_scan>0 else self.simulated_dsp_product)
@@ -798,12 +858,12 @@ class ProcessSPS(mp.Process):
                 _execution_start = perf_counter()  # we use _execution_time as start timestamp
                 # need to create a new State Machine to work with
                 # get configuration from DSP + DB connection
-                program_sequence, sequence_revision, resource_str, part_number = self.collect_parameters(_cfg, _dsp)
+                program_sequence, sequence_revision, resource_str, part_number, db_session_maker = self.collect_parameters(_cfg, _dsp)
                 print("Create new SPS state machine")
                 if self.enable_udi_scan:
                     # production version must be started by UDI scan
                     # and can run only once
-                    SM = SPSStateMachine(resource_str, program_sequence)
+                    SM = SPSStateMachine(resource_str, program_sequence, have_read_measurements=True)
                 else:
                     # we use a development state-machine here
                     SM = SPSStateMachineRotating(resource_str, program_sequence)
@@ -829,16 +889,26 @@ class ProcessSPS(mp.Process):
                 match SM.state:
                     case SPSStates.FAILED:
                         self.response_queue.put({"result": "failed", "udi": _udi})
-                        _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)
+                        if _udi:
+                            store_db(_udi, part_number, SM, db_session_maker)
+                            _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                         _udi = None  # finished
+                    case SPSStates.POSITION_PASSED:
+                        if _udi:
+                            # only to store a passed welding position's measurement
+                            store_db(_udi, part_number, SM, db_session_maker)
                     case SPSStates.PASSED:
                         self.response_queue.put({"result": "passed", "udi": _udi})
-                        _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
+                        if _udi:
+                            store_db(_udi, part_number, SM, db_session_maker)
+                            _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                         _udi = None  # finished
                     case SPSStates.SET_PROGRAM_ON_MACHINE:
                         self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no})
                     case SPSStates.SHOW_PROGRAM_STEP:
                         self.response_queue.put({"position": SM.sequence_pos, "program": SM.program_no})
+                        # Note: could also be used to store the parameter set to database
+
                 # execute the state-machine
                 SM.do_one_loop()
             # check for incomming commands
