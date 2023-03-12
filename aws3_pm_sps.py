@@ -842,16 +842,18 @@ class ProcessSPS(mp.Process):
                     # store a new parameter-set; linked by a hash over the set which keeps it unique
                     _wp_str = json.dumps(SM.welding_parameters, sort_keys=True, ensure_ascii=True)  # create a JSON to store in db and generate a HASH
                     _hash_params = get_hash(_wp_str)
-                    _sql = text(f"INSERT INTO `welding_parameters` (hash,parameter_set) VALUES ({_hash_params},{_wp_str})")
+                    _device_name = SM.welding_parameters["name"]
+                    _program_no = SM.program_no
+                    _sql = text(f"INSERT INTO `welding_parameters` (hash,device_name,program_no,parameter_set) VALUES ({_hash_params},{_device_name},{_program_no},{_wp_str})")
                     response = session.execute(_sql)
                 if SM.welding_waveforms:
                     # Store waveforms. linked by (udi,counter) index to "measurements" table
                     _ww_str = json.dumps(SM.welding_waveforms)
-                    _sql = text(f"INSERT INTO `welding_waveforms` (udi,count,waveforms) VALUES ({udi},{_counter},{json.dumps(_ww_str)})")
+                    _sql = text(f"INSERT INTO `welding_waveforms` (udi,counter,waveforms) VALUES ({udi},{_counter},{json.dumps(_ww_str)})")
                     response = session.execute(_sql)
                 # always store the measurement data; (udi,counter) is primary key
                 _wm_str = json.dumps(SM.welding_measurements)
-                _sql = text(f"INSERT INTO `welding_measurements` (udi,count,part_number,line_id,station_id,status,ref_parameter,measurements) "+\
+                _sql = text(f"INSERT INTO `welding_measurements` (udi,counter,part_number,line_id,station_id,pass_fail,ref_parameter,measurements) "+\
                             f"VALUES ({udi},{_counter},{part_number},{line_id},{station_id},{_result},{_hash_params},{_wm_str})")
                 response = session.execute(_sql)
                 session.commit()
