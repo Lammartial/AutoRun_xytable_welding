@@ -624,6 +624,13 @@ class SPSStateMachine(SPSStateMachineBase):
                     self.lock_machine()
                     sleep(self._throttle_pause)  # throttle polling
                     _, status = self.dev.is_machine_ready()
+                    #
+                    # get the machine's measurements if required
+                    #
+                    self.dev.fetch_welding_parameters()
+                    self.dev.fetch_welding_measurements()
+                    #self.dev.fetch_welding_waveforms()
+
                     if status["reject"] > 0:
                         self.set_state(SPSStates.FAILED)  # keep machine locked
                     elif status["ok"] > 0:

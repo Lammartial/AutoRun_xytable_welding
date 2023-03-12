@@ -87,9 +87,9 @@ class AWS3Modbus(ModbusClient):
         d = {
             "ready": 1 if bits[0] else 0,
             "operational_mode": 1 if bits[1] else 0,  # 0=auto, 1=step
-            "reject": 1 if bits[4] else 0,
+            "reject": 1 if (bits[2] or bits[4]) else 0,  # combine both axes: either one fails
             "hfi_device_fault": 1 if bits[5] else 0,
-            "ok": 1 if bits[6] else 0
+            "ok": 1 if (bits[6] and bits[7]) else 0  # combine both axes: both need to be good
         }
         return bits[0], d
 
@@ -126,16 +126,81 @@ class AWS3Modbus(ModbusClient):
         dc: BinaryPayloadDecoder = self.getDecoder(response)
         return dc.decode_32bit_uint()
 
+    def _decode_binary_ouput_hfi(self, _b) -> dict:
+        return {
+            "HFIReady": (_b>>0) & 1,  # Bit 0.0
+            "OperationalMode": (_b>>1) & 1,  # Bit 0.1  (0 - Auto, 1 - Step)
+            "Reject_Ax2": (_b>>2) & 1,  # Bit 0.2
+            "CounterLimit": (_b>>3) & 1,  # Bit 0.3  (only in Mode without MFP)
+            "Reject_Ax1": (_b>>4) & 1,  # Bit 0.4
+            "HFIDeviceFault": (_b>>5) & 1,  # Bit 0.5
+            "Ok_Ax1": (_b>>6) & 1,  # Bit 0.6
+            "Ok_Ax2": (_b>>7) & 1,  # Bit 0.7
+
+            "OutOfLimitsWeldTime_Ax1": (_b>>8) & 1,  # Bit 1.0
+            "OutOfLimitsWeldTime_Ax2": (_b>>9) & 1,  # Bit 1.1
+            "CounterPre-Warning": (_b>>10) & 1,  # Bit 1.2  (only in Mode without MFP)
+            "ActionCounterEnd": (_b>>11) & 1,  # Bit 1.3
+            "OutOfLimitsMonitoring_Ax1": (_b>>12) & 1,  # Bit 1.4
+            "OutOfLimitsMonitoring_Ax2": (_b>>13) & 1,  # Bit 1.5
+            "WeldEnd_Ax1 ": (_b>>14) & 1,  # Bit 1.6  (only in Mode without MFP)
+            "WeldEnd_Ax2 ": (_b>>15) & 1,  # Bit 1.7  (only in Mode without MFP)
+
+            "HomePosCylinder_Ax1 ": (_b>>16) & 1,  # Bit 2.0  (only in Mode without MFP)
+            "HomePosCylinder_Ax2 ": (_b>>17) & 1,  # Bit 2.1  (only in Mode without MFP)
+            "TriggerActive_Ax1": (_b>>18) & 1,  # Bit 2.2
+            "TriggerActive_Ax2": (_b>>19) & 1,  # Bit 2.3
+
+            "Reserved_(Type DC/AC)": (_b>>24) & 1,  # Bit 3.0  (Type DC/AC)
+            "Reserved_(Unit Distance SI/US)": (_b>>25) & 1,  # Bit 3.1  (Unit Distance SI/US)
+            "Reserved_(Unit Force SI/US)": (_b>>26) & 1,  # Bit 3.2  (Unit Force SI/US)
+            "Reserved_(Unit Pressure SI/US)": (_b>>27) & 1,  # Bit 3.3  (Unit Pressure SI/US)
+            "MeasurementToggleBit_Ax1": (_b>>28) & 1,  # Bit 3.4
+            "MeasurementToggleBit_Ax2": (_b>>29) & 1,  # Bit 3.5
+        }
+
+
+    def _decode_binary_output_mfp(self, _b) -> dict:
+
+        def _mfp_byte_0_1(b0: int, b1: int, suffix: str) -> dict:
+            return {
+                f"MFPReady{suffix}": (b0>>0) & 1,  # Bit 0.0
+                f"HomePosition{suffix}": (b0>>1) & 1,  # Bit 0.1
+                f"WaitPosition{suffix}": (b0>>2) & 1,  # Bit 0.2
+                f"InterlockingCylUnlocked{suffix}": (b0>>3) & 1,  # Bit 0.3
+                f"InterlockingCylLocked{suffix}": (b0>>4) & 1,  # Bit 0.4
+                f"MFPControllerOn{suffix}": (b0>>5) & 1,  # Bit 0.5
+                f"ErrorPart{suffix}": (b0>>6) & 1,  # Bit 0.6  (also in Mode without MFP)
+                f"ErrorDisplacement{suffix}": (b0>>7) & 1,  # Bit 0.7  (also in Mode without MFP)
+
+                f"MFPFault{suffix}": (b1>>0) & 1,  # Bit 1.0
+                f"CounterPre-Warning{suffix}": (b1>>1) & 1,  # Bit 1.1
+                f"CounterLimit{suffix}": (b1>>2) & 1,  # Bit 1.2
+                f"SearchForceReached{suffix}": (b1>>3) & 1,  # Bit 1.3
+                f"EndOfCycle{suffix}": (b1>>4) & 1,  # Bit 1.4
+                f"ErrorForce/Pressure{suffix}": (b1>>5) & 1,  # Bit 1.5  (also in Mode without MFP)
+            }
+
+        return   {
+            **_mfp_byte_0_1(_b>>0, _b>>8, "_Ax1"),   # bytes 0 and 1
+            **_mfp_byte_0_1(_b>>16, _b>>24, "_Ax2")  # bytes 2 and 3
+        }
+
     def read_binary_io(self) -> dict:
         self._sync_modbus_timing()
         response = self.read_holding_registers(412-1, 8, unit_address=3)
         dc: BinaryPayloadDecoder = self.getDecoder(response)
-        d = {
-            "BinaryOutputs-MFP": dc.decode_32bit_uint(),
-            "BinaryInputs-MFP": dc.decode_32bit_uint(),
-            "BinaryOutputs-HFI": dc.decode_32bit_uint(),
-            "BinaryInputs-HFI": dc.decode_32bit_uint(),
-        }
+        # expecting "dual axis mode" data
+        # ommitting the inputs as the information is useless
+        #   "BinaryOutputs-MFP": dc.decode_32bit_uint(),
+        #   "BinaryInputs-MFP": dc.decode_32bit_uint(),
+        #   "BinaryOutputs-HFI": dc.decode_32bit_uint(),
+        #   "BinaryInputs-HFI": dc.decode_32bit_uint(),
+        d = {}
+        d["BinaryOutputs-MFP"] = self._decode_binary_output_mfp(dc.decode_32bit_uint())
+        dc.decode_32bit_uint()  # ignore MFP inputs
+        d["BinaryOutputs-HFI"] = self._decode_binary_ouput_hfi(dc.decode_32bit_uint())
+        # ignore HFI inputs
         return d
 
 
@@ -150,9 +215,9 @@ class AWS3Modbus(ModbusClient):
             "Energy_P1-W": dc.decode_32bit_float(),
             "Resistance_P1-R": dc.decode_32bit_float(),
             "WeldTime_P1-tw": dc.decode_32bit_float(),
-            "WeldPeriods_P1-tw~": dc.decode_32bit_float(),
+            "WeldPeriods_P1-tw": dc.decode_32bit_float(),
             "Displacement_P1-s3": dc.decode_32bit_float(),
-            "Force_P1-F/Ax1_Pressure_P1-p": dc.decode_32bit_float(),
+            "Force_P1-F/Pressure_P1-p": dc.decode_32bit_float(),
             "Value_P1-v": dc.decode_32bit_float(),
             "PeakCurrent_P2-Ipk": dc.decode_32bit_float(),
             "PeakVoltage_P2-Upk": dc.decode_32bit_float(),
@@ -162,9 +227,9 @@ class AWS3Modbus(ModbusClient):
             "Energy_P2-W": dc.decode_32bit_float(),
             "Resistance_P2-R": dc.decode_32bit_float(),
             "WeldTime_P2-tw": dc.decode_32bit_float(),
-            "WeldPeriods_P2-tw~": dc.decode_32bit_float(),
+            "WeldPeriods_P2-tw": dc.decode_32bit_float(),
             "Displacement_P2-s3": dc.decode_32bit_float(),
-            "Force_P2-F/Ax1_Pressure_P2-p": dc.decode_32bit_float(),
+            "Force_P2-F/Pressure_P2-p": dc.decode_32bit_float(),
             "Value_P2-v": dc.decode_32bit_float(),
             "PeakCurrent_P3-Ipk": dc.decode_32bit_float(),
             "PeakVoltage_P3-Upk": dc.decode_32bit_float(),
@@ -174,7 +239,7 @@ class AWS3Modbus(ModbusClient):
             "Energy_P3-W": dc.decode_32bit_float(),
             "Resistance_P3-R": dc.decode_32bit_float(),
             "WeldTime_P3-tw": dc.decode_32bit_float(),
-            "WeldPeriods_P3-tw~": dc.decode_32bit_float(),
+            "WeldPeriods_P3-tw": dc.decode_32bit_float(),
             "PartRecognition_Fs-s1": dc.decode_32bit_float(),
             "PartRecognition_Fw-s1": dc.decode_32bit_float(),
             "Program": dc.decode_32bit_int(),
@@ -339,12 +404,33 @@ class AWS3Modbus(ModbusClient):
         return self._decode_process_parameters(dc)
 
 
-    def read_waveform_data(self, axis: int) -> dict:
+    def read_waveform_data(self, axis: int, selection: tuple = ("I","U","P","s3","F","p")) -> dict:
+        """Read selected waveform data points.
+
+        Note that each waveform needs about 500ms to select and then read.
+        If less points are stored this time reduces.
+
+        Args:
+            axis (int): _description_
+            selection (tuple, optional): _description_. Defaults to ("I","U","P","s3","F","p").
+
+        Returns:
+            dict: Read waveform data in following struct:
+                     {
+                        "selector": {
+                            "WaveformPoints": int, 1-250
+                            "WaveformResolution": float, scaler
+                            "WaveformSampleTime": int, in ms
+                            "points": List[float]
+                        },
+                        ...
+                     }
+        """
         global DEBUG
         _log = getLogger(__name__, DEBUG)
-        _dt = [(19,"I"), (20,"U"), (3,"P"), (7,"s3"), (8,"F"), (9,"p")]
+        _all = ((19,"I"), (20,"U"), (3,"P"), (7,"s3"), (8,"F"), (9,"p"))
         d = {}
-        for c, u in _dt:
+        for c, u in [_t for _t in _all if _t[1] in selection]:
             _log.debug(f"Activate Waveform {u}")
             self.write_register(1001-1, c, unit_address=axis)
             self._sync_modbus_timing(next_wait_s=self._wait_after_write)
@@ -436,6 +522,48 @@ class AWS3Modbus(ModbusClient):
         payload_str = b"".join(pack("<H", x) for x in response)  # need to convert strings as little endian
         return remove_non_ascii(payload_str.decode())
 
+     #----------------------------------------------------------------------------------------------
+
+    def fetch_welding_parameters(self) -> dict:
+        self._welding_parameters = {
+            "name": dev.read_name(),
+            "parameters": dev.read_parameters(),
+            "program_name": {
+                1: dev.read_program_name(1),
+                2: dev.read_program_name(2),
+            },
+            "global_parameters": {
+                1: dev.read_global_parameters(1),
+                2:  dev.read_global_parameters(2),
+            },
+            "process_parameters": {
+                1: dev.read_process_parameters(1),
+                2: dev.read_process_parameters(2),
+            },
+        }
+        return self._welder_parameters
+
+
+    def fetch_welding_measurements(self) -> dict:
+        self._welding_measurements = {
+            "binary_io": dev.read_binary_io(),
+            "measuring_values": {
+                1: dev.read_measuring_values(1),
+                2: dev.read_measuring_values(2),
+            },
+            "extended_measurement_status": {
+                1: dev.read_ext_measurement_status(1),
+                2: dev.read_ext_measurement_status(2),
+            },
+        }
+        return self._welding_measurements
+
+
+    def fetch_welding_waveforms(self) -> dict:
+        self._welder_waveforms = {
+            "waveform_data": dev.read_waveform_data(1)  # only axis 1 useful
+        }
+        return self._welding_waveforms
 
 #--------------------------------------------------------------------------------------------------
 
@@ -445,6 +573,12 @@ class AWS3Modbus_DUMMY(object):
         self.dev = "SIMULATION"
         self.machine_name = "DUMMY"
         self.program_no = -1
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass
 
     def get_identification_str(self) -> str:
         return f"{self.machine_name}@{self.dev}"
@@ -494,6 +628,12 @@ class AWS3Modbus_DUMMY(object):
     def read_global_parameters(self, axis: int):
         return {}
 
+    def read_process_parameters(self, axis: int) -> dict:
+        return {}
+
+    def read_waveform_data(self, axis: int) -> dict:
+        return {}
+
     def read_ext_measurement_status(self, axis: int) -> dict:
         pass
 
@@ -506,57 +646,18 @@ class AWS3Modbus_DUMMY(object):
     def read_name(self) -> str:
         return "DUMMY-MACHINE"
 
-    def read_process_parameters(self, axis: int) -> dict:
+    #----------------------------------------------------------------------------------------------
+
+    def fetch_welding_parameters(self) -> dict:
         return {}
 
-    def read_waveform_data(self, axis: int) -> dict:
+    def fetch_welding_measurements(self) -> dict:
+        return {}
+
+    def fetch_welding_waveforms(self) -> dict:
         return {}
 
 #--------------------------------------------------------------------------------------------------
-
-
-def read_welder_parameters(dev: AWS3Modbus) -> dict:
-    m = {
-        "name": dev.read_name(),
-        "parameters": dev.read_parameters(),
-        "program_name": {
-            1: dev.read_program_name(1),
-            2: dev.read_program_name(2),
-        },
-        "global_parameters": {
-            1: dev.read_global_parameters(1),
-            2:  dev.read_global_parameters(2),
-        },
-        "process_parameters": {
-            1: dev.read_process_parameters(1),
-            2: dev.read_process_parameters(2),
-        },
-    }
-    return m
-
-
-def read_welder_measurements(dev: AWS3Modbus) -> dict:
-    p = {
-        "binary_io": dev.read_binary_io(),
-        "measuring_values": {
-            1: dev.read_measuring_values(1),
-            2: dev.read_measuring_values(2),
-        },
-        "extended_measurement_status": {
-            1: dev.read_ext_measurement_status(1),
-            2: dev.read_ext_measurement_status(2),
-        },
-    }
-    return p
-
-
-def read_welder_waveforms(dev: AWS3Modbus) -> dict:
-    w = {
-        "waveform_data": dev.read_waveform_data(1)  # only axis 1 useful
-    }
-    return w
-
-
 #--------------------------------------------------------------------------------------------------
 def test_basic_communication(dev: AWS3Modbus):
     m = {}
@@ -639,6 +740,8 @@ if __name__ == '__main__':
     from json import dumps
     from time import sleep
     from pathlib import Path
+    from pprint import PrettyPrinter
+    from pymodbus.exceptions import ConnectionException
 
     ## Initialize the logging
     _log_fp = Path(__file__).parent / "../../.." / "logs"
@@ -647,18 +750,19 @@ if __name__ == '__main__':
 
     log_modbus_version()
 
-    with AWS3Modbus("tcp:172.21.101.100:502") as dev:
-        #d = test_basic_communication(dev)
-        #d = dev.write_program_no(5)
+    dev = AWS3Modbus("tcp:172.21.101.100:502")
+    if dev.open():
+        # d = test_basic_communication(dev)
+        d = dev.write_program_no(5)
         d = dev.read_program_no()
         print(f"PROGRAM: {d}")
 
         t0 = perf_counter()
         counter = dev.read_axis_counter(1)
         d = {
-            **read_welder_parameters(dev),
-            **read_welder_measurements(dev),
-            #**read_welder_waveforms(dev),
+            **dev.fetch_welding_parameters(),
+            **dev.fetch_welding_measurements(),
+            #**dev.fetch_welder_waveforms(),
         }
         t = perf_counter()-t0
         with open(_log_fp / f"aws_readings_{counter}.yaml", "wt") as file:
@@ -666,11 +770,26 @@ if __name__ == '__main__':
         print("-->TIME:", t)
 
         t0 = perf_counter()
-        d = read_welder_waveforms(dev)
+        d = dev.fetch_welding_waveforms()
         t = perf_counter()-t0
         with open(_log_fp / f"aws_waveforms_{counter}.yaml", "wt") as file:
             file.write(dump(d, Dumper=Dumper))
         print("-->TIME:", t)
+
+        dev.close()
+
+    pp = PrettyPrinter(indent=4)
+    print("FAILED","-"*100)
+    print("HFI:")
+    pp.pprint(dev._decode_binary_ouput_hfi(4030841885))
+    print("MFP:")
+    pp.pprint(dev._decode_binary_output_mfp(8388736))
+    print("GOOD", "-"*100)
+    print("HFI:")
+    pp.pprint(dev._decode_binary_ouput_hfi(3225535565))
+    print("MFP:")
+    pp.pprint(dev._decode_binary_output_mfp(8388608))
+
 
     _log.info("End test")
 

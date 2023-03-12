@@ -18,7 +18,7 @@ from pymodbus.pdu import ExceptionResponse
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-DEBUG = 0
+DEBUG = 1
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
@@ -194,11 +194,11 @@ class ModbusClient:
         return type(self)._connection_open
 
     # ---------------------------------------------
-    def open(self):
+    def open(self) -> bool:
         self.connection_open[self.gateway_str] += 1
-        self.client.connect() # checks for already open connections -> can be called even if connection was already opened
+        return self.client.connect() # checks for already open connections -> can be called even if connection was already opened
 
-    def close(self):
+    def close(self) -> None:
         self.connection_open[self.gateway_str] -= 1
         if self.connection_open[self.gateway_str] == 0:
             self.client.close()
