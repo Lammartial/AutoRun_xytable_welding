@@ -790,7 +790,6 @@ if __name__ == '__main__':
     print("MFP:")
     pp.pprint(dev._decode_binary_output_mfp(8388608))
 
-
     _log.info("End test")
 
 # END OF FILE

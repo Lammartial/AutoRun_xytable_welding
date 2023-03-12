@@ -5,7 +5,9 @@ import itertools
 import tkinter as tk
 import tkinter.ttk as ttk
 import json
-from hashlib import sha256
+import yaml
+from hashlib import md5
+from base64 import b64decode, b64encode
 from time import sleep, perf_counter
 from pathlib import Path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
@@ -30,6 +32,8 @@ from rrc.custom_logging import getLogger
 
 ENABLE_UDI_SCAN: int = None  # is being overwritten by argument
 SIMULATED_DSP_PRODUCT: str = None # is being overwritten by argument
+STORE_MEASUREMENTS: bool = None
+MEASUREMENTS_FILE_PATH: Path = Path(__file__).parent
 
 #--------------------------------------------------------------------------------------------------
 
@@ -47,6 +51,18 @@ def get_random_digits_string(length):
     numbers = string.digits
     return "".join(random.choice(numbers) for i in range(length))
 
+def get_hash(o: dict) -> str:
+    """Create a 24 base64 encoded characters hash of a dict.
+
+    Args:
+        o (dict): an dict
+
+    Returns:
+        str: hash as base64 encoded byte array
+    """
+    _s = json.dumps(o, sort_keys=True, ensure_ascii=True)
+    _h = md5(_s.encode("utf8")).digest()
+    return b64encode(_h)
 
 #--------------------------------------------------------------------------------------------------
 
@@ -402,8 +418,8 @@ class SPSStateMachineBase(object):
 
 class SPSStateMachineRotating(SPSStateMachineBase):
 
-    def __init__(self, dev: AWS3Modbus | str, program_sequence: List[int] = [1]) -> None:
-        super().__init__(dev, program_sequence=program_sequence)
+    def __init__(self, dev: AWS3Modbus | str, program_sequence: List[int] = [1], have_read_measurements: bool = False) -> None:
+        super().__init__(dev, program_sequence=program_sequence, have_read_measurements=have_read_measurements)
         self.is_sequence_done = False
 
     def __str__(self) -> str:
@@ -763,13 +779,15 @@ class ProcessSPS(mp.Process):
 
     def __init__(self, command_queue: mp.JoinableQueue, response_queue: mp.Queue) -> None:
         mp.Process.__init__(self)
-        global DEBUG, ENABLE_UDI_SCAN, SIMULATED_DSP_PRODUCT
+        global DEBUG, ENABLE_UDI_SCAN, SIMULATED_DSP_PRODUCT, STORE_MEASUREMENTS, MEASUREMENTS_FILE_PATH
 
         self._log = getLogger(__name__, DEBUG)
         self.command_queue = command_queue
         self.response_queue = response_queue
         self.enable_udi_scan = ENABLE_UDI_SCAN
         self.simulated_dsp_product = SIMULATED_DSP_PRODUCT
+        self.have_read_measurements = STORE_MEASUREMENTS
+        self.measurements_filepath = Path(MEASUREMENTS_FILE_PATH)
 
 
     def collect_parameters(self, cfg: StationConfiguration, dsp: DspInterface) -> Tuple[List[int], str, str, str]:
@@ -817,31 +835,50 @@ class ProcessSPS(mp.Process):
         """
 
         def store_db(udi: str, part_number: str, SM: SPSStateMachine, db_session_maker: Session):
-            _wp = json.dumps(SM.welding_parameters, sort_keys=True, ensure_ascii=True)  # create a JSON to store in db and generate a HASH
-            _wm = json.dumps(SM.welding_measurements)  # create a JSON to store in db
-            _ww = json.dumps(SM.welding_waveforms)  # create a JSON to store in db
-            _status = SM.welding_status
+            _result = "P" if SM.welding_status["ok"]>0 else ("F" if SM.welding_status["reject"]>0 else "A")
             _counter = SM.counter_ax1
             with self.db_session_maker() as session:
-                if _wp:
+                if SM.welding_parameters:
                     # store a new parameter-set; linked by a hash over the set which keeps it unique
-                    _wp_str = json.dumps(_wp, sort_keys=True, ensure_ascii=True)  # create a JSON to store in db and generate a HASH
-                    _hash_params = sha256(_wp_str).hexdigest()
+                    _wp_str = json.dumps(SM.welding_parameters, sort_keys=True, ensure_ascii=True)  # create a JSON to store in db and generate a HASH
+                    _hash_params = get_hash(_wp_str)
                     _sql = text(f"INSERT INTO `welding_parameters` (hash,parameter_set) VALUES ({_hash_params},{_wp_str})")
                     response = session.execute(_sql)
-                if _ww:
-                    # Store waveforms. linked by (udi,counter) index to "measurments" table
-                    _ww_str = json.dumps(_ww)
-                    _sql = text(f"INSERT INTO `welding_waveforms` (ref_measurement,waveforms) VALUES (({udi},{_counter}),{_ww_str})")
+                if SM.welding_waveforms:
+                    # Store waveforms. linked by (udi,counter) index to "measurements" table
+                    _ww_str = json.dumps(SM.welding_waveforms)
+                    _sql = text(f"INSERT INTO `welding_waveforms` (udi,count,waveforms) VALUES (({udi},{_counter}),{json.dumps(_ww_str)})")
                     response = session.execute(_sql)
                 # always store the measurement data; (udi,counter) is primary key
-                _wm_str = json.dumps(_wp)
-                _sql = text(f"INSERT INTO `welding_measurements` (udi,count,status,ref_parameter,measurements) VALUES ({udi},{_counter},{_status},{_hash_params},{_wm_str})")
+                _wm_str = json.dumps(SM.welding_measurements)
+                _sql = text(f"INSERT INTO `welding_measurements` (udi,count,status,ref_parameter,measurements) VALUES ({udi},{_counter},{_result},{_hash_params},{_wm_str})")
                 response = session.execute(_sql)
                 session.commit()
 
-        def store_file(udi: str, part_number: str, SM: SPSStateMachine, fp_pattern: Path):
-            pass
+        def store_file(udi: str, part_number: str, SM: SPSStateMachine, fp_pattern: Path = "aws_readings"):
+            _counter = SM.counter_ax1
+            with open(fp_pattern.parent /  f"{fp_pattern.name}_measurements_{_counter}.yaml", "wt") as file:
+                file.write(yaml.dump({
+                    "counter": _counter,
+                    "status": SM.welding_status,
+                    **SM.welding_measurements
+                    },
+                    Dumper=yaml.Dumper))
+            with open(fp_pattern.parent /  f"{fp_pattern.name}_waveforms_{_counter}.yaml", "wt") as file:
+                file.write(yaml.dump({
+                    "counter": _counter,
+                    "status": SM.welding_status,
+                    **SM.welding_waveforms
+                    },
+                    Dumper=yaml.Dumper))
+            with open(fp_pattern.parent /  f"{fp_pattern.name}_parameters_{_counter}.yaml", "wt") as file:
+                file.write(yaml.dump({
+                    "counter": _counter,
+                    "status": SM.welding_status,
+                    **SM.welding_parameters
+                    },
+                    Dumper=yaml.Dumper))
+
 
         # we need to keep the _dsp interface for UDI presentation and result transmission
         _cfg, _dsp = _create_interfaces(None if self.enable_udi_scan>0 else self.simulated_dsp_product)
@@ -852,6 +889,8 @@ class ProcessSPS(mp.Process):
         _start_datetime: str = ""
         _execution_start: float = 0
         _udi: str = None
+        _store_to_db = False
+        _store_to_file = False
         while True:
             if not SM:
                 _start_datetime = datetime.utcnow().isoformat()
@@ -864,9 +903,11 @@ class ProcessSPS(mp.Process):
                     # production version must be started by UDI scan
                     # and can run only once
                     SM = SPSStateMachine(resource_str, program_sequence, have_read_measurements=True)
+                    _store_to_db = True
                 else:
                     # we use a development state-machine here
-                    SM = SPSStateMachineRotating(resource_str, program_sequence)
+                    SM = SPSStateMachineRotating(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
+                    _store_to_file = self.have_read_measurements  # depending on the command line
                 print(f"STATE-MACHINE: {repr(SM)}")
                 # let the UI show the correct data
                 self.response_queue.put({
@@ -890,18 +931,23 @@ class ProcessSPS(mp.Process):
                     case SPSStates.FAILED:
                         self.response_queue.put({"result": "failed", "udi": _udi})
                         if _udi:
-                            store_db(_udi, part_number, SM, db_session_maker)
                             _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)
+                        if self.have_read_measurements:
+                            if _store_to_db: store_db(_udi, part_number, SM, db_session_maker)
+                            if _store_to_file: store_file(None, part_number, SM, fp_pattern=self.measurements_filepath)
                         _udi = None  # finished
                     case SPSStates.POSITION_PASSED:
-                        if _udi:
-                            # only to store a passed welding position's measurement
-                            store_db(_udi, part_number, SM, db_session_maker)
+                        # only to store a passed welding position's measurement
+                        if self.have_read_measurements:
+                            if _store_to_db: store_db(_udi, part_number, SM, db_session_maker)
+                            if _store_to_file: store_file(None, part_number, SM, fp_pattern=self.measurements_filepath)
                     case SPSStates.PASSED:
                         self.response_queue.put({"result": "passed", "udi": _udi})
                         if _udi:
-                            store_db(_udi, part_number, SM, db_session_maker)
                             _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
+                        if self.have_read_measurements:
+                            if _store_to_db: store_db(_udi, part_number, SM, db_session_maker)
+                            if _store_to_file: store_file(None, part_number, SM, fp_pattern=self.measurements_filepath)
                         _udi = None  # finished
                     case SPSStates.SET_PROGRAM_ON_MACHINE:
                         self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no})
@@ -1037,11 +1083,17 @@ if __name__ == '__main__':
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("--development", action="store_true", help="Activate development mode.")
     parser.add_argument("--product", choices=["RRC2020B", "RRC2040B"], action="store", default="RRC2020B", help="Set a product for simulated DSP interface.")
+    parser.add_argument("--store", action="store_true", help="Enable read and store of measurements. If development (no UDI), data is store to YAML files.")
+    parser.add_argument("--savefile", action="store", default="aws_readings", help="Path and filename prefix for file stored measurements")
+
 
     args = parser.parse_args()
 
     ENABLE_UDI_SCAN = 0 if args.development else 1
     SIMULATED_DSP_PRODUCT = args.product
+    STORE_MEASUREMENTS = args.store
+    MEASUREMENTS_FILE_PATH = args.filepath
+
 
     p = None
     w = None
