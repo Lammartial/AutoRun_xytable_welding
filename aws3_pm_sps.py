@@ -825,7 +825,7 @@ class ProcessSPS(mp.Process):
             # not found! -> do not proceed
             raise Exception(f"No Data in Database for part {_part_number} found, cannot proceed!")
         print(f"Got record: {rows[0]}")
-        return [int(i) for i in rows[0][1].split(",")], str(rows[0][0]), _controller_resource_str, _part_number, session_maker
+        return [int(i) for i in rows[0][1].split(",")], str(rows[0][0]), _controller_resource_str, _part_number, session_maker, _line_id, _station_id
 
 
     def run(self) -> None:
@@ -834,7 +834,7 @@ class ProcessSPS(mp.Process):
         Create all relevant objects from here!
         """
 
-        def store_db(udi: str, part_number: str, SM: SPSStateMachine, db_session_maker: Session):
+        def store_db(udi: str, part_number: str, line_id: int, station_id: str, SM: SPSStateMachine, db_session_maker: Session):
             _result = "P" if SM.welding_status["ok"]>0 else ("F" if SM.welding_status["reject"]>0 else "A")
             _counter = SM.counter_ax1
             with self.db_session_maker() as session:
@@ -847,31 +847,32 @@ class ProcessSPS(mp.Process):
                 if SM.welding_waveforms:
                     # Store waveforms. linked by (udi,counter) index to "measurements" table
                     _ww_str = json.dumps(SM.welding_waveforms)
-                    _sql = text(f"INSERT INTO `welding_waveforms` (udi,count,waveforms) VALUES (({udi},{_counter}),{json.dumps(_ww_str)})")
+                    _sql = text(f"INSERT INTO `welding_waveforms` (udi,count,waveforms) VALUES ({udi},{_counter},{json.dumps(_ww_str)})")
                     response = session.execute(_sql)
                 # always store the measurement data; (udi,counter) is primary key
                 _wm_str = json.dumps(SM.welding_measurements)
-                _sql = text(f"INSERT INTO `welding_measurements` (udi,count,status,ref_parameter,measurements) VALUES ({udi},{_counter},{_result},{_hash_params},{_wm_str})")
+                _sql = text(f"INSERT INTO `welding_measurements` (udi,count,part_number,line_id,station_id,status,ref_parameter,measurements) "+\
+                            f"VALUES ({udi},{_counter},{part_number},{line_id},{station_id},{_result},{_hash_params},{_wm_str})")
                 response = session.execute(_sql)
                 session.commit()
 
-        def store_file(udi: str, part_number: str, SM: SPSStateMachine, fp_pattern: Path = "aws_readings"):
+        def store_file(udi: str, part_number: str, line_id: int, station_id: str, SM: SPSStateMachine, fp_pattern: Path = "aws_readings"):
             _counter = SM.counter_ax1
-            with open(fp_pattern.parent /  f"{fp_pattern.name}_measurements_{_counter}.yaml", "wt") as file:
+            with open(fp_pattern.parent /  f"{fp_pattern.name}_measurements_{line_id}_{station_id}_{_counter}.yaml", "wt") as file:
                 file.write(yaml.dump({
                     "counter": _counter,
                     "status": SM.welding_status,
                     **SM.welding_measurements
                     },
                     Dumper=yaml.Dumper))
-            with open(fp_pattern.parent /  f"{fp_pattern.name}_waveforms_{_counter}.yaml", "wt") as file:
+            with open(fp_pattern.parent /  f"{fp_pattern.name}_waveforms_{line_id}_{station_id}_{_counter}.yaml", "wt") as file:
                 file.write(yaml.dump({
                     "counter": _counter,
                     "status": SM.welding_status,
                     **SM.welding_waveforms
                     },
                     Dumper=yaml.Dumper))
-            with open(fp_pattern.parent /  f"{fp_pattern.name}_parameters_{_counter}.yaml", "wt") as file:
+            with open(fp_pattern.parent /  f"{fp_pattern.name}_parameters_{line_id}_{station_id}_{_counter}.yaml", "wt") as file:
                 file.write(yaml.dump({
                     "counter": _counter,
                     "status": SM.welding_status,
@@ -897,7 +898,7 @@ class ProcessSPS(mp.Process):
                 _execution_start = perf_counter()  # we use _execution_time as start timestamp
                 # need to create a new State Machine to work with
                 # get configuration from DSP + DB connection
-                program_sequence, sequence_revision, resource_str, part_number, db_session_maker = self.collect_parameters(_cfg, _dsp)
+                program_sequence, sequence_revision, resource_str, part_number, db_session_maker, line_id, station_id = self.collect_parameters(_cfg, _dsp)
                 print("Create new SPS state machine")
                 if self.enable_udi_scan:
                     # production version must be started by UDI scan
@@ -933,21 +934,21 @@ class ProcessSPS(mp.Process):
                         if _udi:
                             _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                         if self.have_read_measurements:
-                            if _store_to_db: store_db(_udi, part_number, SM, db_session_maker)
-                            if _store_to_file: store_file(None, part_number, SM, fp_pattern=self.measurements_filepath)
+                            if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                            if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
                         _udi = None  # finished
                     case SPSStates.POSITION_PASSED:
                         # only to store a passed welding position's measurement
                         if self.have_read_measurements:
-                            if _store_to_db: store_db(_udi, part_number, SM, db_session_maker)
-                            if _store_to_file: store_file(None, part_number, SM, fp_pattern=self.measurements_filepath)
+                            if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                            if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
                     case SPSStates.PASSED:
                         self.response_queue.put({"result": "passed", "udi": _udi})
                         if _udi:
                             _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                         if self.have_read_measurements:
-                            if _store_to_db: store_db(_udi, part_number, SM, db_session_maker)
-                            if _store_to_file: store_file(None, part_number, SM, fp_pattern=self.measurements_filepath)
+                            if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                            if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
                         _udi = None  # finished
                     case SPSStates.SET_PROGRAM_ON_MACHINE:
                         self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no})
