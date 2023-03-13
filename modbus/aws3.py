@@ -34,7 +34,7 @@ class AWS3Modbus(ModbusClient):
 
     def __init__(self, connection_str: str, group_by_gateway: bool = True) -> None:
         super().__init__(connection_str, group_by_gateway=group_by_gateway, unit_address=None,
-                        byte_order=Endian.Big, word_order=Endian.Little)
+                         byte_order=Endian.Big, word_order=Endian.Little)
         self.machine_name = None
         self._last_modbus_access = perf_counter()
         self._wait_after_read = 0.001
@@ -73,7 +73,7 @@ class AWS3Modbus(ModbusClient):
             self._wait_threshold_s = self._wait_after_read
 
     def setup_device(self):
-        #self.set_machine_byteorder(bo=3)  # switch byte order to default
+        self.set_machine_byteorder()  # switch byte order to default
         self.machine_name = self.read_name().strip()
 
     def set_machine_byteorder(self, bo: int = 3) -> None:
