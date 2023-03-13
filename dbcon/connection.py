@@ -67,6 +67,7 @@ def createInternalSession(config, echo=False):
                     config["sourceDatabase"]["database"],
                     config["sourceDatabase"]["encoding"]
                 ),
+                pool_pre_ping=True,  # this should automatically reconnect if connection has been lost due to be stale
                 echo=echo)
     # engine = sa.create_engine("{0}://{1}:{2}@{3}/{4}".format(
     #                 config["sourceDatabase"]["servertype"],
