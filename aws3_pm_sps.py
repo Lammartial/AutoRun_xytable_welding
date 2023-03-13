@@ -1076,6 +1076,9 @@ class ProcessSPS(mp.Process):
                         if SM.welding_status["reject"] > 0:
                             # update UI (red) while read waveforms taking a lot of time
                             self.response_queue.put({"result": "failed", "udi": _udi})
+                        if SM.welding_status["ok"] > 0:
+                            # update UI (green) while read waveforms taking a lot of time
+                            self.response_queue.put({"result": "passed", "udi": _udi})
                     case SPSStates.FAILED:
                         self.response_queue.put({"result": "failed", "udi": _udi})  # update UI (red)
                         if _udi:
