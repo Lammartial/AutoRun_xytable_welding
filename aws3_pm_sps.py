@@ -236,20 +236,20 @@ class WindowUI(object):
             if a:
                 if "resource_str" in a:
                     self.var_label_resource_str.set(a["resource_str"])
-                    #print("UPDATE RESOURCE")
+                    #print("UI:UPDATE RESOURCE")
                     _do_update = True
                 if "revision" in a:
                     self.var_label_sequence_revision.set(f'Rev.: {a["revision"]}')
-                    #print("UPDATE REVISION")
+                    #print("UI:UPDATE REVISION")
                     _do_update = True
                 if "part_number" in a:
                     self.var_label_part_number.set(a["part_number"])
-                    #print("UPDATE PART NUMBER")
+                    #print("UI:UPDATE PART NUMBER")
                     _do_update = True
                 if "sequence" in a:
                     self.var_label_sequence.set(a["sequence"])
                     self.var_label_sequence_length.set(f'Seq. length: {len(a["sequence"])}')
-                    #print("UPDATE SEQUENCE")
+                    #print("UI:UPDATE SEQUENCE")
                     _do_update = True
                 if "position" in a:
                     _txt = a["position"]
@@ -257,18 +257,18 @@ class WindowUI(object):
                     # WE show Postion 1-based (!ROBERT)
                     # !!!
                     self.var_label_position.set((_txt + 1) if _txt != -1 else "")
-                    #print("UPDATE COUNTER")
+                    #print("UI:UPDATE COUNTER")
                     _do_update = True
                 if "program" in a:
                     _txt = a["program"]
                     self.var_label_program.set(_txt if _txt != -1 else "")
-                    #print("UPDATE PROGRAM")
+                    #print("UI:UPDATE PROGRAM")
                     _do_update = True
                 if "udi" in a:
                     if a["udi"] is None:
                         self.label_udi.config(background="gray", foreground="black")
                         self.var_label_udi.set("PLEASE SCAN UDI")
-                        print("RESET UDI")
+                        print("UI:RESET UDI")
                     else:
                         self.label_udi.config(background="blue", foreground="white")
                         self.var_label_udi.set(a["udi"])
@@ -276,18 +276,18 @@ class WindowUI(object):
                 if "udi_scanned" in a:
                     self.label_udi.config(background="lightblue", foreground="black")
                     self.var_label_udi.set(a["udi_scanned"])
-                    print("UPDATE UDI")
+                    print("UI:UPDATE UDI")
                     _do_update = True
                 if "udi_rejected" in a:
                     self.label_udi.config(background="orange", foreground="black")
                     self.var_label_udi.set("UDI REJECTED")
-                    print("REJECTED UDI")
+                    print("UI:REJECTED UDI")
                     _do_update = True
                     pass
                 if "udi_not_confirmed" in a:
                     self.label_udi.config(background="orange", foreground="red")
                     self.var_label_udi.set(a["udi_not_confirmed"])
-                    print("BLACKLISTED UDI")
+                    print("UI:BLACKLISTED UDI")
                     _do_update = True
                     pass
                 if "result" in a:
@@ -296,7 +296,7 @@ class WindowUI(object):
                     else:
                         self.label_udi.config(background="red", foreground="black")
                     self.var_label_udi.set(a["udi"])
-                    print("RESULT")
+                    print("UI:RESULT")
                     _do_update = True
             if _do_update:
                 self.root.update()
@@ -564,14 +564,14 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                         sleep(self._throttle_pause)  # throttle polling
 
                 case SPSStates.SET_PROGRAM_ON_MACHINE:
-                    t0 = perf_counter()
+                    #t0 = perf_counter()
                     #self.lock_machine()
-                    print("T0:", perf_counter()-t0)
+                    #print("T0:", perf_counter()-t0)
                     # check if the correct program step is set
                     self.program_no = self.dev.read_program_no()
                     if self.next_program_no != self.program_no:
                         print(f"Set program {self.next_program_no} on machine.")
-                        #t0 = perf_counter()
+                        t0 = perf_counter()
                         self.dev.write_program_no(self.next_program_no)
                         print("T1:", perf_counter()-t0)
                         self.program_no = self.dev.read_program_no()
@@ -592,7 +592,7 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                         print("P1:", perf_counter()-t0)
                     if self._machine_locked:
                         self.unlock_machine()
-                    print("T3:", perf_counter()-t0)
+                    #print("T3:", perf_counter()-t0)
                     self.set_state(SPSStates.SHOW_PROGRAM_STEP)
 
                 #
@@ -727,7 +727,7 @@ class SPSStateMachine(SPSStateMachineBase):
                     # We do this task here to have quick feedback on UI before the
                     # long task for read the information begins.
                     if self.have_read_measurements:
-                        print(f"Read measurements {self.sequence_pos}")
+                        print(f"Read measurements of pos.{self.sequence_pos}")
                         # get the machine's measurements if required
                         # and store 'em into protocol database
                         self.welding_measurements = self.dev.fetch_welding_measurements()
@@ -750,7 +750,11 @@ class SPSStateMachine(SPSStateMachineBase):
                             pass
                         if self.have_read_measurements:
                             # we do read waveforms only on FAILED welding position in production mode
-                            self.welding_waveforms = self.dev.read_waveform_data(1, ("I","s3","p")) # ??? selectable sets ???
+                            print("Read waveforms")
+                            self.welding_waveforms = {
+                                1: self.dev.read_waveform_data(1, ("I","U","s3")),  # ??? selectable sets ???
+                                2: self.dev.read_waveform_data(2, ("s3"))
+                            }
                         self.set_state(SPSStates.FAILED)
 
                 case SPSStates.POSITION_PASSED:
@@ -795,13 +799,14 @@ class SPSStateMachine(SPSStateMachineBase):
                             # ??? consequence ???
                             #
                             pass
-                        if self.have_read_measurements:
-                            # read the parameters of the current program
-                            # to be able to write them on "SHOW_PROGRAM" step
-                            self.welding_parameters = self.dev.fetch_welding_parameters()
                     else:
                         #self.welding_parameters = None  # signal not to store ths set again
                         print(f"Program {self.program_no} already set.")
+                    if self.have_read_measurements:
+                        # read the parameters of the current program
+                        # to be able to write them on "SHOW_PROGRAM" step
+                        print("Read parameters")
+                        self.welding_parameters = self.dev.fetch_welding_parameters()
                     if self._machine_locked:
                         self.unlock_machine()
                     sleep(self._throttle_pause)  # throttle polling
@@ -948,7 +953,8 @@ class ProcessSPS(mp.Process):
                     # store a new parameter-set; linked by a hash over the set which keeps it unique
                     _wp_str = json.dumps(SM.welding_parameters, sort_keys=True, ensure_ascii=True)  # create a JSON to store in db and generate a HASH
                     _hash_params = get_hash(_wp_str).decode(encoding="utf-8", errors="strict")
-                    _device_name = SM.welding_parameters["name"]
+                    #_device_name = SM.welding_parameters["name"]
+                    _device_name = SM.dev.get_identification_str()
                     _program_no = SM.welding_parameters["parameters"]["ProgramNumber"]
                     _attr = (("hash",_hash_params), ("device_name",_device_name), ("program_no",_program_no), ("parameters",_wp_str))
                     _vstr = esc_values(_attr)
@@ -1035,13 +1041,15 @@ class ProcessSPS(mp.Process):
                 if self.enable_udi_scan:
                     # production version must be started by UDI scan
                     # and can run only once
-                    SM = SPSStateMachine(resource_str, program_sequence, have_read_measurements=True)
-                    _store_to_db = True
+                    SM = SPSStateMachine(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
+                    self.have_read_measurements = True  # overrides the command line parameter
+                    _store_to_db = True  # overrides the command line parameter
+                    #_store_to_file = self.have_read_measurements  # depending on the command line
                 else:
                     # we use a development state-machine here
                     SM = SPSStateMachineRotating(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
+                    #_store_to_db = True  # DEBUG
                     _store_to_file = self.have_read_measurements  # depending on the command line
-                    _store_to_db = True # DEBUG
 
                 print(f"STATE-MACHINE: {repr(SM)}")
                 # let the UI show the correct data

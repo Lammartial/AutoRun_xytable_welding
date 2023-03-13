@@ -5,7 +5,7 @@ from pprint import pprint
 from collections import OrderedDict
 
 
-CONF_FILENAME_DEV = Path(".") / "station_config_example.yaml"  # development
+CONF_FILENAME_DEV = Path(__file__).parent / "station_config_example.yaml"  # development
 CONF_FILENAME_PROD = Path("C:/") / "Production" / "station_config.yaml"  # production
 
 
