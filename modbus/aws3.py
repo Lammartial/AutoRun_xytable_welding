@@ -40,6 +40,9 @@ class AWS3Modbus(ModbusClient):
         self._wait_after_read = 0.001
         self._wait_after_write = 0.001
         self._wait_threshold_s = 0  # we start without having to wait before next modbus
+        self._welding_waveforms = None
+        self._welding_measurements = None
+        self._welding_parameters = None
 
     def __str__(self) -> str:
         return f"AWS3 Welder Modbus connection on {repr(self.client)}"
@@ -70,10 +73,18 @@ class AWS3Modbus(ModbusClient):
             self._wait_threshold_s = self._wait_after_read
 
     def setup_device(self):
-        self.set_machine_byteorder()  # switch byte order to default
+        #self.set_machine_byteorder(bo=3)  # switch byte order to default
         self.machine_name = self.read_name().strip()
 
     def set_machine_byteorder(self, bo: int = 3) -> None:
+        """
+        1: Little Endian - Ascending Byte Order
+        2: Big Endian (Data) - Descending Byte Order in Datum
+        3: Big Endian (Registers) – Descending Byte Order in Registers (default)
+
+        Args:
+            bo (int, optional): See above. Defaults to 3.
+        """
         self._sync_modbus_timing()
         self._wait_threshold_s = self._wait_after_write
         self.write_register(9999-1, bo, unit_address=3) # 3=default, 1=big
@@ -143,11 +154,11 @@ class AWS3Modbus(ModbusClient):
             "ActionCounterEnd": (_b>>11) & 1,  # Bit 1.3
             "OutOfLimitsMonitoring_Ax1": (_b>>12) & 1,  # Bit 1.4
             "OutOfLimitsMonitoring_Ax2": (_b>>13) & 1,  # Bit 1.5
-            "WeldEnd_Ax1 ": (_b>>14) & 1,  # Bit 1.6  (only in Mode without MFP)
-            "WeldEnd_Ax2 ": (_b>>15) & 1,  # Bit 1.7  (only in Mode without MFP)
+            "WeldEnd_Ax1": (_b>>14) & 1,  # Bit 1.6  (only in Mode without MFP)
+            "WeldEnd_Ax2": (_b>>15) & 1,  # Bit 1.7  (only in Mode without MFP)
 
-            "HomePosCylinder_Ax1 ": (_b>>16) & 1,  # Bit 2.0  (only in Mode without MFP)
-            "HomePosCylinder_Ax2 ": (_b>>17) & 1,  # Bit 2.1  (only in Mode without MFP)
+            "HomePosCylinder_Ax1": (_b>>16) & 1,  # Bit 2.0  (only in Mode without MFP)
+            "HomePosCylinder_Ax2": (_b>>17) & 1,  # Bit 2.1  (only in Mode without MFP)
             "TriggerActive_Ax1": (_b>>18) & 1,  # Bit 2.2
             "TriggerActive_Ax2": (_b>>19) & 1,  # Bit 2.3
 
@@ -289,7 +300,8 @@ class AWS3Modbus(ModbusClient):
         assert (axis in [1,2])
         self._sync_modbus_timing()
         response = self.read_holding_registers(601-1, 24, unit_address=axis)
-        dc: BinaryPayloadDecoder = self.getDecoder(response)
+        #dc: BinaryPayloadDecoder = self.getDecoder(response)
+        dc = BinaryPayloadDecoder.fromRegisters(response, byteorder=Endian.Big, wordorder=Endian.Big) # why changed endianess ??
         # read a string
         self._sync_modbus_timing()
         response2 = self.read_holding_registers(833-1, 16, unit_address=axis)
@@ -442,17 +454,18 @@ class AWS3Modbus(ModbusClient):
                 "WaveformResolution": dc.decode_32bit_float(),
                 "points": [],
             }
-            p = d[u]["WaveformPoints"]
+            p = d[u]["WaveformPoints"]*2  # two registers per point
             m = ()
             k: int = 0
             while k < p:
                 r = min(120, p - k)  # the new manual doc says: 60 measurement points (float, 32bits) => 120 holdings
                 self._sync_modbus_timing()
                 response = self.read_holding_registers(1008 - 1 + k, r, unit_address=axis)
+                z = min(len(response), r)
                 dc: BinaryPayloadDecoder = self.getDecoder(response)
-                for n in range(int(r/2)):
+                for n in range(int(z/2)):
                     m = m + (dc.decode_32bit_float(),)
-                k += r
+                k += z
             _log.debug(f"Data Points: {len(m)}")
             d[u]["points"] = list(m)
         return d
@@ -526,42 +539,45 @@ class AWS3Modbus(ModbusClient):
 
     def fetch_welding_parameters(self) -> dict:
         self._welding_parameters = {
-            "name": dev.read_name(),
-            "parameters": dev.read_parameters(),
+            "name": self.read_name(),
+            "parameters": self.read_parameters(),
             "program_name": {
-                1: dev.read_program_name(1),
-                2: dev.read_program_name(2),
+                1: self.read_program_name(1),
+                2: self.read_program_name(2),
             },
-            "global_parameters": {
-                1: dev.read_global_parameters(1),
-                2:  dev.read_global_parameters(2),
-            },
+            # The global parameters have the counters which
+            # yield into ongoing change of hash
+            # -> commented out
+            # "global_parameters": {
+            #     1: self.read_global_parameters(1),
+            #     2:  self.read_global_parameters(2),
+            # },
             "process_parameters": {
-                1: dev.read_process_parameters(1),
-                2: dev.read_process_parameters(2),
+                1: self.read_process_parameters(1),
+                2: self.read_process_parameters(2),
             },
         }
-        return self._welder_parameters
+        return self._welding_parameters
 
 
     def fetch_welding_measurements(self) -> dict:
         self._welding_measurements = {
-            "binary_io": dev.read_binary_io(),
+            "binary_io": self.read_binary_io(),
             "measuring_values": {
-                1: dev.read_measuring_values(1),
-                2: dev.read_measuring_values(2),
+                1: self.read_measuring_values(1),
+                2: self.read_measuring_values(2),
             },
             "extended_measurement_status": {
-                1: dev.read_ext_measurement_status(1),
-                2: dev.read_ext_measurement_status(2),
+                1: self.read_ext_measurement_status(1),
+                2: self.read_ext_measurement_status(2),
             },
         }
         return self._welding_measurements
 
 
     def fetch_welding_waveforms(self) -> dict:
-        self._welder_waveforms = {
-            "waveform_data": dev.read_waveform_data(1)  # only axis 1 useful
+        self._welding_waveforms = {
+            "waveform_data": self.read_waveform_data(1)  # only axis 1 useful
         }
         return self._welding_waveforms
 
@@ -570,7 +586,7 @@ class AWS3Modbus(ModbusClient):
 class AWS3Modbus_DUMMY(object):
 
     def __init__(self, connection_str: str, group_by_gateway: bool = True) -> None:
-        self.dev = "SIMULATION"
+        self.client = "SIMULATION"
         self.machine_name = "DUMMY"
         self.program_no = -1
 
@@ -581,7 +597,7 @@ class AWS3Modbus_DUMMY(object):
         pass
 
     def get_identification_str(self) -> str:
-        return f"{self.machine_name}@{self.dev}"
+        return f"{self.machine_name}@{self.client}"
 
     def close(self):
         pass

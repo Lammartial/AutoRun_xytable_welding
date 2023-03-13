@@ -51,7 +51,7 @@ def get_random_digits_string(length):
     numbers = string.digits
     return "".join(random.choice(numbers) for i in range(length))
 
-def get_hash(o: dict) -> str:
+def get_hash(o: dict) -> bytes:
     """Create a 24 base64 encoded characters hash of a dict.
 
     Args:
@@ -421,6 +421,7 @@ class SPSStateMachineRotating(SPSStateMachineBase):
     def __init__(self, dev: AWS3Modbus | str, program_sequence: List[int] = [1], have_read_measurements: bool = False) -> None:
         super().__init__(dev, program_sequence=program_sequence, have_read_measurements=have_read_measurements)
         self.is_sequence_done = False
+        self._debug_trigger_ = False
 
     def __str__(self) -> str:
         return f"Rotating State Machine for SPS on modbus {repr(self.dev)} with sequence {self.program_sequence}"
@@ -473,9 +474,9 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                     print(f"Next program on sequence on {self.sequence_pos}: {self.next_program_no}")
                     if self.next_program_no != self.program_no:
                         self.program_no = self.next_program_no  # to avoid blitting a -1 on UI
-                        self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
-                    else:
-                        self.set_state(SPSStates.SHOW_PROGRAM_STEP)
+                    self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
+                    #else:
+                    #    self.set_state(SPSStates.SHOW_PROGRAM_STEP)
 
                 case SPSStates.SHOW_PROGRAM_STEP:
                     print(f"Program step: {self.sequence_pos} of {len(self.program_sequence)}")
@@ -484,17 +485,73 @@ class SPSStateMachineRotating(SPSStateMachineBase):
 
                 case SPSStates.SYNC_ON_MACHINE_COUNTER:
                     _do_pause = True
-                    if self.dev.is_machine_ready():
+                    _machine_ready, _status = self.dev.is_machine_ready()
+                    if self._machine_locked or _machine_ready:
                         self.counter_ax1 = self.dev.read_axis_counter(1)
-                        #  check if we have to moved to the  next program step
+                        #  Check if welding is done and read the result,
+                        #  then proceed to check if pass or failed.
                         diffcount = self.counter_ax1 - self.last_counter_ax1
+                        #if diffcount > 0 or self._debug_trigger_: # DEBUG
+                        #    self._debug_trigger_ = False  # DEBUG
                         if diffcount > 0:
+                            # welding completed
+                            #self.lock_machine() # lock machine to have control for read measurements
                             self.last_counter_ax1 = self.counter_ax1
                             print(f"Counters: Ax1={self.counter_ax1}")
-                            self.set_state(SPSStates.FETCH_NEXT_PROGRAM)
+                            self.welding_status = _status  # store result
+                            self.set_state(SPSStates.CHECK_WELDING_RESULT)
                             _do_pause = False
                     if _do_pause:
                         sleep(self._throttle_pause)  # throttle polling
+
+                case SPSStates.CHECK_WELDING_RESULT:
+                    # We do this task here to have quick feedback on UI before the
+                    # long task for read the information begins.
+                    if self.have_read_measurements:
+                        self.lock_machine() # lock machine to have control for read measurements
+                        print(f"Read measurements {self.sequence_pos}")
+                        # get the machine's measurements if required
+                        # and store 'em into protocol database
+                        t0 = perf_counter()
+                        self.welding_measurements = self.dev.fetch_welding_measurements()
+                        print("M1:", perf_counter()-t0)
+                        print("Read waveforms")
+                        self.welding_waveforms = {
+                            1: self.dev.read_waveform_data(1, ("I","U","s3")),  # ??? selectable sets ???
+                            2: self.dev.read_waveform_data(2, ("s3"))
+                        }
+                        print("M2:", perf_counter()-t0)
+                    else:
+                        # reset to avoid false database storage
+                        self.welding_measurements = None
+                        self.welding_waveforms = None
+                    # switch to indication state, allowing the outer loop to handle the
+                    # measurements accordingly
+                    #self.unlock_machine()
+                    if self.welding_status["ok"] > 0:
+                        self.set_state(SPSStates.PASSED)
+                    else:
+                        if self.welding_status["reject"] > 0:
+                            # should we do more here ?
+                            pass
+                        else:
+                            # we got neither a pass nor fail - what's up here ?
+                            pass
+                        self.set_state(SPSStates.FAILED)
+
+                case SPSStates.PASSED:
+                    # This state is to let the outer loop do write the measurement data
+                    # for a FAILED position.
+                    print(f"PASSED at position {self.sequence_pos}")
+                    # Then Get next position's program or PASS on end of sequence
+                    self.set_state(SPSStates.FETCH_NEXT_PROGRAM)
+
+                case SPSStates.FAILED:
+                    # This state is to let the outer loop do write the measurement data
+                    # for a PASS position.
+                    print(f"FAILED at position {self.sequence_pos}")
+                    # Then Get next position's program or PASS on end of sequence
+                    self.set_state(SPSStates.FETCH_NEXT_PROGRAM)
 
                 case SPSStates.FETCH_NEXT_PROGRAM:
                     # yes we have finished a cycle -> move to next program step WAIT_READY_TO_SET_PROGRAM
@@ -507,17 +564,35 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                         sleep(self._throttle_pause)  # throttle polling
 
                 case SPSStates.SET_PROGRAM_ON_MACHINE:
-                    self.lock_machine()
+                    t0 = perf_counter()
+                    #self.lock_machine()
+                    print("T0:", perf_counter()-t0)
                     # check if the correct program step is set
                     self.program_no = self.dev.read_program_no()
                     if self.next_program_no != self.program_no:
                         print(f"Set program {self.next_program_no} on machine.")
+                        #t0 = perf_counter()
                         self.dev.write_program_no(self.next_program_no)
+                        print("T1:", perf_counter()-t0)
                         self.program_no = self.dev.read_program_no()
-                        # ??? check ???
+                        print("T2:", perf_counter()-t0)
+                        if self.program_no != self.next_program_no:
+                            #
+                            # ??? consequence ???
+                            #
+                            pass
                     else:
                         print(f"Program {self.program_no} already set.")
-                    self.unlock_machine()
+                    if self.have_read_measurements:
+                        # read the parameters of the current program
+                        # to be able to write them on "SHOW_PROGRAM" step
+                        print("Read parameters")
+                        t0 = perf_counter()
+                        self.welding_parameters = self.dev.fetch_welding_parameters()
+                        print("P1:", perf_counter()-t0)
+                    if self._machine_locked:
+                        self.unlock_machine()
+                    print("T3:", perf_counter()-t0)
                     self.set_state(SPSStates.SHOW_PROGRAM_STEP)
 
                 #
@@ -534,6 +609,7 @@ class SPSStateMachineRotating(SPSStateMachineBase):
             pass  # swallow
         except Exception as ex:
             print(f"SPS complains: {type(ex)}:{ex}")
+            #raise
             pass  # swallow
         finally:
             # make sure that the welding machine will be unlocked in any failure cases
@@ -619,9 +695,9 @@ class SPSStateMachine(SPSStateMachineBase):
                     print(f"Next program on sequence on {self.sequence_pos}: {self.next_program_no}")
                     if self.next_program_no != self.program_no:
                         self.program_no = self.next_program_no  # to avoid blitting a -1 on UI
-                        self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
-                    else:
-                        self.set_state(SPSStates.SHOW_PROGRAM_STEP)
+                    self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
+                    #else:
+                    #    self.set_state(SPSStates.SHOW_PROGRAM_STEP)
 
                 case SPSStates.SHOW_PROGRAM_STEP:
                     print(f"Program step: {self.sequence_pos} of {len(self.program_sequence)}")
@@ -630,56 +706,64 @@ class SPSStateMachine(SPSStateMachineBase):
 
                 case SPSStates.SYNC_ON_MACHINE_COUNTER:
                     _do_pause = True
-                    if self._machine_locked or self.dev.is_machine_ready():
+                    _machine_ready, _status = self.dev.is_machine_ready()
+                    if self._machine_locked or _machine_ready:
                         self.counter_ax1 = self.dev.read_axis_counter(1)
-                        #  check if welding is done and
-                        #     pass so that we have to moved to the next program step
-                        #  or
-                        #     fail so that we stop here
+                        #  Check if welding is done and read the result,
+                        #  then proceed to check if pass or failed.
                         diffcount = self.counter_ax1 - self.last_counter_ax1
                         if diffcount > 0:
                             # welding completed
+                            #self.lock_machine() # lock machine to have control for read measurements
                             self.last_counter_ax1 = self.counter_ax1
                             print(f"Counters: Ax1={self.counter_ax1}")
+                            self.welding_status = _status  # store result
                             self.set_state(SPSStates.CHECK_WELDING_RESULT)
                             _do_pause = False
                     if _do_pause:
                         sleep(self._throttle_pause)  # throttle polling
 
                 case SPSStates.CHECK_WELDING_RESULT:
-                    self.lock_machine()
-                    sleep(self._throttle_pause)  # throttle polling
-                    _, status = self.dev.is_machine_ready()
-                    self.welding_status = status  # store always
+                    # We do this task here to have quick feedback on UI before the
+                    # long task for read the information begins.
                     if self.have_read_measurements:
+                        print(f"Read measurements {self.sequence_pos}")
                         # get the machine's measurements if required
                         # and store 'em into protocol database
                         self.welding_measurements = self.dev.fetch_welding_measurements()
-                        self.welding_waveforms = None  # reset to avoid false database storage
-                    if status["ok"] > 0:
+                        self.welding_waveforms = None
+                    else:
+                        # reset to avoid false database storage
+                        self.welding_measurements = None
+                        self.welding_waveforms = None
+                    # switch to indication state, allowing the outer loop to handle the
+                    # measurements accordingly
+                    if self.welding_status["ok"] > 0:
+                        # we do NOT read waveforms as it takes too long
                         self.set_state(SPSStates.POSITION_PASSED)
                     else:
-                        if status["reject"] > 0:
+                        if self.welding_status["reject"] > 0:
                             # should we do more here ?
                             pass
                         else:
                             # we got neither a pass nor fail - what's up here ?
                             pass
-                        self.set_state(SPSStates.FAILED)  # keep machine locked
+                        if self.have_read_measurements:
+                            # we do read waveforms only on FAILED welding position in production mode
+                            self.welding_waveforms = self.dev.read_waveform_data(1, ("I","s3","p")) # ??? selectable sets ???
+                        self.set_state(SPSStates.FAILED)
 
                 case SPSStates.POSITION_PASSED:
                     # This state is to let the outer loop do write the measurement data
                     # for a PASS position.
+                    # MEASUREMENT DATA VALID
                     # Then Get next position's program or PASS on end of sequence
                     self.set_state(SPSStates.FETCH_NEXT_PROGRAM)
 
                 case SPSStates.FAILED:
+                    # This state is to let the outer loop react on FAILED
+                    # MEASUREMENT DATA VALID
                     print(f"FAILED at position {self.sequence_pos}")
-                    if self.have_read_measurements:
-                        # On fail, we read the waveforms, too to store into database.
-                        # We do this task here to have quick feedback on UI before the
-                        # long task for read the information begins.
-                        self.welding_waveforms = self.dev.read_waveform_data(1, ("I","s3","p"))
                     self.set_state(SPSStates.STOP)
 
                 case SPSStates.FETCH_NEXT_PROGRAM:
@@ -698,7 +782,7 @@ class SPSStateMachine(SPSStateMachineBase):
                         sleep(self._throttle_pause)  # throttle polling
 
                 case SPSStates.SET_PROGRAM_ON_MACHINE:
-                    self.lock_machine()
+                    #self.lock_machine()
                     # check if the correct program step is set
                     self.program_no = self.dev.read_program_no()
                     if self.next_program_no != self.program_no:
@@ -718,7 +802,8 @@ class SPSStateMachine(SPSStateMachineBase):
                     else:
                         #self.welding_parameters = None  # signal not to store ths set again
                         print(f"Program {self.program_no} already set.")
-                    self.unlock_machine()
+                    if self._machine_locked:
+                        self.unlock_machine()
                     sleep(self._throttle_pause)  # throttle polling
                     self.set_state(SPSStates.SHOW_PROGRAM_STEP)
 
@@ -737,6 +822,7 @@ class SPSStateMachine(SPSStateMachineBase):
             pass  # swallow
         except Exception as ex:
             print(f"SPS complains: {type(ex)}:{ex}")
+            #raise
             pass  # swallow
         finally:
             # make sure that the welding machine will be unlocked in any failure cases
@@ -834,54 +920,98 @@ class ProcessSPS(mp.Process):
         Create all relevant objects from here!
         """
 
+        #global DEBUG
+        #_log = getLogger(__file__, DEBUG)
+
+        #------------------------------------------------------------------------------------------
+
         def store_db(udi: str, part_number: str, line_id: int, station_id: str, SM: SPSStateMachine, db_session_maker: Session):
+
+            def esc_values(lst: List[tuple]) -> str:
+                def _esc(v) -> str:
+                    if v:
+                        if isinstance(v, (int,float)):
+                            return str(v)
+                        else:
+                            return f"'{v}'"
+                    else:
+                        # None -> NULL
+                        return "NULL"
+                return ",".join([f"{k}={_esc(v)}" for k,v in lst])
+
+            print("STORE DB")
             _result = "P" if SM.welding_status["ok"]>0 else ("F" if SM.welding_status["reject"]>0 else "A")
             _counter = SM.counter_ax1
-            with self.db_session_maker() as session:
+            _udi = udi if udi else "undefined"  # database uses UDI as prim key -> not null
+            with db_session_maker() as session:
                 if SM.welding_parameters:
                     # store a new parameter-set; linked by a hash over the set which keeps it unique
                     _wp_str = json.dumps(SM.welding_parameters, sort_keys=True, ensure_ascii=True)  # create a JSON to store in db and generate a HASH
-                    _hash_params = get_hash(_wp_str)
+                    _hash_params = get_hash(_wp_str).decode(encoding="utf-8", errors="strict")
                     _device_name = SM.welding_parameters["name"]
-                    _program_no = SM.program_no
-                    _sql = text(f"INSERT INTO `welding_parameters` (hash,device_name,program_no,parameter_set) VALUES ({_hash_params},{_device_name},{_program_no},{_wp_str})")
+                    _program_no = SM.welding_parameters["parameters"]["ProgramNumber"]
+                    _attr = (("hash",_hash_params), ("device_name",_device_name), ("program_no",_program_no), ("parameters",_wp_str))
+                    _vstr = esc_values(_attr)
+                    _updstr = esc_values(_attr[1:])
+                    _sql = text(f"INSERT INTO `welding_parameters` SET {_vstr} ON DUPLICATE KEY UPDATE {_updstr}")
                     response = session.execute(_sql)
+                else:
+                    _hash_params = None
                 if SM.welding_waveforms:
                     # Store waveforms. linked by (udi,counter) index to "measurements" table
                     _ww_str = json.dumps(SM.welding_waveforms)
-                    _sql = text(f"INSERT INTO `welding_waveforms` (udi,counter,waveforms) VALUES ({udi},{_counter},{json.dumps(_ww_str)})")
+                    _vstr = esc_values((("udi", _udi), ("counter", _counter), ("waveforms", _ww_str)))
+                    _sql = text(f"INSERT INTO `welding_waveforms` SET {_vstr}")
                     response = session.execute(_sql)
                 # always store the measurement data; (udi,counter) is primary key
                 _wm_str = json.dumps(SM.welding_measurements)
-                _sql = text(f"INSERT INTO `welding_measurements` (udi,counter,part_number,line_id,station_id,pass_fail,ref_parameter,measurements) "+\
-                            f"VALUES ({udi},{_counter},{part_number},{line_id},{station_id},{_result},{_hash_params},{_wm_str})")
+                _vstr = esc_values((("udi", _udi), ("counter", _counter), ("part_number", part_number),
+                                   ("line_id", line_id), ("station_id", station_id), ("result", _result),
+                                   ("ref_parameter", _hash_params), ("measurements", _wm_str)))
+                _sql = text(f"INSERT INTO `welding_measurements` SET {_vstr}")
                 response = session.execute(_sql)
                 session.commit()
 
-        def store_file(udi: str, part_number: str, line_id: int, station_id: str, SM: SPSStateMachine, fp_pattern: Path = "aws_readings"):
-            _counter = SM.counter_ax1
-            with open(fp_pattern.parent /  f"{fp_pattern.name}_measurements_{line_id}_{station_id}_{_counter}.yaml", "wt") as file:
-                file.write(yaml.dump({
-                    "counter": _counter,
-                    "status": SM.welding_status,
-                    **SM.welding_measurements
-                    },
-                    Dumper=yaml.Dumper))
-            with open(fp_pattern.parent /  f"{fp_pattern.name}_waveforms_{line_id}_{station_id}_{_counter}.yaml", "wt") as file:
-                file.write(yaml.dump({
-                    "counter": _counter,
-                    "status": SM.welding_status,
-                    **SM.welding_waveforms
-                    },
-                    Dumper=yaml.Dumper))
-            with open(fp_pattern.parent /  f"{fp_pattern.name}_parameters_{line_id}_{station_id}_{_counter}.yaml", "wt") as file:
-                file.write(yaml.dump({
-                    "counter": _counter,
-                    "status": SM.welding_status,
-                    **SM.welding_parameters
-                    },
-                    Dumper=yaml.Dumper))
+        #------------------------------------------------------------------------------------------
 
+        def store_file(udi: str, part_number: str, line_id: int, station_id: str, SM: SPSStateMachine, fp_pattern: Path = "aws_readings"):
+            print("SAVE FILES")
+            _counter = SM.counter_ax1
+            try:
+                with open(fp_pattern.parent /  f"{fp_pattern.name}_measurements_{line_id}_{station_id}_{_counter}.yaml", "wt") as file:
+                    file.write(yaml.dump({
+                        "counter": _counter,
+                        "status": SM.welding_status,
+                        **SM.welding_measurements
+                        },
+                        Dumper=yaml.Dumper))
+            except Exception as ex:
+                print(ex) # swallow
+                print("Measurements:", SM.welding_measurements)
+
+            try:
+                with open(fp_pattern.parent /  f"{fp_pattern.name}_waveforms_{line_id}_{station_id}_{_counter}.yaml", "wt") as file:
+                    file.write(yaml.dump({
+                        "counter": _counter,
+                        "status": SM.welding_status,
+                        **SM.welding_waveforms
+                        },
+                        Dumper=yaml.Dumper))
+            except Exception as ex:
+                print(ex) # swallow
+                print("Waveforms:", SM.welding_waveforms)
+
+            try:
+                with open(fp_pattern.parent /  f"{fp_pattern.name}_parameters_{line_id}_{station_id}_{_counter}.yaml", "wt") as file:
+                    file.write(yaml.dump({
+                        "counter": _counter,
+                        "status": SM.welding_status,
+                        **SM.welding_parameters
+                        },
+                        Dumper=yaml.Dumper))
+            except Exception as ex:
+                print(ex) # swallow
+                print("Parameters:", SM.welding_parameters)
 
         # we need to keep the _dsp interface for UDI presentation and result transmission
         _cfg, _dsp = _create_interfaces(None if self.enable_udi_scan>0 else self.simulated_dsp_product)
@@ -911,6 +1041,8 @@ class ProcessSPS(mp.Process):
                     # we use a development state-machine here
                     SM = SPSStateMachineRotating(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
                     _store_to_file = self.have_read_measurements  # depending on the command line
+                    _store_to_db = True # DEBUG
+
                 print(f"STATE-MACHINE: {repr(SM)}")
                 # let the UI show the correct data
                 self.response_queue.put({
@@ -932,30 +1064,33 @@ class ProcessSPS(mp.Process):
                 # check actions depending on state
                 match SM.state:
                     case SPSStates.FAILED:
-                        self.response_queue.put({"result": "failed", "udi": _udi})
+                        self.response_queue.put({"result": "failed", "udi": _udi})  # update UI (red)
                         if _udi:
                             _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                         if self.have_read_measurements:
+                            print("FAILED: Store measurements enabled.")
                             if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
                             if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
                         _udi = None  # finished
                     case SPSStates.POSITION_PASSED:
                         # only to store a passed welding position's measurement
+                        print("WELD POSITION PASSED: Store measurements enabled.")
                         if self.have_read_measurements:
                             if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
                             if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
                     case SPSStates.PASSED:
-                        self.response_queue.put({"result": "passed", "udi": _udi})
+                        self.response_queue.put({"result": "passed", "udi": _udi})  # update UI (green)
                         if _udi:
                             _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                         if self.have_read_measurements:
+                            print("PASSED: Store measurements enabled.")
                             if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
                             if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
                         _udi = None  # finished
                     case SPSStates.SET_PROGRAM_ON_MACHINE:
-                        self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no})
+                        self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no})  # update UI
                     case SPSStates.SHOW_PROGRAM_STEP:
-                        self.response_queue.put({"position": SM.sequence_pos, "program": SM.program_no})
+                        self.response_queue.put({"position": SM.sequence_pos, "program": SM.program_no})  # update UI
                         # Note: could also be used to store the parameter set to database
 
                 # execute the state-machine
@@ -1009,6 +1144,7 @@ class ProcessSPS(mp.Process):
                         answer = "OK"
                     else:
                         # no UDI control
+                        SM._debug_trigger_ = True
                         SM.set_state(SM.move_seqence_step(int(cmd["move_counter"])))
                         answer = "OK"
                 if "reset_counter" in cmd:
@@ -1087,7 +1223,7 @@ if __name__ == '__main__':
     parser.add_argument("--development", action="store_true", help="Activate development mode.")
     parser.add_argument("--product", choices=["RRC2020B", "RRC2040B"], action="store", default="RRC2020B", help="Set a product for simulated DSP interface.")
     parser.add_argument("--store", action="store_true", help="Enable read and store of measurements. If development (no UDI), data is store to YAML files.")
-    parser.add_argument("--savefile", action="store", default="aws_readings", help="Path and filename prefix for file stored measurements")
+    parser.add_argument("--filepath", action="store", default=(Path(__file__).parent / "../.." / "logs" / "aws_readings"), help="Path and filename prefix for file stored measurements")
 
 
     args = parser.parse_args()
