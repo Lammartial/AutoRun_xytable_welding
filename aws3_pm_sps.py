@@ -1071,6 +1071,11 @@ class ProcessSPS(mp.Process):
                     #SM.set_state(SPSStates.LOCK_MACHINE)
                 # check actions depending on state
                 match SM.state:
+                    case SPSStates.CHECK_WELDING_RESULT:
+                        # KNAUP!
+                        if SM.welding_status["reject"] > 0:
+                            # update UI (red) while read waveforms taking a lot of time
+                            self.response_queue.put({"result": "failed", "udi": _udi})
                     case SPSStates.FAILED:
                         self.response_queue.put({"result": "failed", "udi": _udi})  # update UI (red)
                         if _udi:
