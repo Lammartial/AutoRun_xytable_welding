@@ -37,8 +37,8 @@ class AWS3Modbus(ModbusClient):
                          byte_order=Endian.Big, word_order=Endian.Little)
         self.machine_name = None
         self._last_modbus_access = perf_counter()
-        self._wait_after_read = 0.001
-        self._wait_after_write = 0.001
+        self._wait_after_read = 0.0001
+        self._wait_after_write = 0.0001
         self._wait_threshold_s = 0  # we start without having to wait before next modbus
         self._welding_waveforms = None
         self._welding_measurements = None
@@ -762,6 +762,13 @@ if __name__ == '__main__':
     ## Initialize the logging
     _log_fp = Path(__file__).parent / "../../.." / "logs"
     logger_init(filename_base=_log_fp / "aws3")  ## init root logger with different filename
+    # set the pymodbus to desired debug level
+    getLogger("pymodbus.client", DEBUG)
+    getLogger("pymodbus.protocol", DEBUG)
+    getLogger("pymodbus.payload", DEBUG)
+    getLogger("pymodbus.transaction", DEBUG)
+    getLogger("pymodbus", DEBUG)
+
     _log = getLogger(__name__, DEBUG)
 
     log_modbus_version()

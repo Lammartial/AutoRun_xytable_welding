@@ -13,8 +13,6 @@ from pathlib import Path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from datetime import timezone, datetime
 
-from pymodbus.exceptions import ModbusException
-from rrc.modbus.aws3 import AWS3Modbus, AWS3Modbus_DUMMY
 from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
 from rrc.dsp.interface import DspInterface, DspInterface_SIMULATION
 # import SQL managing modules
@@ -22,13 +20,31 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from rrc.dbcon import get_protocol_db_connector
 from rrc.barcode_scanner import create_barcode_scanner, Eth2SerialDevice, SerialComportDevice
+from pymodbus.exceptions import ModbusException
+from pymodbus import version as modbus_version
+from rrc.modbus.aws3 import AWS3Modbus, AWS3Modbus_DUMMY
 
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-DEBUG = 2   # set to 0 for production
-from rrc.custom_logging import getLogger
+DEBUG = 1   # set to 0 for production
+from rrc.custom_logging import getLogger, logger_init
+
+# this is necessary to enable modbus logging
+_log_fp = Path(__file__).parent / "../.." / "logs"
+#logger_init(filename_base=_log_fp / "aws3_sps")  ## init root logger with different filename
+logger_init(filename_base=None)
+_log = getLogger(__name__, DEBUG)
+
+getLogger("pymodbus.client", DEBUG)
+getLogger("pymodbus.protocol", DEBUG)
+getLogger("pymodbus.payload", DEBUG)
+getLogger("pymodbus.transaction", DEBUG)
+getLogger("pymodbus", DEBUG)
+
+
 # --------------------------------------------------------------------------- #
+
 
 ENABLE_UDI_SCAN: int = None  # is being overwritten by argument
 SIMULATED_DSP_PRODUCT: str = None # is being overwritten by argument
@@ -420,8 +436,11 @@ class SPSStateMachineRotating(SPSStateMachineBase):
 
     def __init__(self, dev: AWS3Modbus | str, program_sequence: List[int] = [1], have_read_measurements: bool = False) -> None:
         super().__init__(dev, program_sequence=program_sequence, have_read_measurements=have_read_measurements)
+        global DEBUG
+        self._log = getLogger(__name__, DEBUG)
         self.is_sequence_done = False
         self._debug_trigger_ = False
+
 
     def __str__(self) -> str:
         return f"Rotating State Machine for SPS on modbus {repr(self.dev)} with sequence {self.program_sequence}"
@@ -602,13 +621,16 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                     self.set_state(SPSStates.START)
 
         except ModbusException as ex:
-            print(f"SPS: {ex}")
+            #print(f"SPS: {ex}")
+            self._log.error(f"SPS: {ex}")
             pass  # swallow
         except AssertionError as ex:
-            print(f"SPS ignores: {ex}")
+            #print(f"SPS ignores: {ex}")
+            self._log.error(f"SPS ignores: {ex}")
             pass  # swallow
         except Exception as ex:
-            print(f"SPS complains: {type(ex)}:{ex}")
+            #print(f"SPS complains: {type(ex)}:{ex}")
+            self._log.critical(f"SPS complains: {type(ex)}:{ex}")
             #raise
             pass  # swallow
         finally:
@@ -632,6 +654,8 @@ class SPSStateMachine(SPSStateMachineBase):
     """
     def __init__(self, dev: AWS3Modbus | str, program_sequence: List[int] = [1], have_read_measurements: bool = True) -> None:
         super().__init__(dev, program_sequence=program_sequence, have_read_measurements=have_read_measurements)
+        global DEBUG
+        self._log = getLogger(__name__, DEBUG)
 
 
     def __str__(self) -> str:
@@ -820,13 +844,16 @@ class SPSStateMachine(SPSStateMachineBase):
                     self.set_state(SPSStates.START)
 
         except ModbusException as ex:
-            print(f"SPS: {ex}")
+            #print(f"SPS: {ex}")
+            self._log.error(f"SPS: {ex}")
             pass  # swallow
         except AssertionError as ex:
-            print(f"SPS ignores: {ex}")
+            #print(f"SPS ignores: {ex}")
+            self._log.error(f"SPS ignores: {ex}")
             pass  # swallow
         except Exception as ex:
-            print(f"SPS complains: {type(ex)}:{ex}")
+            #print(f"SPS complains: {type(ex)}:{ex}")
+            self._log.critical(f"SPS complains: {type(ex)}:{ex}")
             #raise
             pass  # swallow
         finally:
@@ -839,6 +866,42 @@ class SPSStateMachine(SPSStateMachineBase):
 # *** SPS ***
 #
 
+def _esc(v) -> str:
+    """Return the value v as either string with parentheses or number.
+
+    Intended to be used with sql statements.
+
+    Args:
+        v (Any): Does expect v being a basic type of either float,int, bytes or str.
+
+    Returns:
+        str: String with parentheses or plain number as string without parentheses.
+    """
+    if v:
+        if isinstance(v, (int,float)):
+            return str(v)
+        else:
+            return f"'{v}'"
+    else:
+        # None -> NULL
+        return "NULL"
+
+def esc_values(lst: List[tuple]) -> str:
+    """
+    Converts a list of key,value tuples into comma separated list of key=value string.
+    The List is separated by comma.
+
+    Intended to be used with sql statements.
+
+    Args:
+        lst (List[tuple]): _description_
+
+    Returns:
+        str: "key=value|'value', ..."
+    """
+    return ",".join([f"{k}={_esc(v)}" for k,v in lst])
+
+
 def _create_interfaces(simulation: None | str = None) -> Tuple[StationConfiguration, DspInterface]:
     """Creates the interfaces for configuration and DSP.
 
@@ -848,6 +911,8 @@ def _create_interfaces(simulation: None | str = None) -> Tuple[StationConfigurat
     Returns:
         Tuple[StationConfiguration, DspInterface]: _description_
     """
+    global DEBUG
+    _log = getLogger(__name__, DEBUG)
 
     # 1. we need the station config
     try:
@@ -855,10 +920,11 @@ def _create_interfaces(simulation: None | str = None) -> Tuple[StationConfigurat
     except FileNotFoundError:
         # comfort for testing: using the development configuration
         cfg = StationConfiguration("CELL_WELDING", filename=CONF_FILENAME_DEV)
+        _log.info(f"USING DEVELOPMENT CONFIGURATION {CONF_FILENAME_DEV}")
     _, __, _dsp_api_base_url, _, _ = cfg.get_station_configuration()
     # 2. we can create the DSP interface
     if simulation:
-        print(f"Use simulation for DSP interface configured {simulation}")
+        _log.info(f"Use simulation for DSP interface configured {simulation}")
         dsp = DspInterface_SIMULATION(simulation, None)
     else:
         dsp = DspInterface(_dsp_api_base_url, None)
@@ -895,8 +961,8 @@ class ProcessSPS(mp.Process):
         _, _station_id, _dsp_api_base_url, _line_id, _ = cfg.get_station_configuration()
         # 2. with station config we can request the part number from DSP
         print("Fetching part number from DSP...")
-        #_dsp_info = dsp.get_parameter_for_testrun("CELL_WELDING", _station_id, _line_id, "0")
-        _dsp_info = dsp.get_parameter_for_welding(_station_id, _line_id)
+        _dsp_info = dsp.get_parameter_for_testrun("CELL_WELDING", _station_id, _line_id, "0")
+        #_dsp_info = dsp.get_parameter_for_welding(_station_id, _line_id)
         _part_number = _dsp_info["part_number"]
         _sequence_revision = _dsp_info["test_program_id"]
         # 3. with station config we can get the IP resource for the welder MODBUS
@@ -909,7 +975,10 @@ class ProcessSPS(mp.Process):
         engine, session_maker = get_protocol_db_connector()
         with session_maker() as session:
             response = session.execute(text(
-                    f"SELECT revision,program_sequence,parameter FROM `spsconfig` AS sc WHERE sc.part_number='{_part_number}' ORDER BY revision DESC"
+                    f"SELECT revision,program_sequence,parameter FROM `spsconfig` AS sc "+\
+                    f"  WHERE sc.part_number={_esc(_part_number)} "+\
+                    f"  AND sc.revision={_esc(_sequence_revision)}"
+                    #f"  ORDER BY revision DESC"
                     ))
             rows = response.fetchall()
         if len(rows) == 0:
@@ -927,22 +996,15 @@ class ProcessSPS(mp.Process):
 
         #global DEBUG
         #_log = getLogger(__file__, DEBUG)
+        # getLogger("pymodbus.client.*", 2)
+        # getLogger("pymodbus.protocol.*", 2)
+        # getLogger("pymodbus.payload.*", 2)
+        # getLogger("pymodbus.transaction.*", 2)
+        # getLogger("pymodbus.*", 2)
 
         #------------------------------------------------------------------------------------------
 
         def store_db(udi: str, part_number: str, line_id: int, station_id: str, SM: SPSStateMachine, db_session_maker: Session):
-
-            def esc_values(lst: List[tuple]) -> str:
-                def _esc(v) -> str:
-                    if v:
-                        if isinstance(v, (int,float)):
-                            return str(v)
-                        else:
-                            return f"'{v}'"
-                    else:
-                        # None -> NULL
-                        return "NULL"
-                return ",".join([f"{k}={_esc(v)}" for k,v in lst])
 
             print("STORE DB")
             _result = "P" if SM.welding_status["ok"]>0 else ("F" if SM.welding_status["reject"]>0 else "A")
@@ -951,10 +1013,15 @@ class ProcessSPS(mp.Process):
             with db_session_maker() as session:
                 if SM.welding_parameters:
                     # store a new parameter-set; linked by a hash over the set which keeps it unique
-                    _wp_str = json.dumps(SM.welding_parameters, sort_keys=True, ensure_ascii=True)  # create a JSON to store in db and generate a HASH
-                    _hash_params = get_hash(_wp_str).decode(encoding="utf-8", errors="strict")
                     #_device_name = SM.welding_parameters["name"]
                     _device_name = SM.dev.get_identification_str()
+                    _wp_str = json.dumps({
+                        "device_name": _device_name,
+                        # we include the device name consisting of IP name@address into the hash calculation to
+                        #  a) distinct between different machines
+                        #  b) have reference to the execting machine in data
+                        **SM.welding_parameters}, sort_keys=True, ensure_ascii=True)  # create a JSON to store in db and generate a HASH
+                    _hash_params = get_hash(_wp_str).decode(encoding="utf-8", errors="strict")
                     _program_no = SM.welding_parameters["parameters"]["ProgramNumber"]
                     _attr = (("hash",_hash_params), ("device_name",_device_name), ("program_no",_program_no), ("parameters",_wp_str))
                     _vstr = esc_values(_attr)
@@ -983,6 +1050,7 @@ class ProcessSPS(mp.Process):
         def store_file(udi: str, part_number: str, line_id: int, station_id: str, SM: SPSStateMachine, fp_pattern: Path = "aws_readings"):
             print("SAVE FILES")
             _counter = SM.counter_ax1
+            _device_name = SM.dev.get_identification_str()
             try:
                 with open(fp_pattern.parent /  f"{fp_pattern.name}_measurements_{line_id}_{station_id}_{_counter}.yaml", "wt") as file:
                     file.write(yaml.dump({
@@ -1012,6 +1080,7 @@ class ProcessSPS(mp.Process):
                     file.write(yaml.dump({
                         "counter": _counter,
                         "status": SM.welding_status,
+                        "device_name": _device_name,
                         **SM.welding_parameters
                         },
                         Dumper=yaml.Dumper))
@@ -1230,17 +1299,16 @@ class ProcessScanner(mp.Process):
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
-    # Initialize the logging
-    from rrc.custom_logging import logger_init
-    logger_init(filename_base=None)  ## init root logger with different filename
-    _log = getLogger(__name__, DEBUG)
+    # need to initialize logger on load
+
+    print("=== POOR MAN's SPS ===")
+    print(modbus_version)
 
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("--development", action="store_true", help="Activate development mode.")
     parser.add_argument("--product", choices=["RRC2020B", "RRC2040B"], action="store", default="RRC2020B", help="Set a product for simulated DSP interface.")
     parser.add_argument("--store", action="store_true", help="Enable read and store of measurements. If development (no UDI), data is store to YAML files.")
     parser.add_argument("--filepath", action="store", default=(Path(__file__).parent / "../.." / "logs" / "aws_readings"), help="Path and filename prefix for file stored measurements")
-
 
     args = parser.parse_args()
 

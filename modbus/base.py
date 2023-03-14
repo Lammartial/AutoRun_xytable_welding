@@ -22,7 +22,6 @@ DEBUG = 1
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
-
 # ----------------------------------------------------------------------- #
 # This will send the error messages in the specified namespace to a file.
 # The available namespaces in pymodbus are as follows:
@@ -32,15 +31,13 @@ from rrc.custom_logging import getLogger, logger_init
 # * pymodbus.client.*   - all logging messages involving the client
 # * pymodbus.protocol.* - all logging messages inside the protocol layer
 # ----------------------------------------------------------------------- #
-import logging
-#logging.disable(logging.NOTSET)
-logging.getLogger("pymodbus.client").setLevel(logging.DEBUG if DEBUG>1 else logging.INFO)
-logging.getLogger("pymodbus.protocol").setLevel(logging.DEBUG if DEBUG>1 else logging.INFO)
-logging.getLogger("pymodbus.payload").setLevel(logging.DEBUG)  # payload logging takes too long
-logging.getLogger("pymodbus.transaction").setLevel(logging.DEBUG)
-logging.getLogger("pymodbus").setLevel(logging.DEBUG if DEBUG>1 else logging.INFO)
-
-
+# Example using our custom logger:
+#       getLogger("pymodbus.client", DEBUG)
+#       getLogger("pymodbus.protocol", DEBUG)
+#       getLogger("pymodbus.payload", DEBUG)
+#       getLogger("pymodbus.transaction", DEBUG)
+#       getLogger("pymodbus", DEBUG)
+#
 
 
 #--------------------------------------------------------------------------------------------------
@@ -68,7 +65,10 @@ def _check_call(rr):
     if isinstance(rr, ExceptionResponse):
         raise ModbusException(f"Device rejected request: {rr}")
     if rr.isError():
-        raise ModbusException(rr)
+        if not isinstance(rr, Exception):
+            raise ModbusException(rr)  # need to create our own exception
+        # is already an exception
+        raise rr
     return rr
 
 #--------------------------------------------------------------------------------------------------
@@ -250,6 +250,14 @@ if __name__ == '__main__':
 
     ## Initialize the logging
     logger_init(filename_base=None)  ## init root logger with different filename
+
+    # set the pymodbus to desired debug level
+    getLogger("pymodbus.client", DEBUG)
+    getLogger("pymodbus.protocol", DEBUG)
+    getLogger("pymodbus.payload", DEBUG)
+    getLogger("pymodbus.transaction", DEBUG)
+    getLogger("pymodbus", DEBUG)
+
     _log = getLogger(__name__, DEBUG)
 
     log_modbus_version()
