@@ -16,7 +16,7 @@ from rrc.modbus.base import ModbusClient, log_modbus_version
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-DEBUG = 1
+DEBUG = 2
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
@@ -750,6 +750,86 @@ def test_basic_communication(dev: AWS3Modbus):
     return m
 
 
+def test_read_to_yaml(dev: AWS3Modbus, _log_fp):
+    t0 = perf_counter()
+    counter = dev.read_axis_counter(1)
+    d = {
+        **dev.fetch_welding_parameters(),
+        **dev.fetch_welding_measurements(),
+        #**dev.fetch_welder_waveforms(),
+    }
+    t = perf_counter()-t0
+    with open(_log_fp / f"aws_readings_{counter}.yaml", "wt") as file:
+        file.write(dump(d, Dumper=Dumper))
+    print("-->TIME:", t)
+
+    t0 = perf_counter()
+    d = dev.fetch_welding_waveforms()
+    t = perf_counter()-t0
+    with open(_log_fp / f"aws_waveforms_{counter}.yaml", "wt") as file:
+        file.write(dump(d, Dumper=Dumper))
+    print("-->TIME:", t)
+
+
+def test_returned_bitio_pattern(dev: AWS3Modbus):
+    pp = PrettyPrinter(indent=4)
+    print("FAILED","-"*100)
+    print("HFI:")
+    pp.pprint(dev._decode_binary_ouput_hfi(4030841885))
+    print("MFP:")
+    pp.pprint(dev._decode_binary_output_mfp(8388736))
+    print("GOOD", "-"*100)
+    print("HFI:")
+    pp.pprint(dev._decode_binary_ouput_hfi(3225535565))
+    print("MFP:")
+    pp.pprint(dev._decode_binary_output_mfp(8388608))
+
+
+def test_program_no_timing(dev: AWS3Modbus):
+
+    def _set_program(x: int):
+        print(f"Set program no: {x}")
+        t0 = perf_counter()
+        d = dev.write_program_no(x)
+        _t = perf_counter()-t0
+        print(f"T: {_t}s")
+
+    def _read_program():
+        t0 = perf_counter()
+        d = dev.read_program_no()
+        _t = perf_counter()-t0
+        print(f"Read program no: {d} ({_t}s)")
+
+    print("Reset program")
+    _set_program(5)
+
+    print("Unlock machine")
+    t0 = perf_counter()
+    dev.unlock_machine_step()
+    _t = perf_counter()-t0
+    print(f"T: {_t}s")
+    sleep(0.1)
+    _set_program(6)
+    sleep(0.1)
+    _set_program(5)
+    sleep(0.1)
+    print("Lock machine")
+    t0 = perf_counter()
+    dev.lock_machine_step()
+    _t = perf_counter()-t0
+    print(f"T: {_t}s")
+    sleep(0.1)
+    _set_program(6)
+    sleep(0.1)
+    _set_program(5)
+
+    sleep(0.1)
+    print("Unlock machine")
+    t0 = perf_counter()
+    dev.unlock_machine_step()
+    _t = perf_counter()-t0
+    print(f"T: {_t}s")
+
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
     from yaml import load, dump, Loader, Dumper
@@ -776,42 +856,11 @@ if __name__ == '__main__':
     dev = AWS3Modbus("tcp:172.21.101.100:502")
     if dev.open():
         # d = test_basic_communication(dev)
-        d = dev.write_program_no(5)
-        d = dev.read_program_no()
-        print(f"PROGRAM: {d}")
-
-        t0 = perf_counter()
-        counter = dev.read_axis_counter(1)
-        d = {
-            **dev.fetch_welding_parameters(),
-            **dev.fetch_welding_measurements(),
-            #**dev.fetch_welder_waveforms(),
-        }
-        t = perf_counter()-t0
-        with open(_log_fp / f"aws_readings_{counter}.yaml", "wt") as file:
-            file.write(dump(d, Dumper=Dumper))
-        print("-->TIME:", t)
-
-        t0 = perf_counter()
-        d = dev.fetch_welding_waveforms()
-        t = perf_counter()-t0
-        with open(_log_fp / f"aws_waveforms_{counter}.yaml", "wt") as file:
-            file.write(dump(d, Dumper=Dumper))
-        print("-->TIME:", t)
-
+        #test_read_to_yaml(dev, _log_fp)
+        test_program_no_timing(dev)
         dev.close()
 
-    pp = PrettyPrinter(indent=4)
-    print("FAILED","-"*100)
-    print("HFI:")
-    pp.pprint(dev._decode_binary_ouput_hfi(4030841885))
-    print("MFP:")
-    pp.pprint(dev._decode_binary_output_mfp(8388736))
-    print("GOOD", "-"*100)
-    print("HFI:")
-    pp.pprint(dev._decode_binary_ouput_hfi(3225535565))
-    print("MFP:")
-    pp.pprint(dev._decode_binary_output_mfp(8388608))
+    #test_returned_bitio_pattern(dev)
 
     _log.info("End test")
 
