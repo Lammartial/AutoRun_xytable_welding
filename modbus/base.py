@@ -234,7 +234,7 @@ class ModbusClient:
         return writeResponse
 
     def write_registers(self, address: int, values: List[int | float | str], unit_address: int | None = None) -> WriteMultipleRegistersResponse | Any:
-        writeResponse = _check_call(self.client.write_coils(address, values, slave=unit_address if unit_address is not None else self.unit_address))
+        writeResponse = _check_call(self.client.write_registers(address, values, slave=unit_address if unit_address is not None else self.unit_address))
         return writeResponse
 
     def write_coil(self, address: int, value: bool, unit_address: int | None = None) -> WriteSingleCoilResponse | Any:
