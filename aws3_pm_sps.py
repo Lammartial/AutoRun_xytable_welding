@@ -14,7 +14,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from datetime import timezone, datetime
 
 from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
-from rrc.dsp.interface import DspInterface, DspInterface_SIMULATION
+from rrc.dsp.interface import DspInterface, DspInterface_SIMULATION, DSPInterfaceError
 # import SQL managing modules
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -1084,6 +1084,8 @@ class ProcessSPS(mp.Process):
                 print(ex) # swallow
                 print("Parameters:", SM.welding_parameters)
 
+        #------------------------------------------------------------------------------------------
+
         # we need to keep the _dsp interface for UDI presentation and result transmission
         _cfg, _dsp = _create_interfaces(self.simulated_dsp_product)
 
@@ -1095,147 +1097,152 @@ class ProcessSPS(mp.Process):
         _udi: str = None
         _store_to_db = False
         _store_to_file = False
-        while True:
-            if not SM:
-                _start_datetime = datetime.utcnow().isoformat()
-                _execution_start = perf_counter()  # we use _execution_time as start timestamp
-                # need to create a new State Machine to work with
-                # get configuration from DSP + DB connection
-                program_sequence, sequence_revision, resource_str, part_number, db_session_maker, line_id, station_id = self.collect_parameters(_cfg, _dsp)
-                print("Create new SPS state machine")
-                if self.production_mode:
-                    # production version must be started by UDI scan
-                    # and can run only once
-                    SM = SPSStateMachine(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
-                    self.have_read_measurements = True  # overrides the command line parameter
-                    _store_to_db = True  # overrides the command line parameter
-                    #_store_to_file = self.have_read_measurements  # depending on the command line
+        try:
+            while True:
+                if not SM:
+                    _start_datetime = datetime.utcnow().isoformat()
+                    _execution_start = perf_counter()  # we use _execution_time as start timestamp
+                    # need to create a new State Machine to work with
+                    # get configuration from DSP + DB connection
+                    program_sequence, sequence_revision, resource_str, part_number, db_session_maker, line_id, station_id = self.collect_parameters(_cfg, _dsp)
+                    print("Create new SPS state machine")
+                    if self.production_mode:
+                        # production version must be started by UDI scan
+                        # and can run only once
+                        SM = SPSStateMachine(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
+                        self.have_read_measurements = True  # overrides the command line parameter
+                        _store_to_db = True  # overrides the command line parameter
+                        #_store_to_file = self.have_read_measurements  # depending on the command line
+                    else:
+                        # we use a development state-machine here
+                        SM = SPSStateMachineRotating(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
+                        #_store_to_db = True  # DEBUG
+                        _store_to_file = self.have_read_measurements  # depending on the command line
+
+                    print(f"STATE-MACHINE: {repr(SM)}")
+                    # let the UI show the correct data
+                    self.response_queue.put({
+                        # global infos
+                        "resource_str": SM.dev.get_identification_str(),  # only to inform user about the connected welder
+                        "part_number": part_number,
+                        "sequence": program_sequence,
+                        "revision": sequence_revision,
+                        # infos about the current sequence
+                        "position": SM.sequence_pos,
+                        "program": SM.next_program_no,
+                        "udi": _udi,
+                    })
                 else:
-                    # we use a development state-machine here
-                    SM = SPSStateMachineRotating(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
-                    #_store_to_db = True  # DEBUG
-                    _store_to_file = self.have_read_measurements  # depending on the command line
+                    # execute the state-machine if configured
+                    if not _udi and self.enable_udi_scan:
+                        SM.lock_machine()
+                        #SM.set_state(SPSStates.LOCK_MACHINE)
+                    # check actions depending on state
+                    match SM.state:
+                        case SPSStates.CHECK_WELDING_RESULT:
+                            # KNAUP!
+                            if SM.welding_status["reject"] > 0:
+                                # update UI (red) while read waveforms taking a lot of time
+                                self.response_queue.put({"result": "failed", "udi": _udi})
+                            if SM.welding_status["ok"] > 0:
+                                # update UI (green) while read waveforms taking a lot of time
+                                self.response_queue.put({"result": "passed", "udi": _udi})
+                        case SPSStates.FAILED:
+                            self.response_queue.put({"result": "failed", "udi": _udi})  # update UI (red)
+                            if _udi:
+                                _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)
+                            if self.have_read_measurements:
+                                print("FAILED: Store measurements enabled.")
+                                if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                                if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
+                            _udi = None  # finished
+                        case SPSStates.POSITION_PASSED:
+                            # only to store a passed welding position's measurement
+                            print("WELD POSITION PASSED: Store measurements enabled.")
+                            if self.have_read_measurements:
+                                if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                                if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
+                        case SPSStates.PASSED:
+                            self.response_queue.put({"result": "passed", "udi": _udi})  # update UI (green)
+                            if _udi:
+                                _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
+                            if self.have_read_measurements:
+                                print("PASSED: Store measurements enabled.")
+                                if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                                if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
+                            _udi = None  # finished
+                        case SPSStates.SET_PROGRAM_ON_MACHINE:
+                            self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no})  # update UI
+                        case SPSStates.SHOW_PROGRAM_STEP:
+                            self.response_queue.put({"position": SM.sequence_pos, "program": SM.program_no})  # update UI
+                            # Note: could also be used to store the parameter set to database
 
-                print(f"STATE-MACHINE: {repr(SM)}")
-                # let the UI show the correct data
-                self.response_queue.put({
-                    # global infos
-                    "resource_str": SM.dev.get_identification_str(),  # only to inform user about the connected welder
-                    "part_number": part_number,
-                    "sequence": program_sequence,
-                    "revision": sequence_revision,
-                    # infos about the current sequence
-                    "position": SM.sequence_pos,
-                    "program": SM.next_program_no,
-                    "udi": _udi,
-                })
-            else:
-                # execute the state-machine if configured
-                if not _udi and self.enable_udi_scan:
-                    SM.lock_machine()
-                    #SM.set_state(SPSStates.LOCK_MACHINE)
-                # check actions depending on state
-                match SM.state:
-                    case SPSStates.CHECK_WELDING_RESULT:
-                        # KNAUP!
-                        if SM.welding_status["reject"] > 0:
-                            # update UI (red) while read waveforms taking a lot of time
-                            self.response_queue.put({"result": "failed", "udi": _udi})
-                        if SM.welding_status["ok"] > 0:
-                            # update UI (green) while read waveforms taking a lot of time
-                            self.response_queue.put({"result": "passed", "udi": _udi})
-                    case SPSStates.FAILED:
-                        self.response_queue.put({"result": "failed", "udi": _udi})  # update UI (red)
+                    # execute the state-machine
+                    SM.do_one_loop()
+                # check for incomming commands
+                if not self.command_queue.empty():
+                    cmd = self.command_queue.get()
+                    if cmd is None:
+                        # Poison pill means shutdown
+                        print(f"{proc_name}: Exiting")
                         if _udi:
-                            _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)
-                        if self.have_read_measurements:
-                            print("FAILED: Store measurements enabled.")
-                            if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
-                            if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
-                        _udi = None  # finished
-                    case SPSStates.POSITION_PASSED:
-                        # only to store a passed welding position's measurement
-                        print("WELD POSITION PASSED: Store measurements enabled.")
-                        if self.have_read_measurements:
-                            if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
-                            if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
-                    case SPSStates.PASSED:
-                        self.response_queue.put({"result": "passed", "udi": _udi})  # update UI (green)
-                        if _udi:
-                            _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
-                        if self.have_read_measurements:
-                            print("PASSED: Store measurements enabled.")
-                            if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
-                            if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
-                        _udi = None  # finished
-                    case SPSStates.SET_PROGRAM_ON_MACHINE:
-                        self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no})  # update UI
-                    case SPSStates.SHOW_PROGRAM_STEP:
-                        self.response_queue.put({"position": SM.sequence_pos, "program": SM.program_no})  # update UI
-                        # Note: could also be used to store the parameter set to database
-
-                # execute the state-machine
-                SM.do_one_loop()
-            # check for incomming commands
-            if not self.command_queue.empty():
-                cmd = self.command_queue.get()
-                if cmd is None:
-                    # Poison pill means shutdown
-                    print(f"{proc_name}: Exiting")
-                    if _udi:
-                        # inform the DSP that the process has been aborted
-                        _dsp.ts_send_result_for_testrun("aborted", _start_datetime, perf_counter() - _execution_start, _udi, None)
-                    if SM:
-                        SM.close()
-                        SM = None
-                    self.command_queue.task_done()
-                    break
-                print(f"{proc_name}: {cmd}")
-                if "udi_scanned" in cmd:
-                    # check if we are NOT in the middle of a sequence or at start position:
-                    if _udi is None or (SM.sequence_pos == 0):
-                        # forward the UDI to the UI
-                        _verify_udi = cmd["udi_scanned"]
-                        if "CELL" in _verify_udi:
-                            _udi = _verify_udi
-                            self.response_queue.put({"udi_scanned": _udi})
-                            ok, _response = _dsp.send_udi_upfront(_udi)
-                            if ok:
-                                # need to reset the sequence
-                                SM.close()
-                                SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
-                                answer = "OK"
+                            # inform the DSP that the process has been aborted
+                            _dsp.ts_send_result_for_testrun("aborted", _start_datetime, perf_counter() - _execution_start, _udi, None)
+                        if SM:
+                            SM.close()
+                            SM = None
+                        self.command_queue.task_done()
+                        break
+                    print(f"{proc_name}: {cmd}")
+                    if "udi_scanned" in cmd:
+                        # check if we are NOT in the middle of a sequence or at start position:
+                        if _udi is None or (SM.sequence_pos == 0):
+                            # forward the UDI to the UI
+                            _verify_udi = cmd["udi_scanned"]
+                            if "CELL" in _verify_udi:
+                                _udi = _verify_udi
+                                self.response_queue.put({"udi_scanned": _udi})
+                                ok, _response = _dsp.send_udi_upfront(_udi)
+                                if ok:
+                                    # need to reset the sequence
+                                    SM.close()
+                                    SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
+                                    answer = "OK"
+                                else:
+                                    _udi = None
+                                    self.response_queue.put({"udi_not_confirmed": "MES rejects UDI"})
+                                    print(f"Response from MES: {_response}")
+                                    answer = "NOT OK"
                             else:
+                                # false UDI -> popup ?
                                 _udi = None
-                                self.response_queue.put({"udi_not_confirmed": "MES rejects UDI"})
-                                print(f"Response from MES: {_response}")
+                                self.response_queue.put({"udi_rejected": _udi})
                                 answer = "NOT OK"
                         else:
-                            # false UDI -> popup ?
-                            _udi = None
-                            self.response_queue.put({"udi_rejected": _udi})
+                            # we are in the middle of a sequence
                             answer = "NOT OK"
-                    else:
-                        # we are in the middle of a sequence
-                        answer = "NOT OK"
-                if "move_counter" in cmd:
-                    if self.enable_udi_scan:
-                        if _udi:
+                    if "move_counter" in cmd:
+                        if self.enable_udi_scan:
+                            if _udi:
+                                SM.set_state(SM.move_seqence_step(int(cmd["move_counter"])))
+                            answer = "OK"
+                        else:
+                            # no UDI control
+                            SM._debug_trigger_ = True
                             SM.set_state(SM.move_seqence_step(int(cmd["move_counter"])))
+                            answer = "OK"
+                    if "reset_counter" in cmd:
+                        #SM.reset_seqence()
+                        SM.close()
+                        SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
                         answer = "OK"
-                    else:
-                        # no UDI control
-                        SM._debug_trigger_ = True
-                        SM.set_state(SM.move_seqence_step(int(cmd["move_counter"])))
-                        answer = "OK"
-                if "reset_counter" in cmd:
-                    #SM.reset_seqence()
-                    SM.close()
-                    SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
-                    answer = "OK"
-                self.command_queue.task_done()
-                self.response_queue.put(answer)
+                    self.command_queue.task_done()
+                    self.response_queue.put(answer)
+        except DSPInterfaceError as e:
+            _log.error(str(e))
+            self.response_queue.put({"udi_not_confirmed": str(e).replace(",","\n").replace(":","\n")})
 
+        print(f"Process {self.name} has termiated.")
         return
 
 

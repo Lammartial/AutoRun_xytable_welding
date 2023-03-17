@@ -76,7 +76,7 @@ class DspInterface:
         #    "part_number": a valid part number matching the test_program_id,
         # }
         if response.status_code not in [200, 202, 406]:
-            raise DSPInterfaceError(f"DSP controller error, cannot get parameters for test run {response.status_code}: {response.json()}")
+            raise DSPInterfaceError(f"DSP controller error, cannot get parameters ({response.status_code}): {response.json()}")
         if response.status_code == 406:  # not acceptable!
             # No production order or such alike
             _log.warning(response.json())
@@ -85,7 +85,7 @@ class DspInterface:
         _log.debug(f"/GET_PARAMETER_FOR_TEST_RUN: {runparams}")
         # pre check the JSON (can be optimized for production)
         if not all(k in runparams for k in ("test_type", "station_id", "test_socket", "test_program_id", "part_number")):
-            raise DSPInterfaceError(f"DSP controller error, wrong parameters for test run {runparams}")
+            raise DSPInterfaceError(f"DSP controller get run parameters mssing keys: {runparams}")
         self.api = {**self.api, **runparams}
         return True, runparams
 
