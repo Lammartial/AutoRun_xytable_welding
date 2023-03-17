@@ -45,11 +45,10 @@ getLogger("pymodbus", DEBUG)
 
 # --------------------------------------------------------------------------- #
 
-
+PRODUCTION_MODE: int = None # is being overwritten by argument
 ENABLE_UDI_SCAN: int = None  # is being overwritten by argument
 SIMULATED_DSP_PRODUCT: str = None # is being overwritten by argument
-STORE_MEASUREMENTS: bool = None
-MEASUREMENTS_FILE_PATH: Path = Path(__file__).parent
+STORE_MEASUREMENTS: str = None # is being overwritten by argument
 
 #--------------------------------------------------------------------------------------------------
 
@@ -85,7 +84,7 @@ def get_hash(o: dict) -> bytes:
 class WindowUI(object):
 
     def __init__(self, command_queue: mp.JoinableQueue, response_queue: mp.Queue, title: str = "POOR MAN'S SPS"):
-        global DEBUG, ENABLE_UDI_SCAN
+        global DEBUG, PRODUCTION_MODE
 
         self._log = getLogger(__name__, DEBUG)
         self.q_cmd = command_queue
@@ -159,18 +158,14 @@ class WindowUI(object):
         #                     textvariable=self.var_label_sequence,
         #                     justify="center", font=("-size", 10, "-weight", "bold"))
         # label_s.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
-        if ENABLE_UDI_SCAN:
+        if PRODUCTION_MODE:
             self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center",
                                        font=("-size", 14, "-weight", "bold"), background="gray", foreground="black")
             self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=50, sticky="ew")
         else:
             self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center", font=("-size", 12))
             self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5, sticky="ew")
-        # if ENABLE_UDI_SCAN:
-        #     self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=50, sticky="ew")
-        # else:
-        #     self.label_udi.grid_forget()
-
+        
         #_row = next(row_itr)
         label3 = ttk.Label(self.mainframe,text="SEQUENCE POS",justify="center", font=("-size", 10))
         label3.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
@@ -186,7 +181,7 @@ class WindowUI(object):
             justify="center", font=("-size", 32, "-weight", "bold"))
         label6.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
 
-        if not ENABLE_UDI_SCAN:
+        if not PRODUCTION_MODE:
             # Buttons
             _row = next(row_itr)
             style.configure('B1.TButton', foreground="red", background='#232323')
@@ -240,7 +235,7 @@ class WindowUI(object):
         self.root.deiconify()
         self.root.focus_force()  # this is to activate the window again (important after programmatically closed)
 
-        if not ENABLE_UDI_SCAN:
+        if not PRODUCTION_MODE:
             reset_seq_button.focus_set()
 
 
@@ -936,15 +931,16 @@ class ProcessSPS(mp.Process):
 
     def __init__(self, command_queue: mp.JoinableQueue, response_queue: mp.Queue) -> None:
         mp.Process.__init__(self)
-        global DEBUG, ENABLE_UDI_SCAN, SIMULATED_DSP_PRODUCT, STORE_MEASUREMENTS, MEASUREMENTS_FILE_PATH
+        global DEBUG, ENABLE_UDI_SCAN, PRODUCTION_MODE, SIMULATED_DSP_PRODUCT, STORE_MEASUREMENTS
 
         self._log = getLogger(__name__, DEBUG)
         self.command_queue = command_queue
         self.response_queue = response_queue
         self.enable_udi_scan = ENABLE_UDI_SCAN
         self.simulated_dsp_product = SIMULATED_DSP_PRODUCT
-        self.have_read_measurements = STORE_MEASUREMENTS
-        self.measurements_filepath = Path(MEASUREMENTS_FILE_PATH)
+        self.have_read_measurements = True if STORE_MEASUREMENTS is not None else False
+        self.measurements_filepath = Path(STORE_MEASUREMENTS) if STORE_MEASUREMENTS is not None else None
+        self.production_mode = PRODUCTION_MODE
 
 
     def collect_parameters(self, cfg: StationConfiguration, dsp: DspInterface) -> Tuple[List[int], str, str, str]:
@@ -1089,7 +1085,7 @@ class ProcessSPS(mp.Process):
                 print("Parameters:", SM.welding_parameters)
 
         # we need to keep the _dsp interface for UDI presentation and result transmission
-        _cfg, _dsp = _create_interfaces(None if self.enable_udi_scan>0 else self.simulated_dsp_product)
+        _cfg, _dsp = _create_interfaces(self.simulated_dsp_product)
 
         SM = None
         proc_name: str = self.name
@@ -1107,7 +1103,7 @@ class ProcessSPS(mp.Process):
                 # get configuration from DSP + DB connection
                 program_sequence, sequence_revision, resource_str, part_number, db_session_maker, line_id, station_id = self.collect_parameters(_cfg, _dsp)
                 print("Create new SPS state machine")
-                if self.enable_udi_scan:
+                if self.production_mode:
                     # production version must be started by UDI scan
                     # and can run only once
                     SM = SPSStateMachine(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
@@ -1250,10 +1246,11 @@ class ProcessScanner(mp.Process):
 
     def __init__(self, sps_queue: mp.Queue, ui_queue: mp.Queue) -> None:
         mp.Process.__init__(self)
-        global DEBUG
+        global DEBUG, SIMULATE_UDI_SCAN
         self._log = getLogger(__name__, DEBUG)
         self.sps_queue = sps_queue
         self.ui_queue = ui_queue
+        self.simulate_scan = SIMULATE_UDI_SCAN
 
     def run(self) -> None:
         """
@@ -1265,9 +1262,9 @@ class ProcessScanner(mp.Process):
         _cfg, _dsp = _create_interfaces()
         _, resource_str = _cfg.get_resource_strings_for_socket(0)
         scanner = create_barcode_scanner(resource_str)
-        while True:
-            _udi = None
-            if 1:
+        if not self.simulate_scan:
+            while True:
+                _udi = None        
                 try:
                     _udi = scanner.request(None, timeout=None).strip()
                 except TimeoutError:
@@ -1281,20 +1278,17 @@ class ProcessScanner(mp.Process):
                     msg = {"udi_scanned": _udi}
                     #self.ui_queue.put(msg)  # this goes to the UI process
                     self.sps_queue.put(msg)   # this goes to the SPS process
-
-            if 0:
-                # ********** Simulationsprofil *************
+        else:
+            # ********** Simulation Profile *************
+            while True:                                   
                 sleep(5.0)
                 _udi = "1CELL" + get_random_digits_string(12)
                 self.sps_queue.put({"udi_scanned": _udi})
                 sleep(3.0)
+                # add some steps
                 for n in range(6):
                     sleep(1.0)
                     self.sps_queue.put({"move_counter": 1})
-                # *******************************************
-
-        return
-
 
 #--------------------------------------------------------------------------------------------------
 
@@ -1304,18 +1298,23 @@ if __name__ == '__main__':
     print("=== POOR MAN's SPS ===")
     print(modbus_version)
 
+    #_default_yaml_filepath_ = Path(__file__).parent / "aws_readings"
+    _default_yaml_filepath_ = Path(__file__).parent / "../.." / "logs" / "aws_readings"
+    
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--development", action="store_true", help="Activate development mode.")
-    parser.add_argument("--product", choices=["RRC2020B", "RRC2040B"], action="store", default="RRC2020B", help="Set a product for simulated DSP interface.")
+    parser.add_argument("--development", action="store_true", help="Activate development mode.")    
+    parser.add_argument("--product", choices=["RRC2020B", "RRC2040B"], action="store", default=None, help="Set a product for simulated DSP interface.")
     parser.add_argument("--store", action="store_true", help="Enable read and store of measurements. If development (no UDI), data is store to YAML files.")
-    parser.add_argument("--filepath", action="store", default=(Path(__file__).parent / "../.." / "logs" / "aws_readings"), help="Path and filename prefix for file stored measurements")
-
+    parser.add_argument("--filepath", action="store", default=_default_yaml_filepath_, help="Path and filename prefix for file stored measurements")
+    parser.add_argument("--simulate_scan", action="store_true", help="Set a product for simulated UDI scan interface.")
+    
     args = parser.parse_args()
 
-    ENABLE_UDI_SCAN = 0 if args.development else 1
+    PRODUCTION_MODE = not args.development
+    ENABLE_UDI_SCAN = (PRODUCTION_MODE or args.simulate_scan) 
+    SIMULATE_UDI_SCAN = args.simulate_scan      
     SIMULATED_DSP_PRODUCT = args.product
-    STORE_MEASUREMENTS = args.store
-    MEASUREMENTS_FILE_PATH = args.filepath
+    STORE_MEASUREMENTS = args.filepath if args.store else None 
 
 
     p = None

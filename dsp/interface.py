@@ -60,104 +60,8 @@ class DspInterface:
 
     def set_result(self, result: str):
         self.api["result"] = result[:1].upper()  # only first letter
-
-
-    def get_parameter_for_welding(self, station_id: str, line_id: str) -> dict:
-        global DEBUG
-        _log = getLogger(__name__, DEBUG)
-        #_log.info("WELDING PARAMETERS FOR ", station_id, line_id)
-        response = requests.get(f"{self.API_BASE_URL}/GET_PARAMETER_FOR_WELDING", params={"station_id": station_id, "line_id": line_id})
-        # expects JSON of
-        # {
-        #     station_id: str,          # optional
-        #     line_id: str,             # optional
-        #     sequence_revision: str,   # mandatory
-        #     part_number: str,         # mandatory
-        # }
-        if response.status_code not in [200, 202]:
-            raise DSPInterfaceError(f"DSP controller error, cannot get parameters for test run {response.status_code}: {response.json()}")
-        configuration = response.json()
-        _log.debug(configuration)
-        # pre check the JSON (can be optimized for production)
-        if not all(k in configuration for k in ("sequence_revision","part_number")):
-            raise DSPInterfaceError(f"DSP controller error, wrong parameters for test run {configuration}")
-        # the welder' SPS configuration needs only a revision, not really a program/sequence name
-        runparams = {
-            "test_type": "CELL_WELDING",
-            "test_socket": 0,  # dummy
-            "station_id": station_id,
-            "line_id": line_id,
-            "test_program_id": configuration["sequence_revision"],
-            "part_number": configuration["part_number"],
-        }
-        self.api = {**self.api, **runparams}
-        return runparams
-
-
-    # def get_parameter_for_testrun_r2(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> dict:
-    #     _log = getLogger(__name__, DEBUG)
-    #     response = requests.get(f"{self.API_BASE_URL}/GET_PARAMETER_FOR_TEST_RUN",
-    #                             params= {"test_type": test_type, "station_id": station_id, "line_id": line_id, "test_socket": test_socket })  # old
-    #     #response = requests.get(f"{self.API_BASE_URL}/GET_PARAMETER_FOR_STATION", params= {"station_id": station_id, "line_id": line_id})  # new
-    #     # expects JSON of
-    #     # {
-    #     #     sequence_revision = {
-    #     #         cell_test: str,      # Großbuchstabe „A“, „B“, … gepflegt von RRC analog zu den Produktrevisionen
-    #     #         pcba_test: str,      # Großbuchstabe „A“, „B“, … gepflegt von RRC analog zu den Produktrevisionen
-    #     #         corepack_test: str,  # Großbuchstabe „A“, „B“, … gepflegt von RRC analog zu den Produktrevisionen
-    #     #         eol_test: str,       # Großbuchstabe „A“, „B“, … gepflegt von RRC analog zu den Produktrevisionen
-    #     #         cell_welder: str     # Großbuchstabe „A“, „B“, … gepflegt von RRC analog zu den Produktrevisionen
-    #     #     },
-    #     #     part_number = {
-    #     #          product: str,        # product part number including the revision suffix
-    #     #          pre_assembly: str,   # product part number including the revision suffix
-    #     #          pcba: str            # product part number including the revision suffix
-    #     #     }
-    #     # }
-    #     if response.status_code not in [200, 202]:
-    #         raise DSPInterfaceError(f"DSP controller error, cannot get parameters for test run {response.status_code}: {response.json()}")
-    #     configuration = response.json()
-    #     _log.debug(configuration)
-    #     # 1. pre check the JSON (can be optimized for production)
-    #     if not \
-    #         (all(k in configuration for k in ("sequence_revision","part_number")) and \
-    #          all(k in configuration["sequence_revision"] for k in ("cell_test","pcba_test","corepack_test","eol_test","cell_welder")) and \
-    #          all(k in configuration["part_number"] for k in ("product","pre_assembly","pcba"))):
-    #         raise DSPInterfaceError(f"DSP controller error, wrong parameters for test run {configuration}")
-    #     # 2. create the needed information to run the test or welder by ourselves
-    #     #    (copy from mockup server)
-    #     sequence_id = "UNKNOWW"
-    #     part_number = "UNKNOWN"
-    #     match test_type:
-    #         case "CELLSTACK_TEST":
-    #             part_number = configuration["part_number"]["pre_assembly"]
-    #             sequence_id = f'{part_number.split("-")[0]}_Cell-Test_{configuration["sequence_revision"]["cell_test"]}'
-    #         case "PCBA_TEST":
-    #             part_number = configuration["part_number"]["pcba"]
-    #             sequence_id = f'{part_number.split("-")[0]}_PCBA-Test_{configuration["sequence_revision"]["pcba_test"]}'
-    #         case "COREPACK_TEST":
-    #             part_number = configuration["part_number"]["pre_assembly"]
-    #             sequence_id = f'{part_number.split("-")[0]}_Corepack-Test_{configuration["sequence_revision"]["corepack_test"]}'
-    #         case "EOL_TEST":
-    #             part_number = configuration["part_number"]["product"]
-    #             sequence_id = f'{part_number.split("-")[0]}_EOL-Test_{configuration["sequence_revision"]["eol_test"]}'
-    #         case "WELDER_SPS":
-    #             # the welder' SPS configuration needs only a revision, not really a program/sequence name
-    #             part_number = configuration["part_number"]["pre_assembly"]
-    #             sequence_id = configuration["sequence_revision"]["cell_welder"]
-    #     runparams = {
-    #         "test_type": test_type,
-    #         "station_id": station_id,
-    #         "line_id": line_id,
-    #         "test_socket": test_socket,
-    #         "test_program_id": sequence_id,
-    #         "part_number": part_number,
-    #     }
-    #     # 3. combine the test configuration information into the API for later transfer as result to DSP
-    #     self.api = {**self.api, **runparams}
-    #     return runparams
-
-    def get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> dict:
+   
+    def get_parameter_for_testrun_r2(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> Tuple[bool, dict]:
         global DEBUG
         _log = getLogger(__name__, DEBUG)
         response = requests.get(f"{self.API_BASE_URL}/GET_PARAMETER_FOR_TEST_RUN",
@@ -171,14 +75,23 @@ class DspInterface:
         #    "test_program_id": a valid subsequence name which will be called,
         #    "part_number": a valid part number matching the test_program_id,
         # }
-        if response.status_code not in [200, 202]:
+        if response.status_code not in [200, 202, 406]:
             raise DSPInterfaceError(f"DSP controller error, cannot get parameters for test run {response.status_code}: {response.json()}")
+        if response.status_code == 406:  # not acceptable!
+            # No production order or such alike
+            _log.warning(response.json())
+            return False, response.json()
         runparams = response.json()
         _log.debug(f"/GET_PARAMETER_FOR_TEST_RUN: {runparams}")
         # pre check the JSON (can be optimized for production)
         if not all(k in runparams for k in ("test_type", "station_id", "test_socket", "test_program_id", "part_number")):
             raise DSPInterfaceError(f"DSP controller error, wrong parameters for test run {runparams}")
         self.api = {**self.api, **runparams}
+        return True, runparams
+
+
+    def get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> dict:  # old interface
+        ok, runparams = self.get_parameter_for_testrun_r2(test_type, station_id, line_id, test_socket)
         return runparams
 
     #----------------------------------------------------------------------------------------------
@@ -380,31 +293,28 @@ class DspInterface_SIMULATION(DspInterface):
         #
         self.SIMULATED_PART = api_base_url
 
-    def set_result(self, result: str):
+    def set_result(self, result: str) -> None:
         pass
 
-    def get_parameter_for_welding(self, station_id: str, line_id: str) -> dict:
-        d = PART_INFORMATION[self.SIMULATED_PART]["CELL_WELDING"]
-        for k,v in d.items():
-            if isinstance(v, tuple):
-                d[k] = v[1]  # we do not need the tuples
-        return d
-
-    def get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> dict:
+    def get_parameter_for_testrun_r2(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> Tuple[bool, dict]:
         d = PART_INFORMATION[self.SIMULATED_PART][test_type]
         for k,v in d.items():
             if isinstance(v, tuple):
                 d[k] = v[1]  # we do not need the tuples
-        return d
+        return True, d
 
+    def get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> dict:
+        ok, d = self.get_parameter_for_testrun_r2(test_type, station_id, line_id, test_socket)
+        return d
+    
     def verify_serial_number(self, test_type: str, station_id: str, line_id: str, test_socket: str, part_number:str, serial_number: str) -> Tuple[bool, dict]:
-        pass
+        return True, {}
 
     def get_serial_number_for_udi(self, test_type: str, station_id: str, line_id: str, test_socket: str, udi: str) -> Tuple[bool, dict]:
-        pass
+        return True, {}
 
-    def send_udi_upfront(self, udi: str) -> None:
-        pass
+    def send_udi_upfront(self, udi: str) -> Tuple[bool, dict]:
+        return True, {}
 
     def ts_get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: int, test_socket: int) -> tuple:
         d = self.get_parameter_for_testrun(None,None,None,None)
@@ -412,19 +322,19 @@ class DspInterface_SIMULATION(DspInterface):
         return tuple([(d[field][1] if d[field][1] is not None else "") for field in order])
 
     def ts_get_serial_number_for_udi(self, udi: str) -> str:
-        pass
+        return ""
 
     def ts_send_result_for_testrun(self, result: str, start_datetime: str, execution_time: float, udi: str, serial_number: str) -> None:
         pass
 
     def send_result_of_testrun(self, result_list: list[dict]) -> list[dict]:
-        pass
+        return [{}]
 
     def save_result_list_to_json(self, result_list: list[dict]) -> None:
         pass
 
     def load_result_list_from_json(self) -> list[dict]:
-        pass
+        return [{}]
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
@@ -511,7 +421,7 @@ def test_welder_interface(dsp: DspInterface, udi: str ):
         ""                 # serial number
     )
     dsp.ts_send_result_for_testrun(
-        "Failed",          # result PASS
+        "Failed",          # result FAILED
         datetime.utcnow().isoformat(),  # start_datetime e.g. 2022-12-24T17:28:23.382748
         2.465,             # execution_time
         udi,               # udi, scanned string
@@ -539,9 +449,8 @@ if __name__ == "__main__":
     # define the route
     #api_url = "https://production-network.rrc/testcontrol"
     #API_URL = "http://127.0.0.1:8000"
-    #API_URL = "http://172.22.2.40:9925"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
-    API_URL = "http://172.21.101.8:9929"  # Orbis DSP REST API Local-PC
-
+    API_URL = "http://172.22.2.40:9929"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
+    
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
     dsp = DspInterface(API_URL, None)
 
