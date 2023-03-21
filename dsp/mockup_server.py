@@ -89,29 +89,6 @@ async def get_serial(test_type, station_id, line_id, test_socket, udi, response:
     }
 
 
-@app.get("/VERIFY_SERIAL_NUMBER", status_code=status.HTTP_200_OK)
-async def verify_serial(test_type, station_id, line_id, test_socket, part_number, serial_number, response: Response):
-    global serial_db, lock_serial_db
-
-    r = None
-    async with lock_serial_db:
-        if serial_number not in serial_db:
-            response.status_code = status.HTTP_406_NOT_ACCEPTABLE
-            r = { "error": "Serial number not found in db", "code": 8,
-                  "serial_number": serial_number, "part_number": part_number }
-        # if serial_number in [1,5,7,11]:
-        #     response.status_code = status.HTTP_406_NOT_ACCEPTABLE
-        #     r = { "error": "Serial number is blacklisted", "code": 7,
-        #           "serial_number": serial_number, "part_number": part_number }
-        else:
-            r = {
-                "serial_number": serial_number,
-                "part_number": part_number,
-                "udi": "76378126378163"
-            }
-    return r
-
-
 @app.post("/SEND_UDI", status_code=status.HTTP_202_ACCEPTED)
 async def send_udi(item: UdiItem, response: Response):
     getLogger(__name__, 2).debug(f"Accepted UDI: {item}")

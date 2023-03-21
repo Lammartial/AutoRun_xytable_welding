@@ -61,7 +61,7 @@ class DspInterface:
     def set_result(self, result: str):
         self.api["result"] = result[:1].upper()  # only first letter
    
-    def get_parameter_for_testrun_r2(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> Tuple[bool, dict]:
+    def get_parameter_for_testrun_r2(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> Tuple[bool, dict | str]:
         global DEBUG
         _log = getLogger(__name__, DEBUG)
         response = requests.get(f"{self.API_BASE_URL}/GET_PARAMETER_FOR_TEST_RUN",
@@ -80,45 +80,19 @@ class DspInterface:
         if response.status_code == 406:  # not acceptable!
             # No production order or such alike
             _log.warning(response.json())
-            return False, response.json()
+            return False, response.json()  # -> bool, str
         runparams = response.json()
         _log.debug(f"/GET_PARAMETER_FOR_TEST_RUN: {runparams}")
         # pre check the JSON (can be optimized for production)
         if not all(k in runparams for k in ("test_type", "station_id", "test_socket", "test_program_id", "part_number")):
             raise DSPInterfaceError(f"DSP controller get run parameters mssing keys: {runparams}")
         self.api = {**self.api, **runparams}
-        return True, runparams
+        return True, runparams  # -> bool, dict
 
 
     def get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: str, test_socket: str) -> dict:  # old interface
         ok, runparams = self.get_parameter_for_testrun_r2(test_type, station_id, line_id, test_socket)
-        return runparams
-
-    #----------------------------------------------------------------------------------------------
-
-    def verify_serial_number(self, test_type: str, station_id: str, line_id: str, test_socket: str, part_number:str, serial_number: str) -> Tuple[bool, dict]:
-        global DEBUG
-        _log = getLogger(__name__, DEBUG)
-        response = requests.get(f"{self.API_BASE_URL}/VERIFY_SERIAL_NUMBER",
-                                params={"test_type": test_type, "station_id": station_id, "line_id": line_id, "test_socket": test_socket,
-                                        "serial_number": serial_number, "part_number": part_number})
-        # expects JSON of
-        # {
-        #    "serial_number": serial_number,
-        #    "part_number": part_number,
-        #    "udi": "1CELL1296237,1PCBA2713282"
-        # }
-        if response.status_code not in [200, 202, 406]:
-            pass
-        if response.status_code == 406:  # not acceptable!
-            # Serial number black listed or any other failer with it
-            _log.warning(response.json())
-            return False, response.json()
-        # valid response
-        runparams = response.json()
-        _log.debug(f"Verified SN: {runparams}")
-        # we got a verified SN
-        return True, runparams
+        return runparams   
 
     #----------------------------------------------------------------------------------------------
 
@@ -177,7 +151,7 @@ class DspInterface:
         response = requests.post(f"{self.API_BASE_URL}/SEND_UDI", json=data)
         _log.debug(f"/SEND_UDI: {response}")
         if response.status_code not in [200, 202, 406]:
-            raise DSPInterfaceError(f"DSP controller error, cannot update UDI {response.status_code}: {response.json()}")
+            raise DSPInterfaceError(f"DSP controller error, cannot send UDI {response.status_code}: {response.json()}")
         if response.status_code == 406:  # not acceptable!
             # Serial number black listed or any other failer with it
             _log.warning(response.json())
@@ -227,7 +201,7 @@ class DspInterface:
     # Interfaces to TestStand
     #
 
-    def ts_get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: int, test_socket: int) -> tuple:
+    def ts_get_parameter_for_testrun(self, test_type: str, station_id: str, line_id: int, test_socket: int) -> Tuple[str, str]:
         """This will convert the dictionary to tuple always in defined order.
 
         d = {'x': 1 , 'y':2}
@@ -241,19 +215,23 @@ class DspInterface:
             test_socket (str): _description_
 
         Returns:
-            tuple: (test_program_id: str, part_number: str)
+            tuple: dsp_ok: bool, error_json: str, (test_program_id: str, part_number: str)
 
         """
 
-        d = self.get_parameter_for_testrun(test_type, station_id, int(line_id), int(test_socket))
-        order = ["test_program_id", "part_number"]
-        #order = ["test_program_id"]
-        # expect test_program_id and part_number being tuples
-        return tuple([(d[field] if d[field] is not None else "") for field in order])
+        ok, d = self.get_parameter_for_testrun_r2(test_type, station_id, int(line_id), int(test_socket))
+        if ok:
+            order = ["test_program_id", "part_number"]
+            # TS expects test_program_id and part_number being returned as tuples
+            return tuple([(d[field] if d[field] is not None else "") for field in order])
+        else:
+            # return the error details as JSON string in "part_number"
+            # while empty test_program_id indicates the error
+            return "", str(d)
 
     #--------------------------------------------------------------------------------------------------
 
-    def ts_get_serial_number_for_udi(self, udi: str) -> str:
+    def ts_get_serial_number_for_udi(self, udi: str) -> Tuple[bool, str]:
         ok, d = self.get_serial_number_for_udi(
                         self.api["test_type"],
                         self.api["station_id"],
@@ -261,7 +239,8 @@ class DspInterface:
                         self.api["test_socket"],
                         udi)
         if not ok:
-            sn = f"Got Error: {str(d)}" # error from DSP as string
+            #sn = f"Got Error: {str(d)}" # error from DSP as string
+            sn = str(d)  # error from DSP as string
         else:
             sn = d["serial_number"]
         return ok, sn
@@ -307,9 +286,6 @@ class DspInterface_SIMULATION(DspInterface):
         ok, d = self.get_parameter_for_testrun_r2(test_type, station_id, line_id, test_socket)
         return d
     
-    def verify_serial_number(self, test_type: str, station_id: str, line_id: str, test_socket: str, part_number:str, serial_number: str) -> Tuple[bool, dict]:
-        return True, {}
-
     def get_serial_number_for_udi(self, test_type: str, station_id: str, line_id: str, test_socket: str, udi: str) -> Tuple[bool, dict]:
         return True, {}
 
