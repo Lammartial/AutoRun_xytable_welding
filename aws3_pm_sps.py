@@ -165,7 +165,7 @@ class WindowUI(object):
         else:
             self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center", font=("-size", 12))
             self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5, sticky="ew")
-        
+
         #_row = next(row_itr)
         label3 = ttk.Label(self.mainframe,text="SEQUENCE POS",justify="center", font=("-size", 10))
         label3.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
@@ -1033,8 +1033,9 @@ class ProcessSPS(mp.Process):
                     _sql = text(f"INSERT INTO `welding_waveforms` SET {_vstr}")
                     response = session.execute(_sql)
                 # always store the measurement data; (udi,counter) is primary key
+                _seq_pos = SM.sequence_pos
                 _wm_str = json.dumps(SM.welding_measurements)
-                _vstr = esc_values((("udi", _udi), ("counter", _counter), ("part_number", part_number),
+                _vstr = esc_values((("udi", _udi), ("counter", _counter), ("position", _seq_pos), ("part_number", part_number),
                                    ("line_id", line_id), ("station_id", station_id), ("result", _result),
                                    ("ref_parameter", _hash_params), ("measurements", _wm_str)))
                 _sql = text(f"INSERT INTO `welding_measurements` SET {_vstr}")
@@ -1051,6 +1052,7 @@ class ProcessSPS(mp.Process):
                 with open(fp_pattern.parent /  f"{fp_pattern.name}_measurements_{line_id}_{station_id}_{_counter}.yaml", "wt") as file:
                     file.write(yaml.dump({
                         "counter": _counter,
+                        "position": SM.sequence_pos,
                         "status": SM.welding_status,
                         **SM.welding_measurements
                         },
@@ -1271,7 +1273,7 @@ class ProcessScanner(mp.Process):
         scanner = create_barcode_scanner(resource_str)
         if not self.simulate_scan:
             while True:
-                _udi = None        
+                _udi = None
                 try:
                     _udi = scanner.request(None, timeout=None).strip()
                 except TimeoutError:
@@ -1287,7 +1289,7 @@ class ProcessScanner(mp.Process):
                     self.sps_queue.put(msg)   # this goes to the SPS process
         else:
             # ********** Simulation Profile *************
-            while True:                                   
+            while True:
                 sleep(5.0)
                 _udi = "1CELL" + get_random_digits_string(12)
                 self.sps_queue.put({"udi_scanned": _udi})
@@ -1307,21 +1309,21 @@ if __name__ == '__main__':
 
     #_default_yaml_filepath_ = Path(__file__).parent / "aws_readings"
     _default_yaml_filepath_ = Path(__file__).parent / "../.." / "logs" / "aws_readings"
-    
+
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--development", action="store_true", help="Activate development mode.")    
+    parser.add_argument("--development", action="store_true", help="Activate development mode.")
     parser.add_argument("--product", choices=["RRC2020B", "RRC2040B"], action="store", default=None, help="Set a product for simulated DSP interface.")
     parser.add_argument("--store", action="store_true", help="Enable read and store of measurements. If development (no UDI), data is store to YAML files.")
     parser.add_argument("--filepath", action="store", default=_default_yaml_filepath_, help="Path and filename prefix for file stored measurements")
     parser.add_argument("--simulate_scan", action="store_true", help="Set a product for simulated UDI scan interface.")
-    
+
     args = parser.parse_args()
 
     PRODUCTION_MODE = not args.development
-    ENABLE_UDI_SCAN = (PRODUCTION_MODE or args.simulate_scan) 
-    SIMULATE_UDI_SCAN = args.simulate_scan      
+    ENABLE_UDI_SCAN = (PRODUCTION_MODE or args.simulate_scan)
+    SIMULATE_UDI_SCAN = args.simulate_scan
     SIMULATED_DSP_PRODUCT = args.product
-    STORE_MEASUREMENTS = args.filepath if args.store else None 
+    STORE_MEASUREMENTS = args.filepath if args.store else None
 
 
     p = None
