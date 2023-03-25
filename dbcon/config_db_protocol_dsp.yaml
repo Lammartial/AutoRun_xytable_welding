@@ -1,7 +1,7 @@
 # configure database which will be expected to be a MySQL/MariaDB type;
 sourceDatabase:
     servertype: "mysql+pymysql" # pure python
-    serverhost: "172.22.2.99"
+    serverhost: "sv-production-vn"
     database:   "protocol"
     login:      "dsp"
     password:   "fdZD9djESaYuVbZ"
