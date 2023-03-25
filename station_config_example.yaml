@@ -16,9 +16,9 @@ dsp_api_base_url:  "http://sv-production-vn:8000"  # mockup on sv-production-vn
 line_id:        1               # 1 .. 9, -1 = undetermined -> calculate from 2nd IP octet: 
                                  #              xxx.xxx.LINE-ID-100.xxx if octet is > 100, otherwise := 0
 #test_type:      UNDETERMINED     # cannot be set and comes from test program instead :
-                                  #     CELLSTACK_TEST, PCBA_TEST, COREPACK_TEST, EOL_TEST
+                                  #     CELLS_TEST, PCBA_TEST, COREPACK_TEST, EOL_TEST
 #station_id:     UNDETERMINED     # Define a Station name or comment out to take the PC's hostname instead: 
-                                 #     PL1-WS102=CELLSTACK_TEST
+                                 #     PL1-WS102=CELL_TEST
                                  #     PL1-WS103=PCBA_TEST
                                  #     PL1-WS111=CORPACK_TEST
                                  #     PL1-WS113=EOL_TEST
@@ -41,7 +41,7 @@ line_network:   "172.21.101."    # Line specific network range is different depe
 # Configuration setup depending on the test_type selected
 # for this station above:
 #------------------------------------------------------------------------------
-CELLSTACK_TEST:
+CELL_TEST:
   dsp_api_base_url:  "http://sv-production-vn:9925"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
   # There is NO I2C MUX on cell stack tester.
   #
