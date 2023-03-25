@@ -13,7 +13,7 @@ dsp_api_base_url:  "http://sv-production-vn:8000"  # mockup on sv-production-vn
 # hardware of PC and assigned measurement hardware
 #
 
-line_id:        -1               # 1 .. 9, -1 = undetermined -> calculate from 2nd IP octet: 
+line_id:        1               # 1 .. 9, -1 = undetermined -> calculate from 2nd IP octet: 
                                  #              xxx.xxx.LINE-ID-100.xxx if octet is > 100, otherwise := 0
 #test_type:      UNDETERMINED     # cannot be set and comes from test program instead :
                                   #     CELLSTACK_TEST, PCBA_TEST, COREPACK_TEST, EOL_TEST
