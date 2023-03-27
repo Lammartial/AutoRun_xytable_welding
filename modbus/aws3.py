@@ -116,6 +116,26 @@ class AWS3Modbus(ModbusClient):
         self._sync_modbus_timing(next_wait_s=self._wait_after_write)
         return self.write_coil(45-1, False, unit_address=3)
 
+
+
+    def read_machine_lock_status_x(self) -> tuple:
+        response = self.read_holding_registers(208-1, 2, unit_address=3)
+        dc: BinaryPayloadDecoder = self.getDecoder(response)
+        return 0 == dc.decode_32bit_int()
+
+    def lock_machine_step_x(self) -> bool:
+        ec: BinaryPayloadBuilder = self.getEncoder()
+        ec.add_32bit_int(0)  # = log out
+        return self.write_registers(208-1, ec.to_registers(), unit_address=3)
+
+    def unlock_machine_step_x(self) -> bool:
+        ec: BinaryPayloadBuilder = self.getEncoder()
+        ec.add_32bit_int(2)  # = login ingenieur
+        return self.write_registers(208-1, ec.to_registers(), unit_address=3)
+
+
+
+
     def write_program_no(self, number):
         self._sync_modbus_timing(next_wait_s=self._wait_after_write)
         #ec: BinaryPayloadBuilder = self.getEncoder()
