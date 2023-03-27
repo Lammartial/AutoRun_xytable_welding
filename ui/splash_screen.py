@@ -22,15 +22,15 @@ if __name__ == '__main__':
     print("=== Splash Screen ===")
 
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
+    parser.add_argument("title", type=str, help="Title of the splash-screen.")
+    parser.add_argument("message", type=str, help="The message of the splash-screen. Use of \\n possible to wrap lines.")
     parser.add_argument("--closeafter", action="store", default=3.0, type=float, help="Close after x s.")
 
     args = parser.parse_args()
 
-
-    splash = BatteryPopup("Teststand is starting up", title="Keep cool ...")
-
-    splash.root.after(int(args.closeafter * 1e+3), lambda: splash.close())
-    splash.root.mainloop()
+    splash = BatteryPopup(args.message, title=args.title)
+    splash.root.after(int(args.closeafter * 1e+3), lambda: splash.close())  # set timeout
+    splash.root.mainloop()  # run the UI
 
     print("DONE.")
 
