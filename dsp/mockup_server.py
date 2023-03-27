@@ -110,7 +110,7 @@ async def get_parameter_for_test_run(station_id, line_id):
     return {
         "station_id": station_id,
         "line_id": line_id,
-        "sequence_revision": _fhm["sequence_id"][1],  # str
+        "sequence_revision": _fhm["test_program_id"][1],  # str
         "part_number": _fhm["part_number"][1],        # str
     }
 
@@ -151,7 +151,7 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
             _fhm = _mock["CELL_WELDING"]
         case _:
             _fhm = {
-                "sequence_id": ("FULLY", "UNKNOWN"),
+                "test_program_id": ("FULLY", "UNKNOWN"),
                 "part_number": ("REALLY", "UNKNOWN")
             }
     return {
@@ -159,7 +159,7 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
         "station_id": station_id,
         "line_id": line_id,
         "test_socket": test_socket,
-        "test_program_id": _fhm["sequence_id"][1],  # str
+        "test_program_id": _fhm["test_program_id"][1],  # str
         "part_number": _fhm["part_number"][1],      # str
         #"serial_number": _serial,
         #"serial_number": "",
