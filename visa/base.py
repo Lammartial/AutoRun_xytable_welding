@@ -1,7 +1,8 @@
 """
 Provides basic ETH to SERIAL conversion handling the visa communication.
 """
-from pyvisa import ResourceManager
+from pyvisa import ResourceManager, VisaIOError
+from pyvisa.constants import VI_ERROR_TMO
 from time import sleep
 
 # --------------------------------------------------------------------------- #
@@ -105,17 +106,26 @@ class AdhocVisaDevice(object):
                 if self.write_termination:
                     session.write_termination = self.write_termination
                 session.write(msg)
-                if pause_after_write:
-                    sleep(pause_after_write/1000)
-                result = session.read()
-                #_log.debug(f"Received: {result!r}")
+                # seen some spurious timeout errors on read -> use retries for wait until completed
+                while retries > 0:
+                    if pause_after_write:
+                        sleep(pause_after_write/1000)
+                    try:
+                        result = session.read()
+                        #_log.debug(f"Received: {result!r}")                        
+                        break  # leave this inner loop for good
+                    except VisaIOError as vex:  # VI_ERROR_TMO (timeout)
+                        retries -= 1
+                        if retries <= 0:
+                            raise ex
+                # done for good
                 break
-            except Exception:
+            except Exception as ex:
                 # two types of exceptions seen VisaIOError and TimeOutError ...
                 # do NOT log, we need this exception being quiet when polling
                 retries -= 1
                 if retries <= 0:
-                    raise
+                    raise ex
                 if self.pause_on_retry:
                     sleep(self.pause_on_retry)
             finally:
