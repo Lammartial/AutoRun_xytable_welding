@@ -318,42 +318,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         #
         return self.unseal(0x8D21FAC3, 0x63DB2CE4)  # low-word goes first to battery
 
-    # def operation_status(self):
-    #     return int.from_bytes((self.read_mac_data(0x0054)[:2]), "little")
-
-    # def full_access_battery(self):
-    #     # this is without hiding the secrets
-    #     UNSEAL_WORD1 = 0xFAC3
-    #     UNSEAL_WORD2 = 0x8D21
-    #     FA_WORD1 = 0x2CE4
-    #     FA_WORD2 = 0x63DB
-    #     self.writeWord(Cmd.MANUFACTURER_ACCESS, UNSEAL_WORD1)
-    #     self.writeWord(Cmd.MANUFACTURER_ACCESS, UNSEAL_WORD2)
-    #     self.writeWord(Cmd.MANUFACTURER_ACCESS, FA_WORD1)
-    #     self.writeWord(Cmd.MANUFACTURER_ACCESS, FA_WORD2)
-
-    # def seal_mode(self) -> int:
-    #     return (self.operation_status() & 0x0300) >> 8
-
-    # def is_full_access(self) -> bool:
-    #     return self.seal_mode() == 1
-
-    # def is_unsealed(self) -> bool:
-    #     return self.seal_mode() == 2
-
-    # def is_sealed(self) -> bool:
-    #     return self.seal_mode() == 3
-
-    # def seal_battery(self):
-    #     self.writeBlock(Cmd.MANUFACTURER_BLOCK_ACCESS, bytearray([0x30, 0x00]))
-
-    # def read_mac_data(self, cmd: int):
-    #     self.writeBlock(Cmd.MANUFACTURER_BLOCK_ACCESS, cmd.to_bytes(2, "little"))
-    #     result = self.readBlock(Cmd.MANUFACTURER_BLOCK_ACCESS)
-    #     if result[1]:
-    #         return result[0][2:]
-
-
+    
     def wait_for_operation_status_flag(self, os_key: str, state: bool, retries: int = 20, pause_on_retry: float = 0.1) -> bool:
         """Wait for flags on operation_status()."""
         retries = int(retries)
@@ -376,7 +341,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             dict: decoded lifetime data of block 1 according the datasheet
         """
-        b1 = self.read_manufacturer_block(command= 0x0060, length= 32)
+        b1 = self.read_manufacturer_block(command=0x0060, length=32)
         return _od2t(OrderedDict({
             "block": self._maybe_hexlify(b1, hexi), # all blocks of bytes as they are - but hexlified as it looks better in JSON files later ...
             # decode block 1
@@ -780,7 +745,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self.manufacturer_block_access = command
             res = self.manufacturer_block_access
             rcv_command = struct.unpack("<H", res[:2])[0]
-            res = res[2:]
+            res = res[2:]  # slice the command
             # if the expected length may variy you need to pass None to length
             if (rcv_command == command) and (((length is not None) and (len(res) == length)) or (length is None)):
                 return res
@@ -799,8 +764,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             OrderedDict: _description_
         """
-        buf = self.read_manufacturer_block(command= 0x0071, length= 32)
-        return _od2t(OrderedDict({
+        buf = self.read_manufacturer_block(command=0x0071, length=32)        
+        self._manufacturing_dastatus1 = OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
             "cell_voltage_1": unpack_from("<H", buf, 0)[0] * 1e-3,  # mV, unsigned short, little endian
@@ -819,11 +784,12 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "cell_power_4":   unpack_from("<h", buf, 26)[0] * 1e-2,  # cW, signed short, little endian
             "power_calculated": unpack_from("<h", buf, 28)[0] * 1e-2,  # cW, signed short, little endian
             "average_power":  unpack_from("<h", buf, 30)[0] * 1e-2,  # cW, signed short, little endian
-        }))
+        })
+        return _od2t(self._manufacturing_dastatus1)  # Teststand interface
 
     def manufacturing_dastatus2(self, celsius: bool = True, hexi: bool | str | None = None) -> tuple:
-        buf = self.read_manufacturer_block(command= 0x0072, length= 16)
-        return _od2t(OrderedDict({
+        buf = self.read_manufacturer_block(command=0x0072, length=16)         
+        self._manufacturing_dastatus2 = OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
             "int_temperature": unpack_from("<H", buf, 0)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
@@ -834,13 +800,14 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "cell_temperature":    unpack_from("<H", buf, 10)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
             "fet_temperature":     unpack_from("<H", buf, 12)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
             "gauging_temperature": unpack_from("<H", buf, 14)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-        }))
+        })
+        return _od2t(self._manufacturing_dastatus2)  # Teststand interface
 
 
     def _read_ccadc_cal(self, hexi: bool | str | None = None) -> tuple:
         #self.manufacturer_access = 0xf081  # output CCADC Cal
         buf = self.manufacturer_block_access
-        buf = buf[2:]
+        buf = buf[2:]  # slice command
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 24): 
             raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
         self._ccadc_cal = OrderedDict({
@@ -932,7 +899,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         else: voltage = 0
         return float(voltage)
 
-    def calib_write_cell_voltage_gain(self, cell_voltages: Tuple[float], shorted: bool = False) -> Tuple[float]:
+    def calib_write_cell_voltage_gain(self, cell_voltages: Tuple[float], shorted: bool = False) -> Tuple[np.array, int]:
         """
         Cells Voltage Calibration. 
 
@@ -942,35 +909,33 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 internal short on the coulomb counter inputs (SRP, SRN). Defaults to False.
 
         Returns:
-            Tuple[float]: calibrated cells voltage, V
+            tuple:
+                (np.array) calibrated cell voltage measurements (V) : len = len(given cell_voltage), 
+                (int) bat_gain               
+            
         """
-        try:
-            n_cell = len(cell_voltages)
-            if (n_cell > 4):
-                raise IndexError("Cells voltage list index out of range.")
-            for i in range(n_cell):
-                cell_voltages[i] = float(cell_voltages[i]) 
-            # 1. average adc cell_1 voltage
-            # Raw ADC data. 3.6 V == 19.45  
-            adc_cell_voltage = self.calib_read_adc_cell_voltage(shorted=shorted)
-            # 2. calculate cell_gain
-            # adc_cell_voltage == 0 => Exception
-            cell_gain: int = int(cell_voltages[0]/adc_cell_voltage*65536)
-            # 3. write cell_gain
-            block = self.read_flash_block(0x4000)  # one page, no extras
-            bytes_cell_gain = cell_gain.to_bytes(2, byteorder='little', signed=True)
-            block[0:2] = bytes_cell_gain  # 0x4000/0x4001     
-            self.write_flash_block(0x4000, block)
-            # 4. Return calibrated cell_voltages
-            self._ms_toggle_helper("cal_test", False, 0x002d)
-            sleep(0.1)
-            dasstat = self.manufacturing_dastatus1()
-            res = []
-            for i in range(n_cell):
-                res.append(dasstat[i+1])
-        except Exception:
-            raise
-        return res
+        n_cell = len(cell_voltages)
+        if (n_cell > 4):
+            raise IndexError("Cells voltage list index out of range.")
+        for i in range(n_cell):
+            cell_voltages[i] = float(cell_voltages[i]) 
+        # 1. average adc cell_1 voltage
+        # Raw ADC data. 3.6 V == 19.45  
+        adc_cell_voltage = self.calib_read_adc_cell_voltage(shorted=shorted)
+        # 2. calculate cell_gain
+        # adc_cell_voltage == 0 => Exception
+        cell_gain: int = int(cell_voltages[0]/adc_cell_voltage*65536)
+        # 3. write cell_gain
+        block = self.read_flash_block(0x4000)  # one page, no extras
+        bytes_cell_gain = cell_gain.to_bytes(2, byteorder='little', signed=True)
+        block[0:2] = bytes_cell_gain  # 0x4000/0x4001     
+        self.write_flash_block(0x4000, block)
+        # 4. Return calibrated cell_voltages
+        self._ms_toggle_helper("cal_test", False, 0x002d)
+        sleep(0.1)
+        dasstat = self.manufacturing_dastatus1()
+        res = [dasstat[1 + i] for i in range(n_cell)]
+        return np.array(res), cell_gain
 
     def calib_read_adc_bat_voltage(self,  samples: int = 8, shorted: bool = False,  timeout: float = 5.0) -> float:
         """Enables the calibration mode of the battery if not set already, then
@@ -1007,7 +972,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         else: adc_bat_voltage = 0
         return float(adc_bat_voltage)
 
-    def calib_write_bat_voltage_gain(self, bat_voltage: float, shorted: bool = False) -> float:
+    def calib_write_bat_voltage_gain(self, bat_voltage: float, shorted: bool = False) -> Tuple[float, int]:
         """
         Battery Voltage Calibration.
 
@@ -1018,27 +983,28 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
         Returns:
             float: calibrated battery voltage.
+            tuple: 
+                (float) calibrated battery voltage (V),
+                (int) bat_gain
+
         """
-        try:
-            bat_voltage = float(bat_voltage) 
-            # 1. average adc bat voltage 
-            # Raw ADC data. 10.8 V == ~14.4  
-            adc_bat_voltage = self.calib_read_adc_bat_voltage(shorted=shorted)
-            # 2. calculate bat_gain
-            # adc_bat_voltage == 0 => Exception
-            bat_gain: int = int(bat_voltage/adc_bat_voltage*65536)
-            # 3. write bat_gain
-            block = self.read_flash_block(0x4000)  # one page, no extras   
-            bytes_bat_gain = bat_gain.to_bytes(2, byteorder='little', signed=False)
-            block[4:6] = bytes_bat_gain  # 0x4004/0x4005
-            self.write_flash_block(0x4000, block)
-            # 4. Return calibrated cell_voltages
-            self._ms_toggle_helper("cal_test", False, 0x002d)
-            sleep(0.1)
-            dasstat = self.manufacturing_dastatus1()
-        except Exception:
-            raise
-        return float(dasstat[5])
+        bat_voltage = float(bat_voltage) 
+        # 1. average adc bat voltage 
+        # Raw ADC data. 10.8 V == ~14.4  
+        adc_bat_voltage = self.calib_read_adc_bat_voltage(shorted=shorted)
+        # 2. calculate bat_gain
+        # adc_bat_voltage == 0 => Exception
+        bat_gain: int = int(bat_voltage / adc_bat_voltage * 65536)
+        # 3. write bat_gain
+        block = self.read_flash_block(0x4000)  # one page, no extras   
+        bytes_bat_gain = bat_gain.to_bytes(2, byteorder='little', signed=False)
+        block[4:6] = bytes_bat_gain  # 0x4004/0x4005
+        self.write_flash_block(0x4000, block)
+        # 4. Return calibrated cell_voltages
+        self._ms_toggle_helper("cal_test", False, 0x002d)
+        sleep(0.1)
+        dasstat = self.manufacturing_dastatus1()
+        return float(dasstat[5]), bat_gain
 
     def calib_read_adc_pack_voltage(self,  samples: int = 8, shorted: bool = False,  timeout: float = 5.0) -> float:
         """Enables the calibration mode of the battery if not set already, then
@@ -1075,7 +1041,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         else: adc_pack_voltage = 0
         return float(adc_pack_voltage)
 
-    def calib_write_pack_voltage_gain(self, pack_voltage: float, shorted: bool = False) -> float:
+    def calib_write_pack_voltage_gain(self, pack_voltage: float, shorted: bool = False) -> Tuple[float, int]:
         """
         Package Voltage Calibration.
 
@@ -1085,7 +1051,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 internal short on the coulomb counter inputs (SRP, SRN). Defaults to False.
 
         Returns:
-            float: calibrated package voltage, Volts.
+            tuple:
+                (float) calibrated package voltage (V),
+                (int) pack_gain
         """
         pack_voltage = float(pack_voltage) 
         # 1. average adc bat voltage 
@@ -1104,7 +1072,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self._ms_toggle_helper("cal_test", False, 0x002d)
         sleep(0.1)
         dasstat = self.manufacturing_dastatus1()
-        return float(dasstat[6])
+        return float(dasstat[6]), pack_gain
 
     def calib_read_adc_current(self,  samples: int = 8, shorted: bool = False,  timeout: float = 5.0) -> float:
         """
@@ -1138,11 +1106,13 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             # now get the ADCs from the last block read with corrected signs
             self._read_ccadc_cal()
             adc_curr += self._ccadc_cal[f"current_cc"] 
-        if (samples != 0): adc_curr = adc_curr/samples
-        else: adc_curr = 0
-        return float(adc_curr)
+        if (samples != 0): 
+            adc_curr = adc_curr / samples
+        else: 
+            adc_curr = 0
+        return adc_curr
 
-    def calib_write_current_gain(self, current: float, shorted: bool = False) -> np.array:
+    def calib_write_current_gain(self, current: float, shorted: bool = False) -> Tuple[float,float,int,int,int]:
         """
         Current Calibration.
 
@@ -1152,8 +1122,13 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 internal short on the coulomb counter inputs (SRP, SRN). Defaults to False.
 
         Returns:
-            np.array[0]: calibrated current, Amps.
-            np.array[1]: cc_gain
+            tuple: 
+                (float) calibrated current (A), 
+                (float) bq_st_cc_gain, 
+                (int) cc_gain, 
+                (int) capacity_gain, 
+                (int) adc_current
+
         """
         current = float(current)
         # 1. average adc current 
@@ -1162,34 +1137,33 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # adc_current == 0 => Exception
         #cc_gain = 3.58422                  # default
         if adc_current != 0:
-            cc_gain = float(current/adc_current)
+            cc_gain = float(current / adc_current)
         else:
             cc_gain = 3.58422
         capacity_gain = float(cc_gain*298261.6178)
-        # 3. write bat_gain
-        block = self.read_flash_block(0x4006, 32, hexi=False)
-        # old gain
-        #old_cc_gain = struct.unpack_from("<f", block, 0)[0]
-        #old_capacity_gain = struct.unpack_from("<f", block, 1)[0]
-        bytes_cc_gain = bytearray(struct.pack("<f", cc_gain))
-        bytes_cap_gain = bytearray(struct.pack("<f", capacity_gain))
-        block[0:4] = bytes_cc_gain
-        block[4:8] = bytes_cap_gain
-        self.write_flash_block(0x4006, block)
+        # 3. write bat_gain        
+        bytes_cc_gain = bytearray(struct.pack("<f", cc_gain))         # 4 bytes
+        bytes_cap_gain = bytearray(struct.pack("<f", capacity_gain))  # 4 bytes
+        block = self.read_flash_block(0x4000)  # one page, no extras
+        block[6:10] = bytes_cc_gain    # 0x4006/7/8/9
+        block[10:14] = bytes_cap_gain  # 0x400a/b/c/d
+        #block = (block[:6]                
+        #        + bytes_cc_gain   # 0x4006/7/8/9
+        #        + bytes_cap_gain  # 0x400a/b/c/d
+        #        + block[14:])     # brackets to avoid linter failure
+        #if len(block) != 32: raise Exception("Fuck the Energiesparlampe!")      
+        self.write_flash_block(0x4000, block)
         # 4. Return calibrated current
         self._ms_toggle_helper("cal_test", False, 0x002d)
         sleep(0.1)
-        result = np.array([])
-        nplist = []
-        nplist.append(float(self.get_current()))
+        # do a measurement to provide verification
+        _current_meas = self.get_current()
         # use BQ Studio scale factor
-        bq_st_cc_gain = 3.714528/cc_gain
-        nplist.append(float(bq_st_cc_gain))
-        result = np.array(nplist)
-        return result
+        bq_st_cc_gain = 3.714528 / cc_gain
+        # return the relevant values e.g. for logging
+        return _current_meas, bq_st_cc_gain, int(cc_gain), int(capacity_gain), int(adc_current)
 
-
-    def calib_write_temp(self, temp: Tuple[float]) -> Tuple[float]:
+    def calib_write_temp(self, temp: Tuple[float]) -> Tuple[np.array,int,int,int,int]:
         """
         Temperature calibration.
 
@@ -1197,50 +1171,69 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             temp (Tuple[int]): temperature TS1 ... TS4, degrees C
 
         Returns:
-            Tuple[int]: calibrated temperature, degrees C
-        """
-        try:
-            n_ts = len(temp)
-            if (n_ts > 4):
-                raise IndexError("Temperature list index out of range.")
-            t_temp = []
-            for i in range(n_ts):
-                t_temp.append(int(temp[i]*10))
-            # 1. Read TS1...TS4 offset
-            block = self.read_flash_block(0x4015, 32, hexi=False)
-            # convert temperature offset to signed byte
-            ts_offset = []
-            ts_offset.append(struct.unpack_from("<b", block, 0)[0])
-            ts_offset.append(struct.unpack_from("<b", block, 1)[0])
-            ts_offset.append(struct.unpack_from("<b", block, 2)[0])
-            ts_offset.append(struct.unpack_from("<b", block, 3)[0])
-            # 2. Read appropriate temperature from the DAStatus2()
-            # use manufacturing_dastatus2()
-            dastatus2 = self.manufacturing_dastatus2()
-            int_temp = [int(dastatus2[2]*10), int(dastatus2[3]*10), int(dastatus2[4]*10), int(dastatus2[5]*10)]
-            # 3. Calculate new TS1...TS4 offset
-            new_offset = bytearray(b'\x00\x00\x00\x00')
-            for i in range(0, 4):
-                if (i < n_ts):
-                    dt = t_temp[i] - int_temp[i] + ts_offset[i] 
-                    new_offset[i:] = struct.pack("b", dt)        
-                else:
-                    new_offset[i:] = struct.pack("b", 0)
-                # copy new temperature offset
-                block[i] = new_offset[i]
-            #print(block)
-            # 4. Write new TS1...TS4 offset
-            self.write_flash_block(0x4015, block)
-            # 5. Re-check temperature TS1...TS4
-            sleep(1)
-            dastatus2 = self.manufacturing_dastatus2()
-            res = []
-            for i in range(n_ts):
-                res.append(dastatus2[i+2])
-        except Exception:
-            raise
-        return res
+            tuple:
+              (np.array): 1 to number of given temperatures (temp) as celsius (°C),
+              (int,): 4x offsets which are stored into the flash
 
+        """
+        n_ts = len(temp)
+        if (n_ts > 4):
+            raise IndexError("Temperature list index out of range.")
+        # convert to °C x10
+        t_temp = [int(temp[i]*10) for i in range(n_ts)]
+        #for i in range(n_ts):
+        #    t_temp.append(int(temp[i]*10))
+        # 1. Read TS1...TS4 offset
+        block = self.read_flash_block(0x4000)  # one page (32 bytes), no extras
+        #block = self.read_flash_block(0x4015, 32, hexi=False)
+        # convert 4 temperature offsets to *signed* bytes
+        ts_offset = [struct.unpack_from("<b", block[i:])[0] for i in range(0x15, 0x19)]
+        #ts_offset.append(struct.unpack_from("<b", block, 21+0)[0])
+        #ts_offset.append(struct.unpack_from("<b", block, 21+1)[0])
+        #ts_offset.append(struct.unpack_from("<b", block, 21+2)[0])
+        #ts_offset.append(struct.unpack_from("<b", block, 21+3)[0])
+        # 2. Read appropriate temperature from the DAStatus2()
+        # use manufacturing_dastatus2()
+        dastatus2 = self.manufacturing_dastatus2(celsius=True)
+        #int_temp = [int(dastatus2[2]*10),   # ts1
+        #            int(dastatus2[3]*10),   # ts2
+        #            int(dastatus2[4]*10),   # ts3
+        #            int(dastatus2[5]*10)]   # ts4
+        # convert TS1 ... TS4 from the tuple list
+        int_temp = [int(t * 10) for t in dastatus2[2:6]]
+        # 3. Calculate new TS1...TS4 offset
+        #new_offset = bytearray(b'\x00\x00\x00\x00')
+        #new_offset = bytearray(b'\x00') * 4  # 4 bytes 0's initialized
+        new_offset = bytearray()
+        for i in range(0, 4):
+            if (i < n_ts):
+                dt = t_temp[i] - int_temp[i] + ts_offset[i] 
+                #new_offset[i:] = struct.pack("b", dt)
+                _b = struct.pack("b", dt)        
+            else:
+                #new_offset[i:] = struct.pack("b", 0)
+                _b = b'\x00'
+            new_offset += _b
+            # copy new temperature offset
+            #block[i] = new_offset[i]
+        # copy new temperature offset
+        block[0x15:0x19] = new_offset
+        #block = block[0:0x15] + new_offset + block[0x19:]
+        #if len(block) != 32: raise Exception("Fuck the Energiesparlampe!")
+        #print(block)
+        # 4. Write new TS1...TS4 offset
+        #self.write_flash_block(0x4015, block)
+        self.write_flash_block(0x4000, block)
+        # 5. Re-check temperature TS1...TS4
+        dastatus2 = self.manufacturing_dastatus2()
+        res = [dastatus2[2 + i] for i in range(n_ts)]
+        # #res = []
+        # #for i in range(n_ts):
+        # #    res.append(dastatus2[2 + i])
+        # return res
+        # return the measurements and offsets for documentation
+        return np.array(res), *[struct.unpack_from("<b", new_offset[i:])[0] for i in range(4)]
+        
     def _ms_toggle_helper(self, ms_key: str, enable: bool, ma_cmd: int, retries: int = 5, pause_on_retry: float = 0.1) -> bool:
         """Internal function to set a defined state using toggle and manufacturing_status() reads for control.
 
@@ -1451,7 +1444,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     #    self.manufacturer_access = 0x0012
 
     def get_afe_register(self, hexi: bool | str | None = None) -> tuple:
-        buf = self.read_manufacturer_block(command= 0x0058, length= 32)
+        buf = self.read_manufacturer_block(command=0x0058, length=32)
         return _od2t(OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
