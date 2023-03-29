@@ -856,7 +856,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self._read_ccadc_cal()
             c1 = self._ccadc_cal["counter"]
 
-    def calib_read_adc_cell_voltage(self, samples: int = 8, shorted: bool = False, timeout: float = 5.0) -> float:
+    def calib_read_adc_cell_voltage(self, samples: int = 4, shorted: bool = False, timeout: float = 5.0) -> float:
         """
         Enables the calibration mode of the battery if not set already, then
         measures the voltage for Cell 1, averages "samples" readings for higher accuracy, 
@@ -937,7 +937,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         res = [dasstat[1 + i] for i in range(n_cell)]
         return np.array(res), cell_gain
 
-    def calib_read_adc_bat_voltage(self,  samples: int = 8, shorted: bool = False,  timeout: float = 5.0) -> float:
+    def calib_read_adc_bat_voltage(self,  samples: int = 4, shorted: bool = False,  timeout: float = 5.0) -> float:
         """Enables the calibration mode of the battery if not set already, then
         measures battery voltage, averages "samples" readings for higher accuracy, 
         returning the mean value.
@@ -1006,7 +1006,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         dasstat = self.manufacturing_dastatus1()
         return float(dasstat[5]), bat_gain
 
-    def calib_read_adc_pack_voltage(self,  samples: int = 8, shorted: bool = False,  timeout: float = 5.0) -> float:
+    def calib_read_adc_pack_voltage(self,  samples: int = 4, shorted: bool = False,  timeout: float = 5.0) -> float:
         """Enables the calibration mode of the battery if not set already, then
         measures package voltage, averages "samples" readings for higher accuracy, 
         returning the mean value.
@@ -1074,7 +1074,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         dasstat = self.manufacturing_dastatus1()
         return float(dasstat[6]), pack_gain
 
-    def calib_read_adc_current(self,  samples: int = 8, shorted: bool = False,  timeout: float = 5.0) -> float:
+    def calib_read_adc_current(self,  samples: int = 4, shorted: bool = False,  timeout: float = 5.0) -> float:
         """
         Enables the calibration mode of the battery if not set already, then
         measures current_cc, averages "samples" readings for higher accuracy, 
@@ -1112,7 +1112,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             adc_curr = 0
         return adc_curr
 
-    def calib_write_current_gain(self, current: float, shorted: bool = False) -> Tuple[float,float,int,int,int]:
+    def calib_write_current_gain(self, current: float, shorted: bool = False) -> Tuple[float,float,float,float,float]:
         """
         Current Calibration.
 
@@ -1125,9 +1125,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             tuple: 
                 (float) calibrated current (A), 
                 (float) bq_st_cc_gain, 
-                (int) cc_gain, 
-                (int) capacity_gain, 
-                (int) adc_current
+                (float) cc_gain, 
+                (float) capacity_gain, 
+                (float) adc_current
 
         """
         current = float(current)
@@ -1140,7 +1140,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             cc_gain = float(current / adc_current)
         else:
             cc_gain = 3.58422
-        capacity_gain = float(cc_gain*298261.6178)
+        capacity_gain = float(cc_gain * 298261.6178)
         # 3. write bat_gain        
         bytes_cc_gain = bytearray(struct.pack("<f", cc_gain))         # 4 bytes
         bytes_cap_gain = bytearray(struct.pack("<f", capacity_gain))  # 4 bytes
@@ -1161,7 +1161,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # use BQ Studio scale factor
         bq_st_cc_gain = 3.714528 / cc_gain
         # return the relevant values e.g. for logging
-        return _current_meas, bq_st_cc_gain, int(cc_gain), int(capacity_gain), int(adc_current)
+        return _current_meas, bq_st_cc_gain, cc_gain, capacity_gain, adc_current
 
     def calib_write_temp(self, temp: Tuple[float]) -> Tuple[np.array,int,int,int,int]:
         """
@@ -1180,57 +1180,32 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         if (n_ts > 4):
             raise IndexError("Temperature list index out of range.")
         # convert to °C x10
-        t_temp = [int(temp[i]*10) for i in range(n_ts)]
-        #for i in range(n_ts):
-        #    t_temp.append(int(temp[i]*10))
+        t_temp = [int(temp[i] * 10) for i in range(n_ts)]
         # 1. Read TS1...TS4 offset
         block = self.read_flash_block(0x4000)  # one page (32 bytes), no extras
-        #block = self.read_flash_block(0x4015, 32, hexi=False)
         # convert 4 temperature offsets to *signed* bytes
         ts_offset = [struct.unpack_from("<b", block[i:])[0] for i in range(0x15, 0x19)]
-        #ts_offset.append(struct.unpack_from("<b", block, 21+0)[0])
-        #ts_offset.append(struct.unpack_from("<b", block, 21+1)[0])
-        #ts_offset.append(struct.unpack_from("<b", block, 21+2)[0])
-        #ts_offset.append(struct.unpack_from("<b", block, 21+3)[0])
         # 2. Read appropriate temperature from the DAStatus2()
-        # use manufacturing_dastatus2()
         dastatus2 = self.manufacturing_dastatus2(celsius=True)
-        #int_temp = [int(dastatus2[2]*10),   # ts1
-        #            int(dastatus2[3]*10),   # ts2
-        #            int(dastatus2[4]*10),   # ts3
-        #            int(dastatus2[5]*10)]   # ts4
         # convert TS1 ... TS4 from the tuple list
         int_temp = [int(t * 10) for t in dastatus2[2:6]]
         # 3. Calculate new TS1...TS4 offset
-        #new_offset = bytearray(b'\x00\x00\x00\x00')
         #new_offset = bytearray(b'\x00') * 4  # 4 bytes 0's initialized
         new_offset = bytearray()
         for i in range(0, 4):
             if (i < n_ts):
                 dt = t_temp[i] - int_temp[i] + ts_offset[i] 
-                #new_offset[i:] = struct.pack("b", dt)
                 _b = struct.pack("b", dt)        
             else:
-                #new_offset[i:] = struct.pack("b", 0)
                 _b = b'\x00'
             new_offset += _b
-            # copy new temperature offset
-            #block[i] = new_offset[i]
         # copy new temperature offset
         block[0x15:0x19] = new_offset
-        #block = block[0:0x15] + new_offset + block[0x19:]
-        #if len(block) != 32: raise Exception("Fuck the Energiesparlampe!")
-        #print(block)
         # 4. Write new TS1...TS4 offset
-        #self.write_flash_block(0x4015, block)
         self.write_flash_block(0x4000, block)
         # 5. Re-check temperature TS1...TS4
         dastatus2 = self.manufacturing_dastatus2()
         res = [dastatus2[2 + i] for i in range(n_ts)]
-        # #res = []
-        # #for i in range(n_ts):
-        # #    res.append(dastatus2[2 + i])
-        # return res
         # return the measurements and offsets for documentation
         return np.array(res), *[struct.unpack_from("<b", new_offset[i:])[0] for i in range(4)]
         
