@@ -890,9 +890,12 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             c1 = self._ccadc_cal["counter"]
 
     def calib_read_adc_cell_voltage(self, samples: int = 8, shorted: bool = False, timeout: float = 5.0) -> float:
-        """Enables the calibration mode of the battery if not set already, then
+        """
+        Enables the calibration mode of the battery if not set already, then
         measures the voltage for Cell 1, averages "samples" readings for higher accuracy, 
         returning the mean value.
+
+        ATTENTION: its important to use Cell 1 voltage, not the others to get needed accuracy!
 
         Args:
             samples (int, optional): number of samples to average. Defaults to 8.
@@ -903,9 +906,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             float: value of averaged ADC measurements
         """
+
         def _get_adc_reading(i: int) -> float:
             self._read_ccadc_cal()
-            return self._ccadc_cal[f"cell_voltage_{i + 1}"]
+            return self._ccadc_cal[f"cell_voltage_{i}"]
 
         t0 = monotonic_ns()  # common timout over the whole function
         # make sure that calibration test is enabled
@@ -948,22 +952,19 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 cell_voltages[i] = float(cell_voltages[i]) 
             # 1. average adc cell_1 voltage
             # Raw ADC data. 3.6 V == 19.45  
-            adc_cell_voltage = self.calib_read_adc_cell_voltage(samples=4, shorted=shorted)
+            adc_cell_voltage = self.calib_read_adc_cell_voltage(shorted=shorted)
             # 2. calculate cell_gain
             # adc_cell_voltage == 0 => Exception
             cell_gain: int = int(cell_voltages[0]/adc_cell_voltage*65536)
             # 3. write cell_gain
-            block = self.read_flash_block(0x4000, 32, hexi=False)
-            #old_gain = unpack_from("<h", block, 0)[0]
-            #print("Old gain ", old_gain)     
+            block = self.read_flash_block(0x4000)  # one page, no extras
             bytes_cell_gain = cell_gain.to_bytes(2, byteorder='little', signed=True)
-            block[0:2] = bytes_cell_gain
-            sleep(0.5)
+            block[0:2] = bytes_cell_gain  # 0x4000/0x4001     
             self.write_flash_block(0x4000, block)
             # 4. Return calibrated cell_voltages
             self._ms_toggle_helper("cal_test", False, 0x002d)
             sleep(0.1)
-            dasstat = self.manufacturing_dastatus1(True)
+            dasstat = self.manufacturing_dastatus1()
             res = []
             for i in range(n_cell):
                 res.append(dasstat[i+1])
@@ -1022,20 +1023,19 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             bat_voltage = float(bat_voltage) 
             # 1. average adc bat voltage 
             # Raw ADC data. 10.8 V == ~14.4  
-            adc_bat_voltage = self.calib_read_adc_bat_voltage(samples=4, shorted=shorted)
+            adc_bat_voltage = self.calib_read_adc_bat_voltage(shorted=shorted)
             # 2. calculate bat_gain
             # adc_bat_voltage == 0 => Exception
             bat_gain: int = int(bat_voltage/adc_bat_voltage*65536)
             # 3. write bat_gain
-            block = self.read_flash_block(0x4004, 32, hexi=False)   
+            block = self.read_flash_block(0x4000)  # one page, no extras   
             bytes_bat_gain = bat_gain.to_bytes(2, byteorder='little', signed=False)
-            block[0:2] = bytes_bat_gain
-            sleep(0.5)
-            self.write_flash_block(0x4004, block)
+            block[4:6] = bytes_bat_gain  # 0x4004/0x4005
+            self.write_flash_block(0x4000, block)
             # 4. Return calibrated cell_voltages
             self._ms_toggle_helper("cal_test", False, 0x002d)
             sleep(0.1)
-            dasstat = self.manufacturing_dastatus1(True)
+            dasstat = self.manufacturing_dastatus1()
         except Exception:
             raise
         return float(dasstat[5])
@@ -1090,21 +1090,20 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         pack_voltage = float(pack_voltage) 
         # 1. average adc bat voltage 
         # Raw ADC data. 10.8 V == ~14.25  
-        adc_pack_voltage = self.calib_read_adc_pack_voltage(samples=4, shorted=shorted)
+        adc_pack_voltage = self.calib_read_adc_pack_voltage(shorted=shorted)
         # 2. calculate bat_gain
         # adc_pack_voltage == 0 => Exception
         pack_gain: int = int(pack_voltage/adc_pack_voltage*65536)
         # 3. write bat_gain
-        block = self.read_flash_block(0x4002, 32, hexi=False)
+        block = self.read_flash_block(0x4000)  # one page, no extras
         #print(block)  
         bytes_pack_gain = pack_gain.to_bytes(2, byteorder='little', signed=False)
-        block[0:2] = bytes_pack_gain
-        sleep(0.5)
-        self.write_flash_block(0x4002, block)
+        block[2:4] = bytes_pack_gain  # 0x4002/0x4003
+        self.write_flash_block(0x4000, block)
         # 4. Return calibrated cell_voltages
         self._ms_toggle_helper("cal_test", False, 0x002d)
         sleep(0.1)
-        dasstat = self.manufacturing_dastatus1(True)
+        dasstat = self.manufacturing_dastatus1()
         return float(dasstat[6])
 
     def calib_read_adc_current(self,  samples: int = 8, shorted: bool = False,  timeout: float = 5.0) -> float:
@@ -1158,7 +1157,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
         current = float(current)
         # 1. average adc current 
-        adc_current = self.calib_read_adc_current(samples=4, shorted=shorted)
+        adc_current = self.calib_read_adc_current(shorted=shorted)
         # 2. calculate current_gain, capacity_gain. 
         # adc_current == 0 => Exception
         #cc_gain = 3.58422                  # default
