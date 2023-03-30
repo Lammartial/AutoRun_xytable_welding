@@ -1,5 +1,11 @@
 #import unittest
+from typing import Tuple
 from rrc.itech import M3400
+from rrc.eth2i2c import I2CPort
+from rrc.i2cbus import I2CBus, BusMux, I2CMuxedBus
+from rrc.cell_voltage_simulation import CellVoltageSimulation
+from rrc.smbus import BusMaster
+from rrc.chipsets import BQ40Z50R1
 
 
 # --------------------------------------------------------------------------- #
@@ -9,20 +15,11 @@ DEBUG = 0
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
-
-#--------------------------------------------------------------------------------------------------
-def test_start_battery_pcba(psu1: M3400, psu2: M3400):
-    from rrc.eth2i2c import I2CPort
-    from rrc.i2cbus import I2CBus, BusMux, I2CMuxedBus
-    from rrc.testadapter_cell_voltage_source import CellVoltageSource
-    from rrc.smbus import BusMaster
-    from rrc.chipsets import BQ40Z50R1
-
-    i2cbus = I2CPort("172.21.101.30:2101")
+def test_start_battery_pcba(i2cbus: I2CPort, psu1: M3400, psu2: M3400) -> Tuple[BQ40Z50R1, CellVoltageSimulation]:    
     mux = BusMux(i2cbus, 0x77)
-    cellsim = CellVoltageSource(I2CMuxedBus(i2cbus, mux, 4), 0x48)
+    cellsim = CellVoltageSimulation(I2CMuxedBus(i2cbus, mux, 4), 0x48)
     cellsim.initialize()
-    smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 2), retry_limit=5, verify_rounds=3, pause_us=50)
+    smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 2), retry_limit=7, verify_rounds=3, pause_us=50)
     bat = BQ40Z50R1(smbus)
 
     # Wakeup battery
@@ -30,9 +27,10 @@ def test_start_battery_pcba(psu1: M3400, psu2: M3400):
 
     resistance = 50.0
     power_limit = 150
-    current_limit = 0.05
+    current_limit = 0.08
     pack_voltage = 10.8
     cell_count = 3
+
     cellsim.enable_all_cell_channels()
     
     # psu1.set_voltage(pack_voltage)
@@ -53,14 +51,37 @@ def test_start_battery_pcba(psu1: M3400, psu2: M3400):
     cellsim.set_cell_n_voltage(2, pack_voltage/cell_count)
 
     psu2.set_output_state(1)
+    print("Wait after PSU2 on...")
     sleep(1.0)
     psu1.set_output_state(1)
+    print("Wait after PSU1 on...")
     sleep(0.5)
-    if not bat.waitForReady(timeout_ms=2000):
-        print("battery not ready.")
-        return
+    if not bat.waitForReady(timeout_ms=5000):
+        _msg = "battery not ready."
+        #cellsim.power_down_all_cell_channels()
+        #raise Exception(_msg)
+        # output off
+        psu1.set_output_state(0)            
+        print(_msg)
+        return bat, cellsim
     # output off
     psu1.set_output_state(0)
+    print("Battery ready...")
+
+    #bat.enable_full_access()
+    #bat.manufacturing_status()
+    #print(bat._manufacturing_status)
+
+    return bat, cellsim
+
+#--------------------------------------------------------------------------------------------------
+
+def test_something(bat: BQ40Z50R1, cellsim: CellVoltageSimulation):
+    resistance = 50.0
+    power_limit = 150
+    current_limit = 0.05
+    pack_voltage = 10.8
+    cell_count = 3
 
     bat.manufacturing_status()
     print(bat._manufacturing_status)
@@ -121,9 +142,20 @@ def test_start_battery_pcba(psu1: M3400, psu2: M3400):
     psu1.set_output_state(0)
     psu2.set_output_state(0)
     cellsim.power_down_all_cell_channels()
-    
+
+#--------------------------------------------------------------------------------------------------
+
+def test_program_firmware(bat: BQ40Z50R1, filename: str):
+    from rrc.chipsets.bq_flasher import BQStudioFileFlasher
+
+    flasher = BQStudioFileFlasher(bat, filename)
+    flasher.program_fw_file()
 
 
+#--------------------------------------------------------------------------------------------------
+
+def test_flash_write(bat: BQ40Z50R1):
+    bat.write_flash_block(0x4000, b'\x00\x01\x02\x04')
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
@@ -132,30 +164,40 @@ if __name__ == "__main__":
     from pyvisa import ResourceManager
 
     ## Initialize the logging
-    logger_init(filename_base=None)  ## init root logger with different filename
-    logger = logging.getLogger()  # we need to cut down the root logger to suppress pyvisa
+    #logger_init(filename_base=None)  ## init root logger with different filename
+    #logger = logging.getLogger()  # we need to cut down the root logger to suppress pyvisa
     #logger.setLevel(logging.INFO)
-    _log = getLogger(__name__, DEBUG)
+    #_log = getLogger(__name__, DEBUG)
 
     rm = ResourceManager()
     print(rm.list_resources())
-
+    
     # there is one ETH bridge for 6 PSUs
-    E1206_IP_STR = "TCPIP0::172.21.101.24::inst0::INSTR"
+    E1206_IP_STR = "TCPIP0::172.25.101.37::inst0::INSTR"
     m3412 = [M3400(E1206_IP_STR, i) for i in range(1,7)]
     #test_m3400_some(m3412[0])
 
     for m in m3412[:]:
-        m.set_remote_control()
-        m.set_sense_state(1)
         m.set_output_state(0)
         print(m.get_all_measurements())
 
-    test_start_battery_pcba(m3412[0], m3412[1])
+    i2cbus = I2CPort("172.25.101.34:2101")  # battery on socket_2
+    psu1 = m3412[4]
+    psu2 = m3412[5]
+    try:
+        bat, cellsim = test_start_battery_pcba(i2cbus, psu1, psu2)
+        test_program_firmware(bat, "C:/Production/Battery-PCBA-Test/filestore/SCD_3412031-04_A_Rubin-B_RRC2020B_Recovery.bq.fs")
+        #test_program_firmware(bat, "C:/Production/Battery-PCBA-Test/filestore/SCD_3412031-04_A_Rubin-B_RRC2020B.bq.fs")
+        #test_flash_write(bat)
+        #test_something(bat, cellsim)
+    except Exception as ex:
+        print(ex)
+    
 
     for m in m3412:
         m.set_output_state(0)  # switch all outputs OFF
 
- #=============================================================================================
 
     print("DONE.")
+
+# END OF FILE

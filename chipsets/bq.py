@@ -142,7 +142,10 @@ class ChipsetTexasInstruments(Chipset):
         self.manufacturer_access = (ikey & 0xffff)         # low word first
         self.manufacturer_access = ((ikey >> 16) & 0xffff) # high word then
 
-    def unseal(self, unseal_key: int | bytes | bytearray | str, fullaccess_key: int | bytes | bytearray | str = None) -> bool:
+    def unseal(self, 
+               unseal_key: int | bytes | bytearray | str, 
+               fullaccess_key: int | bytes | bytearray | str = None,
+               force: bool = False) -> bool:
         """Unseals the battery using a key given in hexadecimal format.
 
            Note: this function needs to have is_unsealed() implemented!
@@ -153,12 +156,13 @@ class ChipsetTexasInstruments(Chipset):
             Args:
                 (string): unseal_key
                 (string): fullaccess_key
-
+                (bool): True do NOT check if unseald. Defaults to False.
+            
             Returns:
                 (boolean)
         """
         check_fullaccess=fullaccess_key is not None
-        if self.is_unsealed(check_fullaccess=check_fullaccess, refresh=True):
+        if (not force) and self.is_unsealed(check_fullaccess=check_fullaccess, refresh=True):
             return True # already in correct mode
         # Note: After sealing, the bq will not accept unsealing for about
         #       3s to 5s, therefore we retry.

@@ -184,7 +184,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.manufacturer_access = 0x0054
         buf = self.manufacturer_data
         if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 4):
-            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
+            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}, {buf}")
         #os = int.from_bytes(buf, "little")
         os = unpack("<L", buf)[0]
         self._operation_status = OrderedDict({
@@ -1773,72 +1773,14 @@ class BQ40Z50R2(BQ40Z50R1):
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    from datetime import datetime as dt
-    from pathlib import Path
-    from rrc.eth2i2c import I2CPort
-    from rrc.i2cbus import BusMux, I2CMuxedBus
-    from rrc.smbus import BusMaster
-    from rrc.chipsets.bq40z50 import BQ40Z50R2
-
-    ## Initialize the logging
-    logger_init(filename_base="local_log")  ## init root logger
-    _log = getLogger(__name__, DEBUG)
-
-
-    i2c_port = I2CPort(resource_str = "172.21.101.50:2101")
-    busmux = BusMux(i2c_port, address=0x77)
+    ### Initialize the logging
+    #logger_init(filename_base=None)  ## init root logger
+    #_log = getLogger(__name__, DEBUG)
     
-    for i in range(1,9):
-        busmux.setChannel(i)
-        print(i2c_port.i2c_bus_scan())
-    
-    auto_muxed_i2cbus = I2CMuxedBus(i2c_port, busmux, 1)
-    busmaster = BusMaster(auto_muxed_i2cbus)
-    bat = BQ40Z50R2(busmaster)
+    print("NO TESTS: ", __file__)
 
-    #udi:tuple = (8, 7, 6, 5, 4, 3, 2, 1, 8, 7, 6, 5, 4, 3, 2, 1, 8, 7, 6, 5, 4, 3, 2, 1, 8, 7, 6, 5, 4, 3, 2, 1)
-    mib: str = "87654321876543218765432187654321"
-    #mib = bat.get_mib(32, True)
-    #print(mib)
-    #bat.set_mib(data= mib, length= 32, address= 0x4041)
-    #bat.set_manufacturer_date()
-    #bat.set_pack_sn("00B4")
-
-    #buf = bat.battery_status()
-    #print("BatteryStatus:", buf)
-
-    #print(bat.is_sealed())
-
-    #t1 = dt.now()
-
-    #fw_file = Path("../../../Battery-PCBA-Test/filestore/SCD_3412031-04_A_Rubin-B_RRC2020B.srec")
-    #bat.write_flash_from_file(fw_file)
-
-    #t2 = dt.now()
-    #print(f"Programmierzeit: {(t2-t1).seconds}")
-
-    # Testing bq40z50 parameters calibration
-    #bat._ms_toggle_helper("cal_test", False, 0x002d)
-    # Cell voltage calibration
-    cell_volt: Tuple = [3.6, 3.6, 3.6]
-    #print(bat.calib_write_cell_voltage_gain(cell_volt, shorted=False))
-    # Bat voltage calibration
-    bat_volt: float = 10.8
-    #print(bat.calib_write_bat_voltage_gain(bat_volt, shorted=False))
-    # Pack voltage calibration
-    pack_volt = 10.8
-    #print(bat.calib_write_pack_voltage_gain(pack_volt, shorted=False))
-    # Current calibration
-    curr = -2.01
-    #print(bat.calib_write_current_gain(curr, shorted=False))
-    # Temp calibration
-    temp: Tuple = [21.71213214321, 21.71123213123, 21.7112321321321]
-    #print(bat.calib_write_temp(temp))
-
-    #print(bat.get_udi())
-
-    #if (bat.is_sealed()):
-        #bat.unseal(0x8D21FAC3, 0x63DB2CE4)
-
+    #
+    # to test please setup a "test_xxx.py" module !
+    #
 
 # END OF FILE
