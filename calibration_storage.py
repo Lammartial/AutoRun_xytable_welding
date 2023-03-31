@@ -37,10 +37,10 @@ class CalibrationStorage:
 
     page_list_resistance = [0, 1, 2]  # The calibration value will be stored on multiple pages for validation
     page_list_inventory_number = [3, 4, 5]
-    page_list_leakcurrent_offset = [6, 7, 8]
+    page_list_leakcurrent = [6, 7, 8, 9, 10, 11, 12]  # this uses one page for a value -> up to 7 voltage levels
     struct_format_string_resistance = ">d"  # big-endian, double with 8 bytes
     struct_format_string_inventory_number = ">8s"  # big-endian, 8 byte string
-    struct_format_string_leakcurrent_offset = ">d"  # big-endian, double with 8 bytes
+    struct_format_string_leakcurrent = ">d"  # big-endian, double with 8 bytes
 
     def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x50):
         self.eeprom = AT24HC02C(i2c, int(i2c_address_7bit))
@@ -161,7 +161,7 @@ class CalibrationStorage:
         raise CalibrationStorageReadError(self.eeprom, "shunt resistance")
 
 
-    def store_leakcurrent_amps(self, current_amps: float) -> bool:
+    def store_leakcurrent_amps(self, index: int, current_amps: float) -> bool:
         """
         Store the leakage current measurement in EEPROM and return whether it was successful.
         The value is stored with double-precision (ca. 16 significant digits).
@@ -172,21 +172,21 @@ class CalibrationStorage:
         Returns:
             bool: True if the readback was correct. False else.
         """
-    
+        int(index)
         return self.__store_value(float(current_amps), 
-                                  CalibrationStorage.struct_format_string_leakcurrent_offset, 
-                                  CalibrationStorage.page_list_leakcurrent_offset,
+                                  CalibrationStorage.struct_format_string_leakcurrent, 
+                                  [CalibrationStorage.page_list_leakcurrent[int(index)]],
                                   verify=True)
 
-    def load_leakcurrent_amps(self) -> float:
+    def load_leakcurrent_amps(self, index: int) -> float:
         """Read the resistance value from EEPROM and return it as a float in Ohm.
 
         Returns:
             float: Resistance in Ohm
         """
 
-        ok, v = self.__read_value(CalibrationStorage.struct_format_string_leakcurrent_offset,
-                                  CalibrationStorage.page_list_leakcurrent_offset)
+        ok, v = self.__read_value(CalibrationStorage.struct_format_string_leakcurrent,
+                                  [CalibrationStorage.page_list_leakcurrent[int(index)]])
         if ok:
             return v
         
@@ -236,7 +236,7 @@ def test_write_read(storage: CalibrationStorage):
 def test_print_stored_values(storage: CalibrationStorage):
     ohm = storage.load_shunt_resistance_ohm()
     inv = storage.load_inventory_number()
-    amps = storage.load_leakcurrent_amps()
+    amps = [storage.load_leakcurrent_amps(i) for i in range(7)]
     print("Stored EEPROM Values:")
     print(ohm)
     print(inv)
