@@ -142,7 +142,7 @@ class AT24HC02C:
             return False
 
     def __validate_page_number(self, page: int):
-        if page < 0 or page > (AT24HC02C.bytes_per_page - 1):
+        if page < 0 or page > (AT24HC02C.number_of_pages - 1):
             raise ValueError(f"Page number for I2C EEPROM at address 0x{self.i2c_address_7bit:02X} is invalid. "
                              f"Must be between 0 and 31. You selected {page}.")
 
