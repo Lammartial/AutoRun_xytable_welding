@@ -41,7 +41,7 @@ class Hioki_BT3561A(Eth2SerialDevice):
     #----------------------------------------------------------------------------------------------
     def init(self):
         """
-        Some presets for the correct operation of the BT3561A 
+        Some presets for the correct operation of the BT3561A
 
         Returns:
             bool: True - no errors, otherwise False
@@ -375,7 +375,7 @@ class Hioki_BT3561A(Eth2SerialDevice):
         except Exception:
             raise
         result = np.array(nplist)
-        return result 
+        return result
 
     def set_raw_command(self, msg: str) -> bool:
         """
@@ -660,6 +660,9 @@ class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
             new_default_gateway (str, optional): _description_. Defaults to "0.0.0.0".
             pause_reboot (float, optional): _description_. Defaults to 5.0.
         """
+        global DEBUG
+        _log = getLogger(__name__, DEBUG)
+
         # remove the dots from the strings
         _ip_str = new_ip.replace('.' , ',')
         _subnet_mask = new_subnet_mask.replace('.' , ',')
@@ -1117,7 +1120,7 @@ if __name__ == "__main__":
             return True
 
     # measure single channel (1 ... 22)
-    #err = 0   
+    #err = 0
     #for i in range(100):
         if (check_meas(hioki.measure_channnel(1), 1) == False):
             err += 1
