@@ -728,7 +728,7 @@ class SPSStateMachine(SPSStateMachineBase):
                 case SPSStates.SYNC_ON_MACHINE_COUNTER:
                     _do_pause = True
                     _machine_ready, _status = self.dev.is_machine_ready()
-                    if self._machine_locked or _machine_ready:
+                    if _machine_ready:
                         self.counter_ax1 = self.dev.read_axis_counter(1)
                         #  Check if welding is done and read the result,
                         #  then proceed to check if pass or failed.

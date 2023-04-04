@@ -131,6 +131,7 @@ COREPACK_TEST:
         psu_m3900:     "TCPIP0::172.25.101.46::inst0::INSTR"
         icr_bt3561a:   "172.25.101.44:23"
     "1":
+      resource_strings:
         eth_to_i2c:    "172.25.101.42:2101"
         scanner:       "172.25.101.43:2000"
         led_ch9121:    "172.25.101.43:3000"
