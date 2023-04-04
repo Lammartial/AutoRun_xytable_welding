@@ -302,10 +302,11 @@ class WindowUI(object):
                     _do_update = True
                     pass
                 if "result" in a:
-                    if "passed" in a["result"]:
-                        self.label_udi.config(background="green", foreground="black")
+                    _fgcolor = "black" if "\n" in a["udi"] else "white"
+                    if "passed" in a["result"]:                        
+                        self.label_udi.config(background="green", foreground=_fgcolor)
                     else:
-                        self.label_udi.config(background="red", foreground="black")
+                        self.label_udi.config(background="red", foreground=_fgcolor)
                     self.var_label_udi.set(a["udi"])
                     print("UI:RESULT")
                     _do_update = True
