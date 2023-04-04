@@ -411,7 +411,8 @@ class SPSStateMachineBase(object):
         try:
             if not self._machine_locked:
                 self.dev.lock_machine_step()
-                self._machine_locked = True
+                self._machine_locked = self.dev.read_machine_lock_status()
+                #self._machine_locked = True
         except ModbusException as ex:
             print(f"SPS-lock: {ex}")
             pass  # ignore
@@ -1151,7 +1152,7 @@ class ProcessSPS(mp.Process):
                                 # update UI (green) while read waveforms taking a lot of time
                                 self.response_queue.put({"result": "passed", "udi": _udi})
                         case SPSStates.FAILED:
-                            self.response_queue.put({"result": "failed", "udi": _udi})  # update UI (red)
+                            self.response_queue.put({"result": "failed", "udi": f"{_udi}\nSCAN NEXT UDI"})  # update UI (red)
                             if _udi:
                                 _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                             if self.have_read_measurements:
@@ -1166,7 +1167,7 @@ class ProcessSPS(mp.Process):
                                 if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
                                 if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
                         case SPSStates.PASSED:
-                            self.response_queue.put({"result": "passed", "udi": _udi})  # update UI (green)
+                            self.response_queue.put({"result": "passed", "udi": f"{_udi}\nSCAN NEXT UDI" })  # update UI (green)
                             if _udi:
                                 _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                             if self.have_read_measurements:

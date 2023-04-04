@@ -13,29 +13,29 @@ dsp_api_base_url:  "http://sv-production-vn:8000"  # mockup on sv-production-vn
 # hardware of PC and assigned measurement hardware
 #
 
-line_id:        1               # 1 .. 9, -1 = undetermined -> calculate from 2nd IP octet: 
+line_id:        1               # 1 .. 9, -1 = undetermined -> calculate from 2nd IP octet:
                                  #              xxx.xxx.LINE-ID-100.xxx if octet is > 100, otherwise := 0
 #test_type:      UNDETERMINED     # cannot be set and comes from test program instead :
                                   #     CELLS_TEST, PCBA_TEST, COREPACK_TEST, EOL_TEST
-#station_id:     UNDETERMINED     # Define a Station name or comment out to take the PC's hostname instead: 
+#station_id:     UNDETERMINED     # Define a Station name or comment out to take the PC's hostname instead:
                                  #     PL1-WS102=CELL_TEST
                                  #     PL1-WS103=PCBA_TEST
                                  #     PL1-WS111=CORPACK_TEST
                                  #     PL1-WS113=EOL_TEST
-line_network:   "172.21.101."    # Line specific network range is different depending on 
+#line_network:   "172.25.101."    # Line specific network range is different depending on
                                  # where the PC is located:
-                                 #  172.25.101.xxx in VN, 
-                                 #  172.21.101.xxx in DE
-                                 # This pattern is uesed to identify the line network part to be 
-                                 # replaced by module station_config_loader.py when requested for 
+                                 #  172.25.101.xxx in VN,
+                                 #  172.25.101.xxx in DE
+                                 # This pattern is uesed to identify the line network part to be
+                                 # replaced by module station_config_loader.py when requested for
                                  # environment depending on the machine's network IP.
-                                 # Example: 
+                                 # Example:
                                  #    machine has IP 175.25.101.113, then
-                                 #    any IP address from the below definitions having 172.21.101. 
-                                 #    will be replaced by 175.25.101. 
-                                 #    "172.21.101.11:2101" -> "172.25.101.11:2101"
+                                 #    any IP address from the below definitions having 172.25.101.
+                                 #    will be replaced by 175.25.101.
+                                 #    "172.25.101.11:2101" -> "172.25.101.11:2101"
                                  #
-                                 # comment out to leave all addresses unchanged 
+                                 # comment out to leave all addresses unchanged
 #
 #------------------------------------------------------------------------------
 # Configuration setup depending on the test_type selected
@@ -51,10 +51,10 @@ CELL_TEST:
   test_sockets:
     "0":
       resource_strings:
-        eth_to_i2c:   "172.21.101.11:2101"  # Lager RRC
+        eth_to_i2c:   "172.25.101.11:2101"  # Lager RRC
         scanner:      "COM5,9600,8N1"       # Lager RRC
-        icr_bt3561a:  "172.21.101.12:23"    # Lager RRC
-        mux_sw1001:   "172.21.101.13:23"    # Lager RRC
+        icr_bt3561a:  "172.25.101.12:23"    # Lager RRC
+        mux_sw1001:   "172.25.101.13:23"    # Lager RRC
 
 #------------------------------------------------------------------------------
 PCBA_TEST:
@@ -80,28 +80,28 @@ PCBA_TEST:
   test_sockets:
     "0":
       resource_strings:
-        eth_to_i2c:  "172.21.101.30:2101"  #            RRC Lager
-        scanner:     "172.21.101.31:2000"  # Eth->UART  RRC Lager
-        led_ch9121:  "172.21.101.31:3000"  # Eth->UART  RRC Lager
+        eth_to_i2c:  "172.25.101.30:2101"  #            RRC Lager
+        scanner:     "172.25.101.31:2000"  # Eth->UART  RRC Lager
+        led_ch9121:  "172.25.101.31:3000"  # Eth->UART  RRC Lager
         # Following are shared with ALL sockets
-        daq_daq970a: "TCPIP0::172.21.101.36::inst0::INSTR"
-        psu_e1206:   "TCPIP0::172.21.101.37::inst0::INSTR"
+        daq_daq970a: "TCPIP0::172.25.101.36::inst0::INSTR"
+        psu_e1206:   "TCPIP0::172.25.101.37::inst0::INSTR"
     "1":
       resource_strings: # already correct IP addresses
-        eth_to_i2c:  "172.21.101.32:2101"
-        scanner:     "172.21.101.33:2000"
-        led_ch9121:  "172.21.101.33:3000"
+        eth_to_i2c:  "172.25.101.32:2101"
+        scanner:     "172.25.101.33:2000"
+        led_ch9121:  "172.25.101.33:3000"
         # Following are shared with ALL sockets
-        daq_daq970a: "TCPIP0::172.21.101.36::inst0::INSTR"
-        psu_e1206:   "TCPIP0::172.21.101.37::inst0::INSTR"  # bridge to m3400/3900 devices
+        daq_daq970a: "TCPIP0::172.25.101.36::inst0::INSTR"
+        psu_e1206:   "TCPIP0::172.25.101.37::inst0::INSTR"  # bridge to m3400/3900 devices
     "2":
       resource_strings:
-        eth_to_i2c:  "172.21.101.34:2101"
-        scanner:     "172.21.101.35:2000"
-        led_ch9121:  "172.21.101.35:3000"
+        eth_to_i2c:  "172.25.101.34:2101"
+        scanner:     "172.25.101.35:2000"
+        led_ch9121:  "172.25.101.35:3000"
         # Following are shared with ALL sockets
-        daq_daq970a: "TCPIP0::172.21.101.36::inst0::INSTR"
-        psu_e1206:   "TCPIP0::172.21.101.37::inst0::INSTR"  # bridge to m3400/3900 devices
+        daq_daq970a: "TCPIP0::172.25.101.36::inst0::INSTR"
+        psu_e1206:   "TCPIP0::172.25.101.37::inst0::INSTR"  # bridge to m3400/3900 devices
 
 #------------------------------------------------------------------------------
 COREPACK_TEST:
@@ -125,18 +125,18 @@ COREPACK_TEST:
   test_sockets:
     "0":
       resource_strings:
-        eth_to_i2c:    "172.21.101.40:2101"
-        scanner:       "172.21.101.41:2000"
-        led_ch9121:    "172.21.101.41:3000"
-        psu_m3900:     "TCPIP0::172.21.101.46::inst0::INSTR"
-        icr_bt3561a:   "172.21.101.44:23"
+        eth_to_i2c:    "172.25.101.40:2101"
+        scanner:       "172.25.101.41:2000"
+        led_ch9121:    "172.25.101.41:3000"
+        psu_m3900:     "TCPIP0::172.25.101.46::inst0::INSTR"
+        icr_bt3561a:   "172.25.101.44:23"
     "1":
-        eth_to_i2c:    "172.21.101.42:2101"
-        scanner:       "172.21.101.43:2000"
-        led_ch9121:    "172.21.101.43:3000"
-        psu_m3902c:    "TCPIP0::172.21.101.47::inst0::INSTR"
-        icr_bt3562:    "172.21.101.45:23"
-        
+        eth_to_i2c:    "172.25.101.42:2101"
+        scanner:       "172.25.101.43:2000"
+        led_ch9121:    "172.25.101.43:3000"
+        psu_m3902c:    "TCPIP0::172.25.101.47::inst0::INSTR"
+        icr_bt3562:    "172.25.101.45:23"
+
 
 
 #------------------------------------------------------------------------------
@@ -159,8 +159,8 @@ EOL_TEST:
   test_sockets:
     "0":
       resource_strings:
-        eth_to_i2c:   "172.21.101.50:2101"                   # RRC lager
-        psu_e1206:    "TCPIP0::172.21.101.51::inst0::INSTR"  # RRC lager
+        eth_to_i2c:   "172.25.101.50:2101"                   # RRC lager
+        psu_e1206:    "TCPIP0::172.25.101.51::inst0::INSTR"  # RRC lager
 
 
 #------------------------------------------------------------------------------
@@ -172,7 +172,7 @@ CELL_WELDING:
     "0":
       resource_strings:
         # this is a MODBUS resource string
-        aws3_controller:  "tcp:172.21.101.100:502"
-        scanner:          "COM3,9600,8N1"  #"172.21.101.31:2000"  # Eth->UART  RRC Lager
+        aws3_controller:  "tcp:172.25.101.100:502"
+        scanner:          "COM26,9600,8N1"  #"172.25.101.31:2000"  # Eth->UART  RRC Lager
 
 # END OF FILE
