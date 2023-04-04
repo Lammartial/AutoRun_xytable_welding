@@ -391,13 +391,6 @@ class BusMaster:
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    #ncd = I2CPort("192.168.1.149", 2101)
-    #bus = BusMaster(ncd)
-    #print(bus.isReady(0x77))
-    #mux = BusMux(ncd, address=0x77)
-    #mux.setChannel(1)
-    #print(mux.getChannels())
-    #print(bus.readWord(0x0b,0x09))
     pass
 
 # END OF FILE
