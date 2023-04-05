@@ -12,8 +12,7 @@ from rrc.temperature_sts21 import STS21
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    i2cbus = I2CPort("172.25.101.40:2101") # socket 0
-    #i2cbus = I2CPort("172.25.101.42:2101") # socket 1
+    i2cbus = I2CPort("172.25.101.50:2101")  # socket 0
 
     mux = BusMux(i2cbus, address=0x77)
     for i in range(8):
@@ -30,5 +29,6 @@ if __name__ == "__main__":
 
     temp = STS21(I2CMuxedBus(i2cbus, mux, 3))
     print(temp.start_measurement_no_hold())
+
 
 # END OF FILE
