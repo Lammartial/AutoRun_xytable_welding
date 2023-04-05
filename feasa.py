@@ -42,7 +42,7 @@ class FEASA_CH9121(Eth2SerialDevice):
 
         """
         super().__init__(resource_str, termination)
-        self.count_fiber = count_fiber
+        self.count_fiber = int(count_fiber)
 
     def __str__(self) -> str:
         return f"FEASA device at {self.host}:{self.port} having {self.count_fiber} fibers connected."
@@ -158,12 +158,13 @@ class FEASA_CH9121(Eth2SerialDevice):
         Returns:
             numpy array (np.float64): [[rrr, ggg, bbb, iiiii], [], [], []]
         """
+
+        num = int(num)
         if num < 0 or num > self.count_fiber:
             raise ValueError(f"num need to be in [0; {self.count_fibers}]. It was {num}.")
 
         result = np.array([])
         nplist = []
-        num = int(num)
         if num > 0:
             b = num
             e = num + 1
