@@ -1637,7 +1637,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             sn = str(sn)
             sn_int = int(sn, 16)
             cmd_serial_number = 0x1C
-            res = self.writeWordVerified(cmd= cmd_serial_number, w= sn_int)
+            res = self.writeWordVerified(cmd=cmd_serial_number, w=sn_int)
         except Exception:
             raise
         return bool(res)
