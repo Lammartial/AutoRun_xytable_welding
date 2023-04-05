@@ -32,12 +32,25 @@ class FEASA_CH9121(Eth2SerialDevice):
 
     RESPONSE_OK = "OK"
 
-    #def __init__(self, host: str, port: int, termination: str = "\r\n"):
-    #    super().__init__(host, port, termination)
+    def __init__(self, resource_str: str, termination: str = "\r\n", count_fiber: int = 5):
+        """_summary_
 
-    def __init__(self, resource_str: str, termination: str = "\r\n"):
+        Args:
+            resource_str (str): _description_
+            termination (str, optional): _description_. Defaults to "\r\n".
+            count_fiber (int, optional): Number of connected fibers (1 .. 20). Defaults to 5.
+
+        """
         super().__init__(resource_str, termination)
+        self.count_fiber = count_fiber
 
+    def __str__(self) -> str:
+        return f"FEASA device at {self.host}:{self.port} having {self.count_fiber} fibers connected."
+
+    def __repr__(self) -> str:
+        return f"FEASA_CH9121('{self.host}:{self.port}', termination='{self.termination}', count_fibers={self.count_fiber})"
+
+    #----------------------------------------------------------------------------------------------
     def test_int(self):
         return int(1)
 
@@ -55,10 +68,12 @@ class FEASA_CH9121(Eth2SerialDevice):
         Returns:
             bool: False - failed, True - success
         """
-        response = self.request("capture")
+        response = self.request("capture", timeout=5.0)
         if (self.RESPONSE_OK in response):
             return True
         else:
+            global DEBUG
+            _log = getLogger(__name__, DEBUG)
             _log.error("LED analyzer error, capture, %s", response, exc_info=1)
             return False
 
@@ -75,10 +90,12 @@ class FEASA_CH9121(Eth2SerialDevice):
             bool: False - failed, True - success
         """
         cmd = "capture" + str(int(range))
-        response = self.request(cmd)
+        response = self.request(cmd, timeout=5.0)
         if (self.RESPONSE_OK in response):
             return True
         else:
+            global DEBUG
+            _log = getLogger(__name__, DEBUG)
             _log.error("LED analyzer error, capture_range, %s", response, exc_info=1)
             return False
 
@@ -92,10 +109,12 @@ class FEASA_CH9121(Eth2SerialDevice):
         Returns:
             bool: False - failed, True - success
         """
-        response = self.request("capturepwm", 5)
+        response = self.request("capturepwm", timeout=5.0)
         if (self.RESPONSE_OK in response):
             return True
         else:
+            global DEBUG
+            _log = getLogger(__name__, DEBUG)
             _log.error("LED analyzer error, capture_pwm, %s", response, exc_info=1)
             return False
 
@@ -113,10 +132,12 @@ class FEASA_CH9121(Eth2SerialDevice):
             bool: False - failed, True - success
         """
         cmd = "capture" + str(int(range)) + "PWM" + f"{(int(factor)):02d}"
-        response = self.request(cmd, 5)
+        response = self.request(cmd, timeout=5.0)
         if (self.RESPONSE_OK in response):
             return True
         else:
+            global DEBUG
+            _log = getLogger(__name__, DEBUG)
             _log.error("LED analyzer error, capture_pwm_range, %s", response, exc_info=1)
             return False
 
@@ -125,17 +146,20 @@ class FEASA_CH9121(Eth2SerialDevice):
     # getRGBI##
     def get_rgbi_num(self, num: int) -> np.array:
         """
-        This command instructs the LED Analyser to return RGB and Intensity data for fiber ## (01-
-        20) in format rrr ggg bbb iiiii where rrr, ggg and bbb are the red, green and blue
+        This command instructs the LED Analyser to return RGB and Intensity data for fiber
+        ## (01-20) in format rrr ggg bbb iiiii where rrr, ggg and bbb are the red, green and blue
         components of the Colour. The iiiii value indicates the intensity value.
 
         Args:
             num (int): fiber ## (01 - 20)
-                       num=0 means measure all 4 fibers; if >0 the selected LED is measured
+                       num=0 means measure all self.count_fiber fibers; if >0 the selected LED is measured
+            count_fiber (int):
 
         Returns:
             numpy array (np.float64): [[rrr, ggg, bbb, iiiii], [], [], []]
         """
+        if num < 0 or num > self.count_fiber:
+            raise ValueError(f"num need to be in [0; {self.count_fibers}]. It was {num}.")
 
         result = np.array([])
         nplist = []
@@ -145,16 +169,18 @@ class FEASA_CH9121(Eth2SerialDevice):
             e = num + 1
         else:
             b = 0
-            e = 4
+            e = self.count_fiber
         for k in range(b, e):
             cmd = "getrgbi" + f"{(int(k+1)):02d}"
             try:
-                response = self.request(cmd)
-                #_log.debug(response)
+                response = self.request(cmd, timeout=5.0)
+                print(f"{k}: {cmd}, {response}")
                 lst = response.split(' ')
                 nplist.append(np.array([np.float64(n) for n in lst]))
-            except Exception:
-                _log.error("LED analyzer error, get_rgbi_num")
+            except Exception as ex:
+                global DEBUG
+                _log = getLogger(__name__, DEBUG)
+                _log.error(f"LED analyzer error (get_rgbi_num) {ex}, got '{response}'")
                 raise
         result = np.array(nplist)
         return result
@@ -174,8 +200,10 @@ class FEASA_CH9121(Eth2SerialDevice):
         """
         try:
             cmd = "getintensity" + f"{(int(num)):02d}"
-            response = int(self.request(cmd))
+            response = int(self.request(cmd, timeout=5.0))
         except Exception:
+            global DEBUG
+            _log = getLogger(__name__, DEBUG)
             _log.error("LED analyzer error, get_intensity_num")
             raise
         return response
@@ -199,6 +227,8 @@ class FEASA_CH9121(Eth2SerialDevice):
         if (self.RESPONSE_OK in response):
             return True
         else:
+            global DEBUG
+            _log = getLogger(__name__, DEBUG)
             _log.error("LED analyzer error, set_intgain_num, %s", response, exc_info=1)
             return False
 
@@ -218,6 +248,8 @@ class FEASA_CH9121(Eth2SerialDevice):
         if (self.RESPONSE_OK in response):
             return True
         else:
+            global DEBUG
+            _log = getLogger(__name__, DEBUG)
             _log.error("LED analyzer error, set_factor, %s", response, exc_info=1)
             return False
 #-----------------------------------------------------------------------------------------------------
@@ -225,7 +257,7 @@ class FEASA_CH9121(Eth2SerialDevice):
 #-----------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     from time import sleep
-    
+
     ## Initialize the logging
     logger_init(filename_base=None)  ## init root logger without filelogging
     _log = getLogger(__name__, DEBUG)
