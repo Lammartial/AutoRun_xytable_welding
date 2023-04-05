@@ -174,7 +174,7 @@ class FEASA_CH9121(Eth2SerialDevice):
             cmd = "getrgbi" + f"{(int(k+1)):02d}"
             try:
                 response = self.request(cmd, timeout=5.0)
-                print(f"{k}: {cmd}, {response}")
+                #print(f"{k}: {cmd}, {response}")
                 lst = response.split(' ')
                 nplist.append(np.array([np.float64(n) for n in lst]))
             except Exception as ex:

@@ -8,6 +8,10 @@ from rrc.i2cbus import BusMux, I2CMuxedBus
 from rrc.smbus import BusMaster
 from rrc.relayboard_i2c_corepack import CorePackRelayBoard
 from rrc.temperature_sts21 import STS21
+from rrc.barcode_scanner import create_barcode_scanner
+from rrc.feasa import FEASA_CH9121
+from rrc.hioki import Hioki_BT3561A
+from rrc.itech import M3900
 
 #--------------------------------------------------------------------------------------------------
 
@@ -27,8 +31,35 @@ if __name__ == "__main__":
         sleep(0.5)
         gpio.switch_to_psu_measurement()
         sleep(0.5)
+        print("INP2", gpio.read_input(2))
+        sleep(0.5)
 
     temp = STS21(I2CMuxedBus(i2cbus, mux, 3))
     print(temp.start_measurement_no_hold())
+
+    print("test scanner, please do a UDI scan:")
+    try:
+        dev = create_barcode_scanner("172.25.101.41:2000")
+        s = dev.request(None, timeout=20.5)
+        print(s)
+    except TimeoutError:
+        print("Timeout!")
+
+    print("test psu:")
+    psu = M3900("TCPIP0::172.25.101.46::inst0::INSTR")
+    psu.initialize_device()
+
+    print("test Hioki bt:")
+    bt = Hioki_BT3561A("172.25.101.44:23", termination="\r\n")
+    print(bt.self_test())
+    print(bt.init())
+
+    gpio.switch_to_battery_tester_measurement()
+    print("test FEASA:")
+    led = FEASA_CH9121("172.25.101.41:3000", termination="\r\n")
+    for i in range(1):
+        print("capture", i, led.capture_pwm())
+    print(led.get_rgbi_num(0))
+    gpio.switch_to_psu_measurement()
 
 # END OF FILE

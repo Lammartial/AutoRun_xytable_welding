@@ -26,6 +26,8 @@ if __name__ == "__main__":
         sleep(0.5)
         gpio.switch_to_psu_measurement()
         sleep(0.5)
+        print("INP2", gpio.read_input(2))
+        sleep(0.5)
 
     temp = STS21(I2CMuxedBus(i2cbus, mux, 3))
     print(temp.start_measurement_no_hold())

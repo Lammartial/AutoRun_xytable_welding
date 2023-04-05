@@ -165,7 +165,7 @@ class Eth2SerialDevice(object):
         return f"ETH to UART bridge at {self.host}:{self.port}"
 
     def __repr__(self) -> str:
-        return f"Eth2SerialDevice({self.host}, {self.port}, termination={self.termination})"
+        return f"Eth2SerialDevice('{self.host}:{self.port}', termination='{self.termination}')"
 
     #----------------------------------------------------------------------------------------------
 
