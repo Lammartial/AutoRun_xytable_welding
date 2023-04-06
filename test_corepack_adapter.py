@@ -28,76 +28,86 @@ if __name__ == "__main__":
     smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 1), retry_limit=7, verify_rounds=3, pause_us=50)
     bat = BQ40Z50R1(smbus)
     
-    print("nothing")
-    for i in range(10):
-        print(bat.isReady())
-        sleep(0.5)
-        #print(bat.battery_status())
-        #print(bat.device_name())
+    # print("nothing")
+    # for i in range(4):
+    #     print(bat.isReady())
+    #     sleep(0.5)
+    #     #print(bat.battery_status())
+    #     #print(bat.device_name())
 
     gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
-    # for i in range(50):
-    #     gpio.switch_to_battery_tester_measurement()
-    #     sleep(5)
-    #     gpio.switch_to_psu_measurement()
-    #     sleep(5)
-    #     print("INP2", gpio.read_input(2))
-    #     sleep(0.5)
-    gpio.switch_to_psu_measurement()
-    #gpio.switch_to_battery_tester_measurement()
-    sleep(1)
 
-    print("sense")
-    for i in range(10):
-        print(bat.isReady())
-        sleep(0.5)
-        #print(bat.battery_status())
-        #print(bat.device_name())
-
-    # temp = STS21(I2CMuxedBus(i2cbus, mux, 3))
-    # print(temp.start_measurement_no_hold())
-
-    # print("test scanner, please do a UDI scan:")
-    # try:
-    #     dev = create_barcode_scanner("172.25.101.41:2000")
-    #     s = dev.request(None, timeout=20.5)
-    #     print(s)
-    # except TimeoutError:
-    #     print("Timeout!")
-
-    print("test psu:")
     psu = M3900("TCPIP0::172.25.101.46::inst0::INSTR")
-    psu.initialize_device()
+    #psu.initialize_device()
+    bt = Hioki_BT3561A("172.25.101.44:23", termination="\r\n")
+    bt.init()
 
-    #psu.configure_supply(12.55, 2.0, 50, set_output=1)
-    #sleep(1)
-    #print("supply", psu.get_all_measurements())    
-    #psu.set_output_state(0)    
-    #sleep(1)
-    psu.configure_charge_mode(0.5, 12.55, 12.55, 50, True)
-    #psu.configure_supply(12.55, 0.05, 50, set_output=True)   
-    sleep(1.0)
-    print("chargemode", psu.get_all_measurements())    
-    psu.set_output_state(0)    
+    for i in range(50):
+        gpio.switch_to_battery_tester_measurement()        
+        sleep(0.5)
+        a = bt.measure()
+        print(type(a), a)
+        gpio.switch_to_psu_measurement()
+        sleep(5)
+        print(psu.get_all_measurements())
+        #print("INP2", gpio.read_input(2))
+        #sleep(0.5)
+
+
+    # gpio.switch_to_psu_measurement()
+    # #gpio.switch_to_battery_tester_measurement()
+    # sleep(1)
+
+    # print("sense")
+    # for i in range(10):
+    #     print(bat.isReady())
+    #     sleep(0.5)
+    #     #print(bat.battery_status())
+    #     #print(bat.device_name())
+
+    # # temp = STS21(I2CMuxedBus(i2cbus, mux, 3))
+    # # print(temp.start_measurement_no_hold())
+
+    # # print("test scanner, please do a UDI scan:")
+    # # try:
+    # #     dev = create_barcode_scanner("172.25.101.41:2000")
+    # #     s = dev.request(None, timeout=20.5)
+    # #     print(s)
+    # # except TimeoutError:
+    # #     print("Timeout!")
+
+    # print("test psu:")
+   
+
+    # #psu.configure_supply(12.55, 2.0, 50, set_output=1)
+    # #sleep(1)
+    # #print("supply", psu.get_all_measurements())    
+    # #psu.set_output_state(0)    
+    # #sleep(1)
+    # psu.configure_charge_mode(0.5, 12.55, 12.55, 50, True)
+    # #psu.configure_supply(12.55, 0.05, 50, set_output=True)   
+    # sleep(1.0)
+    # print("chargemode", psu.get_all_measurements())    
+    # psu.set_output_state(0)    
     
 
-    # print("test Hioki bt:")
-    # bt = Hioki_BT3561A("172.25.101.44:23", termination="\r\n")
-    # print(bt.self_test())
-    # print(bt.init())
+    # # print("test Hioki bt:")
+    # # bt = Hioki_BT3561A("172.25.101.44:23", termination="\r\n")
+    # # print(bt.self_test())
+    # # print(bt.init())
 
-    # gpio.switch_to_battery_tester_measurement()
-    # print("test FEASA:")
-    # led = FEASA_CH9121("172.25.101.41:3000", termination="\r\n")
-    # for i in range(1):
-    #     print("capture", i, led.capture_pwm())
-    # print(led.get_rgbi_num(0))
-    # gpio.switch_to_psu_measurement()
+    # # gpio.switch_to_battery_tester_measurement()
+    # # print("test FEASA:")
+    # # led = FEASA_CH9121("172.25.101.41:3000", termination="\r\n")
+    # # for i in range(1):
+    # #     print("capture", i, led.capture_pwm())
+    # # print(led.get_rgbi_num(0))
+    # # gpio.switch_to_psu_measurement()
 
-    for i in range(10):
-        print(bat.isReady())
-        sleep(0.5)
-        #print(bat.battery_status())
-        #print(bat.device_name())
+    # for i in range(10):
+    #     print(bat.isReady())
+    #     sleep(0.5)
+    #     #print(bat.battery_status())
+    #     #print(bat.device_name())
 
 # END OF FILE

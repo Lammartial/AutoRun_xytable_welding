@@ -365,7 +365,8 @@ class Hioki_BT3561A(Eth2SerialDevice):
         #[BT3561A] :READ? Execute single measurement using BT3561A.
         val = self.read()
         try:
-            if (function_type == "RV"):
+            print("FUNC", function_type)
+            if ("RV" in function_type):
                 lst = val.split(',')
                 nplist.append(float(lst[0]))
                 nplist.append(float(lst[1]))
