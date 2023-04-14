@@ -4,7 +4,8 @@
 # DSP REST interface
 #
 #dsp_api_base_url:  "http://127.0.0.1:8000"  # mockup on localhost
-dsp_api_base_url:  "http://sv-production-vn:8000"  # mockup on sv-production-vn
+dsp_api_base_url:  "http://172.25.100.43:8000"  # mockup on TSDEV in VN
+#dsp_api_base_url:  "http://sv-production-vn:8000"  # mockup on sv-production-vn
 #dsp_api_base_url:  "http://sv-production-vn:9925"  # Orbis DSP REST API @RRC
 
 #
