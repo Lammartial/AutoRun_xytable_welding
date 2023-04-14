@@ -27,7 +27,7 @@ PART_INFORMATION = {
     "RRC2020B": {
         "CELL_TEST": {
             # Cell Test PRT IDs
-            "test_program_id": ("CT-SQ_2020B", "412031_RRC2020B_Cell-Test_A"),
+            "test_program_id": ("CT-SQ_2020B", "412031_RRC2020B_Cell-Test_B"),
             "part_number": ("CT-PN_2020B", "412031-16"),  # using the pre-assembly PN
         },
         "CELL_WELDING": {
@@ -37,12 +37,12 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2020B", "411828_RRC2020B_PCBA-Test_A"),
+            "test_program_id": ("PT-SQ_2020B", "411828_RRC2020B_PCBA-Test_B"),
             "part_number": ("PT-PN_2020B", "411828-05"),  # using the pcba part number PN
         },
         "COREPACK_TEST": {
             # Core Pack Test PRT IDs:
-            "test_program_id": ("CP-SQ_2020B", "412031_RRC2020B_Corepack-Test_A"),
+            "test_program_id": ("CP-SQ_2020B", "412031_RRC2020B_Corepack-Test_B"),
             "part_number": ("CP-PN_2020B", "412031-16"),  # using the pre-assembly PN
         },
         "EOL_TEST": {
