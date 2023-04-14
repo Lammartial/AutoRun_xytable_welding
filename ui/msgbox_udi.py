@@ -579,12 +579,13 @@ if __name__ == '__main__':
     # set the required UDIs per global
     udi_to_scan = [
         UDIScanCtrlItem("PCBA", validate_udi_by_string_at_position_1),
-        #UDIScanCtrlItem("CELL", validate_udi_by_string_at_position_1),
+        UDIScanCtrlItem("CELL", validate_udi_by_string_at_position_1),
         #UDIScanCtrlItem("HEINZ", validate_udi_by_string_at_position_1),
     ]
 
     allow_manual_edit = True
-    main("172.21.101.33:2000", title="TEST SOCKET SCANNER", test_socket=-1)
+    #main("172.25.101.43:2000", title="TEST SOCKET SCANNER", test_socket=-1)
+    identify_uut(1, ["PCBA", "CELL"], "172.25.101.43:2000", allow_user_edit=False)
     #main("COM24,9600,8N1", title="TEST HANDHELD SCANNER")
     #print(f"SCANNER -> {scanned_udi}")
 

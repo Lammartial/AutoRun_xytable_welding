@@ -10,7 +10,7 @@ from .gpio_mcp23008 import MCP23008
 from ..relayboard_i2cio4r4xdpdt import RelayBoard4Relay4GPIO
 from ..temperature_sts21 import STS21
 from .eeprom_at24hc02c import AT24HC02C
-from .shunt_calibration_storage import ShuntCalibrationStorage
+from .calibration_storage import CalibrationStorage
 
 
 I2C_BRIDGE_IP = "192.168.1.83"
@@ -33,7 +33,7 @@ busmux.setChannel(2)
 # eeprom1.write_bytes(0, bytearray([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]))
 # print(eeprom1.read_bytes(0, 8))
 
-# shunt1 = ShuntCalibrationStorage(i2c_port, 80)
+# shunt1 = CalibrationStorage(i2c_port, 80)
 # shunt1.store_shunt_resistance_ohm(-1.1)
 # print(shunt1.load_shunt_resistance_ohm())
 

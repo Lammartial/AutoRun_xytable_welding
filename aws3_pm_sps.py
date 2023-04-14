@@ -302,10 +302,11 @@ class WindowUI(object):
                     _do_update = True
                     pass
                 if "result" in a:
-                    if "passed" in a["result"]:
-                        self.label_udi.config(background="green", foreground="black")
+                    _fgcolor = "black" if "\n" in a["udi"] else "white"
+                    if "passed" in a["result"]:                        
+                        self.label_udi.config(background="green", foreground=_fgcolor)
                     else:
-                        self.label_udi.config(background="red", foreground="black")
+                        self.label_udi.config(background="red", foreground=_fgcolor)
                     self.var_label_udi.set(a["udi"])
                     print("UI:RESULT")
                     _do_update = True
@@ -411,7 +412,8 @@ class SPSStateMachineBase(object):
         try:
             if not self._machine_locked:
                 self.dev.lock_machine_step()
-                self._machine_locked = True
+                self._machine_locked = self.dev.read_machine_lock_status()
+                #self._machine_locked = True
         except ModbusException as ex:
             print(f"SPS-lock: {ex}")
             pass  # ignore
@@ -726,7 +728,7 @@ class SPSStateMachine(SPSStateMachineBase):
                 case SPSStates.SYNC_ON_MACHINE_COUNTER:
                     _do_pause = True
                     _machine_ready, _status = self.dev.is_machine_ready()
-                    if self._machine_locked or _machine_ready:
+                    if _machine_ready:
                         self.counter_ax1 = self.dev.read_axis_counter(1)
                         #  Check if welding is done and read the result,
                         #  then proceed to check if pass or failed.
@@ -872,14 +874,15 @@ def _esc(v) -> str:
     Returns:
         str: String with parentheses or plain number as string without parentheses.
     """
-    if v:
+    if v is None:
+        # None -> NULL
+        return "NULL"
+    else:
         if isinstance(v, (int,float)):
             return str(v)
         else:
             return f"'{v}'"
-    else:
-        # None -> NULL
-        return "NULL"
+
 
 def esc_values(lst: List[tuple]) -> str:
     """
@@ -1136,7 +1139,7 @@ class ProcessSPS(mp.Process):
                     })
                 else:
                     # execute the state-machine if configured
-                    if not _udi and self.enable_udi_scan:
+                    if _udi is None and self.enable_udi_scan:
                         SM.lock_machine()
                         #SM.set_state(SPSStates.LOCK_MACHINE)
                     # check actions depending on state
@@ -1150,7 +1153,7 @@ class ProcessSPS(mp.Process):
                                 # update UI (green) while read waveforms taking a lot of time
                                 self.response_queue.put({"result": "passed", "udi": _udi})
                         case SPSStates.FAILED:
-                            self.response_queue.put({"result": "failed", "udi": _udi})  # update UI (red)
+                            self.response_queue.put({"result": "failed", "udi": f"{_udi}\nSCAN NEXT UDI"})  # update UI (red)
                             if _udi:
                                 _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                             if self.have_read_measurements:
@@ -1165,13 +1168,13 @@ class ProcessSPS(mp.Process):
                                 if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
                                 if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
                         case SPSStates.PASSED:
-                            self.response_queue.put({"result": "passed", "udi": _udi})  # update UI (green)
+                            self.response_queue.put({"result": "passed", "udi": f"{_udi}\nSCAN NEXT UDI" })  # update UI (green)
                             if _udi:
                                 _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                             if self.have_read_measurements:
                                 print("PASSED: Store measurements enabled.")
-                                if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
-                                if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
+                                #if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                                #if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
                             _udi = None  # finished
                         case SPSStates.SET_PROGRAM_ON_MACHINE:
                             self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no})  # update UI
@@ -1289,15 +1292,15 @@ class ProcessScanner(mp.Process):
                     self.sps_queue.put(msg)   # this goes to the SPS process
         else:
             # ********** Simulation Profile *************
-            while True:
-                sleep(5.0)
-                _udi = "1CELL" + get_random_digits_string(12)
-                self.sps_queue.put({"udi_scanned": _udi})
-                sleep(3.0)
+            #while True:
+            sleep(5.0)
+            _udi = "1CELL" + get_random_digits_string(12)
+            self.sps_queue.put({"udi_scanned": _udi})
+            sleep(3.0)
                 # add some steps
-                for n in range(6):
-                    sleep(1.0)
-                    self.sps_queue.put({"move_counter": 1})
+            #    for n in range(6):
+            #        sleep(1.0)
+            #        self.sps_queue.put({"move_counter": 1})
 
 #--------------------------------------------------------------------------------------------------
 

@@ -1163,12 +1163,13 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # return the relevant values e.g. for logging
         return _current_meas, bq_st_cc_gain, cc_gain, capacity_gain, adc_current
 
-    def calib_write_temp(self, temp: Tuple[float]) -> Tuple[np.array,int,int,int,int]:
+    def calib_write_temp(self, temp: Tuple[float], approx_loops: int = 5) -> Tuple[np.array,int,int,int,int]:
         """
         Temperature calibration.
 
         Args:
             temp (Tuple[int]): temperature TS1 ... TS4, degrees C
+            approx_loops (int): how many calibration loops should be done ? 
 
         Returns:
             tuple:
@@ -1181,28 +1182,31 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             raise IndexError("Temperature list index out of range.")
         # convert to °C x10
         t_temp = [int(temp[i] * 10) for i in range(n_ts)]
-        # 1. Read TS1...TS4 offset
-        block = self.read_flash_block(0x4000)  # one page (32 bytes), no extras
-        # convert 4 temperature offsets to *signed* bytes
-        ts_offset = [struct.unpack_from("<b", block[i:])[0] for i in range(0x15, 0x19)]
-        # 2. Read appropriate temperature from the DAStatus2()
-        dastatus2 = self.manufacturing_dastatus2(celsius=True)
-        # convert TS1 ... TS4 from the tuple list
-        int_temp = [int(t * 10) for t in dastatus2[2:6]]
-        # 3. Calculate new TS1...TS4 offset
-        #new_offset = bytearray(b'\x00') * 4  # 4 bytes 0's initialized
-        new_offset = bytearray()
-        for i in range(0, 4):
-            if (i < n_ts):
-                dt = t_temp[i] - int_temp[i] + ts_offset[i] 
-                _b = struct.pack("b", dt)        
-            else:
-                _b = b'\x00'
-            new_offset += _b
-        # copy new temperature offset
-        block[0x15:0x19] = new_offset
-        # 4. Write new TS1...TS4 offset
-        self.write_flash_block(0x4000, block)
+        # need to do some loops to approximat deviation to 0
+        for m in range(0, int(approx_loops)):
+            # 1. Read TS1...TS4 offset
+            block = self.read_flash_block(0x4000)  # one page (32 bytes), no extras
+            # convert 4 temperature offsets to *signed* bytes
+            ts_offset = [struct.unpack_from("<b", block[i:])[0] for i in range(0x15, 0x19)]
+            # 2. Read appropriate temperature from the DAStatus2()
+            dastatus2 = self.manufacturing_dastatus2(celsius=True)
+            # convert TS1 ... TS4 from the tuple list
+            int_temp = [int(t * 10) for t in dastatus2[2:6]]
+            # 3. Calculate new TS1...TS4 offset
+            #new_offset = bytearray(b'\x00') * 4  # 4 bytes 0's initialized
+            new_offset = bytearray()
+            for i in range(0, 4):
+                if (i < n_ts) and (t_temp[i] != 0):  # we cannot calibrate at 0 °C !!!
+                    dt = t_temp[i] - int_temp[i] + ts_offset[i] 
+                    _b = struct.pack("b", dt)        
+                else:
+                    _b = b'\x00'
+                new_offset += _b
+            # copy new temperature offset
+            block[0x15:0x19] = new_offset
+            # 4. Write new TS1...TS4 offset
+            self.write_flash_block(0x4000, block)
+
         # 5. Re-check temperature TS1...TS4
         dastatus2 = self.manufacturing_dastatus2()
         res = [dastatus2[2 + i] for i in range(n_ts)]
@@ -1633,7 +1637,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             sn = str(sn)
             sn_int = int(sn, 16)
             cmd_serial_number = 0x1C
-            res = self.writeWordVerified(cmd= cmd_serial_number, w= sn_int)
+            res = self.writeWordVerified(cmd=cmd_serial_number, w=sn_int)
         except Exception:
             raise
         return bool(res)

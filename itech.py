@@ -204,7 +204,7 @@ class M3400(AdhocVisaDevice):
         # 5 results - string "###, ###, ###, ###, ###"
         # voltage, current, power, amp-hour, watt-hour
         lst = str(result).split(',')
-        return tuple([float(m) for m in lst])
+        return tuple([float(m) for m in lst[:-1]])
 
 
     def set_output_state(self, state: int) -> bool:
@@ -920,6 +920,17 @@ class M3900(M3400):
         self.send(f"CURR " + param)
         self.send("SINK:RES:STATE 0")
         self.set_output_state(1 if set_output else 0)
+
+
+    def configure_sink(self, current: float, resistance: float | None,
+                       current_limit: float, voltage_limit_high: float,
+                       power_limit: float, set_output: bool = False) -> None:
+        # because of TS does not see base class
+        super().configure_sink(current, resistance, current_limit, voltage_limit_high, power_limit, set_output=set_output)
+    
+    def configure_supply(self, voltage: float, current_limit: float, power_limit: float, set_output: bool = False) -> None:
+        # because of TS does not see base class
+        super().configure_supply(voltage, current_limit, power_limit, set_output=set_output)  
 
 
 #--------------------------------------------------------------------------------------------------
