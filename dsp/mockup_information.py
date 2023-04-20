@@ -47,7 +47,7 @@ PART_INFORMATION = {
         },
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
-            "test_program_id": ("HP-SQ_2020B", "100496_RRC2020B_EOL-Test_A"),
+            "test_program_id": ("HP-SQ_2020B", "100496_RRC2020B_EOL-Test_B"),
             "part_number": ("HP-PN_2020B", "100496-17"),  # using the product number PN
         }
     },
