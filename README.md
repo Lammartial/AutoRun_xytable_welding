@@ -152,7 +152,7 @@ As alternative Python-backend you can install pyvisa-py and pygpib modules.
 
   Eth2I2C (NCD5500)
     1. Connect your PC to the adapter using an Ethernet cable or WiFi network.
-    2. Use "NCDConfigTool.exe" to configure the adapter:
+    2. Use "NCDConfigToolV2.exe" to configure the adapter:
       W:\260_Production-Engineering\100_Projekte\Vietnam\060_Testsysteme\Datenblätter_Manuals\NCD5500_Config_Tool
     3. To find the NCD5500, select the IP address of the PC's Ethernet or WiFi adapter in the combo box.
 
