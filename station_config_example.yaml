@@ -4,9 +4,11 @@
 # DSP REST interface
 #
 #dsp_api_base_url:  "http://127.0.0.1:8000"  # mockup on localhost
-dsp_api_base_url:  "http://172.25.100.43:8000"  # mockup on TSDEV in VN
+#dsp_api_base_url:  "http://172.25.100.43:8000"  # mockup on TSDEV in VN
 #dsp_api_base_url:  "http://sv-production-vn:8000"  # mockup on sv-production-vn
-#dsp_api_base_url:  "http://sv-production-vn:9925"  # Orbis DSP REST API @RRC
+#dsp_api_base_url:  "http://sv-production:9925"  # Orbis DSP REST API @RRC
+#dsp_api_base_url:  "http://172.25.100.9:9925"  # Orbis DSP REST API @RRCVN
+
 
 #
 #
@@ -43,7 +45,7 @@ line_network:   "172.21.101."    # Line specific network range is different depe
 # for this station above:
 #------------------------------------------------------------------------------
 CELL_TEST:
-  dsp_api_base_url:  "http://sv-production-vn:9925"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
+  dsp_api_base_url:  "http://172.25.100.9:9925"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
   # There is NO I2C MUX on cell stack tester.
   #
   # List of TestSocket configurations
@@ -59,7 +61,7 @@ CELL_TEST:
 
 #------------------------------------------------------------------------------
 PCBA_TEST:
-  dsp_api_base_url:  "http://sv-production-vn:9926"  # Orbis DSP REST API
+  dsp_api_base_url:  "http://172.25.100.9:9926"  # Orbis DSP REST API
   i2c_mux:
     # NCD 8x I2C-MUX:
     #  bus 1: Shunt calibration
@@ -106,7 +108,7 @@ PCBA_TEST:
 
 #------------------------------------------------------------------------------
 COREPACK_TEST:
-  dsp_api_base_url:  "http://sv-production-vn:9927"  # Orbis DSP REST API
+  dsp_api_base_url:  "http://172.25.100.9:9927"  # Orbis DSP REST API
   i2c_mux:
     # NCD 8x I2C-MUX:
     #  bus 1: smbus to DUT
@@ -141,7 +143,7 @@ COREPACK_TEST:
 
 #------------------------------------------------------------------------------
 EOL_TEST:
-  dsp_api_base_url:  "http://sv-production-vn:9928"  # Orbis DSP REST API
+  dsp_api_base_url:  "http://172.25.100.9:9928"  # Orbis DSP REST API
   i2c_mux:
     # NCD 8x I2C-MUX:
     #  bus 1: smbus to DUT
@@ -167,7 +169,7 @@ EOL_TEST:
 #  This is the resource for our POOR MAN's SPS to control the welding sequences
 #
 CELL_WELDING:
-  dsp_api_base_url:  "http://sv-production-vn:9929"  # Orbis DSP REST API for PRE-ASSEMBLY / COREPACK_TEST
+  dsp_api_base_url:  "http://172.25.100.9:9929"  # Orbis DSP REST API for PRE-ASSEMBLY / COREPACK_TEST
   test_sockets:
     "0":
       resource_strings:

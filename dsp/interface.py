@@ -423,12 +423,12 @@ if __name__ == "__main__":
     LOCAL_RESULT_FILE = Path(".") / ".." / "filestore" / "unsent_results.json"
 
     # define the route
-    #api_url = "https://production-network.rrc/testcontrol"
     #API_URL = "http://127.0.0.1:8000"
     #API_URL = "http://172.25.100.42:8000"
-    API_URL = "http://sv-production-vn:8000"
+    #API_URL = "http://sv-production-vn:8000"
     #API_URL = "http://172.22.2.40:9929"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
-    
+    API_URL = "http://172.25.100.9:9929"  # Orbis DSP REST API @RRCVN
+
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
     dsp = DspInterface(API_URL, None)
 
