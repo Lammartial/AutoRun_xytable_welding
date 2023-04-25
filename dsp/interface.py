@@ -438,12 +438,15 @@ if __name__ == "__main__":
     dsp_ws113 = DspInterface(f"{API_URL}:9928", None)
     dsp_sps   = DspInterface(f"{API_URL}:9929", None)
     
-    test_teststand_interface(dsp_ws102, "CELL_TEST", "1CELL163512635")
-    test_teststand_interface(dsp_ws103, "PCBA_TEST", "1PCBA163512635")
-    test_teststand_interface(dsp_ws111, "COREPACK_TEST", "1CELL163512635,1PCBA163512635")
-    test_teststand_interface(dsp_ws113, "EOL_TEST", "7")
+    test_teststand_interface(dsp_ws102, "CELL_TEST", "1CELL000000005A2")
 
-    test_teststand_interface(dsp_sps, "CELL_WELDING", "1CELL163512635")
+    #test_teststand_interface(dsp_ws102, "CELL_TEST", "1CELL163512635")
+    #test_teststand_interface(dsp_ws103, "PCBA_TEST", "1PCBA163512635")
+    #test_teststand_interface(dsp_ws111, "COREPACK_TEST", "1CELL163512635,1PCBA163512635")
+    #test_teststand_interface(dsp_ws113, "EOL_TEST", "7")
+
+    test_welder_interface(dsp_sps, "1CELL0000000050F")  # blacklist  
+    test_welder_interface(dsp_sps, "1CELL000000005A2")  # pass
 
     #test_welder_interface(dsp_sps, "1CELL163512635")
 # END OF FILE
