@@ -19,7 +19,7 @@ from rrc.dsp.interface import DspInterface, DspInterface_SIMULATION, DSPInterfac
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from rrc.dbcon import get_protocol_db_connector
-from rrc.barcode_scanner import create_barcode_scanner, Eth2SerialDevice, SerialComportDevice
+from rrc.barcode_scanner import create_barcode_scanner
 from pymodbus.exceptions import ModbusException
 from pymodbus import version as modbus_version
 from rrc.modbus.aws3 import AWS3Modbus, AWS3Modbus_DUMMY
