@@ -372,13 +372,13 @@ def test_teststand_interface(dsp: DspInterface, test_type: str, udi: str ):
         ok, serial = dsp.ts_get_serial_number_for_udi(udi)
         _log.info(f"SERIAL: {serial}")
 
-    dsp.ts_send_result_for_testrun(
-        "P",               # result
-        datetime.utcnow().isoformat(),  # start_datetime e.g. 2022-12-24T17:28:23.382748
-        3.465,             # execution_time
-        udi,               # udi, scanned string
-        serial             # serial number
-    )
+    # dsp.ts_send_result_for_testrun(
+    #     "P",               # result
+    #     datetime.utcnow().isoformat(),  # start_datetime e.g. 2022-12-24T17:28:23.382748
+    #     3.465,             # execution_time
+    #     udi,               # udi, scanned string
+    #     serial             # serial number
+    # )
 
 def test_welder_interface(dsp: DspInterface, udi: str ):
     #test_run = dsp.get_parameter_for_welding("PDPC1302", 1)
@@ -389,27 +389,27 @@ def test_welder_interface(dsp: DspInterface, udi: str ):
     ok, response  = dsp.send_udi_upfront(udi)
     _log.info(f"UDI: {ok}/{response}")
 
-    dsp.ts_send_result_for_testrun(
-        "Passed",          # result PASS
-        datetime.utcnow().isoformat(),  # start_datetime e.g. 2022-12-24T17:28:23.382748
-        3.465,             # execution_time
-        udi,               # udi, scanned string
-        ""                 # serial number
-    )
-    dsp.ts_send_result_for_testrun(
-        "Failed",          # result FAILED
-        datetime.utcnow().isoformat(),  # start_datetime e.g. 2022-12-24T17:28:23.382748
-        2.465,             # execution_time
-        udi,               # udi, scanned string
-        ""                 # serial number
-    )
-    dsp.ts_send_result_for_testrun(
-        "Aborted",         # result Terminate or Abort
-        datetime.utcnow().isoformat(),  # start_datetime e.g. 2022-12-24T17:28:23.382748
-        1.465,             # execution_time
-        udi,               # udi, scanned string
-        ""                 # serial number
-    )
+    # dsp.ts_send_result_for_testrun(
+    #     "Passed",          # result PASS
+    #     datetime.utcnow().isoformat(),  # start_datetime e.g. 2022-12-24T17:28:23.382748
+    #     3.465,             # execution_time
+    #     udi,               # udi, scanned string
+    #     ""                 # serial number
+    # )
+    # dsp.ts_send_result_for_testrun(
+    #     "Failed",          # result FAILED
+    #     datetime.utcnow().isoformat(),  # start_datetime e.g. 2022-12-24T17:28:23.382748
+    #     2.465,             # execution_time
+    #     udi,               # udi, scanned string
+    #     ""                 # serial number
+    # )
+    # dsp.ts_send_result_for_testrun(
+    #     "Aborted",         # result Terminate or Abort
+    #     datetime.utcnow().isoformat(),  # start_datetime e.g. 2022-12-24T17:28:23.382748
+    #     1.465,             # execution_time
+    #     udi,               # udi, scanned string
+    #     ""                 # serial number
+    # )
 
 
 #--------------------------------------------------------------------------------------------------
@@ -427,18 +427,23 @@ if __name__ == "__main__":
     #API_URL = "http://172.25.100.42:8000"
     #API_URL = "http://sv-production-vn:8000"
     #API_URL = "http://172.22.2.40:9929"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
-    API_URL = "http://172.25.100.9:9929"  # Orbis DSP REST API @RRCVN
+    API_URL = "http://172.25.100.9"  # ports 9925..9929 Orbis DSP REST API @RRCVN
 
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
-    dsp = DspInterface(API_URL, None)
-
     #test_interface(dsp)
-    test_teststand_interface(dsp, "CELL_TEST", "1CELL163512635")
-    test_teststand_interface(dsp, "PCBA_TEST", "1PCBA163512635")
-    test_teststand_interface(dsp, "COREPACK_TEST", "1CELL163512635,1PCBA163512635")
-    test_teststand_interface(dsp, "EOL_TEST", "7")
 
-    test_teststand_interface(dsp, "CELL_WELDING", "1CELL163512635")
+    dsp_ws102 = DspInterface(f"{API_URL}:9925", None)
+    dsp_ws103 = DspInterface(f"{API_URL}:9926", None)
+    dsp_ws111 = DspInterface(f"{API_URL}:9927", None)
+    dsp_ws113 = DspInterface(f"{API_URL}:9928", None)
+    dsp_sps   = DspInterface(f"{API_URL}:9929", None)
+    
+    test_teststand_interface(dsp_ws102, "CELL_TEST", "1CELL163512635")
+    test_teststand_interface(dsp_ws103, "PCBA_TEST", "1PCBA163512635")
+    test_teststand_interface(dsp_ws111, "COREPACK_TEST", "1CELL163512635,1PCBA163512635")
+    test_teststand_interface(dsp_ws113, "EOL_TEST", "7")
 
-    #test_welder_interface(dsp, "1CELL163512635")
+    test_teststand_interface(dsp_sps, "CELL_WELDING", "1CELL163512635")
+
+    #test_welder_interface(dsp_sps, "1CELL163512635")
 # END OF FILE
