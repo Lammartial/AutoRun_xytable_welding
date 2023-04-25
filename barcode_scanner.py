@@ -20,15 +20,11 @@ from rrc.custom_logging import getLogger, logger_init
 
 # --------------------------------------------------------------------------- #
 
-# def create_barcode_scanner(resource_string: str) -> Eth2SerialDevice | SerialComportDevice:
-#     if "," in resource_string:
-#         dev = SerialComportDevice(resource_string, termination="\r")  # COM port
-#     else:
-#         dev = Eth2SerialDevice(resource_string, termination="\r\n")   # socket port
-#     return dev
-
 def create_barcode_scanner(resource_string: str) -> Eth2SerialDevice | SerialComportDevice:
-    dev = Eth2SerialDevice(resource_string, termination="\n")   # socket and COM port shall have same configuration
+    if "," in resource_string:
+        dev = SerialComportDevice(resource_string, termination="\n")  # COM port
+    else:
+        dev = Eth2SerialDevice(resource_string, termination="\n")   # socket port
     return dev
 
 #--------------------------------------------------------------------------------------------------
