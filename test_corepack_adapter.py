@@ -40,16 +40,22 @@ if __name__ == "__main__":
     psu = M3900("TCPIP0::172.25.101.46::inst0::INSTR")
     #psu.initialize_device()
     bt = Hioki_BT3561A("172.25.101.44:23", termination="\r\n")
+
+    sleep(3)
+
+    gpio.switch_to_battery_tester_measurement()
+    #gpio.switch_to_psu_measurement()
+    sleep(1.3)
     bt.init()
 
     for i in range(50):
         gpio.switch_to_battery_tester_measurement()        
         sleep(0.5)
         a = bt.measure()
-        print(type(a), a)
+        print("HIOKI", type(a), a)
         gpio.switch_to_psu_measurement()
-        sleep(5)
-        print(psu.get_all_measurements())
+        sleep(1)
+        print("PSU", psu.get_all_measurements())
         #print("INP2", gpio.read_input(2))
         #sleep(0.5)
 
