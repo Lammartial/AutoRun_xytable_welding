@@ -39,27 +39,44 @@ if __name__ == "__main__":
 
     gpio.switch_to_psu_measurement()
 
-    sleep(0.5)    
-
-    psu = M3900("TCPIP0::172.25.101.46::inst0::INSTR")
+    sleep(1.0)    
     
-    #print("PSU Output on")
-    psu.configure_supply(12.0, 0.050, 50, 1)
-
-    sleep(2.5)  # wakeup battery
+    psu = M3900("TCPIP0::172.25.101.46::inst0::INSTR")   
+    psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
+    psu.configure_current_rise_times(pos="DEF", neg="DEF")
+    print("SS", bat.get_safety_status())
+    #bat.set_fet_control(False)
+    print("PSU Output on")
+    #psu.configure_supply(0, 0.080, 50, 1)
+    #sleep(2.5)
+    #print("PSU", psu.get_all_measurements())
+    #print("SS", bat.get_safety_status())
+    #psu.configure_supply(12.0, 0.080, 50, 1)
+    psu.configure_cc_mode(0.05, 10.8*1.15, (10.8*1.15) * 0.8, 50, 1)
+    sleep(3.5)  # wakeup battery    
+    print(bat.current())
     print("PSU", psu.get_all_measurements())
+    print("SS", bat.get_safety_status())
+    print("SSS", bat._safety_status)
 
     print("PSU output off")
     #psu.configure_supply(12.0, 0.001, 50, 0)
     psu.set_output_state(0)
     #psu.initialize_device()
-
+    sleep(0.5)
+    #print("RESET ERRORS", bat.reset_errors())
+    print("SS", bat.get_safety_status())
+    print("SSS", bat._safety_status)
+    print("PSU - sense connected", psu.get_all_measurements())
+    bat.set_fet_control(True)
     # psu.configure_supply(0.0, 0.0, 50, 0)
-
-    sleep(2.5)
-    
+    print("waiting")
+    sleep(3)
+    print("SS", bat.get_safety_status())
+    print("SSS", bat._safety_status)
     print("PSU - sense connected", psu.get_all_measurements())
 
+    psu.set_output_state(0)
     
     sleep(1.0)
 
@@ -69,16 +86,18 @@ if __name__ == "__main__":
     print("PSU - sense on BT", psu.get_all_measurements())
     
     bt = Hioki_BT3561A("172.25.101.44:23", termination="\r\n")
-    sleep(0.7)
+    #sleep(0.7)
 
     bt.init()
 
-    sleep(5.5)
-    print(bt.set_resistance_range(0.1))
-    print(bt.set_voltage_range(20))
-    print(bt.set_autorange(0))
+    #sleep(1.5)
+    #print(bt.set_resistance_range(0.1))
+    #print(bt.set_voltage_range(20))
+    #print(bt.set_autorange(0))
 
-    for i in range(50):
+    #exit(1)
+
+    for i in range(5):
         #gpio.switch_to_battery_tester_measurement()        
         sleep(0.25)
         a = bt.measure()
