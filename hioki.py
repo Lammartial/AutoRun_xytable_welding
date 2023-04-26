@@ -345,7 +345,7 @@ class Hioki_BT3561A(Eth2SerialDevice):
             str: Measured Values
         """
         try:
-            resp = self.request(':READ?').strip()
+            resp = self.request(':READ?', timeout=7.0).strip()
             return resp
         except Exception:
             raise
