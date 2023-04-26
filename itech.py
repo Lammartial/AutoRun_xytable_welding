@@ -846,78 +846,78 @@ class M3900(M3400):
     #    except Exception as ex:
     #        raise
 
-    def configure_sink(self, current: float, resistance: float | None,
-                       current_limit: float, voltage_limit_high: float, power_limit: float, set_output: bool = False) -> None:
-        if self.last_mode != "CURR":
-            self.set_output_state(0)  # make sure output is OFF
-        self.set_function("CURR")  # CC priority
+    # def configure_sink(self, current: float, resistance: float | None,
+    #                    current_limit: float, voltage_limit_high: float, power_limit: float, set_output: bool = False) -> None:
+    #     if self.last_mode != "CURR":
+    #         self.set_output_state(0)  # make sure output is OFF
+    #     self.set_function("CURR")  # CC priority
 
 
     def configure_charge_mode(self, current: float, voltage_limit_high: float, voltage_limit_low: float,
                               power_limit: float, set_output: bool = False) -> None:
         """
-        Use to switch on battery charging mode. CC mode.
+        Use to switch on battery charging mode. CC priority mode.
         M3900 device only.
         """
-        if self.last_mode != "CURR":
-            self.set_output_state(0)            # make sure output is OFF
-        self.set_function("CURR")               # CC priority
-        self.send(f"POW:LIM:NEG {(-1)*power_limit:0.2f}")
-        self.send(f"POW:LIM:POS {power_limit:0.2f}")
-
-        # DO NOT use current limits in CC mode. Causes an internal error of the M3900
-        #self.send(f"CURR:LIM:NEG {0.0:06.3f}")
-        #self.send(f"CURR:LIM:POS {current_limit:06.3f}")
-
-        self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}")
-        self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
-        self.send(f"CURR {current:0.2f}")
-        self.send("SINK:RES:STATE 0")
-        self.set_output_state(1 if set_output else 0)
+        self.configure_cc_mode(current, voltage_limit_high, voltage_limit_low, power_limit, set_output=set_output)
 
 
     def configure_discharge_mode(self, current: float,  voltage_limit_high: float, voltage_limit_low: float,
                                  power_limit: float, set_output: bool = False) -> None:
         """
-        Use to switch on battery discharging mode. CC mode.
+        Use to switch on battery discharging mode. CC priority mode.
         M3900 device only.
         """
-        if self.last_mode != "CURR":
-            self.set_output_state(0)            # make sure output is OFF
-        self.set_function("CURR")               # CC priority
-        self.send(f"POW:LIM:NEG {power_limit:0.2f}")
-        self.send(f"POW:LIM:POS {0.0:0.2f}")
+        self.configure_cc_mode(-abs(current), voltage_limit_high, voltage_limit_low, -abs(power_limit), set_output=set_output)
 
-        # DO NOT use current limits in CC mode. Causes an internal error of the M3900
-        #self.send(f"CURR:LIM:NEG {current_limit:0.2f}")
-        #self.send(f"CURR:LIM:POS {0.0:0.2f}")
-        #
-        self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}")
-        self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
-        self.send(f"CURR {current:0.2f}")
-        self.send("SINK:RES:STATE 0")
-        self.set_output_state(1 if set_output else 0)
 
     def configure_wake_up_mode(self, current: float, voltage_limit_high: float, voltage_limit_low: float,
                                power_limit: float, set_output: bool = False) -> None:
         """
-        Use to wake up bq40z50 or another bq chip. CV mode.
+        Use to wake up bq40z50 or another bq chip. CC priority mode.
         M3900 device only.
         """
+        self.configure_cc_mode(current, voltage_limit_high, voltage_limit_low, power_limit, set_output=set_output)
+
+
+    def configure_cc_mode(self, current: float, voltage_limit_high: float, voltage_limit_low: float,
+                            power_limit: float, set_output: bool = False) -> None:
+        """Switches the PSU into CC priority mode. 
+        
+        Can be used to supply or sink depending on current sign.
+        Use to wake up on battery without triggering a safety event.
+        
+        To configure supply, provide positive current and power limits,
+        to sink set both negative.
+        Positve and negative power limits at same time are not allowed here.
+
+        NOTE: In CV mode which is used in configure_supply(), the bq IC triggers a ASCD failure. 
+              M3900 device only.
+        
+        Args:
+            current (float): Current limit in A, can be positive (supply) or negative (sink). Adjust sign of power limit accordingly.
+            voltage_limit_high (float): upper voltage limit for regulation.
+            voltage_limit_low (float): lower voltage limit for regulation.
+            power_limit (float): Power limit ion W. The sign need to match the current's one.
+            set_output (bool, optional): Enables (True) or disables (False) power terminals for supply or sink. Defaults to False.
+        
+        """
+
+        # check that power limit and current have same sign
+        if (current * power_limit) < 0:
+            raise ValueError("Parameters current and power_limit need to have same sign.")
+
         if self.last_mode != "CURR":
             self.set_output_state(0)            # make sure output is OFF
         self.set_function("CURR")               # CC priority
-        self.send("POW:LIM:NEG " + f"{(-1)*power_limit:0.2f}")
-        self.send("POW:LIM:POS " + f"{power_limit:0.2f}")
+        self.send(f"POW:LIM:NEG {(power_limit if power_limit < 0 else 0):0.2f}")
+        self.send(f"POW:LIM:POS {(power_limit if power_limit > 0 else 0):0.2f}")
 
-        # DO NOT use current limits in CC mode. Causes an internal error of the M3900
-        #self.send("CURR:LIM:NEG " + f"{(-1)*current_limit:0.2f}")
-        #self.send("CURR:LIM:POS " + f"{current_limit:0.2f}")
-        #
+        # DO NOT use current limits in CC mode, it Causes an internal error of the M3900
+      
         self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}")
         self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
-        param = f"{current:0.2f}"
-        self.send(f"CURR " + param)
+        self.send(f"CURR {current:0.2f}")
         self.send("SINK:RES:STATE 0")
         self.set_output_state(1 if set_output else 0)
 
@@ -928,6 +928,7 @@ class M3900(M3400):
         # because of TS does not see base class
         super().configure_sink(current, resistance, current_limit, voltage_limit_high, power_limit, set_output=set_output)
     
+
     def configure_supply(self, voltage: float, current_limit: float, power_limit: float, set_output: bool = False) -> None:
         # because of TS does not see base class
         super().configure_supply(voltage, current_limit, power_limit, set_output=set_output)  
