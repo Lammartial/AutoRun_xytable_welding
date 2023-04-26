@@ -68,6 +68,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self._operation_status = None  # shadow copy of operation_status() read to avoid redundant reads for seal/unseal checks
         self._manufacturing_status = None  # shadow copy of manufacturing_status()
         self._ccadc_cal = None  # shadow copy
+        self._safety_status = None  # shadow copy
+        self._pf_status = None  # shadow copy
 
     def __str__(self) -> str:
         return f"SmartBattery with BQ40Z50 chipset at 0x{self.address} on {str(self.bus)}"
@@ -1669,28 +1671,128 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         buf =  self.current()
         return float(buf[0])
     
+
+    def _decode_safety_status(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:
+        os = unpack("<L", buf)[0]
+        return OrderedDict({
+            "block": self._maybe_hexlify(buf, hexi),
+            # data come little endian 
+            "RSVD": ((os>>30) & 0x3),  # Reserved. Do not use.
+            "OCDL":  ((os>>29) & 1),  # Overcurrent in Discharge
+            "COVL": ((os>>28) & 1),  #  Cell Overvoltage Latch
+            "UTD": ((os>>27) & 1),  #  Undertemperature During Discharge
+            "UTC": ((os>>26) & 1),  #  Undertemperature During Charge
+            "PCHGC": ((os>>25) & 1),  #  Over-Precharge Current
+            "CHGV": ((os>>24) & 1),  #  Overcharging Voltage
+            "CHGC": ((os>>23) & 1),  #  Overcharging Current
+            "OC": ((os>>22) & 1),  #  Overcharge
+            "RSVD": ((os>>21) & 1),  #  Reserved. Do not use.
+            "CTO": ((os>>20) & 1),  #  Charge Timeout
+            "RSVD": ((os>>19) & 1),  #  Reserved. Do not use.
+            "PTO": ((os>>18) & 1),  #  Precharge Timeout
+            "RSVD": ((os>>17) & 1),  #  Reserved. Do not use.
+            "OTF": ((os>>16) & 1),  #  Overtemperature FET
+            "RSVD": ((os>>15) & 1),  #  Reserved. Do not use.
+            "CUVC": ((os>>14) & 1),  #  Cell Undervoltage Compensated
+            "OTD": ((os>>13) & 1),  #  Overtemperature During Discharge
+            "OTC": ((os>>12) & 1),  #  Overtemperature During Charge
+            "ASCDL": ((os>>11) & 1),  #  Short-circuit During Discharge Latch
+            "ASCD": ((os>>10) & 1),  #  Short-circuit During Discharge
+            "ASCCL": ((os>>9) & 1),  #  Short-circuit During Charge Latch
+            "ASCC": ((os>>8) & 1),  #  Short-circuit During Charge
+            "AOLDL": ((os>>7) & 1),  #  Overload During Discharge Latch
+            "AOLD": ((os>>6) & 1),  #  Overload During Discharge
+            "OCD2": ((os>>5) & 1),  #  Overcurrent During Discharge 2
+            "OCD1": ((os>>4) & 1),  #  Overcurrent During Discharge 1
+            "OCC2": ((os>>3) & 1),  #  Overcurrent During Charge 2
+            "OCC1": ((os>>2) & 1),  #  Overcurrent During Charge 1
+            "COV": ((os>>1) & 1),  #  Cell Overvoltage
+            "CUV": ((os>>0) & 1),  #  Cell Undervoltage
+        })
+        
+
+    def safety_status(self, hexi: bool | str | None = None) -> tuple:
+        self.manufacturer_access = 0x0051
+        buf = self.manufacturer_data
+        self._safety_status = self._decode_safety_status(buf, hexi=hexi) 
+        return _od2t(self._safety_status)  # Teststand interface
+    
+    
     def get_safety_status(self) -> str:
         """
         Returns safety status register to log it.
+        Legacy, please use safety_status instead.
 
         Returns:
-            str: safety status register
+            str: safety status register as bytes string
         """
         self.manufacturer_access = 0x0051
         buf = self.manufacturer_data
+        self._safety_status = self._decode_safety_status(buf)
         return str(buf)
+
+
+    def _decode_pf_status(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:
+        os = unpack("<L", buf)[0]
+        return OrderedDict({
+            "block": self._maybe_hexlify(buf, hexi),
+            # data come little endian 
+            "TS4": ((os>>31) & 1),  #  Open Thermistor–TS4 Failure
+            "TS3": ((os>>30) & 1),  #  Open Thermistor–TS3 Failure
+            "TS2": ((os>>29) & 1),  #  Open Thermistor–TS2 Failure
+            "TS1": ((os>>28) & 1),  #  Open Thermistor–TS1 Failure
+            "RSVD": ((os>>27) & 1),  #  Reserved. Do not use.
+            "DFW": ((os>>26) & 1),  #  Data Flash Wearout Failure
+            "RSVD": ((os>>25) & 1),  #  Reserved. Do not use.
+            "IFC": ((os>>24) & 1),  #  Instruction Flash Checksum Failure
+            "PTC": ((os>>23) & 1),  #  PTC Failure
+            "2LVL": ((os>>22) & 1),  #  Second Level Protector Failure
+            "AFEC": ((os>>21) & 1),  #  AFE Communication Failure
+            "AFER": ((os>>20) & 1),  #  AFE Register Failure
+            "FUSE": ((os>>19) & 1),  #  Chemical Fuse Failure
+            "OCDL": ((os>>18) & 1),  #  Overcurrent in Discharge
+            "DFETF": ((os>>17) & 1),  #  Discharge FET Failure
+            "CFETF": ((os>>16) & 1),  #  Charge FET Failure
+            "ASCDL": ((os>>15) & 1),  #  Short Circuit in Discharge
+            "ASCCL": ((os>>14) & 1),  #  Short Circuit in Charge
+            "AOLDL": ((os>>13) & 1),  #  Overload in Discharge
+            "VIMA": ((os>>12) & 1),  #  Voltage Imbalance While Pack Is Active Failure
+            "VIMR": ((os>>11) & 1),  #  Voltage Imbalance While Pack At Rest Failure
+            "CD": ((os>>10) & 1),  #  Capacity Degradation Failure
+            "IMP": ((os>>9) & 1),  #  Impedance Failure
+            "CB": ((os>>8) & 1),  #  Cell Balancing Failure
+            "QIM": ((os>>7) & 1),  #  QMax Imbalance Failure
+            "SOTF": ((os>>6) & 1),  #  Safety Overtemperature FET Failure
+            "COVL": ((os>>5) & 1),  #  Cell Overvoltage Latch
+            "SOT": ((os>>4) & 1),  #  Safety Overtemperature Cell Failure
+            "SOCD": ((os>>3) & 1),  #  Safety Overcurrent in Discharge
+            "SOCC": ((os>>2) & 1),  #  Safety Overcurrent in Charge
+            "SOV": ((os>>1) & 1),  #  Safety Cell Overvoltage Failure
+            "SUV": ((os>>0) & 1),  #  Safety Cell Undervoltage Failure
+        })
+
+
+    def safety_status(self, hexi: bool | str | None = None) -> tuple:
+        self.manufacturer_access = 0x0053
+        buf = self.manufacturer_data
+        self._pf_status = self._decode_safety_status(buf, hexi=hexi) 
+        return _od2t(self._pf_status)  # Teststand interface
+    
 
     def get_pf_status(self) -> str:
         """
         Returns PF status register to log it.
+        Legacy, please use ps_status instead.
 
         Returns:
             str: PF status register
         """
         self.manufacturer_access = 0x0053
         buf = self.manufacturer_data
+        self._pf_status = self._decode_pf_status(buf)
         return str(buf)        
     
+
     def reset_errors(self) -> None:
         """
         Resets Black Box Recorder and Permanent Fail Data.
