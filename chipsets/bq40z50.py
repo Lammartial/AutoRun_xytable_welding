@@ -1639,7 +1639,13 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             cmd_serial_number = 0x1C
             res = self.writeWordVerified(cmd=cmd_serial_number, w=sn_int)
         except Exception:
-            raise
+            try:
+                ar = sn.split("_")
+                sn_int = int(ar[-1], 16)
+                cmd_serial_number = 0x1C
+                res = self.writeWordVerified(cmd=cmd_serial_number, w=sn_int)
+            except Exception:
+                raise
         return bool(res)
 
     def get_rsoc(self) -> int:
