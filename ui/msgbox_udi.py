@@ -87,7 +87,7 @@ async def aio_blocking_communication(task_id: int, tk_q: queue.Queue, resource_s
         #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = None)  # uses .readln()
         _response = await dev.request_async(None)
         if _response:
-            _wp = f"RESPONSE={_response}"
+            _wp = f"RESPONSE={_response.strip()}"
             #safeprint(_wp)
             _log.info(_wp)
             work_package = _wp
