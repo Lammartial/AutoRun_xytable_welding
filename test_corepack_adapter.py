@@ -37,24 +37,54 @@ if __name__ == "__main__":
 
     gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
 
-    psu = M3900("TCPIP0::172.25.101.46::inst0::INSTR")
-    #psu.initialize_device()
-    bt = Hioki_BT3561A("172.25.101.44:23", termination="\r\n")
+    gpio.switch_to_psu_measurement()
 
-    sleep(3)
+    sleep(0.5)    
+
+    psu = M3900("TCPIP0::172.25.101.46::inst0::INSTR")
+    
+    #print("PSU Output on")
+    psu.configure_supply(12.0, 0.050, 50, 1)
+
+    sleep(2.5)  # wakeup battery
+    print("PSU", psu.get_all_measurements())
+
+    print("PSU output off")
+    #psu.configure_supply(12.0, 0.001, 50, 0)
+    psu.set_output_state(0)
+    #psu.initialize_device()
+
+    # psu.configure_supply(0.0, 0.0, 50, 0)
+
+    sleep(2.5)
+    
+    print("PSU - sense connected", psu.get_all_measurements())
+
+    
+    sleep(1.0)
 
     gpio.switch_to_battery_tester_measurement()
-    #gpio.switch_to_psu_measurement()
+    
     sleep(1.3)
+    print("PSU - sense on BT", psu.get_all_measurements())
+    
+    bt = Hioki_BT3561A("172.25.101.44:23", termination="\r\n")
+    sleep(0.7)
+
     bt.init()
 
+    sleep(5.5)
+    print(bt.set_resistance_range(0.1))
+    print(bt.set_voltage_range(20))
+    print(bt.set_autorange(0))
+
     for i in range(50):
-        gpio.switch_to_battery_tester_measurement()        
-        sleep(0.5)
+        #gpio.switch_to_battery_tester_measurement()        
+        sleep(0.25)
         a = bt.measure()
         print("HIOKI", type(a), a)
-        gpio.switch_to_psu_measurement()
-        sleep(1)
+        #gpio.switch_to_psu_measurement()
+        sleep(0.25)
         print("PSU", psu.get_all_measurements())
         #print("INP2", gpio.read_input(2))
         #sleep(0.5)
