@@ -103,7 +103,7 @@ if __name__ == "__main__":
 
     # global engine and session generator to share access in the callbacks later
     #srcEngine, SSession = get_teststand_db_connector()
-    srcEngine, SSession = get_mockup_useracess_db_connector()
+    srcEngine, SSession = get_teststand_users_db_connector()
 
     _log.info(srcEngine.table_names())
 
