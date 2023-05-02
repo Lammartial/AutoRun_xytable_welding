@@ -4,7 +4,7 @@ import yaml
 from pathlib import Path
 # import SQL managing modules
 import sqlalchemy as sa
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -44,7 +44,7 @@ def load_config_yaml_file(fname: Path | str):
     return CONFIG
 
 #-------------------------------------------------------------------------------------------------
-def createInternalSession(config, echo=False):
+def createInternalSession(config, echo=False, autocommit: bool = True, autoflush: bool = False) -> Tuple[sa.Engine, Session]:
     """Setup a persistent connection to the selected database.
     There is no need to close the connection.
 
@@ -53,6 +53,8 @@ def createInternalSession(config, echo=False):
     Args:
         config (dict): Possibility to change the connection on demand. Defaults to CONFIG.
         echo (bool, optional): Verbosity level of the SQL driver: True delivers a lot of SQL transfer prints. Defaults to False.
+        autocommit (bool, optional): _explanation_ . Defaults to True.
+        autoflush (bool, optional): _explanation_ . Defaults to False.
 
     Returns:
         Tuple of engine and session: These hold and manage the connection for queries.
@@ -68,18 +70,9 @@ def createInternalSession(config, echo=False):
                     config["sourceDatabase"]["encoding"]
                 ),
                 pool_pre_ping=True,  # this should automatically reconnect if connection has been lost due to be stale
-                echo=echo)
-    # engine = sa.create_engine("{0}://{1}:{2}@{3}/{4}".format(
-    #                 config["sourceDatabase"]["servertype"],
-    #                 config["sourceDatabase"]["login"],
-    #                 config["sourceDatabase"]["password"],
-    #                 config["sourceDatabase"]["serverhost"],
-    #                 config["sourceDatabase"]["database"]
-    #             ),
-    #             encoding=config["sourceDatabase"]["encoding"],
-    #             echo=echo)
+                echo=echo).execution_options(autocommit=autocommit, autoflush=autoflush)
     #dialect = sa.dialects.postgresql
-    session = sessionmaker(bind=engine, autoflush=False)
+    session = sessionmaker(bind=engine, autocommit=autocommit, autoflush=autoflush)
     return (engine, session)
 
 #-------------------------------------------------------------------------------------------------
@@ -89,19 +82,17 @@ CONFIG = load_config_yaml_file("config_db_teststand")
 CFG_PROTOCOL = load_config_yaml_file("config_db_protocol")
 CFG_USER_ACCESS = load_config_yaml_file("config_db_station_users")
 
-def get_teststand_db_connector():
-    return createInternalSession(CONFIG, echo=True if DEBUG else False)
+
+def get_teststand_db_connector(autocommit: bool = True):
+    return createInternalSession(CONFIG, echo=True if DEBUG else False, autocommit=autocommit)
 
 
-def get_protocol_db_connector():
-    return createInternalSession(CFG_PROTOCOL, echo=True if DEBUG else False)
+def get_protocol_db_connector(autocommit: bool = True):
+    return createInternalSession(CFG_PROTOCOL, echo=True if DEBUG else False, autocommit=autocommit)
 
 
-def get_teststand_users_db_connector():
-    return createInternalSession(CFG_USER_ACCESS, echo=True if DEBUG else False)
-
-def get_mockup_useracess_db_connector():
-    return createInternalSession(CFG_USER_ACCESS, echo=True if DEBUG else False)
+def get_teststand_users_db_connector(autocommit: bool = True):
+    return createInternalSession(CFG_USER_ACCESS, echo=True if DEBUG else False, autocommit=autocommit)
 
 
 #--------------------------------------------------------------------------------------------------
