@@ -55,7 +55,7 @@ class AWS3Modbus(object):
     def __init__(self, connection_str: str) -> None:
         _host, _port = connection_str.lower().split(":")
 
-        self.client = ModbusTcpClient(_host, port=_port,
+        self.client = ModbusTcpClient(_host, port=int(_port),
                     # following goes to client.params
                     retries=7,                   # default = 3
                     retry_on_empty=True,         # default = False
@@ -83,19 +83,19 @@ class AWS3Modbus(object):
     # --- lower level
 
     def read_coils(self, address: int, count: int, unit_address: int | None = None) -> ReadCoilsResponse | Any:
-        readResponse = self.client.read_coils(address, count, slave=unit_address if unit_address is not None else self.unit_address)
+        readResponse = self.client.read_coils(address, count, slave=unit_address if unit_address is not None else 0)
         return readResponse.bits[:count]
 
     def write_coil(self, address: int, value: bool, unit_address: int | None = None) -> WriteSingleCoilResponse | Any:
-        writeResponse = self.client.write_coil(address, value, slave=unit_address if unit_address is not None else self.unit_address)
+        writeResponse = self.client.write_coil(address, value, slave=unit_address if unit_address is not None else 0)
         return writeResponse
 
     def read_holding_registers(self, address: int, count: int, unit_address: int | None = None) -> ReadHoldingRegistersResponse | Any:
-        readResponse = self.client.read_holding_registers(address, count, slave=unit_address if unit_address is not None else self.unit_address)
+        readResponse = self.client.read_holding_registers(address, count, slave=(unit_address if unit_address is not None else 0))
         return readResponse.registers
 
     def write_register(self, address: int, value: int | float | str, unit_address: int | None = None) -> WriteMultipleRegistersResponse | Any:
-        writeResponse = self.client.write_register(address, value, slave=unit_address if unit_address is not None else self.unit_address)
+        writeResponse = self.client.write_register(address, value, slave=unit_address if unit_address is not None else 0)
         return writeResponse
 
     # --- high level
