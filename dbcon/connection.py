@@ -72,7 +72,7 @@ def createInternalSession(config, echo=False, autocommit: bool = True, autoflush
                 pool_pre_ping=True,  # this should automatically reconnect if connection has been lost due to be stale
                 echo=echo).execution_options(autocommit=autocommit, autoflush=autoflush)
     #dialect = sa.dialects.postgresql
-    session = sessionmaker(bind=engine, autocommit=autocommit, autoflush=autoflush)
+    session = sessionmaker(bind=engine, autoflush=autoflush)
     return (engine, session)
 
 #-------------------------------------------------------------------------------------------------

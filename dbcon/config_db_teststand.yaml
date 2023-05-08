@@ -3,7 +3,7 @@ sourceDatabase:
     #servertype: "mysql"  # default
     #servertype: "mysql+mysqldb"  # C-implentation, a maintained fork of MySQL-Python, not avail here
     servertype: "mysql+pymysql" # pure python
-    serverhost: "sv-production-vn"
+    serverhost: "sv-prod"
     database:   "teststand"
     login:      "teststand"
     password:   "gedoehns!"
