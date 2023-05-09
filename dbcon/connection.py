@@ -21,7 +21,7 @@ CONFIG = {}
 
 #-------------------------------------------------------------------------------------------------
 # import static configuration from YAML file
-def load_config_yaml_file(fname: Path | str):
+def load_config_yaml_file(fname: Path | str) -> dict:
     """Loads the given filename as YAML while appending the .yaml suffix.
 
     Args:
@@ -44,7 +44,7 @@ def load_config_yaml_file(fname: Path | str):
     return CONFIG
 
 #-------------------------------------------------------------------------------------------------
-def createInternalSession(config, echo=False, autocommit: bool = True, autoflush: bool = False) -> Tuple[sa.Engine, Session]:
+def createInternalSession(config, echo: bool =False, autocommit: bool = True, autoflush: bool = False) -> Tuple[sa.Engine, Session]:
     """Setup a persistent connection to the selected database.
     There is no need to close the connection.
 
@@ -72,7 +72,7 @@ def createInternalSession(config, echo=False, autocommit: bool = True, autoflush
                 pool_pre_ping=True,  # this should automatically reconnect if connection has been lost due to be stale
                 echo=echo).execution_options(autocommit=autocommit, autoflush=autoflush)
     #dialect = sa.dialects.postgresql
-    session = sessionmaker(bind=engine, autoflush=autoflush)
+    session = sessionmaker(bind=engine, autoflush=autoflush)  # autocommit option has been dropped in SQLAlchemy 2.x
     return (engine, session)
 
 #-------------------------------------------------------------------------------------------------

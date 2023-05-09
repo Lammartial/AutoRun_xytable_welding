@@ -80,6 +80,15 @@ PART_INFORMATION = {
             "test_program_id": ("HP-SQ_2040B", "100498_RRC2040B_EOL-Test_A"),
             "part_number": ("HP-PN_2040B", "100498-17"),
         }
+    },
+    #
+    # RRC Spinel
+    #
+    "SPINEL": {
+        "COREPACK_TEST": {
+            # Core Pack Test PRT IDs:
+            "test_program_id": ("CP-SQ_SPINEL", "110282_SPINEL_Corepack-Test_A"),
+            "part_number": ("CP-PN_SPINEL", "110282-02"),
     }
 }
 
