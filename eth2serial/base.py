@@ -169,12 +169,13 @@ class Eth2SerialDevice(object):
 
     #----------------------------------------------------------------------------------------------
 
-    def send(self, msg: str, timeout: float = 3.0) -> None:
+    def send(self, msg: str, timeout: float = 3.0, encoding: str | None = "utf-8") -> None:
         """_summary_
 
         Args:
             msg (str): _description_
             timeout (float, optional): _description_. Defaults to 1.0.
+             encoding (str, optional): will be passed to write() function.
 
         Returns:
             bool: _description_
@@ -184,7 +185,7 @@ class Eth2SerialDevice(object):
             _s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             _s.settimeout(timeout)
             _s.connect((self.host, self.port))
-            _s.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
+            _s.sendall(bytes(msg, encoding) + self._termination_as_bytes)
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling
             raise
@@ -197,13 +198,14 @@ class Eth2SerialDevice(object):
 
     #----------------------------------------------------------------------------------------------
 
-    def request(self, msg: str | None, timeout: float | None = 3.0, limit: int = 0, encoding: str = "utf-8") -> str:
+    def request(self, msg: str | None, timeout: float | None = 3.0, limit: int = 0, encoding: str | None = "utf-8") -> str:
         """_summary_
 
         Args:
             msg (str): _description_
             timeout (float, optional): _description_. Defaults to 5.0.
             limit (int, optional): _description_. Defaults to 0.
+            encoding (str, optional): if given will be used to decode() result from bytes. If None, bytes will be returned. Defaults to utf-8.
 
         Returns:
             str: _description_
@@ -228,7 +230,10 @@ class Eth2SerialDevice(object):
                     break
                 if (rcvdata.rfind(self._termination_as_bytes) >= 0):
                     break
-            result = rcvdata.decode(encoding=encoding)
+            if encoding:
+                result = rcvdata.decode(encoding=encoding)
+            else:
+                result = rcvdata
             _log.debug(f"Received: {result!r}")
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling
@@ -243,7 +248,7 @@ class Eth2SerialDevice(object):
 
     #----------------------------------------------------------------------------------------------
 
-    async def request_async(self,  message: str | None, limit: None | str | bytes | int = None, encoding: str = "utf-8") -> str:
+    async def request_async(self,  message: str | None, limit: None | str | bytes | int = None, encoding: str | None = "utf-8") -> str:
         """_summary_
 
         Args:
@@ -251,7 +256,7 @@ class Eth2SerialDevice(object):
             limit (None | str | bytes | int, optional): None=use class defined termination bytes,
                                 str=use readline() function, bytes=uses this termination, int=use this number of characters to read.
                                 Defaults to None.
-            encoding (str, optional): _description_. Defaults to "utf-8".
+            encoding (str, optional): if given will be used to decode() result from bytes. If None, bytes will be returned. Defaults to utf-8.
 
         Returns:
             str: _description_
@@ -282,7 +287,10 @@ class Eth2SerialDevice(object):
                 rcvdata = rcvdata[:-len(limit)]
             else:
                 rcvdata = await reader.readline()  # read until \n or \r\n using library functions
-            result = rcvdata.decode(encoding=encoding)
+            if encoding:
+                result = rcvdata.decode(encoding=encoding)
+            else:
+                result = rcvdata
             _log.debug(f"Received: {result!r}")
             return result
 
