@@ -85,6 +85,8 @@ class SerialComportDevice(object):
         Returns:
             str: _description_
         """
+        global DEBUG
+
         _log = getLogger(__name__, DEBUG)
         _s = serial.Serial(self.comport, self.baudrate,
                            bytesize=int(self.linesettings[0]), parity=self.linesettings[1], stopbits=int(self.linesettings[2]),
@@ -134,6 +136,8 @@ class SerialComportDevice(object):
         Returns:
             str: _description_
         """
+        global DEBUG
+
         async def xchange(reader, writer):
             _log = getLogger(__name__, DEBUG)
             if message:
@@ -188,6 +192,8 @@ class SerialComportDevice(object):
 
 #--------------------------------------------------------------------------------------------------
 async def test_async_request():
+    global DEBUG
+
     _log = getLogger(__name__, DEBUG)
     c = SerialComportDevice("COM24,9600,8N1", termination="\r")
     r = await c.request_async(None)

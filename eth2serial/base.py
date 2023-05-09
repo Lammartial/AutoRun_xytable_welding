@@ -210,6 +210,8 @@ class Eth2SerialDevice(object):
         Returns:
             str: _description_
         """
+        global DEBUG
+
         _log = getLogger(__name__, DEBUG)
         try:
             _s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -261,6 +263,7 @@ class Eth2SerialDevice(object):
         Returns:
             str: _description_
         """
+        global DEBUG
 
         async def xchange(reader, writer):
             _log = getLogger(__name__, DEBUG)
@@ -334,6 +337,7 @@ async def tcp_send_and_receive_from_server(resource_string: str, message: str | 
     Returns:
         str: received data.
     """
+    global DEBUG
 
     _IP, _PORT = resource_string.split(":")
 
@@ -382,6 +386,8 @@ async def tcp_send_and_receive_from_server(resource_string: str, message: str | 
 
 #--------------------------------------------------------------------------------------------------
 async def test_async_request():
+    global DEBUG
+
     _log = getLogger(__name__, DEBUG)
     c = Eth2SerialDevice("192.168.1.90:23", termination="\r")
     r = await c.request_async(None)
