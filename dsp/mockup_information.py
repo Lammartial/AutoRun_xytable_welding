@@ -89,6 +89,7 @@ PART_INFORMATION = {
             # Core Pack Test PRT IDs:
             "test_program_id": ("CP-SQ_SPINEL", "110282_SPINEL_Corepack-Test_A"),
             "part_number": ("CP-PN_SPINEL", "110282-02"),
+        }
     }
 }
 
