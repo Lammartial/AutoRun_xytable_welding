@@ -14,34 +14,17 @@ from rrc.feasa import FEASA_CH9121
 from rrc.hioki import Hioki_BT3561A
 from rrc.itech import M3900
 
+# --------------------------------------------------------------------------- #
+# Logging
+# --------------------------------------------------------------------------- #
+
+DEBUG = 2
+
+from rrc.custom_logging import getLogger, logger_init
+
 #--------------------------------------------------------------------------------------------------
 
-if __name__ == "__main__":
-    i2cbus = I2CPort("172.25.101.40:2101") # socket 0
-    #i2cbus = I2CPort("172.25.101.42:2101") # socket 1
-
-    mux = BusMux(i2cbus, address=0x77)
-    for i in range(8):
-        mux.setChannel(i + 1)
-        print("CH:", i, i2cbus.i2c_bus_scan())
-
-    smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 1), retry_limit=7, verify_rounds=3, pause_us=50)
-    bat = BQ40Z50R1(smbus)
-    
-    # print("nothing")
-    # for i in range(4):
-    #     print(bat.isReady())
-    #     sleep(0.5)
-    #     #print(bat.battery_status())
-    #     #print(bat.device_name())
-
-    gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
-
-    gpio.switch_to_psu_measurement()
-
-    sleep(1.0)    
-    
-    psu = M3900("TCPIP0::172.25.101.46::inst0::INSTR")   
+def rack_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, bt: Hioki_BT3561A) -> None:
     psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
     psu.configure_current_rise_times(pos="DEF", neg="DEF")
     print("SS", bat.get_safety_status())
@@ -85,11 +68,6 @@ if __name__ == "__main__":
     sleep(1.3)
     print("PSU - sense on BT", psu.get_all_measurements())
     
-    bt = Hioki_BT3561A("172.25.101.44:23", termination="\r\n")
-    #sleep(0.7)
-
-    bt.init()
-
     #sleep(1.5)
     #print(bt.set_resistance_range(0.1))
     #print(bt.set_voltage_range(20))
@@ -164,5 +142,55 @@ if __name__ == "__main__":
     #     sleep(0.5)
     #     #print(bat.battery_status())
     #     #print(bat.device_name())
+
+
+def spinel_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, bt: Hioki_BT3561A) -> None:
+    print("SPINEL TEST")
+
+    gpio.switch_to_psu_measurement()
+    sleep(0.5)
+    psu.configure_supply(5.0, 1.0, 50.0, 1)
+    print("PSU", psu.get_all_measurements())
+   
+   
+
+#--------------------------------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    ## Initialize the logging
+    logger_init(filename_base=None)  ## init root logger with different filename
+    _log = getLogger(__name__, DEBUG)
+
+    i2cbus = I2CPort("172.21.101.40:2101") # socket 0
+    #i2cbus = I2CPort("172.25.101.42:2101") # socket 1
+
+    mux = BusMux(i2cbus, address=0x77)
+    for i in range(8):
+        mux.setChannel(i + 1)
+        print("CH:", i, i2cbus.i2c_bus_scan())
+
+    smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 1), retry_limit=7, verify_rounds=3, pause_us=50)
+    bat = BQ40Z50R1(smbus)
+    gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
+    #gpio.switch_to_psu_measurement()
+    #sleep(0.5)
+    psu = M3900("TCPIP0::172.21.101.46::inst0::INSTR")
+    psu.set_output_state(0)
+    print("INIT Hioki")
+    bt = Hioki_BT3561A("172.21.101.44:23", termination="\r\n")
+    bt.init()
+
+    #rack_test(bat, gpio, psu, bt)
+    spinel_test(bat, gpio, psu, bt)
+    pass
+    # scan = create_barcode_scanner("172.21.101.41:2000")
+    # _udi = scan.request(None, timeout=10, encoding="ascii")
+    # print(_udi)
+    # records = [s.split("\x1d") for s in _udi.split("\x04")[0].split("\x1e")]
+    # print(records)
+
+    #Received: '[)>\x1e06\x1d\\0000261P110282-01\x1d30PSPINEL\x1d10D2305\x1dSSPIN01R1000063\x1e\x04\r\n'
+    #[)>▲06↔\0000261P110282-01↔30PSPINEL↔10D2305↔SSPIN01R1000063▲♦
+    #[['[)>'], ['06', '\\0000261P110282-01', '30PSPINEL', '10D2305', 'SSPIN01R1000063'], ['']]
 
 # END OF FILE
