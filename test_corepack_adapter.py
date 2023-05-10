@@ -174,8 +174,11 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    #i2cbus = I2CPort("172.25.101.40:2101") # socket 0
-    i2cbus = I2CPort("172.25.101.42:2101") # socket 1
+    #LINE_NETWORK = "172.25.101"  # VN line 1
+    LINE_NETWORK = "172.21.101"  # HOM Warehouse
+
+    #i2cbus = I2CPort(f"{LINE_NETWORK}.40:2101") # socket 0
+    i2cbus = I2CPort(f"{LINE_NETWORK}.42:2101") # socket 1
 
     mux = BusMux(i2cbus, address=0x77)
     for i in range(8):
@@ -187,18 +190,18 @@ if __name__ == "__main__":
     gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
     gpio.switch_to_psu_measurement()
     sleep(0.5)
-    #psu = M3900("TCPIP0::172.25.101.46::inst0::INSTR")  # socket 0
-    psu = M3900("TCPIP0::172.25.101.47::inst0::INSTR")  # socket 1
+    #psu = M3900(f"TCPIP0::{LINE_NETWORK}.46::inst0::INSTR")  # socket 0
+    psu = M3900(f"TCPIP0::{LINE_NETWORK}.47::inst0::INSTR")  # socket 1
     
     psu.set_output_state(0)
     print("INIT Hioki")
-    #bt = Hioki_BT3561A("172.25.101.44:23", termination="\r\n")  # socket 0
-    bt = Hioki_BT3561A("172.25.101.45:23", termination="\r\n")  # socket 1
+    #bt = Hioki_BT3561A(f"{LINE_NETWORK}.44:23", termination="\r\n")  # socket 0
+    bt = Hioki_BT3561A(f"{LINE_NETWORK}.45:23", termination="\r\n")  # socket 1
     bt.init()
 
-    relay_test(20, gpio, psu, bt)
+    #relay_test(20, gpio, psu, bt)
     #rack_test(bat, gpio, psu, bt)
-    #spinel_test(bat, gpio, psu, bt)
+    spinel_test(bat, gpio, psu, bt)
     pass
     # scan = create_barcode_scanner("172.21.101.41:2000")
     # _udi = scan.request(None, timeout=10, encoding="ascii")
