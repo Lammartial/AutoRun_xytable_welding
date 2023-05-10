@@ -58,7 +58,7 @@ def decode_rrc_product_serial_label(raw: str | bytes | bytearray) -> Tuple[dict,
                 result["part_number"] = g[2:]
             elif "30P" in g[:3]:
                 # something
-                result["something"] = g[3:]
+                result["part_name"] = g[3:]
             elif "10D" in g[:3]:
                 result["date_code"] = g[3:]
             elif "S" in g[:1]:
