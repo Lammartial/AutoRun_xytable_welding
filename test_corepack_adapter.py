@@ -27,16 +27,17 @@ from rrc.custom_logging import getLogger, logger_init
 def rack_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, bt: Hioki_BT3561A) -> None:
     psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
     psu.configure_current_rise_times(pos="DEF", neg="DEF")
-    print("SS", bat.get_safety_status())
+    #print("SS", bat.get_safety_status())
     #bat.set_fet_control(False)
     print("PSU Output on")
     #psu.configure_supply(0, 0.080, 50, 1)
     #sleep(2.5)
     #print("PSU", psu.get_all_measurements())
     #print("SS", bat.get_safety_status())
-    #psu.configure_supply(12.0, 0.080, 50, 1)
+    #psu.configure_supply(12.0, 0.080, 50, 0)
     psu.configure_cc_mode(0.05, 10.8*1.15, (10.8*1.15) * 0.8, 50, 1)
-    sleep(3.5)  # wakeup battery    
+    sleep(3.5)  # wakeup battery
+    #bat.enable_full_access()
     print(bat.current())
     print("PSU", psu.get_all_measurements())
     print("SS", bat.get_safety_status())
@@ -75,15 +76,15 @@ def rack_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, bt: Hioki_BT
 
     #exit(1)
 
-    for i in range(5):
-        #gpio.switch_to_battery_tester_measurement()        
-        sleep(0.25)
+    for i in range(10):
+        gpio.switch_to_battery_tester_measurement()
+        sleep(0.5)
         a = bt.measure()
         print("HIOKI", type(a), a)
-        #gpio.switch_to_psu_measurement()
-        sleep(0.25)
+        gpio.switch_to_psu_measurement()
+        sleep(0.5)
         print("PSU", psu.get_all_measurements())
-        #print("INP2", gpio.read_input(2))
+        print("INP2", gpio.read_input(2))
         #sleep(0.5)
 
 
@@ -144,6 +145,18 @@ def rack_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, bt: Hioki_BT
     #     #print(bat.device_name())
 
 
+def relay_test(n: int, gpio: CorePackRelayBoard, psu: M3900, bt: Hioki_BT3561A) -> None:
+    for i in range(n):
+        gpio.switch_to_battery_tester_measurement()
+        sleep(0.5)
+        a = bt.measure()
+        print("HIOKI", type(a), a)
+        gpio.switch_to_psu_measurement()
+        sleep(0.5)
+        print("PSU", psu.get_all_measurements())
+        print("INP2", gpio.read_input(2))
+
+
 def spinel_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, bt: Hioki_BT3561A) -> None:
     print("SPINEL TEST")
 
@@ -161,8 +174,8 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    i2cbus = I2CPort("172.21.101.40:2101") # socket 0
-    #i2cbus = I2CPort("172.25.101.42:2101") # socket 1
+    #i2cbus = I2CPort("172.25.101.40:2101") # socket 0
+    i2cbus = I2CPort("172.25.101.42:2101") # socket 1
 
     mux = BusMux(i2cbus, address=0x77)
     for i in range(8):
@@ -172,16 +185,20 @@ if __name__ == "__main__":
     smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 1), retry_limit=7, verify_rounds=3, pause_us=50)
     bat = BQ40Z50R1(smbus)
     gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
-    #gpio.switch_to_psu_measurement()
-    #sleep(0.5)
-    psu = M3900("TCPIP0::172.21.101.46::inst0::INSTR")
+    gpio.switch_to_psu_measurement()
+    sleep(0.5)
+    #psu = M3900("TCPIP0::172.25.101.46::inst0::INSTR")  # socket 0
+    psu = M3900("TCPIP0::172.25.101.47::inst0::INSTR")  # socket 1
+    
     psu.set_output_state(0)
     print("INIT Hioki")
-    bt = Hioki_BT3561A("172.21.101.44:23", termination="\r\n")
+    #bt = Hioki_BT3561A("172.25.101.44:23", termination="\r\n")  # socket 0
+    bt = Hioki_BT3561A("172.25.101.45:23", termination="\r\n")  # socket 1
     bt.init()
 
+    relay_test(20, gpio, psu, bt)
     #rack_test(bat, gpio, psu, bt)
-    spinel_test(bat, gpio, psu, bt)
+    #spinel_test(bat, gpio, psu, bt)
     pass
     # scan = create_barcode_scanner("172.21.101.41:2000")
     # _udi = scan.request(None, timeout=10, encoding="ascii")
