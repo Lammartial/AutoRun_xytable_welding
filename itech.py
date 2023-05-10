@@ -909,15 +909,24 @@ class M3900(M3400):
 
         if self.last_mode != "CURR":
             self.set_output_state(0)            # make sure output is OFF
-        self.set_function("CURR")               # CC priority
+
+        # Fix setup of M3900 to work correctly: use VOLT xx, then set function to current (CC prio)
+        # Before: after power up using the "CURR xx" command to set CC prioroty did result in -0.5A on battery
+        self.send(f"VOLT {voltage_limit_high:0.2f}")
+        self.send(f"CURR:LIM:NEG {(current if current < 0 else 0):0.3f}")
+        self.send(f"CURR:LIM:POS {(current if current > 0 else 0):0.3f}")
+
+        self.set_function("CURR")               # enable CC priority
         self.send(f"POW:LIM:NEG {(power_limit if power_limit < 0 else 0):0.2f}")
         self.send(f"POW:LIM:POS {(power_limit if power_limit > 0 else 0):0.2f}")
 
-        # DO NOT use current limits in CC mode, it Causes an internal error of the M3900
-      
+        # DO NOT use current limits in CC priority mode, it Causes an internal error of the M3900
+
         self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}")
         self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
-        self.send(f"CURR {current:0.2f}")
+
+        #self.send(f"CURR {current:0.2f}")  # do NOT use CURR xx here !
+        
         self.send("SINK:RES:STATE 0")
         self.set_output_state(1 if set_output else 0)
 
