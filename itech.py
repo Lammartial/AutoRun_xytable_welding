@@ -1005,53 +1005,37 @@ class M3900(M3400):
             # not possible without throwing an error.
             #
             self.send(f"VOLT {voltage_limit_high:0.2f}")
-            print(self.read_system_error())
+            #print(self.read_system_error())
             self.send(f"CURR:LIM:NEG MIN")
-            print(self.read_system_error())
+            #print(self.read_system_error())
             self.send(f"CURR:LIM:POS MAX")
-            print(self.read_system_error())
+            #print(self.read_system_error())
    
 
         self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
-        print(self.read_system_error())
+        #print(self.read_system_error())
         self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}")
-        print(self.read_system_error())
+        #print(self.read_system_error())
     
         self.send(f"POW:LIM:NEG {(power_limit if power_limit < 0 else -1):0.2f}")  # does not accept 0W !
-        print(self.read_system_error())
+        #print(self.read_system_error())
         self.send(f"POW:LIM:POS {(power_limit if power_limit > 0 else +1):0.2f}")  # does not accept 0W !
-        print(self.read_system_error())
-
-        # #
-        # # Fix setup of M3900 to work correctly: use VOLT xx, then set device to CV priority mode
-        # # to allow changing the CURRENT limits before switching to CC prio. Otherwise, the
-        # # after power up the limits are set to 1%/-1% of rating which is 0.4A/-0.4A which 
-        # # causes CC mode to fail.
-        # #
-        # self.send(f"VOLT {voltage_limit_high:0.2f}")
-        # print(self.read_system_error())
-        # self.send(f"CURR:LIM:NEG {((current * 1.10) if current < 0 else 0):0.3f}")
-        # print(self.read_system_error())
-        # self.send(f"CURR:LIM:POS {((current * 1.10) if current > 0 else 0):0.3f}")
-        # print(self.read_system_error())
-
-        #print(self.request("CURRENT:LIMIT:NEG?"))
-        #print(self.request("CURRENT:LIMIT:POS?"))
+        #print(self.read_system_error())
 
         self.set_function("CURR")               # enable CC priority 
-        print(self.read_system_error())
+        #print(self.read_system_error())
         self.send("FUNC:MODE FIX")
-        print(self.read_system_error())
+        #print(self.read_system_error())
 
         self.send(f"CURR {current:0.2f}")       # set current for CC priority mode
-        print(self.read_system_error())
+        #print(self.read_system_error())
 
         # DO NOT use current limits in CC priority mode, it Causes an internal error of the M3900
 
         self.send("SINK:RES:STATE 0")
-        print(self.read_system_error())
+        #print(self.read_system_error())
         self.set_output_state(1 if set_output else 0)
-        print(self.read_system_error())
+        #print(self.read_system_error())
 
 
     def configure_sink(self, current: float, resistance: float | None,
