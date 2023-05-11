@@ -13,7 +13,7 @@ class CorePackRelayBoard():
     Pin 3 (input) - RRC3570 Detection (0 - RRC3570 inserted, 1 - no RRC3570 battery)
     Pin 4 (relay) - PSU/Hioki Relay (0 - Hioki Sense, 1 - PSU Sense)
     """
-    relay_3570_switch = 0       
+    relay_3570_switch = 0
     inp_300ohm_detect = 1
     inp_3570_detect   = 2
     relay_meas        = 3

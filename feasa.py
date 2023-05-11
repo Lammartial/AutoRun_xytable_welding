@@ -253,47 +253,21 @@ class FEASA_CH9121(Eth2SerialDevice):
             _log = getLogger(__name__, DEBUG)
             _log.error("LED analyzer error, set_factor, %s", response, exc_info=1)
             return False
-#-----------------------------------------------------------------------------------------------------
 
 #-----------------------------------------------------------------------------------------------------
+
+
+#-----------------------------------------------------------------------------------------------------
+
 if __name__ == "__main__":
-    from time import sleep
 
     ## Initialize the logging
-    logger_init(filename_base=None)  ## init root logger without filelogging
+    logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    Feasa_resource_string = "172.21.101.33:3000"
-
-    # 1. Create an instance of class as device controller
-    feasa = FEASA_CH9121(Feasa_resource_string)
-
-    # 2. Get some data
-
-    # # "CAPTURE" command
-    # print(feasa.capture())
-
-    # # "CAPTURE#" command
-    # print(feasa.capture_range(1))
-
-    # "CAPTUREPWM" command
-    print(feasa.capture_pwm())
-
-    # # "CAPTURE#PWM@@" command
-    # print(feasa.capture_pwm_range(1, 7))
-
-    # "getRGBI##" command
-    print(feasa.get_rgbi_num(0))
-    print(feasa.get_rgbi_num(3))
-
-    # # "getINTENSITY##" command
-    # print(feasa.get_intensity_num(1))
-
-    # # "SetIntGain##xxx" command
-    # print(feasa.set_intgain_num(1, 100))
-
-    # # SetFactor## command
-    # print(feasa.set_factor(1))
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    # TESTS have been moved out to module: test_feasa.py
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     print("DONE.")
 

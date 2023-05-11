@@ -27,56 +27,39 @@ from rrc.custom_logging import getLogger, logger_init
 def rack_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, bt: Hioki_BT3561A) -> None:
     psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
     psu.configure_current_rise_times(pos="DEF", neg="DEF")
-    #print("SS", bat.get_safety_status())
-    #bat.set_fet_control(False)
+    
+    gpio.switch_to_psu_measurement()
+    sleep(0.5)
+    psu.set_output_state(0)
+    sleep(0.5)
+    # verify that PSU does not trigger battery protection
     print("PSU Output on")
-    #psu.configure_supply(0, 0.080, 50, 1)
-    #sleep(2.5)
-    #print("PSU", psu.get_all_measurements())
-    #print("SS", bat.get_safety_status())
     #psu.configure_supply(12.0, 0.080, 50, 0)
     psu.configure_cc_mode(0.05, 10.8*1.15, (10.8*1.15) * 0.8, 50, 1)
-    sleep(3.5)  # wakeup battery
-    #bat.enable_full_access()
+    sleep(1.5)  # wakeup battery
     print(bat.current())
     print("PSU", psu.get_all_measurements())
-    print("SS", bat.get_safety_status())
-    print("SSS", bat._safety_status)
-
-    print("PSU output off")
-    #psu.configure_supply(12.0, 0.001, 50, 0)
+    print("Safety Status:", bat.get_safety_status())
+    print("Safety Status details:", bat._safety_status)
+    print("PSU Output off")
     psu.set_output_state(0)
-    #psu.initialize_device()
-    sleep(0.5)
+    sleep(0.5) 
     #print("RESET ERRORS", bat.reset_errors())
-    print("SS", bat.get_safety_status())
-    print("SSS", bat._safety_status)
+    print("Safety Status:", bat.get_safety_status())
+    print("Safety Status details:", bat._safety_status)
     print("PSU - sense connected", psu.get_all_measurements())
-    bat.set_fet_control(True)
-    # psu.configure_supply(0.0, 0.0, 50, 0)
-    print("waiting")
-    sleep(3)
-    print("SS", bat.get_safety_status())
-    print("SSS", bat._safety_status)
-    print("PSU - sense connected", psu.get_all_measurements())
-
-    psu.set_output_state(0)
     
-    sleep(1.0)
-
+    bat.set_fet_control(True)
+    
+    
+    print("Check HIOKI battery tester")
     gpio.switch_to_battery_tester_measurement()
     
     sleep(1.3)
     print("PSU - sense on BT", psu.get_all_measurements())
     
-    #sleep(1.5)
-    #print(bt.set_resistance_range(0.1))
-    #print(bt.set_voltage_range(20))
-    #print(bt.set_autorange(0))
-
-    #exit(1)
-
-    for i in range(10):
+    # toggle Relay several times and check measurements
+    for i in range(5):
         gpio.switch_to_battery_tester_measurement()
         sleep(0.5)
         a = bt.measure()
@@ -85,8 +68,32 @@ def rack_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, bt: Hioki_BT
         sleep(0.5)
         print("PSU", psu.get_all_measurements())
         print("INP2", gpio.read_input(2))
-        #sleep(0.5)
 
+
+def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900) -> None:
+    psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
+    psu.configure_current_rise_times(pos="DEF", neg="DEF")
+    
+    gpio.switch_to_psu_measurement()
+    sleep(0.5)
+    psu.set_output_state(0)
+    # check PSU charge mode
+    print("PSU Output on")
+    #psu.configure_supply(12.0, 0.080, 50, 0)
+    psu.configure_cc_mode(0.3, 10.8*1.15, (10.8*1.15) * 0.8, 50, 1)
+    print("PSU", psu.get_all_measurements())
+    psu.configure_charge_mode(0.25, 12.55, 10.0, 50, 1)
+    print("PSU", psu.get_all_measurements())
+    sleep(2)
+    print("PSU", psu.get_all_measurements())
+    print("PSU Output off")
+    psu.set_output_state(0)
+    sleep(0.5)
+    psu.configure_discharge_mode(-0.25, 12.55, 10.0, -50, 1)
+    sleep(2)
+    print("PSU", psu.get_all_measurements())
+    print("PSU Output off")
+    psu.set_output_state(0)
 
     # gpio.switch_to_psu_measurement()
     # #gpio.switch_to_battery_tester_measurement()
@@ -174,8 +181,8 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    #LINE_NETWORK = "172.25.101"  # VN line 1
-    LINE_NETWORK = "172.21.101"  # HOM Warehouse
+    LINE_NETWORK = "172.25.101"  # VN line 1
+    #LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
     #i2cbus = I2CPort(f"{LINE_NETWORK}.40:2101") # socket 0
     i2cbus = I2CPort(f"{LINE_NETWORK}.42:2101") # socket 1
@@ -200,8 +207,9 @@ if __name__ == "__main__":
     bt.init()
 
     #relay_test(20, gpio, psu, bt)
-    #rack_test(bat, gpio, psu, bt)
-    spinel_test(bat, gpio, psu, bt)
+    #psu_test(bat, gpio, psu)
+    rack_test(bat, gpio, psu, bt)
+    #spinel_test(bat, gpio, psu, bt)
     pass
     # scan = create_barcode_scanner("172.21.101.41:2000")
     # _udi = scan.request(None, timeout=10, encoding="ascii")

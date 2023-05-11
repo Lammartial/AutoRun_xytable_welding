@@ -8,6 +8,7 @@ barcode scanned UDI or human typed UDI or for whatever reason it is being used e
 """
 
 from typing import Tuple
+import re
 
 from rrc.eth2serial import Eth2SerialDevice, tcp_send_and_receive_from_server
 from rrc.serialport import SerialComportDevice
@@ -31,6 +32,13 @@ def create_barcode_scanner(resource_string: str) -> Eth2SerialDevice | SerialCom
 
 #--------------------------------------------------------------------------------------------------
 
+def decode_rrc_udi_label(raw: str | bytes | bytearray) -> Tuple[dict, list]:
+    #1CELL00000000505,1PCBA00000000664
+    filter = re.compile(r"(.*)(CELL|PCBA)(.*)")
+    g = filter.findall(raw.strip())
+    pass
+
+#--------------------------------------------------------------------------------------------------
 
 def decode_rrc_product_serial_label(raw: str | bytes | bytearray) -> Tuple[dict, list]:
     """Converts an RRC specific barcode reading string into data record set.
