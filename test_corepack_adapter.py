@@ -70,19 +70,58 @@ def rack_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, bt: Hioki_BT
         print("INP2", gpio.read_input(2))
 
 
+def psu_print_error_queue(psu) -> None:
+    last_error = None
+    n = 0
+    empty = False
+    while not empty:
+        last_error = psu.read_system_error()
+        if last_error[0] == 0:
+            empty = True
+        else:
+            n += 1
+        print(last_error)
+    print(f"Found number of errors: {n}")
+
+
 def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900) -> None:
-    psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
-    psu.configure_current_rise_times(pos="DEF", neg="DEF")
-    
+
+    print("Voltage slew rates:")
+    print(psu.request("VOLTAGE:SLEW:NEG?"))
+    print(psu.request("VOLTAGE:SLEW:POS?"))
+    print("Current slew rates:")
+    print(psu.request("CURRENT:SLEW:NEG?"))
+    print(psu.request("CURRENT:SLEW:POS?"))
+
+    # Device need to be configured for CV mode to change V slopes
+    #psu.configure_voltage_rise_times(pos="MIN", neg="MIN")
+    #print(psu.read_system_error())
+
     gpio.switch_to_psu_measurement()
     sleep(0.5)
     psu.set_output_state(0)
+    print("PSU", psu.get_all_measurements())    
+
     # check PSU charge mode
     print("PSU Output on")
-    #psu.configure_supply(12.0, 0.080, 50, 0)
-    psu.configure_cc_mode(0.3, 10.8*1.15, (10.8*1.15) * 0.8, 50, 1)
+    #psu.configure_supply(12.0, 0.080, 50, 1)
+   
+    psu_print_error_queue(psu)
+
+    psu.configure_cc_mode(0.3, 6.9*1.15, 6.9*0.80, 50, 1)
+
+    # Device need to be configured for CC mode to change I slopes
+    #psu.configure_current_rise_times(pos="MIN", neg="MIN")
+    #print(psu.read_system_error())
+    #psu.set_output_state(1)
+
+    psu_print_error_queue(psu)
+    
     print("PSU", psu.get_all_measurements())
+    psu.set_output_state(0)
+    
     psu.configure_charge_mode(0.25, 12.55, 10.0, 50, 1)
+    psu_print_error_queue(psu)
     print("PSU", psu.get_all_measurements())
     sleep(2)
     print("PSU", psu.get_all_measurements())
@@ -90,6 +129,7 @@ def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900) -> None:
     psu.set_output_state(0)
     sleep(0.5)
     psu.configure_discharge_mode(-0.25, 12.55, 10.0, -50, 1)
+    psu_print_error_queue(psu)
     sleep(2)
     print("PSU", psu.get_all_measurements())
     print("PSU Output off")
@@ -171,7 +211,8 @@ def spinel_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, bt: Hioki_
     sleep(0.5)
     psu.configure_supply(5.0, 1.0, 50.0, 1)
     print("PSU", psu.get_all_measurements())
-   
+    print("PSU Output off")
+    psu.set_output_state(0)
    
 
 #--------------------------------------------------------------------------------------------------
@@ -181,11 +222,11 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    LINE_NETWORK = "172.25.101"  # VN line 1
-    #LINE_NETWORK = "172.21.101"  # HOM Warehouse
+    #LINE_NETWORK = "172.25.101"  # VN line 1
+    LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
-    #i2cbus = I2CPort(f"{LINE_NETWORK}.40:2101") # socket 0
-    i2cbus = I2CPort(f"{LINE_NETWORK}.42:2101") # socket 1
+    i2cbus = I2CPort(f"{LINE_NETWORK}.40:2101") # socket 0
+    #i2cbus = I2CPort(f"{LINE_NETWORK}.42:2101") # socket 1
 
     mux = BusMux(i2cbus, address=0x77)
     for i in range(8):
@@ -197,18 +238,18 @@ if __name__ == "__main__":
     gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
     gpio.switch_to_psu_measurement()
     sleep(0.5)
-    #psu = M3900(f"TCPIP0::{LINE_NETWORK}.46::inst0::INSTR")  # socket 0
-    psu = M3900(f"TCPIP0::{LINE_NETWORK}.47::inst0::INSTR")  # socket 1
+    psu = M3900(f"TCPIP0::{LINE_NETWORK}.46::inst0::INSTR")  # socket 0
+    #psu = M3900(f"TCPIP0::{LINE_NETWORK}.47::inst0::INSTR")  # socket 1
     
     psu.set_output_state(0)
     print("INIT Hioki")
-    #bt = Hioki_BT3561A(f"{LINE_NETWORK}.44:23", termination="\r\n")  # socket 0
-    bt = Hioki_BT3561A(f"{LINE_NETWORK}.45:23", termination="\r\n")  # socket 1
+    bt = Hioki_BT3561A(f"{LINE_NETWORK}.44:23", termination="\r\n")  # socket 0
+    #bt = Hioki_BT3561A(f"{LINE_NETWORK}.45:23", termination="\r\n")  # socket 1
     bt.init()
 
     #relay_test(20, gpio, psu, bt)
-    #psu_test(bat, gpio, psu)
-    rack_test(bat, gpio, psu, bt)
+    psu_test(bat, gpio, psu)
+    #rack_test(bat, gpio, psu, bt)
     #spinel_test(bat, gpio, psu, bt)
     pass
     # scan = create_barcode_scanner("172.21.101.41:2000")

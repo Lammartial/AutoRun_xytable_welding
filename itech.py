@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 from time import sleep
 from rrc.visa import AdhocVisaDevice
 
@@ -109,6 +109,7 @@ class M3400(AdhocVisaDevice):
 
     def initialize_device(self) -> None:
         self.send("SYST:REM")     # set remote control ON
+        self.reset_device()       # Reset device
         #self.send("OFF:VOLT CONST")  # CONST or ZERO -> for CC priority mode
         #self.send("FUNC:MODE FIX")   # FIX, LIST, BATT, BEM
         self.send("SENS:STAT 1")  # set sense state ON
@@ -117,9 +118,27 @@ class M3400(AdhocVisaDevice):
 
     #----------------------------------------------------------------------------------------------
 
-    def read_system_error(self) -> str:
-        err = self.request_raw_query("SYSTEM:ERROR?")
-        return err
+    def reset_device(self):
+        """
+        Issues a reset by *RST resulting in these settings:
+
+        SCPI Commands *RST Initial Settings:
+        ...
+
+        """
+        self.send("*RST")  # Reset device
+        #self.send("SYST:CLE")     # Clear error queue
+
+    #----------------------------------------------------------------------------------------------
+
+    def read_system_error(self) -> Tuple[int, str]:
+        err_str = self.request_raw_query("SYSTEM:ERROR?")
+        err = err_str.split(",")  # try to split on comma => int, str
+        if len(err) < 2:
+            err = err_str.split(" ")  # try to split on space
+            if len(err < 2):
+                raise ValueError(f"Error response not valid '{err_str}'.")
+        return int(err[0]), str(err[1]).strip("\"")
 
     # def set_remote_control(self) -> None:
     #     """
@@ -636,11 +655,25 @@ class M3400(AdhocVisaDevice):
         return True
 
 
-    def configure_current_rise_times(self, pos: float| str = "MIN", neg: float | str = "MIN"):
+    def configure_current_rise_times(self, pos: float | str = "DEF", neg: float | str = "DEF"):
+        """Configures the current rise (negative rise = fall) times in seconds (s). 
+        Need be called when device is configured for CC mode, otherwise device throws an execution error.
+
+        Args:
+            pos (float | str, optional): Positive time value in s or MIN=0.001, MAX=2000 or DEF=0.1. Defaults to "DEF".
+            neg (float | str, optional): Positive time value in s or MIN=0.001, MAX=2000 or DEF=0.1. Defaults to "DEF".
+        """
         self.send(f"CURRENT:SLEW:NEG {neg}")
         self.send(f"CURRENT:SLEW:POS {pos}")
 
-    def configure_voltage_rise_times(self, pos: float | str = "MIN", neg: float | str = "MIN"):
+    def configure_voltage_rise_times(self, pos: float | str = "DEF", neg: float | str = "DEF"):
+        """Configures the voltage rise (negative rise = fall) times in seconds (s).
+        Need be called when device is configured for CV mode, otherwise device throws an execution error.
+
+        Args:
+            pos (float | str, optional): Positive time value in s or MIN=0.001, MAX=2000 or DEF=0.1. Defaults to "DEF".
+            neg (float | str, optional): Positive time value in s or MIN=0.001, MAX=2000 or DEF=0.1. Defaults to "DEF".
+        """
         self.send(f"VOLTAGE:SLEW:NEG {neg}")
         self.send(f"VOLTAGE:SLEW:POS {pos}")
 
@@ -728,6 +761,60 @@ class M3900(M3400):
 
     #----------------------------------------------------------------------------------------------
     # common function repeated as trampoline for TestStand only :-(
+
+    def reset_device(self):
+        """
+        Issues a reset by *RST resulting in these settings:
+
+        SCPI Commands *RST Initial Settings:
+
+        ARB:COUNt 1
+        ARB:CURRent:CDWell:DWELl 0.001
+        ARB:FUNCtion:SHAPe CDW
+        ARB:FUNCtion:TYPE VOLTage
+        ARB:TERMinate:LAST OFF
+        ARB:VOLTage:CDWell:DWELl 0.001
+        CALibrate:STATe OFF
+        CURRent 0
+        CURRent:LIMit 1% of rating
+        CURRent:LIMit:NEGative -1% of rating
+        CURRent:MODE FIXed
+        CURRent:PROTection:DELay 20ms
+        CURRent:PROTection:STATe OFF
+        CURRent:SHARing OFF
+        CURRent:SLEW MAX
+        CURRent:SLEW:MAXimum ON
+        CURRent:TRIGgered 0
+        FUNCtion VOLTage
+        INITialize:CONTinuous:TRANsient OFF
+        OUTPut OFF
+        OUTPut:DELay:FALL 0
+        OUTPut:DELay:RISE 0
+        OUTPut:PROTection:WDOG OFF
+        OUTPut:PROTection:WDOG:DELay 60
+        RESistance 0
+        RESistance:STATe 0
+        TRIGger:ACQuire:CURRent 0
+        TRIGger:ACQuire:CURRent:SLOPe POSitive
+        TRIGger:ACQuire:SOURce BUS
+        TRIGger:ACQuire:TOUTput OFF
+        TRIGger:ACQuire:VOLTage 0
+        TRIGger:ACQuire:VOLTage:SLOPe POSitive
+        TRIGger:ARB:SOURce BUS
+        TRIGger:TRANsient:SOURce BUS
+        VOLTage 1% of rating
+        VOLTage:LIMit 1% of rating
+        VOLTage:MODE FIXed
+        VOLTage:PROTection 120% of rating
+        VOLTage:RESistance 0
+        VOLTage:RESistance:STATe OFF
+        VOLTage:SLEW MAX
+        VOLTage:SLEW:MAXimum ON
+        """
+
+        self.send("*RST")       # Reset device
+        self.send("SYST:CLE")  # Clear error queue
+
 
     #def set_remote_control(self) -> None:
     #    super().set_remote_control()
@@ -908,27 +995,63 @@ class M3900(M3400):
             raise ValueError("Parameters current and power_limit need to have same sign.")
 
         if self.last_mode != "CURR":
+            # was in different mode before: need to prepare settings
             self.set_output_state(0)            # make sure output is OFF
+            #
+            # Fix setup of M3900 to work correctly: use VOLT xx, then set device to CV priority mode
+            # to allow changing the CURRENT limits before switching to CC prio. Otherwise, the
+            # after power up the limits are set to 1%/-1% of rating which is 0.4A/-0.4A which 
+            # causes CC mode to fail. We set the current limits to MIN/MAX as a change later is
+            # not possible without throwing an error.
+            #
+            self.send(f"VOLT {voltage_limit_high:0.2f}")
+            print(self.read_system_error())
+            self.send(f"CURR:LIM:NEG MIN")
+            print(self.read_system_error())
+            self.send(f"CURR:LIM:POS MAX")
+            print(self.read_system_error())
+   
 
-        # Fix setup of M3900 to work correctly: use VOLT xx, then set function to current (CC prio)
-        # Before: after power up using the "CURR xx" command to set CC prioroty did result in -0.5A on battery
-        self.send(f"VOLT {voltage_limit_high:0.2f}")
-        self.send(f"CURR:LIM:NEG {(current if current < 0 else 0):0.3f}")
-        self.send(f"CURR:LIM:POS {(current if current > 0 else 0):0.3f}")
+        self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
+        print(self.read_system_error())
+        self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}")
+        print(self.read_system_error())
+    
+        self.send(f"POW:LIM:NEG {(power_limit if power_limit < 0 else -1):0.2f}")  # does not accept 0W !
+        print(self.read_system_error())
+        self.send(f"POW:LIM:POS {(power_limit if power_limit > 0 else +1):0.2f}")  # does not accept 0W !
+        print(self.read_system_error())
 
-        self.set_function("CURR")               # enable CC priority
-        self.send(f"POW:LIM:NEG {(power_limit if power_limit < 0 else 0):0.2f}")
-        self.send(f"POW:LIM:POS {(power_limit if power_limit > 0 else 0):0.2f}")
+        # #
+        # # Fix setup of M3900 to work correctly: use VOLT xx, then set device to CV priority mode
+        # # to allow changing the CURRENT limits before switching to CC prio. Otherwise, the
+        # # after power up the limits are set to 1%/-1% of rating which is 0.4A/-0.4A which 
+        # # causes CC mode to fail.
+        # #
+        # self.send(f"VOLT {voltage_limit_high:0.2f}")
+        # print(self.read_system_error())
+        # self.send(f"CURR:LIM:NEG {((current * 1.10) if current < 0 else 0):0.3f}")
+        # print(self.read_system_error())
+        # self.send(f"CURR:LIM:POS {((current * 1.10) if current > 0 else 0):0.3f}")
+        # print(self.read_system_error())
+
+        #print(self.request("CURRENT:LIMIT:NEG?"))
+        #print(self.request("CURRENT:LIMIT:POS?"))
+
+        self.set_function("CURR")               # enable CC priority 
+        print(self.read_system_error())
+        self.send("FUNC:MODE FIX")
+        print(self.read_system_error())
+
+        self.send(f"CURR {current:0.2f}")       # set current for CC priority mode
+        print(self.read_system_error())
 
         # DO NOT use current limits in CC priority mode, it Causes an internal error of the M3900
 
-        self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}")
-        self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
-
-        #self.send(f"CURR {current:0.2f}")  # do NOT use CURR xx here !
-        
         self.send("SINK:RES:STATE 0")
+        print(self.read_system_error())
         self.set_output_state(1 if set_output else 0)
+        print(self.read_system_error())
 
 
     def configure_sink(self, current: float, resistance: float | None,
