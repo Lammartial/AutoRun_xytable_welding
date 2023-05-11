@@ -123,11 +123,12 @@ class M3400(AdhocVisaDevice):
         Issues a reset by *RST resulting in these settings:
 
         SCPI Commands *RST Initial Settings:
-        ...
+        
+        ????
 
         """
-        self.send("*RST")  # Reset device
-        #self.send("SYST:CLE")     # Clear error queue
+        self.send("*RST")      # Reset device
+        self.send("SYST:CLE")  # Clear system status register
 
     #----------------------------------------------------------------------------------------------
 
@@ -135,9 +136,9 @@ class M3400(AdhocVisaDevice):
         err_str = self.request_raw_query("SYSTEM:ERROR?")
         err = err_str.split(",")  # try to split on comma => int, str
         if len(err) < 2:
-            err = err_str.split(" ")  # try to split on space
-            if len(err < 2):
-                raise ValueError(f"Error response not valid '{err_str}'.")
+            #err = err_str.split(" ")  # try to split on space
+            #if len(err < 2):
+            raise ValueError(f"Error response invalid '{err_str}'.")
         return int(err[0]), str(err[1]).strip("\"")
 
     # def set_remote_control(self) -> None:
