@@ -35,7 +35,8 @@ def create_barcode_scanner(resource_string: str) -> Eth2SerialDevice | SerialCom
 def decode_rrc_udi_label(raw: str | bytes | bytearray) -> Tuple[dict, list]:
     #1CELL00000000505,1PCBA00000000664
     filter = re.compile(r"(.*)(CELL|PCBA)(.*)")
-    g = filter.findall(raw.strip())
+    m = filter.findall(raw.strip())
+    print(m)
     pass
 
 #--------------------------------------------------------------------------------------------------
