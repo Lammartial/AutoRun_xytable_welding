@@ -679,6 +679,50 @@ class M3400(AdhocVisaDevice):
         self.send(f"VOLTAGE:SLEW:POS {pos}")
 
 
+    def configure_cc_mode(self, current: float, resistance: float, voltage_limit_high: float, voltage_limit_low: float,
+                            power_limit: float, set_output: bool = False) -> None:
+        """Switches the PSU into CC priority mode. 
+        
+        Can be used to supply or sink depending on current sign.
+        Use to wake up on battery without triggering a safety event.
+        
+        To configure supply, provide positive current and power limits,
+        to sink set both negative.
+        Positve and negative power limits at same time are not allowed here.
+       
+        Args:
+            current (float): Current limit in A, can be positive (supply) or negative (sink). Adjust sign of power limit accordingly.
+            voltage_limit_high (float): upper voltage limit for regulation.
+            voltage_limit_low (float): lower voltage limit for regulation.
+            power_limit (float): Power limit ion W. The sign need to match the current's one.
+            set_output (bool, optional): Enables (True) or disables (False) power terminals for supply or sink. Defaults to False.
+        
+        """
+
+        # check that power limit and current have same sign
+        if (current * power_limit) < 0:
+            raise ValueError("Parameters current and power_limit need to have same sign.")
+
+        if self.last_mode != "CURR":
+            self.set_output_state(0)            # make sure output is OFF
+            self.send(f"VOLT {voltage_limit_high:0.2f}")
+            # make sure the current limits are set high enough
+            self.send(f"CURR:LIM:NEG MIN")
+            self.send(f"CURR:LIM:POS MAX")
+        self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
+        self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}")
+        self.send(f"POW:LIM:NEG {(power_limit if power_limit < 0 else -1):0.2f}")  # does not accept 0W !
+        self.send(f"POW:LIM:POS {(power_limit if power_limit > 0 else +1):0.2f}")  # does not accept 0W !
+        self.set_function("CURR")               # enable CC priority 
+        self.send("FUNC:MODE FIX")
+        self.send(f"CURR {current:0.2f}")       # set current for CC priority mode
+        if resistance is not None:
+            self.send(f"SINK:RES {resistance:0.3f}")
+            self.send("SINK:RES:STATE 1")
+        else:
+            self.send("SINK:RES:STATE 0")
+        self.set_output_state(1 if set_output else 0)
+
     def configure_sink(self, current: float, resistance: float | None,
                        current_limit: float, voltage_limit_high: float,
                        power_limit: float, set_output: bool = False) -> None:

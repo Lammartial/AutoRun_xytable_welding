@@ -96,7 +96,10 @@ def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900) -> None:
     # Device need to be configured for CV mode to change V slopes
     #psu.configure_voltage_rise_times(pos="MIN", neg="MIN")
     #print(psu.read_system_error())
-
+    #print("Voltage slew rates:")
+    #print(psu.request("VOLTAGE:SLEW:NEG?"))
+    #print(psu.request("VOLTAGE:SLEW:POS?"))
+    
     gpio.switch_to_psu_measurement()
     sleep(0.5)
     psu.set_output_state(0)
@@ -108,7 +111,9 @@ def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900) -> None:
    
     psu_print_error_queue(psu)
 
-    psu.configure_cc_mode(0.3, 6.9*1.15, 6.9*0.80, 50, 1)
+    #psu.configure_cc_mode(0.3, 6.9*1.15, 6.9*0.80, 50, 1)
+    psu.configure_cc_mode(0.3, 12.55, 10.0, 50, 1)
+
 
     # Device need to be configured for CC mode to change I slopes
     #psu.configure_current_rise_times(pos="MIN", neg="MIN")
@@ -116,22 +121,33 @@ def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900) -> None:
     #psu.set_output_state(1)
 
     psu_print_error_queue(psu)
-    sleep(3)
+    sleep(1)
     print("PSU", psu.get_all_measurements())
     #print("PSU Output off")
-    #psu.set_output_state(0)
+    #psu.send(f"CURRENT:LIM:NEG 0.00")
+    #psu.send(f"CURRENT:LIM:POS 0.00")
+    #psu.send(f"CURR 0.0")
+    #psu.send(f"VOLT 0.0")
+    
+    #psu.send(f"VOLTAGE:LIM:LOW 13.00")
+    #psu.send(f"VOLTAGE:LIM:HIGH 13.00")
+    psu.set_output_state(0)
 
     psu.configure_charge_mode(0.25, 12.55, 10.0, 50, 1)
     psu_print_error_queue(psu)
     print("PSU", psu.get_all_measurements())
-    sleep(3)
+    sleep(1)
     print("PSU", psu.get_all_measurements())
     #print("PSU Output off")
-    #psu.set_output_state(0)
+    psu.set_output_state(0)
     sleep(0.5)
-    psu.configure_discharge_mode(-0.25, 12.55, 10.0, -50, 1)
+    psu.configure_discharge_mode(-1.501, 13.55, 4.0, -50, 1)
     psu_print_error_queue(psu)
-    sleep(3)
+    sleep(1)
+    print("PSU", psu.get_all_measurements())
+    psu.configure_discharge_mode(-2.000, 13.55, 4.0, -50, 1)
+    psu_print_error_queue(psu)
+    sleep(1)
     print("PSU", psu.get_all_measurements())
     print("PSU Output off")
     psu.set_output_state(0)
@@ -223,8 +239,8 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    #LINE_NETWORK = "172.25.101"  # VN line 1
-    LINE_NETWORK = "172.21.101"  # HOM Warehouse
+    LINE_NETWORK = "172.25.101"  # VN line 1
+    #LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
     i2cbus = I2CPort(f"{LINE_NETWORK}.40:2101") # socket 0
     #i2cbus = I2CPort(f"{LINE_NETWORK}.42:2101") # socket 1
