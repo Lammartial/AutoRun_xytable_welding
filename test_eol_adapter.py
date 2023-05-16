@@ -11,6 +11,15 @@ from rrc.relayboard_i2c_corepack import CorePackRelayBoard
 from rrc.temperature_sts21 import STS21
 from rrc.itech import M3400
 
+# --------------------------------------------------------------------------- #
+# Logging
+# --------------------------------------------------------------------------- #
+
+DEBUG = 2
+
+from rrc.custom_logging import getLogger, logger_init
+
+
 #--------------------------------------------------------------------------------------------------
 
 def psu_print_error_queue(psu) -> None:
@@ -26,6 +35,8 @@ def psu_print_error_queue(psu) -> None:
         print(last_error)
     print(f"Found number of errors: {n}")
 
+
+#--------------------------------------------------------------------------------------------------
 
 def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3400) -> None:
 
@@ -72,9 +83,11 @@ def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3400) -> None:
 
 #--------------------------------------------------------------------------------------------------
 
-
 if __name__ == "__main__":
-    
+    ## Initialize the logging
+    logger_init(filename_base=None)  ## init root logger with different filename
+    _log = getLogger(__name__, DEBUG)
+
     LINE_NETWORK = "172.25.101"  # VN line 1
     #LINE_NETWORK = "172.21.101"  # HOM Warehouse
 

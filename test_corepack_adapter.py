@@ -22,6 +22,24 @@ DEBUG = 2
 
 from rrc.custom_logging import getLogger, logger_init
 
+
+#--------------------------------------------------------------------------------------------------
+
+
+def psu_print_error_queue(psu) -> None:
+    last_error = None
+    n = 0
+    empty = False
+    while not empty:
+        last_error = psu.read_system_error()
+        if last_error[0] == 0:
+            empty = True
+        else:
+            n += 1
+        print(last_error)
+    print(f"Found number of errors: {n}")
+
+
 #--------------------------------------------------------------------------------------------------
 
 def rack_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, bt: Hioki_BT3561A) -> None:
@@ -68,20 +86,6 @@ def rack_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, bt: Hioki_BT
         sleep(0.5)
         print("PSU", psu.get_all_measurements())
         print("INP2", gpio.read_input(2))
-
-
-def psu_print_error_queue(psu) -> None:
-    last_error = None
-    n = 0
-    empty = False
-    while not empty:
-        last_error = psu.read_system_error()
-        if last_error[0] == 0:
-            empty = True
-        else:
-            n += 1
-        print(last_error)
-    print(f"Found number of errors: {n}")
 
 
 def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900) -> None:

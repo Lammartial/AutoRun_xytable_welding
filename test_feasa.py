@@ -26,7 +26,7 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger without filelogging
     _log = getLogger(__name__, DEBUG)
 
-    RESOURCE_STRING = "172.25.101.43:3000"
+    RESOURCE_STRING = "172.21.101.31:3000"  # PCBA test, socket 0
 
     # 1. Create an instance of class as device controller
     feasa = FEASA_CH9121(RESOURCE_STRING)
