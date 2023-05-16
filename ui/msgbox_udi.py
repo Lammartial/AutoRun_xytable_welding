@@ -21,7 +21,7 @@ from collections.abc import Iterator
 from typing import Optional, Tuple
 from pathlib import Path
 from serial import Serial
-from rrc.barcode_scanner import create_barcode_scanner
+from rrc.barcode_scanner import create_barcode_scanner, decode_rrc_udi_label
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -56,12 +56,23 @@ allow_manual_edit: bool = False
 #--------------------------------------------------------------------------------------------------
 
 def validate_udi_by_string_at_position_1(udi: str, v_str: str) -> bool:
+    """Quick and dirty UDI check function. Obsolete."""
     if len(udi) > len(v_str) + 1:
         #if udi[1:1+len(v_str)] in v_str:  # positions given by RRC team
         #    return True
         if v_str in udi:  # position if ID in the codestring doesn't care
             return True
     return False
+
+
+def validate_udi_by_rrc_udi_decoder(udi: str, v_str: str) -> bool:
+    """Verify the UDI with our UDI decoder just using the correct sorting key here."""
+    result, _ = decode_rrc_udi_label(udi)
+    if v_str in result:  # check if the correct UDI type is decoded
+        return True
+    return False
+
+
 
 #--------------------------------------------------------------------------------------------------
 
@@ -554,7 +565,7 @@ def identify_uut(test_socket: int, requested_udi: list, scanner_resource_str: st
     _scanner = scanner_resource_str
     # clear the UDIs to scan from TestStand context:
     udi_to_scan = [
-        UDIScanCtrlItem(item, validate_udi_by_string_at_position_1) for item in requested_udi
+        UDIScanCtrlItem(item, validate_udi_by_rrc_udi_decoder) for item in requested_udi
     ]
     main(_scanner, title=title, test_socket=int(test_socket))
     res = tuple()
@@ -578,17 +589,22 @@ if __name__ == '__main__':
 
     # set the required UDIs per global
     udi_to_scan = [
-        UDIScanCtrlItem("PCBA", validate_udi_by_string_at_position_1),
-        UDIScanCtrlItem("CELL", validate_udi_by_string_at_position_1),
-        #UDIScanCtrlItem("HEINZ", validate_udi_by_string_at_position_1),
+        #UDIScanCtrlItem("PCBA", validate_udi_by_string_at_position_1),
+        #UDIScanCtrlItem("CELL", validate_udi_by_string_at_position_1),
+        UDIScanCtrlItem("PCBA", decode_rrc_udi_label),
+        UDIScanCtrlItem("CELL", decode_rrc_udi_label),
     ]
 
+    RESOURCE_STR = "172.21.101.41:2000"
+    #RESOURCE_STR = "COM24,9600,8N1"  # Handheld scanner
+    
     allow_manual_edit = True
-    #main("172.25.101.43:2000", title="TEST SOCKET SCANNER", test_socket=-1)
-    identify_uut(1, ["PCBA", "CELL"], "172.25.101.43:2000", allow_user_edit=False)
-    #main("COM24,9600,8N1", title="TEST HANDHELD SCANNER")
+    #main(RESOURCE_STR, title="TEST SOCKET SCANNER", test_socket=-1)
+    #main(RESOURCE_STR, title="TEST HANDHELD SCANNER")
     #print(f"SCANNER -> {scanned_udi}")
 
+    identify_uut(1, ["PCBA", "CELL"], RESOURCE_STR, allow_user_edit=False)
+       
     res = tuple()
     for item in udi_to_scan:
         _log.debug(f"UDI({item.name})={item.scanned_udi}")
