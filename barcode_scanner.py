@@ -24,6 +24,24 @@ from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
 def create_barcode_scanner(resource_string: str) -> Eth2SerialDevice | SerialComportDevice:
+    """Creates a RRC scanner depending on the resource string for abstraction.
+    It creates either a network socket scanner or a COM port scanner. 
+    The Termination is set to LF only.
+
+    Valid resource strings:
+
+    hostname:port, e.g. "172.25.101.43:2000" for IPv4 172.25.101.43 at port 2000
+    comport,baud,linesettings, e.g."COM7,9600,8N1" for COM7 with 9600 baud and 8 bits No parity, 1 stop bit
+    
+    Args:
+        resource_string (str): Resource connection of the scanner.
+
+    Returns:
+        Eth2SerialDevice | SerialComportDevice: a device that can transparently being used
+            by its function .request() to scan for input.
+
+    """
+
     if "," in resource_string:
         dev = SerialComportDevice(resource_string, termination="\n")  # COM port
     else:
