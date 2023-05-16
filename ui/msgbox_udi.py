@@ -55,6 +55,7 @@ allow_manual_edit: bool = False
 
 #--------------------------------------------------------------------------------------------------
 
+
 def validate_udi_by_string_at_position_1(udi: str, v_str: str) -> bool:
     """Quick and dirty UDI check function. Obsolete."""
     if len(udi) > len(v_str) + 1:
