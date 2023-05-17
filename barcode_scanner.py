@@ -17,7 +17,7 @@ from rrc.serialport import SerialComportDevice
 # Logging
 # --------------------------------------------------------------------------- #
 
-DEBUG = 1
+DEBUG = 0
 
 from rrc.custom_logging import getLogger, logger_init
 

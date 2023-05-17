@@ -8,6 +8,8 @@ from rrc.i2cbus import BusMux, I2CMuxedBus
 from rrc.smbus import BusMaster
 from rrc.chipsets import BQ40Z50R1
 from rrc.relayboard_i2cio4r4xdpdt import RelayBoard4Relay4GPIO
+from rrc.cell_voltage_simulation import CellVoltageSimulation
+from rrc.calibration_storage import CalibrationStorage
 from rrc.temperature_sts21 import STS21
 from rrc.barcode_scanner import create_barcode_scanner
 from rrc.feasa import FEASA_CH9121
@@ -17,7 +19,7 @@ from rrc.itech import M3400
 # Logging
 # --------------------------------------------------------------------------- #
 
-DEBUG = 0
+DEBUG = 1
 
 from rrc.custom_logging import getLogger, logger_init
 
@@ -151,28 +153,39 @@ def psu_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO, psu: M3400) -> None:
     #     #print(bat.device_name())
 
 
-def rack_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO, feasa: FEASA_CH9121, psu1: M3400, psu2: M3400) -> None:
+def rack_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO, feasa: FEASA_CH9121, 
+              calib: CalibrationStorage,  vsim: CellVoltageSimulation,
+              psu1: M3400, psu2: M3400) -> None:
     #psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
     #psu.configure_current_rise_times(pos="DEF", neg="DEF")
     
     # verify that PSU does not trigger battery protection
     print("PSU Output on")
-    #psu1.configure_supply(12.0, 0.080, 50, 0)
+    psu2.configure_supply(10.8, 0.080, 50, 1)
+
     #su.configure_cc_mode(0.05, 10.8*1.15, (10.8*1.15) * 0.8, 50, 1)
     #sleep(1.5)  # wakeup battery
     #print(bat.current())
-    print("PSU", psu1.get_all_measurements())
+    print("PSU1", psu1.get_all_measurements())
+    print("PSU2", psu2.get_all_measurements())
     #print("Safety Status:", bat.get_safety_status())
     #print("Safety Status details:", bat._safety_status)
     #print("PSU Output off")
-    
-    print("Issue capture command...")
-    print(feasa.capture_pwm())
-    # "getRGBI##" command
-    print("getRGBI##0")
-    print(feasa.get_rgbi_num(0))
-    print("getRGBI##3")
-    print(feasa.get_rgbi_num(3))
+    vsim.set_cell_n_voltage(1, 3.6)
+    vsim.set_cell_n_voltage(2, 3.6)
+    vsim.set_cell_n_voltage(3, 3.6)
+    # print("Issue capture command...")
+    # print(feasa.capture_pwm())
+    # # "getRGBI##" command
+    # print("getRGBI##0")
+    # print(feasa.get_rgbi_num(0))
+    # print("getRGBI##3")
+    # print(feasa.get_rgbi_num(3))
+    print("PSU1", psu1.get_all_measurements())
+
+    psu1.set_output_state(0)
+    psu2.set_output_state(0)
+    vsim.initialize()
     
 
 def test_feasa_only(feasa: FEASA_CH9121):
@@ -199,9 +212,9 @@ if __name__ == "__main__":
     #feasa = FEASA_CH9121(f"{LINE_NETWORK}.33:3000")  # PCBA test, socket 1
     #feasa = FEASA_CH9121(f"{LINE_NETWORK}.35:3000")  # PCBA test, socket 2
 
-    test_feasa_only(feasa)
-    exit()
-    
+    #test_feasa_only(feasa)
+    #exit()
+
     i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101") # socket 0
     #i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101") # socket 1
     #i2cbus = I2CPort(f"{LINE_NETWORK}.34:2101") # socket 2
@@ -211,10 +224,14 @@ if __name__ == "__main__":
         mux.setChannel(i + 1)
         print("CH:", i, i2cbus.i2c_bus_scan())
 
+    calib = CalibrationStorage(I2CMuxedBus(i2cbus, mux, 1))
     smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 2), retry_limit=7, verify_rounds=3, pause_us=50)
     bat = BQ40Z50R1(smbus)
     gpio = RelayBoard4Relay4GPIO(I2CMuxedBus(i2cbus, mux, 3))
-    sleep(0.5)
+    vsim = CellVoltageSimulation(I2CMuxedBus(i2cbus, mux, 4))
+    vsim.initialize()
+
+    #sleep(0.5)
     psu1 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=1)  # socket 0, 1, and 2 share
     psu2 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=2)  # socket 0, 1, and 2 share
     #psu1 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=3)
@@ -226,8 +243,8 @@ if __name__ == "__main__":
 
     
     #psu_test(bat, gpio, psu2)
-    #psu_test(bat, gpio, psu1)
-    #rack_test(bat, gpio, feasa, psu1, psu2)
+    psu_test(bat, gpio, psu1)
+    #rack_test(bat, vsim, calib, gpio, feasa, psu1, psu2)
     
 
 # END OF FILE

@@ -54,10 +54,10 @@ def logger_init(filename_base: str | None = "C:/Production/station_test") -> Non
         logger.debug(f"Logger already set.")
         return
 
-    logging.disable(logging.NOTSET)  # enable ALL levels
+    logging.disable(logging.NOTSET)  # make sure we have no barrier left
     #print("print in logging.logger_init()")
     #print("print logging.py __name__: " +__name__)
-    logger.setLevel(logging.NOTSET)
+    #logger.setLevel(logging.NOTSET)  # enables ALL levels
 
     # File handler
     if filename_base:
@@ -99,6 +99,7 @@ def getLogger(namespace: str, debug: int) -> logging.Logger:
         level = logging.WARNING
     _log = logging.getLogger(namespace)
     _log.setLevel(level)
+    logging.getLogger().setLevel(level)  # set root logger also
     return _log
 
 

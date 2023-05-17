@@ -8,7 +8,7 @@ from rrc.eth2i2c.ncd_errors import *
 # Logging
 # --------------------------------------------------------------------------- #
 
-DEBUG = 2
+DEBUG = 0
 
 from rrc.custom_logging import getLogger, logger_init
 
