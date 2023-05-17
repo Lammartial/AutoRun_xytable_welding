@@ -153,8 +153,9 @@ def psu_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO, psu: M3400) -> None:
     #     #print(bat.device_name())
 
 
-def rack_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO, feasa: FEASA_CH9121, 
-              calib: CalibrationStorage,  vsim: CellVoltageSimulation,
+def rack_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO, 
+              vsim: CellVoltageSimulation, calib: CalibrationStorage, 
+              feasa: FEASA_CH9121, 
               psu1: M3400, psu2: M3400) -> None:
     #psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
     #psu.configure_current_rise_times(pos="DEF", neg="DEF")
@@ -162,10 +163,9 @@ def rack_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO, feasa: FEASA_CH9121,
     # verify that PSU does not trigger battery protection
     print("PSU Output on")
     psu2.configure_supply(10.8, 0.080, 50, 1)
-
     #su.configure_cc_mode(0.05, 10.8*1.15, (10.8*1.15) * 0.8, 50, 1)
-    #sleep(1.5)  # wakeup battery
-    #print(bat.current())
+    
+    sleep(1.5)  # wait PSU powered up
     print("PSU1", psu1.get_all_measurements())
     print("PSU2", psu2.get_all_measurements())
     #print("Safety Status:", bat.get_safety_status())
@@ -174,19 +174,43 @@ def rack_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO, feasa: FEASA_CH9121,
     vsim.set_cell_n_voltage(1, 3.6)
     vsim.set_cell_n_voltage(2, 3.6)
     vsim.set_cell_n_voltage(3, 3.6)
-    # print("Issue capture command...")
-    # print(feasa.capture_pwm())
-    # # "getRGBI##" command
-    # print("getRGBI##0")
-    # print(feasa.get_rgbi_num(0))
-    # print("getRGBI##3")
-    # print(feasa.get_rgbi_num(3))
+    
+    psu1.configure_supply(10.8, 0.080, 50, 1)
+    sleep(1.5)
     print("PSU1", psu1.get_all_measurements())
+
+    print(bat.isReady())
+    print(bat.current())
+    
+    print("Test LEDs ON")
+    print(bat.set_led_onoff(1))
+    print(bat.set_led_display(1))
+
+    print("Issue capture command...")
+    print(feasa.capture_pwm())
+    # "getRGBI##" command
+    print("getRGBI##0")
+    print(feasa.get_rgbi_num(0))
+    print("getRGBI##3")
+    print(feasa.get_rgbi_num(3))
+
+    print("Test LEDs OFF")
+    print(bat.set_led_onoff(0))
+    print(bat.set_led_display(0))
+    
+    print("Issue capture command...")
+    print(feasa.capture_pwm())
+    # "getRGBI##" command
+    print("getRGBI##0")
+    print(feasa.get_rgbi_num(0))
+    print("getRGBI##3")
+    print(feasa.get_rgbi_num(3))
+
 
     psu1.set_output_state(0)
     psu2.set_output_state(0)
     vsim.initialize()
-    
+
 
 def test_feasa_only(feasa: FEASA_CH9121):
     print("Issue capture command...")
@@ -243,8 +267,8 @@ if __name__ == "__main__":
 
     
     #psu_test(bat, gpio, psu2)
-    psu_test(bat, gpio, psu1)
-    #rack_test(bat, vsim, calib, gpio, feasa, psu1, psu2)
+    #psu_test(bat, gpio, psu1)
+    rack_test(bat, gpio, vsim, calib, feasa, psu1, psu2)
     
 
 # END OF FILE
