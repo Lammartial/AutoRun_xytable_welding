@@ -164,7 +164,7 @@ def rack_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO,
     print("PSU Output on")
     psu2.configure_supply(10.8, 0.080, 50, 1)
     #su.configure_cc_mode(0.05, 10.8*1.15, (10.8*1.15) * 0.8, 50, 1)
-    
+
     sleep(1.5)  # wait PSU powered up
     print("PSU1", psu1.get_all_measurements())
     print("PSU2", psu2.get_all_measurements())
@@ -174,6 +174,7 @@ def rack_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO,
     vsim.set_cell_n_voltage(1, 3.6)
     vsim.set_cell_n_voltage(2, 3.6)
     vsim.set_cell_n_voltage(3, 3.6)
+    vsim.set_cell_n_voltage(4, 3.6)
     
     psu1.configure_supply(10.8, 0.080, 50, 1)
     sleep(1.5)
