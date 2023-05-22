@@ -211,22 +211,27 @@ if __name__ == "__main__":
 
 
     # there is one ETH bridge for 6 PSUs
-    E1206_IP_STR = "TCPIP0::172.21.101.24::inst0::INSTR"
-    m3412 = [M3400(E1206_IP_STR, i) for i in range(1,7)]
+    #E1206_IP_STR = "TCPIP0::172.25.101.24::inst0::INSTR"
+    #m3412 = [M3400(E1206_IP_STR, i) for i in range(1,7)]
     #test_m3400_some(m3412[0])
+    
+    m = M3400("TCPIP0::172.25.101.51::inst0::INSTR")
+    print('IDN:' +str(m.request('*IDN?')))
+    print('ERROR', m.read_system_error())
+    print(m.get_all_measurements())
 
-    for m in m3412[:]:
-        print('IDN:' +str(m.request('*IDN?')))
-        print('ERROR', m.read_system_error())
-        # m.set_remote_control()
-        # m.set_sense_state(1)
-        # m.set_output_state(0)
-        # print(m.get_all_meas())
+    # for m in m3412[:]:
+    #     print('IDN:' +str(m.request('*IDN?')))
+    #     print('ERROR', m.read_system_error())
+    #     # m.set_remote_control()
+    #     # m.set_sense_state(1)
+    #     # m.set_output_state(0)
+    #     # print(m.get_all_meas())
 
     #test_start_battery_pcba(m3412[0], m3412[1])
 
-    for m in m3412:
-        m.set_output_state(0)  # switch all outputs OFF
+    #for m in m3412:
+    #    m.set_output_state(0)  # switch all outputs OFF
 
     print("DONE.")
 
