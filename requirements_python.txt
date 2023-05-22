@@ -21,6 +21,7 @@ httpcore>=0.16.3
 httptools>=0.5.0
 httpx>=0.23.3
 humanfriendly>=10.0
+icmplib>=3.0.3
 idna>=3.4
 itsdangerous>=2.1.2
 Jinja2>=3.1.2
