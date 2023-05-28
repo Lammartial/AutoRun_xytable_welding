@@ -37,7 +37,7 @@ if __name__ == "__main__":
         f"{NETWORK_STR}.182",
     ]
 
-    print(check_list_of_hosts(hosts))
-    print(find_hosts_down(hosts))
+    print("Hosts status list:", check_list_of_hosts(hosts))
+    print("Hosts not reachable:", find_hosts_down(hosts))
 
 # END OF FILE
