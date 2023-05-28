@@ -1,5 +1,6 @@
 import socket
 from time import sleep
+from struct import pack
 from rrc.eth2i2c.base import I2CBase
 from rrc.eth2i2c.ncd_errors import *
 
@@ -59,14 +60,14 @@ class I2CPort(I2CBase):
             port (int): port used for the communication. Default setting is 2101.
             timeout_s (float, optional): Timeout for network communication in seconds. Defaults to 5s.
             open_connectuion (bool, optional): If True, the socket connection is opened on init(). Defaults to True.
-            
+
         Raises:
             NCDSelfTestFailedError: Raised if the selftest of the converter fails.
         """
-        self.socket = None        
+        self.socket = None
         _res = resource_str.split(":")
         self._host = _res[0]
-        self._port = int(_res[1]) if len(_res) > 1 else int(2101)  # use default port 
+        self._port = int(_res[1]) if len(_res) > 1 else int(2101)  # use default port
         self._open_connection = open_connection
         self.timeout_s = timeout_s
         self.ncd_interface_address = f"{self._host}:{self._port}"  # This the ip address ("192.168.1.61:2101"). Used in error messages.
@@ -133,7 +134,7 @@ class I2CPort(I2CBase):
     #     rx_payload = self.__data_exchange(bytes([0xBC, 0xFF]))
     #     self.__check_for_errors(rx_payload)
     #     return bytearray(rx_payload)
-    
+
     def self_test(self) -> None:
         """Perform the 2-way self test of the converter.
 
@@ -244,24 +245,33 @@ class I2CPort(I2CBase):
         return list(rx_payload)
 
 
-    # def i2c_change_speed(self, channel: int, speed: int) -> list:
-    #     # From internet:
-    #     # 100KHz: AA 06 BC 32 01 01 00 00 A0
-    #     # 38KHz:  AA 06 BC 32 01 01 00 01 A1
-    #     # 200KHz: AA 06 BC 32 01 01 00 02 A2
-    #     # 300KHz: AA 06 BC 32 01 01 00 03 A3
-    #     # 400KHz: AA 06 BC 32 01 01 00 04 A4
-    #     #         [AA bytecount][c1, c2, u1, u2, u3, u4][checksum]
-    #     #              API       payload
-    #     # AA=170, BC=188
-    #     #tx_payload = bytes([0xBC,0x32,0x01,0x01,0x00,0x02])
-    #     tx_payload = bytes([0xBC, 0x01, 0x01, 0x00, speed & 0xff])        
-    #     rx_payload = self.__data_exchange(tx_payload)
-    #     _log = getLogger(__name__, DEBUG)
-    #     _log.info(rx_payload)
-    #     self.__check_for_errors(rx_payload)
-    #     return list(rx_payload)
+    def i2c_change_clock_frequency_ncd(self, frequency: int) -> list:
+        # From internet:
+        # 100KHz: AA 06 BC 32 01 01 00 00 A0
+        # 38KHz:  AA 06 BC 32 01 01 00 01 A1
+        # 200KHz: AA 06 BC 32 01 01 00 02 A2
+        # 300KHz: AA 06 BC 32 01 01 00 03 A3
+        # 400KHz: AA 06 BC 32 01 01 00 04 A4
+        #         [AA bytecount][c1, c2, u1, u2, u3, u4][checksum]
+        #              API       payload
+        # AA=170, BC=188
+        tx_payload = bytes([0xBC,0x32,0x01,0x01,0x00])
+        if   frequency ==  38000: tx_payload += bytes([0x01])
+        elif frequency == 200000: tx_payload += bytes([0x02])
+        elif frequency == 300000: tx_payload += bytes([0x03])
+        elif frequency == 400000: tx_payload += bytes([0x04])
+        else: tx_payload += bytes([0x00])
+        rx_payload = self.__data_exchange(tx_payload)
+        #_log = getLogger(__name__, DEBUG)
+        #_log.info(rx_payload)
+        self.__check_for_errors(rx_payload)
+        return list(rx_payload)
 
+    def i2c_change_clock_frequency(self, frequency: int, timeout_ms: int = 1000) -> list:
+        tx_payload = bytes([0xCF]) + pack(">L", frequency) + pack(">L", timeout_ms)  # to 32 bit unsigned
+        rx_payload = self.__data_exchange(tx_payload)
+        self.__check_for_errors(rx_payload)
+        return list(rx_payload)
 
     def __check_for_errors(self, payload):
         """Check if the response contains an error message"""
@@ -279,7 +289,7 @@ class I2CPort(I2CBase):
         #
         # But using OSError instead is to be SMBUS compliant!
         #
-        # NOTE: 
+        # NOTE:
         #   error messages taken from AlphaStation source code write/read I2C functions
         #
         if error_code == NCD_I2C_READ_ERROR:
@@ -292,7 +302,7 @@ class I2CPort(I2CBase):
             raise Exception("Not implemented I2C function used")
         else:
             raise NCDUnknownErrorCodeError(self, error_code)
-                         
+
 
     def __wrap_payload_in_packet(self, payload: bytes) -> bytes:
         """Wraps the payload in an NCD packet."""
@@ -317,15 +327,15 @@ class I2CPort(I2CBase):
         while retries > 0:
             try:
                 return self.__ethernet_exchange(tx_payload)
-            except Exception as e:                
+            except Exception as e:
                 #_log = getLogger(__name__, 2)
-                #_log.debug(f"NCD Retries {retries}")                
+                #_log.debug(f"NCD Retries {retries}")
                 #sleep(0.05)
                 self.__connect_socket()
                 retries -= 1
                 if retries == 0:
                     raise e
-                
+
     def __ethernet_exchange(self, tx_payload: bytes) -> bytes:
         # Send data
         tx_packet = self.__wrap_payload_in_packet(tx_payload)
@@ -424,16 +434,23 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    I2C_BRIDGE_RESOURCE_STR = "172.21.101.11:2101"
+    #I2C_BRIDGE_RESOURCE_STR = "172.21.101.11:2101"
+    I2C_BRIDGE_RESOURCE_STR = "192.168.69.77:2101"
     dev = I2CPort(I2C_BRIDGE_RESOURCE_STR)
-    mux = BusMux(dev, 0x77)
+    mux = BusMux(dev, 0x70)
     bus = BusMaster(dev)
     bat = BQ40Z50R1(bus)
+    print("Change clock frequency - RRC: ", str(dev.i2c_change_clock_frequency(20000)))
+    #print("Change clock frequency - NCD: ", str(dev.i2c_change_clock_frequency_ncd(38000)))
     #dev.writeto(0x77, bytearray([0x02]))
-    mux.setChannel(2)
-    _log.info(str(dev.i2c_bus_scan()))
-    #print("CHANGE SPEED: ", str(dev.i2c_change_speed(1, 5)))
+    for c in range(1, 9):
+        mux.setChannel(c)
+        print(f"Channel {c}:", str(dev.i2c_bus_scan()))
+    mux.setChannel(6)
     #print(str(dev.get_i2c_port()))
     print(bat.device_name())
+    print(bat.design_capacity())
+    print(bat.design_voltage())
+
 
 # END OF FILE
