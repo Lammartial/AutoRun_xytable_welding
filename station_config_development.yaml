@@ -3,7 +3,7 @@
 #
 # DSP REST interface
 #
-#dsp_api_base_url:  "http://127.0.0.1:8000"  # mockup on localhost
+dsp_api_base_url:  "http://127.0.0.1:8000"  # mockup on localhost
 #dsp_api_base_url:  "http://172.25.100.43:8000"  # mockup on TSDEV in VN
 #dsp_api_base_url:  "http://sv-production-vn:8000"  # mockup on sv-production-vn
 #dsp_api_base_url:  "http://sv-production:9925"  # Orbis DSP REST API @RRC
@@ -16,7 +16,7 @@
 # hardware of PC and assigned measurement hardware
 #
 
-line_id:        -1               # 1 .. 9, -1 = undetermined -> calculate from 2nd IP octet:
+line_id:        2               # 1 .. 9, -1 = undetermined -> calculate from 2nd IP octet:
                                  #              xxx.xxx.LINE-ID-100.xxx if octet is > 100, otherwise := 0
 #test_type:      UNDETERMINED     # cannot be set and comes from test program instead :
                                   #     CELLSTACK_TEST, PCBA_TEST, COREPACK_TEST, EOL_TEST
@@ -25,7 +25,7 @@ line_id:        -1               # 1 .. 9, -1 = undetermined -> calculate from 2
                                  #     PL1-WS103=PCBA_TEST
                                  #     PL1-WS111=CORPACK_TEST
                                  #     PL1-WS113=EOL_TEST
-line_network:   "172.21.101."    # Line specific network range is different depending on
+#line_network:   "172.21.101."    # Line specific network range is different depending on
                                  # where the PC is located:
                                  #  172.25.101.xxx in VN,
                                  #  172.21.101.xxx in DE
@@ -46,6 +46,10 @@ line_network:   "172.21.101."    # Line specific network range is different depe
 #------------------------------------------------------------------------------
 CELL_TEST:
   dsp_api_base_url:  "http://172.25.100.9:9925"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
+                                                 # Each line has own port range:
+                                                 #  line 1 : 9925 - 9929
+                                                 #  line 2 : 9935 - 9939
+                                                 #  line 3 : 9945 - 9949
   # There is NO I2C MUX on cell stack tester.
   #
   # List of TestSocket configurations
@@ -55,7 +59,7 @@ CELL_TEST:
     "0":
       resource_strings:
         eth_to_i2c:   "172.21.101.20:2101"
-        scanner:      "COM3,9600,8N1"
+        scanner:      "COM7,9600,8N1"
         icr_bt3561a:  "172.21.101.21:23"
         mux_sw1001:   "172.21.101.22:23"
 
@@ -140,6 +144,32 @@ COREPACK_TEST:
         icr_bt3561a:   "172.21.101.45:23"
 
 
+#------------------------------------------------------------------------------
+LEANPACK_TEST:
+  dsp_api_base_url:  "http://172.25.100.9:9927"  # same as corepack for now (SPINEL test)
+  i2c_mux:
+    # NCD 8x I2C-MUX:
+    #  bus 1: smbus to DUT
+    #  bus 2: gpio board (pca9536)
+    #  bus 3: reference temperature (sts21)
+    #  bus 4,5,6,7,8: unused
+    num_bus: 8
+    device_to_bus_map:
+      # NOTE: This order may not be changed.
+      #       Append new mappings on the end.
+      #       (list is passed to TS as tuple without names)
+      smbus_dut: 1
+      gpio_board: 2
+      temp_meas: 3
+  test_sockets:
+    "0":
+      resource_strings:
+        eth_to_i2c:    "172.21.101.40:2101"
+        scanner:       "172.21.101.41:2000"
+        led_ch9121:    "172.21.101.41:3000"
+        psu_m3900:     "TCPIP0::172.21.101.46::inst0::INSTR"
+        icr_bt3561a:   "172.21.101.44:23"
+
 
 #------------------------------------------------------------------------------
 EOL_TEST:
@@ -176,5 +206,6 @@ CELL_WELDING:
         # this is a MODBUS resource string
         aws3_controller:  "tcp:172.21.101.100:502"
         scanner:          "COM4,9600,8N1"  # Eth->UART
+
 
 # END OF FILE

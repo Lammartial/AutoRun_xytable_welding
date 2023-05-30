@@ -6,8 +6,8 @@ from pprint import pprint
 from collections import OrderedDict
 
 
-CONF_FILENAME_DEV = Path(__file__).parent / "station_config_example.yaml"  # development
-CONF_FILENAME_PROD = Path("C:/") / "Production" / "station_config.yaml"  # production
+CONF_FILENAME_DEV = Path(__file__).parent / "station_config_development.yaml"  # development
+CONF_FILENAME_PROD = Path("C:/") / "Production" / "station_config.yaml"        # production
 
 
 #--------------------------------------------------------------------------------------------------
@@ -155,6 +155,16 @@ class StationConfiguration:
             _api_base_url = d["dsp_api_base_url"]  # one global base url
         else:
             _api_base_url = d[_test_type]["dsp_api_base_url"]  # allows for test specific base urls
+            # new: add offset of 10 to the port for each production line > 1
+            _ar = _api_base_url.split(":")
+            try:
+                _new_port = int(_ar[-1]) + (self._line_id-1) * 10
+                _ar[-1] = str(_new_port)  # set port with offset based on line no
+                _api_base_url = ":".join(_ar)
+                # do NOT modify the base content!
+            except ValueError:
+                pass  # do not change the api base url 
+            
         if "station_id" not in d:
             _station_id = self._hostname  # we are using the hostname
         else:
