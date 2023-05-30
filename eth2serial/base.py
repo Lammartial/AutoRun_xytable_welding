@@ -406,10 +406,11 @@ if __name__ == "__main__":
 
     _log.info("Test synchronus receive (10s timeout):")
     #c = Eth2SerialDevice("192.168.1.90:23", termination="\n")
-    c = Eth2SerialDevice("192.168.69.77:2101", termination="\n")
+    #c = Eth2SerialDevice("192.168.69.77:2000", termination="\n")
+    c = Eth2SerialDevice("192.168.69.77:3000", termination="\n")
     #c = Eth2SerialDevice("192.168.1.224:2000", termination="\n")
     #c = Eth2SerialDevice("192.168.1.224:2101", termination="\n")
-    r = c.request(None, timeout=10)
+    r = c.request(None, timeout=20)
     _log.info(r)
 
     #_log.info("Test asynchronus receive (CRTL-C or scan to stop):")

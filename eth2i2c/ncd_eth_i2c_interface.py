@@ -440,7 +440,7 @@ if __name__ == "__main__":
     mux = BusMux(dev, 0x70)
     bus = BusMaster(dev)
     bat = BQ40Z50R1(bus)
-    print("Change clock frequency - RRC: ", str(dev.i2c_change_clock_frequency(20000)))
+    print("Change clock frequency - RRC: ", str(dev.i2c_change_clock_frequency(100000)))
     #print("Change clock frequency - NCD: ", str(dev.i2c_change_clock_frequency_ncd(38000)))
     #dev.writeto(0x77, bytearray([0x02]))
     for c in range(1, 9):
