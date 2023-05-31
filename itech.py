@@ -903,56 +903,18 @@ class M3900(M3400):
     #def set_current(self, curr: float) -> None:
     #    super().set_current(curr)
 
-    #def get_current_rounded(self, ndigits: int = 3) -> float:
-    #    return super().get_current_rounded(ndigits=int(ndigits))
+    def get_current_rounded(self, ndigits: int = 3) -> float:
+        return round(self.get_current(), ndigits=int(ndigits))
 
     def get_current(self) -> float:
         return super().get_current()
 
-    #def set_current_limit_positive(self, curr: float) -> None:
-    #    super().set_current_limit_positive(curr)
 
-    #def get_current_limit_positive(self) -> float:
-    #    return super().get_current_limit_positive()
-
-    #def set_current_limit_negative(self, curr: float) -> None:
-    #    super().set_current_limit_negative(curr)
-
-    #def get_current_limit_negative(self) -> float:
-    #    return super().get_current_limit_negative()
-
-    #def set_current_protection(self, curr: float) -> None:
-    #    super().set_current_protection(curr)
-
-    #def get_current_protection(self) -> float:
-    #    return super().get_current_protection()
-
-    #def set_current_under_protection(self, curr: float) -> None:
-    #    super().set_current_under_protection(curr)
-
-    #def set_voltage(self, volt: float) -> None:
-    #    super().set_voltage(volt)
+    def get_voltage_rounded(self, ndigits: int = 3) -> float:
+        return super().get_voltage_rounded(ndigits=int(ndigits))
 
     def get_voltage(self) -> float:
         return super().get_voltage()
-
-    #def set_voltage_limit_high(self, volt: float) -> None:
-    #    super().set_voltage_limit_high(volt)
-
-    #def set_voltage_limit_low(self, volt: float) -> None:
-    #    super().set_voltage_limit_low(volt)
-
-    #def set_voltage_protection(self, volt: float) -> None:
-    #    super().set_voltage_protection(volt)
-
-    #def set_voltage_under_protection(self, volt: float) -> None:
-    #    super().set_voltage_under_protection(volt)
-
-    #def set_power_limit_positive(self, power: float) -> None:
-    #    super().set_power_limit_positive(power)
-
-    #def set_power_limit_negative(self, power: float) -> None:
-    #    super().set_power_limit_negative(power)
 
     def set_function(self, func: str) -> None:
         super().set_function(func)

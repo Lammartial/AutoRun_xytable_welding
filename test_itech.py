@@ -182,6 +182,18 @@ def test_m3400_some(m3400: M3400) -> bool:
 
     return True
 
+def test_m3900_some(m3900: M3900) -> bool:
+    # Get current
+    print(m3900.get_all_measurements())
+    
+    # Get current
+    print(m3900.get_current())
+    print(m3900.get_current_rounded(3))
+
+    # Get voltage
+    print(m3900.get_voltage())
+    print(m3900.get_voltage_rounded(3))
+
 
 
 #--------------------------------------------------------------------------------------------------
@@ -215,10 +227,17 @@ if __name__ == "__main__":
     #m3412 = [M3400(E1206_IP_STR, i) for i in range(1,7)]
     #test_m3400_some(m3412[0])
     
-    m = M3400("TCPIP0::172.25.101.51::inst0::INSTR")
+    # m = M3400("TCPIP0::172.25.101.51::inst0::INSTR")
+    # print('IDN:' +str(m.request('*IDN?')))
+    # print('ERROR', m.read_system_error())
+    # print(m.get_all_measurements())
+
+    m = M3900("TCPIP0::172.21.101.46::inst0::INSTR")
     print('IDN:' +str(m.request('*IDN?')))
     print('ERROR', m.read_system_error())
     print(m.get_all_measurements())
+
+    test_m3900_some(m)
 
     # for m in m3412[:]:
     #     print('IDN:' +str(m.request('*IDN?')))
