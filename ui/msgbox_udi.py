@@ -332,7 +332,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
     # Label
     label = ttk.Label(
         mainframe,
-        text="Scan or Enter the UID of Device under Test",
+        text="Scan or Enter the UDI of Device under Test",
         justify="center",
         font=("-size", 12, "-weight", "bold"),
     )
