@@ -340,8 +340,7 @@ class ProcessScanner(mp.Process):
             while True:
                 _records = None
                 try:
-                    _raw = scanner.request(None, timeout=None, encoding="utf-8")
-                    _records, _ = decode_rrc_product_serial_label(_raw)
+                    _raw = scanner.request(None, timeout=None, encoding="utf-8")                    
                 except TimeoutError:
                     pass  # this is ok to keep the loop running
                 except Exception as ex:

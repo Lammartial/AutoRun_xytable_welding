@@ -1,6 +1,8 @@
 """
 UDI scan dialog for use with Teststand.
 
+May not use Multiprocessing as it does not work well with Teststand!
+
 Need Python 3.10
 
 """
@@ -21,7 +23,7 @@ from collections.abc import Iterator
 from typing import Optional, Tuple
 from pathlib import Path
 from serial import Serial
-from rrc.barcode_scanner import create_barcode_scanner, decode_rrc_udi_label
+from rrc.barcode_scanner import create_barcode_scanner, decode_rrc_udi_label, decode_rrc_product_serial_label
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -44,36 +46,30 @@ class UDIScanCtrlItem:
     validate: Callable   # None or function that checks UDI to accept
     scanned_udi: str       # None or the scan
 
-    def __init__(self, name: str | None, validate: Callable | None) -> None:
-        self.var=None
-        self.name=name
-        self.validate=validate
-        self.scanned_udi=None
+    def __init__(self, name: str | None, decode: Callable, validate: Callable | None) -> None:
+        self.var = None
+        self.name = name
+        self.decode = decode
+        self.validate = validate
+        self.records = None
+        self.scanned_udi = None
 
-udi_to_scan = [UDIScanCtrlItem(None, None)]
+udi_to_scan = [UDIScanCtrlItem(None, None, None)]
 allow_manual_edit: bool = False
 
 #--------------------------------------------------------------------------------------------------
 
+def validate_rrc_udi(records: dict, v_str: str) -> str:    
+    if v_str in records:  # check if the correct UDI type is decoded
+         # return the UDI string reconstructed and stripped from any unreadables
+        original = f"{records[v_str]['plant']}{v_str}{records[v_str]['serial_number']}"
+        return original
+    return None
 
-def validate_udi_by_string_at_position_1(udi: str, v_str: str) -> bool:
-    """Quick and dirty UDI check function. Obsolete."""
-    if len(udi) > len(v_str) + 1:
-        #if udi[1:1+len(v_str)] in v_str:  # positions given by RRC team
-        #    return True
-        if v_str in udi:  # position if ID in the codestring doesn't care
-            return True
-    return False
-
-
-def validate_udi_by_rrc_udi_decoder(udi: str, v_str: str) -> bool:
-    """Verify the UDI with our UDI decoder just using the correct sorting key here."""
-    result, _ = decode_rrc_udi_label(udi)
-    if v_str in result:  # check if the correct UDI type is decoded
-        return True
-    return False
-
-
+def validate_rrc_product_serial(records: dict, v_str: str) -> str:    
+    if all(e in records for e in ["serial_number", "part_name"]):
+        return records["serial_number"]    # return the UDI
+    return None
 
 #--------------------------------------------------------------------------------------------------
 
@@ -94,30 +90,17 @@ async def aio_blocking_communication(task_id: int, tk_q: queue.Queue, resource_s
     _log = getLogger(__name__, DEBUG)
     dev = create_barcode_scanner(resource_string)
     while True:
-        #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = 30)
-        #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0)  # uses .readuntil()
-        #_response = await tcp_send_and_receive_from_server(resource_string, None, timeout=3.0, limit = None)  # uses .readln()
-        _response = await dev.request_async(None)
+        _response = await dev.request_async(None)                
         if _response:
-            _wp = f"RESPONSE={_response.strip()}"
-            #safeprint(_wp)
-            _log.info(_wp)
-            work_package = _wp
+            _log.info(_response)
         else:
-            #safeprint(f"NO RESPONSE!")
-            #work_package = f"Task #{task_id}: NO RESPONSE!"
             continue
-
-        # Exceptions for testing handlers. Uncomment these to see what happens when exceptions are raised.
-        # raise IOError('Just testing an expected error.')
-        # raise ValueError('Just testing an unexpected error.')
-
+      
         # Put the work package into the tkinter's work queue.
         while True:
             try:
                 # Asyncio can't wait for the thread blocking `put` method…
-                tk_q.put_nowait(work_package)
-
+                tk_q.put_nowait(_response)
             except queue.Full:
                 # Give control back to asyncio's loop.
                 await asyncio.sleep(0)
@@ -172,32 +155,31 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
     # Poll continuously while queue has work needing processing.
     poll_interval = 0
     _stop = False
+    work_package = None
     try:
         # Tkinter can't wait for the thread blocking `get` method…
         work_package = tk_q.get_nowait()
-
     except queue.Empty:
         # …so be prepared for an empty queue and slow the polling rate.
         poll_interval = 40
-
     else:
         # Process a work package.
-        #label = ttk.Label(mainframe, text=work_package)
-        #label.grid(column=0, row=(next(row_itr)), sticky='w', padx=10)
-        if "RESPONSE" in work_package:
+        if work_package:
             global udi_to_scan
 
-            _udi = work_package.split("=")[1]
             # validate UDI
             _valid_udi = False
             for item in udi_to_scan:
+                if item.decode is not None:
+                    item.records, _ = item.decode(work_package)
                 if item.validate is not None:
-                    if item.validate(_udi, item.name):  # execute the validation function
-                        item.var.set(_udi)   # set the UDI
-                        _valid_udi = True    # avoid pop-up
+                    # execute the validation function which should return either the UDI or serial number
+                    _s = item.validate(item.records, item.name)  
+                    if _s: 
+                        item.var.set(_s)   # set the UDI or serial number
+                        _valid_udi = True  # avoid pop-up
             if not _valid_udi:
-                #showinfo("Window", f"Wrong UDI code type {_udi}")
-                _log.warning(f"Wrong UDI code type {_udi}")
+                _log.warning(f"Wrong UDI code type {item.records}")
             else:
                 # check if we are complete:
                 _stop = all([(item.var.get() not in [None, ""]) for item in udi_to_scan])
@@ -209,9 +191,8 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
             block_accept_udi = False
             ok_button.invoke()
             # do NOT reschedule after()
-        #else:
+       
         # Have tkinter call this function again after the poll interval.
-        #mainframe._id_after["tk_callback_consumer"] = mainframe.after(poll_interval, functools.partial(tk_callback_consumer, tk_q, mainframe, row_itr))
         mainframe._id_after["tk_callback_consumer"] = mainframe.after(poll_interval, lambda: tk_callback_consumer(tk_q, mainframe, row_itr))
 
 
@@ -285,7 +266,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
 
     def validate_entry(entry, action: str, index: str, current: str, change: str, trigger: str) -> bool:
         global block_accept_udi
-        #print(f"{entry},{action},{index},{current},{change},{trigger}")
+       
         if trigger in ["key", "focusout"]:
             _s = current
             if action == "0":
@@ -457,7 +438,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
 
     root.update()
     root.deiconify()
-    print (root.winfo_geometry())
+    #print (root.winfo_geometry())
 
     #root.focus_force()  # this is to activate the window again (important after programmatically closed)
 
@@ -541,14 +522,21 @@ def main(resource_str: str, title: str = "ENTER UDI", test_socket: int = -1):
     #_log.debug('main ending')
 
 #--------------------------------------------------------------------------------------------------
+
 def identify_uut(test_socket: int, requested_udi: list, scanner_resource_str: str, allow_user_edit:bool = False) -> Tuple[bool, str]:
-    """Entry function for TestStand using context IDispatch interface (block of data)
+    """Show dialog to identfy UUTs depending on the given list of requested_udis.
 
     Args:
-        context (dict): TestStand context
+        test_socket (int): 0,1 or 2 - Teststand socket: selects the window position.
+        requested_udi (list): one ore more text pattern to identify the UDI or a serial number.
+                To scan a RRC serial number, give "Serial" as pattern. Otherwise spezify the pattern 
+                as it is being expected in the UDI code: "CELL" or "PCBA" for the likes of UDIs.
+        scanner_resource_str (str): String to identify the resource as either TCP or COM port. E.g. 
+                "COM3,9600,8N1" for comport, "172.21.101.41:2000" for socket on ipaddress with port.
+        allow_user_edit (bool, optional): Allows user to edit the fields. Defaults to False.
 
     Returns:
-        Tuple[bool, str]: return values to a TestStand container that expects two types in this order.
+        Tuple[bool, str]: _description_
     """
     global udi_to_scan, allow_manual_edit
 
@@ -562,11 +550,12 @@ def identify_uut(test_socket: int, requested_udi: list, scanner_resource_str: st
 
     title = "ENTER UDI" if int(test_socket) < 0 else f"SOCKET {int(test_socket)}: ENTER UDI"
 
-    # _scanner = str(seq_context.Locals.TestSocketResources.scanner)
     _scanner = scanner_resource_str
     # clear the UDIs to scan from TestStand context:
+    # if "SERIAL" is found in requested UDIs, the RRC serial parser is being used
     udi_to_scan = [
-        UDIScanCtrlItem(item, validate_udi_by_rrc_udi_decoder) for item in requested_udi
+        (UDIScanCtrlItem(item, decode_rrc_product_serial_label, validate_rrc_product_serial) if ("SERIAL" in item.upper()) else 
+        UDIScanCtrlItem(item, decode_rrc_udi_label, validate_rrc_udi)) for item in requested_udi
     ]
     main(_scanner, title=title, test_socket=int(test_socket))
     res = tuple()
@@ -588,23 +577,19 @@ if __name__ == '__main__':
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    # set the required UDIs per global
-    udi_to_scan = [
-        #UDIScanCtrlItem("PCBA", validate_udi_by_string_at_position_1),
-        #UDIScanCtrlItem("CELL", validate_udi_by_string_at_position_1),
-        UDIScanCtrlItem("PCBA", decode_rrc_udi_label),
-        UDIScanCtrlItem("CELL", decode_rrc_udi_label),
-    ]
+    # # set the required UDIs per global
+    # udi_to_scan = [
+    #     UDIScanCtrlItem("SERIAL", decode_rrc_product_serial_label, validate_rrc_product_serial),
+    #     UDIScanCtrlItem("PCBA", decode_rrc_udi_label, validate_rrc_udi),
+    #     UDIScanCtrlItem("CELL", decode_rrc_udi_label, validate_rrc_udi),
+    # ]
 
-    RESOURCE_STR = "172.21.101.41:2000"
-    #RESOURCE_STR = "COM24,9600,8N1"  # Handheld scanner
+    #RESOURCE_STR = "172.21.101.41:2000"
+    RESOURCE_STR = "COM3,9600,8N1"  # Handheld scanner
     
     allow_manual_edit = True
-    #main(RESOURCE_STR, title="TEST SOCKET SCANNER", test_socket=-1)
-    #main(RESOURCE_STR, title="TEST HANDHELD SCANNER")
-    #print(f"SCANNER -> {scanned_udi}")
-
-    identify_uut(1, ["PCBA", "CELL"], RESOURCE_STR, allow_user_edit=False)
+   
+    identify_uut(1, ["Serial", "PCBA", "CELL"], RESOURCE_STR, allow_user_edit=False)
        
     res = tuple()
     for item in udi_to_scan:
