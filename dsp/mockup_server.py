@@ -120,9 +120,10 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
     global next_serial, lock_next_serial
 
     # set the product to test for mockup: "RRC2040B" or "RRC2020B"
-    #_product_name = "RRC2020B"
+    _product_name = "RRC2020B"
     #_product_name = "RRC2040B"
-    _product_name = "RRC2054S"
+    #_product_name = "RRC2054S"
+    _product_name = "SPINEL"
     #_mock = MOCK_PARTNUMBER[_product_name]
     _mock = PART_INFORMATION[_product_name]
 
@@ -144,6 +145,8 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
             _fhm = _mock["PCBA_TEST"]
         case "COREPACK_TEST":
             _fhm = _mock["COREPACK_TEST"]
+        case "LEANPACK_TEST":
+            _fhm = _mock["LEANPACK_TEST"]        
         case "EOL_TEST":
             _fhm = _mock["EOL_TEST"]
         case "HARDPACK_TEST":

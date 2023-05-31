@@ -21,21 +21,21 @@ DEBUG = 1   # set to 0 for production
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
-SIMULATE_SCAN = 1
+SIMULATE_SCAN = 0
 
 q_cmd: mp.Queue
 
 class SerialNoScanCtrlItem:
     var: tk.StringVar      # tkinter variable to hold the scanned UDI
     name: str              # title to show for that UDI
-    validate: Callable   # None or function that checks UDI to accept
-    scanned_udi: str       # None or the scan
+    validate: Callable     # None or function that checks UDI to accept
+    scanned_serial: str    # None or the scan
 
     def __init__(self, name: str | None, validate: Callable | None) -> None:
         self.var=None
         self.name=name
         self.validate=validate
-        self.scanned_udi=None
+        self.scanned_serial=None
 
 serialno_to_scan = [SerialNoScanCtrlItem(None, None)]
 allow_manual_edit: bool = False
@@ -81,13 +81,13 @@ class WindowUI(object):
             global serialno_to_scan, block_accept
             if block_accept: return
             for item in serialno_to_scan:
-                item.scanned_udi = item.var.get()  # transfer from each tkinter widget into the result space
+                item.scanned_serial = item.var.get()  # transfer from each tkinter widget into the result space
             self.root.destroy()
 
         def _cancel(parent):
             global serialno_to_scan
             for item in serialno_to_scan:
-                item.scanned_udi = None
+                item.scanned_serial = None
             self.root.destroy()
 
         #---for test only---
@@ -333,14 +333,13 @@ class ProcessScanner(mp.Process):
         """
         proc_name = self.name
         resource_str = self.resource_string
-        print("HELLO FROM SCANNER") 
         if not self.simulate_scan:
             scanner = create_barcode_scanner(resource_str)
             while True:
                 _records = None
                 try:
                     _raw = scanner.request(None, timeout=None, encoding="utf-8")
-                    _records = decode_rrc_product_serial_label(_raw)
+                    _records, _ = decode_rrc_product_serial_label(_raw)
                 except TimeoutError:
                     pass  # this is ok to keep the loop running
                 except Exception as ex:
@@ -349,7 +348,6 @@ class ProcessScanner(mp.Process):
                     print(f"{proc_name}:End")
                     return
                 if _records:
-                    msg = {"udi_scanned": _records}
                     self.ui_queue.put(_records)  # this goes to the UI process
         else:
             # ********** Simulation Profile *************
@@ -416,8 +414,8 @@ def identify_uut(test_socket: int, requested_serial: list, scanner_resource_str:
     scan_serial_label(_scanner, title=title, test_socket=int(test_socket))
     res = tuple()
     for item in serialno_to_scan:
-        _log.debug(f"UDI({item.name})={item.scanned_udi}")
-        res += (item.scanned_udi,)
+        _log.debug(f"SERIAL({item.name})={item.scanned_serial}")
+        res += (item.scanned_serial,)
     if all(res):
         # all elements not None -> no conversion
         return (True,) + res
@@ -434,7 +432,7 @@ if __name__ == '__main__':
 
     # need to initialize logger on load
     #scan_serial_label("COM7:9600,8N1")
-    res = identify_uut(-1, [""], "COM7:9600,8N1")
+    res = identify_uut(-1, [""], "COM3,9600,8N1")
     print(res)
 
 
