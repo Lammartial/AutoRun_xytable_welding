@@ -2,6 +2,8 @@ from typing import List, Tuple, Callable
 from enum import Enum
 import random
 import string
+import os
+import sys
 import multiprocessing as mp
 import itertools
 import tkinter as tk
@@ -364,6 +366,24 @@ class ProcessScanner(mp.Process):
 #--------------------------------------------------------------------------------------------------
 
 def scan_serial_label(resource_string: str, title: str = "ENTER SERIAL", test_socket: int = -1):
+    global q_cmd
+
+    # # following is necessary to run multiprocessing under Teststand
+    # # ---
+    # #Set CWD to python file dir
+    # os.chdir(os.path.dirname(os.path.realpath(__file__)))
+
+    # #create argv argument in sys in case there is none. It happens on TestStand.
+    # if not hasattr(sys, 'argv'):
+    #     sys.argv = [__file__]
+
+    # #Set multiprocessing to python
+    # mp.set_executable(os.path.join(sys.exec_prefix, 'python.exe'))
+
+    # # include python file path to python path
+    # sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+    # # ---
+
     w = None
     s = None
     try:
@@ -374,6 +394,7 @@ def scan_serial_label(resource_string: str, title: str = "ENTER SERIAL", test_so
         w = WindowUI(q_cmd, allow_manual_edit=True)
         # start sub-process for scanner
         s = ProcessScanner(resource_string, q_cmd)
+        # sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
         s.start()
         w.run_mainloop()
     except KeyboardInterrupt as kx:
