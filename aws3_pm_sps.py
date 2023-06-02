@@ -1006,7 +1006,7 @@ class ProcessSPS(mp.Process):
         def store_db(udi: str, part_number: str, line_id: int, station_id: str, SM: SPSStateMachine, db_session_maker: Session):
 
             print("STORE DB")
-            _result = "P" if SM.welding_status["ok"]>0 else ("F" if SM.welding_status["reject"]>0 else "A")
+            _result = "P" if SM.welding_status["ok"]>0 else ("F" if SM.welding_status["reject"]>0 else "A")  # Pass, Fail, Abort
             _counter = SM.counter_ax1
             _udi = udi if udi else "undefined"  # database uses UDI as prim key -> not null
             with db_session_maker() as session:
