@@ -230,18 +230,18 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    #LINE_NETWORK = "172.25.101"  # VN line 1
-    LINE_NETWORK = "172.21.101"  # HOM Warehouse
+    LINE_NETWORK = "172.25.101"  # VN line 1
+    #LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
-    feasa = FEASA_CH9121(f"{LINE_NETWORK}.31:3000")  # PCBA test, socket 0
-    #feasa = FEASA_CH9121(f"{LINE_NETWORK}.33:3000")  # PCBA test, socket 1
+    #feasa = FEASA_CH9121(f"{LINE_NETWORK}.31:3000")  # PCBA test, socket 0
+    feasa = FEASA_CH9121(f"{LINE_NETWORK}.33:3000")  # PCBA test, socket 1
     #feasa = FEASA_CH9121(f"{LINE_NETWORK}.35:3000")  # PCBA test, socket 2
 
     #test_feasa_only(feasa)
     #exit()
 
-    i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101") # socket 0
-    #i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101") # socket 1
+    #i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101") # socket 0
+    i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101") # socket 1
     #i2cbus = I2CPort(f"{LINE_NETWORK}.34:2101") # socket 2
 
     mux = BusMux(i2cbus, address=0x77)
@@ -257,10 +257,10 @@ if __name__ == "__main__":
     vsim.initialize()
 
     #sleep(0.5)
-    psu1 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=1)  # socket 0, 1, and 2 share
-    psu2 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=2)  # socket 0, 1, and 2 share
-    #psu1 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=3)
-    #psu2 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=4)
+    #psu1 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=1)  # socket 0, 1, and 2 share
+    #psu2 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=2)  # socket 0, 1, and 2 share
+    psu1 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=3)
+    psu2 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=4)
     #psu1 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=5)
     #psu2 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=6)
     psu1.set_output_state(0)
