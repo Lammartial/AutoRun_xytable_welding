@@ -1199,7 +1199,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             new_offset = bytearray()
             for i in range(0, 4):
                 if (i < n_ts) and (t_temp[i] != 0):  # we cannot calibrate at 0 °C !!!
-                    dt = t_temp[i] - int_temp[i] + ts_offset[i] 
+                    dt = t_temp[i] - int_temp[i] + ts_offset[i]
+                    # Limit dt -128 <= dt <= 127
+                    if dt < -128: dt = -128
+                    if dt > 127: dt = 127
                     _b = struct.pack("b", dt)        
                 else:
                     _b = b'\x00'
