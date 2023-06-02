@@ -100,7 +100,8 @@ class AWS3Modbus(ModbusClient):
             "operational_mode": 1 if bits[1] else 0,  # 0=auto, 1=step
             "reject": 1 if (bits[2] or bits[4]) else 0,  # combine both axes: either one fails
             "hfi_device_fault": 1 if bits[5] else 0,
-            "ok": 1 if (bits[6] and bits[7]) else 0  # combine both axes: both need to be good
+            "ok": 1 if bits[6] else 0  # Ax1_ok is overall result -> had Ax1_ok=1 and Ax2_ok=0 while no reject was set 
+                                       # (maybe due to firmware update on AWS3)
         }
         return bits[0], d
 
