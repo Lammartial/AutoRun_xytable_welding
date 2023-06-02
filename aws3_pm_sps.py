@@ -738,6 +738,8 @@ class SPSStateMachine(SPSStateMachineBase):
                             #self.lock_machine() # lock machine to have control for read measurements
                             self.last_counter_ax1 = self.counter_ax1
                             print(f"Counters: Ax1={self.counter_ax1}")
+                            # read status again AFTER the counter has changed
+                            _, _status = self.dev.is_machine_ready()
                             self.welding_status = _status  # store result
                             self.set_state(SPSStates.CHECK_WELDING_RESULT)
                             _do_pause = False
