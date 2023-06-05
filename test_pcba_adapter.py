@@ -14,6 +14,7 @@ from rrc.temperature_sts21 import STS21
 from rrc.barcode_scanner import create_barcode_scanner
 from rrc.feasa import FEASA_CH9121
 from rrc.itech import M3400
+from rrc.keysight import DAQ970A
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -156,13 +157,14 @@ def psu_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO, psu: M3400) -> None:
 def rack_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO, 
               vsim: CellVoltageSimulation, calib: CalibrationStorage, 
               feasa: FEASA_CH9121, 
-              psu1: M3400, psu2: M3400) -> None:
+              psu1: M3400, psu2: M3400,
+              daq: DAQ970A) -> None:
     #psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
     #psu.configure_current_rise_times(pos="DEF", neg="DEF")
     
     # verify that PSU does not trigger battery protection
     print("PSU Output on")
-    psu2.configure_supply(10.8, 0.080, 50, 1)
+    psu2.configure_supply(14.4, 0.080, 50, 1)
     #su.configure_cc_mode(0.05, 10.8*1.15, (10.8*1.15) * 0.8, 50, 1)
 
     sleep(1.5)  # wait PSU powered up
@@ -171,14 +173,21 @@ def rack_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO,
     #print("Safety Status:", bat.get_safety_status())
     #print("Safety Status details:", bat._safety_status)
     #print("PSU Output off")
+    vsim.enable_all_cell_channels()
     vsim.set_cell_n_voltage(1, 3.6)
     vsim.set_cell_n_voltage(2, 3.6)
     vsim.set_cell_n_voltage(3, 3.6)
     vsim.set_cell_n_voltage(4, 3.6)
     
-    psu1.configure_supply(10.8, 0.080, 50, 1)
+    psu1.configure_supply(14.4, 0.080, 50, 1)
     sleep(1.5)
     print("PSU1", psu1.get_all_measurements())
+
+    print("DAQ - channel 11", daq.get_VDC(11))
+    print("DAQ - channel 12", daq.get_VDC(12))
+    print("DAQ - channel 14", daq.get_VDC(14))
+    print("DAQ - channel 10", daq.get_VDC(10))
+    print("DAQ - channel 15", daq.get_VDC(15))
 
     print(bat.isReady())
     print(bat.current())
@@ -266,10 +275,13 @@ if __name__ == "__main__":
     psu1.set_output_state(0)
     psu2.set_output_state(0)
 
-    
+    #daq = DAQ970A(f"TCPIP0::{LINE_NETWORK}.36::inst0::INSTR", card_slot=1)  # socket 0
+    daq = DAQ970A(f"TCPIP0::{LINE_NETWORK}.36::inst0::INSTR", card_slot=2)  # socket 1
+    #daq = DAQ970A(f"TCPIP0::{LINE_NETWORK}.36::inst0::INSTR", card_slot=3)  # socket 2
+
     #psu_test(bat, gpio, psu2)
     #psu_test(bat, gpio, psu1)
-    rack_test(bat, gpio, vsim, calib, feasa, psu1, psu2)
+    rack_test(bat, gpio, vsim, calib, feasa, psu1, psu2, daq)
     
 
 # END OF FILE
