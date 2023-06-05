@@ -133,59 +133,81 @@ class DAQ970A(AdhocVisaDevice):
 
     #----------------------------------------------------------------------------------------------
     
-    def get_resistance_rounded(self, channel: int, ndigits: int = 3) -> float:
-        return round(self.get_resistance(int(channel)), ndigits=int(ndigits))
+    def get_resistance_rounded(self, channel: int, ndigits: int = 3, scale: str | float = "AUTO", resolution: str | float = "DEF") -> float:
+        """See doc of get_resistance."""
+        return round(self.get_resistance(int(channel)), ndigits=int(ndigits), scale=scale, resolution=resolution)
     
-    def get_resistance(self, channel: int) -> float:
-        """
-        Returns resistance measurement.
+    def get_resistance(self, channel: int, scale: str | float = "AUTO", resolution: str | float = "DEF") -> float:
+        """Returns resistance measurement.
 
         Args:
             channel (int): channel number (1 ... 20)
-
+            scale (str | float, optional): Measurement range or scale. 
+                        Possible values: A string of "AUTO", "MIN", "MAX", "DEF", "100 Ω", "1 kΩ", "100 kΩ", "1 MΩ", "10 MΩ", "1 GΩ" 
+                        or float value specifying the range in ohm.
+                        Defaults to "AUTO".
+            resolution (str | float, optional): Measurement resolution. 
+                        Possible values: A string of "MIN", "MAX", "DEF" or float value specifying the resolution in ohm.
+                        <resolution> = 1 PLC (0.000003 x Range)
+                        Defaults to "DEF".
+        
         Raises:
             ValueError: invalid argument
-
+        
         Returns:
-            float: resistance
+            float: Resistance in ohms.
+
         """
-        # trick to use function in NI Teststand
+
         channel = int(channel)
+        scale_str_list = ("AUTO", "MIN", "MAX", "DEF", "100 Ω", "1 kΩ", "100 kΩ", "1 MΩ", "10 MΩ", "1 GΩ")
+        resolution_str_list = ("MIN", "MAX", "DEF")
         assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_resistance: Allowed channel range is 1 .. 20.')
-        try:
-            cmd = "MEAS:RES? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
-            return float(self.request(cmd))
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
+        assert(isinstance(scale, float) or (isinstance(scale, str) and scale in scale_str_list)), \
+            ValueError('Invalid scale. Check the available scale values in the function description.')
+        assert(isinstance(resolution, float) or (isinstance(resolution, str) and resolution in resolution_str_list)), \
+            ValueError('Invalid resolution. Check the available resolution values in the function description.')
+        cmd = f"MEAS:RES? {scale},{resolution},(@{self._meas_chan(0, channel)})"
+        return float(self.request(cmd))
+        
 
-
-    def get_4w_resistance_rounded(self, channel: int, ndigits: int = 3) -> float:
-        return round(self.get_4w_resistance(int(channel)), ndigits=int(ndigits))
+    def get_4w_resistance_rounded(self, channel: int, ndigits: int = 3, scale: str | float = "AUTO", resolution: str | float = "DEF") -> float:
+        """See doc of get_4w_resistance."""
+        return round(self.get_4w_resistance(int(channel)), ndigits=int(ndigits), scale=scale, resolution=resolution)
     
-    def get_4w_resistance(self, channel: int):
+    def get_4w_resistance(self, channel: int, scale: str | float = "AUTO", resolution: str | float = "DEF") -> float:
         """
         Returns 4-wire resistance measurement.
 
         Args:
             channel (int): channel number (1 ... 10)
-
+            scale (str | float, optional): Measurement range or scale. 
+                        Possible values: A string of "AUTO", "MIN", "MAX", "DEF", "100 Ω", "1 kΩ", "100 kΩ", "1 MΩ", "10 MΩ", "1 GΩ" 
+                        or float value specifying the range in ohm.
+                        Defaults to "AUTO".
+            resolution (str | float, optional): Measurement resolution. 
+                        Possible values: A string of "MIN", "MAX", "DEF" or float value specifying the resolution in ohm.
+                        <resolution> = 1 PLC (0.000003 x Range)
+                        Defaults to "DEF".
+        
         Raises:
             ValueError: invalid argument
-
+        
         Returns:
-            float: resistance
+            float: Resistance in ohms.
         """
-        # trick to use function in NI Teststand
+        
         channel = int(channel)
+        scale_str_list = ("AUTO", "MIN", "MAX", "DEF", "100 Ω", "1 kΩ", "100 kΩ", "1 MΩ", "10 MΩ", "1 GΩ")
+        resolution_str_list = ("MIN", "MAX", "DEF")
         assert ((channel >= 1) and (channel <= 10)), ValueError('Error, get_4w_resistance: Allowed channel range is 1 .. 10.')
-        try:
-            cmd = "MEAS:FRES? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
-            return float(self.request(cmd))
-        except Exception as ex:
-            #_log.exception(ex)
-            raise
-
+        assert(isinstance(scale, float) or (isinstance(scale, str) and scale in scale_str_list)), \
+            ValueError('Invalid scale. Check the available scale values in the function description.')
+        assert(isinstance(resolution, float) or (isinstance(resolution, str) and resolution in resolution_str_list)), \
+            ValueError('Invalid resolution. Check the available resolution values in the function description.')
+        cmd = f"MEAS:FRES? {scale},{resolution},(@{self._meas_chan(0, channel)})"
+        return float(self.request(cmd))
+       
     
     def get_VDC_rounded(self, channel: int, ndigits: int = 3) -> float:
         return round(self.get_VDC(int(channel)), ndigits=int(ndigits))
@@ -259,7 +281,7 @@ class DAQ970A(AdhocVisaDevice):
         Returns:
             float: ADC
         """
-        # trick to use function in NI Teststand
+        
         channel = int(channel)
         scale_str_list = ("AUTO", "1 uA", "10 uA", "100 uA", "1 mA", "10 mA", "100 mA", "1 A")
         assert ((channel == 21) or (channel == 22)), ValueError('Invalid channel. Only 21 or 22 allowed.')
