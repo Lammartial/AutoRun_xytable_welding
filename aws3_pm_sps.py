@@ -738,7 +738,7 @@ class SPSStateMachine(SPSStateMachineBase):
                         diffcount = self.counter_ax1 - self.last_counter_ax1
                         if diffcount > 0:
                             # welding completed
-                            #self.lock_machine() # lock machine to have control for read measurements
+                            self.lock_machine() # lock machine to have control for read measurements
                             self.last_counter_ax1 = self.counter_ax1
                             print(f"Counters: Ax1={self.counter_ax1}")
                             # read status again AFTER the counter has changed
