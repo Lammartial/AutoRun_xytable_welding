@@ -12,6 +12,7 @@ from time import sleep, perf_counter
 from pathlib import Path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from datetime import timezone, datetime
+from winsound import PlaySound, SND_FILENAME
 
 from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
 from rrc.dsp.interface import DspInterface, DspInterface_SIMULATION, DSPInterfaceError
@@ -292,6 +293,7 @@ class WindowUI(object):
                 if "udi_rejected" in a:
                     self.label_udi.config(background="orange", foreground="black")
                     self.var_label_udi.set("UDI REJECTED")
+                    PlaySound("./sounds/error-buzz", SND_FILENAME)
                     print("UI:REJECTED UDI")
                     _do_update = True
                     pass
@@ -303,10 +305,11 @@ class WindowUI(object):
                     pass
                 if "result" in a:
                     _fgcolor = "black" if "\n" in a["udi"] else "white"
-                    if "passed" in a["result"]:                        
+                    if "passed" in a["result"]:
                         self.label_udi.config(background="green", foreground=_fgcolor)
                     else:
                         self.label_udi.config(background="red", foreground=_fgcolor)
+                        PlaySound("./sounds/error-buzz-hard", SND_FILENAME)
                     self.var_label_udi.set(a["udi"])
                     print("UI:RESULT")
                     _do_update = True
