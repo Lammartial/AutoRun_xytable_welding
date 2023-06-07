@@ -92,8 +92,6 @@ class AWS3Modbus(ModbusClient):
 
     def is_machine_ready(self) -> tuple:
         self._sync_modbus_timing()
-        #return not self.read_coils(65-1, 1, unit_address=3)[0]
-        #return self.read_coils(97-1, 8, unit_address=3)[0]
         bits = self.read_coils(97-1, 8, unit_address=3)
         d = {
             "ready": 1 if bits[0] else 0,
