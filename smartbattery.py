@@ -434,7 +434,8 @@ class ManufacturerAccess:
         return f"ManufacturerAccess({repr(self._battery)},0x{self._cmd:02x},0x{f'{self.read:04x}' if self.read else None})"
 
     def update(self):
-        v, ok = self._battery.readWord(self._cmd)  # includes use of multiple read+compare strategy
+        #v, ok = self._battery.readWord(self._cmd)  # single read, no compare - use only with PEC enabled!
+        v, ok = self._battery.readWordVerified(self._cmd)  # includes use of multiple read+compare strategy
         if ok: self.read = v  # update
         return ok
 
