@@ -29,7 +29,7 @@ class BusmasterVerificationError(BusmasterError):
 class BusMaster:
     i2c = None
 
-    def __init__(self, i2c: I2CBase, retry_limit=1, verify_rounds=3, pause_us=50):
+    def __init__(self, i2c: I2CBase, retry_limit: int = 1, verify_rounds: int = 3, pause_us: int = 50) -> None:
         """Class providing the SMBus master protocols.
 
         Next to the standard functions there are "verified" versions of these
@@ -67,7 +67,7 @@ class BusMaster:
         return self._retry_limit
 
     @retry_limit.setter
-    def retry_limit(self, value):
+    def retry_limit(self, value: int):
         if not (isinstance(value, int) and (value >= 1) and (value <= 10)):
             raise ValueError("Retry count limit must be an integer 1 ... 10")
         self._retry_limit = value
@@ -78,13 +78,13 @@ class BusMaster:
         return self._verify_rounds
 
     @verify_rounds.setter
-    def verify_rounds(self, value):
+    def verify_rounds(self, value: int):
         if not (isinstance(value, int) and (value >= 1) and ((value & 1) == 1)):
             raise ValueError("Retry count limit must be an odd number > 0 like 1,3,5,7,9,...")
         self._verify_rounds = value
 
     # ----------------------------------------------------------------------------------------------
-    def isReady(self, slvAddress):
+    def isReady(self, slvAddress: int) -> bool:
         """Checks if the given slave address is being ACK'd on bus.
 
         Args:
@@ -94,7 +94,7 @@ class BusMaster:
             Boolean: True if address was ACK'd, else False
         """
         # return self.i2c.is_ready(slvAddress)
-        isready = False
+        isready: bool = False
         try:
             #_ = self.i2c.readfrom(slvAddress, 0, stop=True)
             _ = self.i2c.readfrom(slvAddress, 0)
@@ -114,7 +114,7 @@ class BusMaster:
 
     # ----------------------------------------------------------------------------------------------
     # core functions (all others a reusing these ones)
-    def writeBytes(self, slvAddress, cmd, buffer, use_pec=False):
+    def writeBytes(self, slvAddress: int, cmd: int, buffer: bytes | bytearray, use_pec: bool = False) -> bool:
         """Writes a given sequence of bytes to a slave device addressed by slvAddress and command.
 
         Args:
@@ -139,7 +139,7 @@ class BusMaster:
                 # wlen = self.i2c.writeto_mem(slvAddress,cmd,buf)
                 wlen = self.i2c.writeto(slvAddress, bufc)
                 # ok = (wlen > 0)
-                ok = len(bufc) == wlen
+                ok: bool = len(bufc) == wlen
                 return ok
             except OSError:
                 if n == self._retry_limit - 1:
@@ -150,7 +150,7 @@ class BusMaster:
         # may never get here!
         raise Exception("Programming Error")
 
-    def _retry_read_helper(self, slvAddress, cmd, count):
+    def _retry_read_helper(self, slvAddress: int, cmd: int, count: int) -> bytearray:
         for n in range(0, self._retry_limit):
             try:
                 if count <= 16:
@@ -169,7 +169,7 @@ class BusMaster:
         # may never get here!
         raise Exception("Programming Error")
 
-    def readBytes(self, slvAddress, cmd, count, use_pec=False):
+    def readBytes(self, slvAddress: int, cmd: int, count: int, use_pec: bool = False) -> Tuple[bytearray, bool]:
         """Read bytes from a slave address with given command code written after slave address.
 
         Args:
@@ -204,7 +204,7 @@ class BusMaster:
             ok = (rlen == count)
             return buf, ok
 
-    def readBytesVarLen(self, slvAddress, cmd, use_pec=False, byte_count=-1):
+    def readBytesVarLen(self, slvAddress: int, cmd: int, use_pec: bool = False, byte_count: int = -1) -> Tuple[bytearray, bool]:
         """Read bytes from slave address with variable length in first byte received.
 
         As the i2c module does not provide this in dedicate function, we use two read
@@ -236,7 +236,7 @@ class BusMaster:
 
     # ----------------------------------------------------------------------------------------------
     # "verified" functions, using multiple repetitions and compare x of y wheras y is an odd number
-    def vReadBytes(self, slvAddress, cmd, count, use_pec=False):
+    def vReadBytes(self, slvAddress: int, cmd: int, count: int, use_pec: bool = False) -> Tuple[bytearray, bool]:
         d = {}  # we use a dictionary to group the results (bytes read)
         ex = None
         vcnt = self._verify_rounds
@@ -273,7 +273,7 @@ class BusMaster:
             return bytearray(), False  # no or not enough verified result(s) found: fail!
             # raise BusmasterVerificationError("verification read has failed", d)
 
-    def vReadBytesVarLen(self, slvAddress, cmd, use_pec=False):
+    def vReadBytesVarLen(self, slvAddress: int, cmd: int, use_pec: bool = False, byte_count: int = -1) -> Tuple[bytearray, bool]:
         # Algorithm comments see above function vReadBytes()
         d = {}
         ex = None
@@ -281,7 +281,7 @@ class BusMaster:
         vpause = self.pause_us
         for _ in range(0, vcnt):
             try:
-                buf, ok = self.readBytesVarLen(slvAddress, cmd, use_pec=use_pec)
+                buf, ok = self.readBytesVarLen(slvAddress, cmd, use_pec=use_pec, byte_count=byte_count)
                 if ok:
                     k = bytes(buf)
                     if k in d:
@@ -302,7 +302,7 @@ class BusMaster:
             return bytearray(), False
             # raise BusmasterVerificationError("verification read has failed", d)
 
-    def vWriteBytes(self, slvAddress, cmd, buffer, use_pec=False):
+    def vWriteBytes(self, slvAddress: int, cmd: int, buffer: bytes | bytearray, use_pec: bool = False) -> bool:
         # "verified write" is special as we do NOT do multiple write tries but do READ after WRITE
         # and compare whereas "read" means using the "verified read" strategy described above
         ok = self.writeBytes(slvAddress, cmd, buffer, use_pec=use_pec)  # write once
@@ -315,7 +315,7 @@ class BusMaster:
         return False
 
     # ---simple-versions----------------------------------------------------------------------------
-    def readWord(self, slvAddress, cmd, use_pec=False):
+    def readWord(self, slvAddress: int, cmd: int, use_pec: bool = False) -> int | None:
         buf, ok = self.readBytes(slvAddress, cmd, 2, use_pec=use_pec)
         if ok:
             # generate a little endian WORD value from the two bytes
@@ -326,7 +326,7 @@ class BusMaster:
             w = None
         return w, ok
 
-    def readString(self, slvAddress, cmd, use_pec=False):
+    def readString(self, slvAddress: int, cmd: int, use_pec: bool = False) -> Tuple[str, bool]:
         buf, ok = self.readBytesVarLen(slvAddress, cmd, use_pec=use_pec)
         if ok:
             # convert to UTF8 string
@@ -334,7 +334,7 @@ class BusMaster:
         else:
             return '', False
 
-    def readBlock(self, slvAddress, cmd, use_pec=False, byte_count=-1):
+    def readBlock(self, slvAddress: int, cmd: int, use_pec: bool = False, byte_count: int = -1) -> Tuple[bytearray, bool]:
         # Note: there is no writeBlock() function implementation here on purpose.
         #       User should use the writeBytes() function with length byte in first of buffer to send.
         #       This also enables an easy read-after-write as the length of the buffer is already correct (+1)
@@ -346,7 +346,7 @@ class BusMaster:
         else:
             return bytearray(), False
 
-    def writeWord(self, slvAddress, cmd, w, use_pec=False):
+    def writeWord(self, slvAddress: int, cmd: int, w: int, use_pec: bool = False) -> bool:
         buffer = pack("<H", w)
         # buffer = [w & 0xff, (w >> 8) & 0xff] # this is platform independent (w could be little or big endian)
         ok = self.writeBytes(slvAddress, cmd, buffer, use_pec=use_pec)
@@ -354,7 +354,7 @@ class BusMaster:
 
     # ---verified versions--------------------------------------------------------------------------
 
-    def vReadWord(self, slvAddress, cmd, use_pec=False):
+    def vReadWord(self, slvAddress: int, cmd: int, use_pec: bool = False) -> int | None:
         buf, ok = self.vReadBytes(slvAddress, cmd, 2, use_pec=use_pec)
         if ok:
             # generate a little endian WORD value from the two bytes
@@ -365,7 +365,7 @@ class BusMaster:
             w = None
         return w, ok
 
-    def vReadString(self, slvAddress, cmd, use_pec=False):
+    def vReadString(self, slvAddress: int, cmd: int, use_pec: bool = False) -> Tuple[str, bool]:
         buf, ok = self.vReadBytesVarLen(slvAddress, cmd, use_pec=use_pec)
         if ok:
             # convert to UTF8 string
@@ -373,7 +373,7 @@ class BusMaster:
         else:
             return '', False
 
-    def vReadBlock(self, slvAddress, cmd, use_pec=False):
+    def vReadBlock(self, slvAddress: int, cmd: int, use_pec: bool = False) -> Tuple[bytearray, bool]:
         buf, ok = self.vReadBytesVarLen(slvAddress, cmd, use_pec=use_pec)
         if ok:
             # just return the bytes without length
@@ -381,7 +381,7 @@ class BusMaster:
         else:
             return bytearray(), False
 
-    def vWriteWord(self, slvAddress, cmd, w, use_pec=False):
+    def vWriteWord(self, slvAddress: int, cmd: int, w: int, use_pec: bool = False) -> bool:
         buffer = pack("<H", w)
         # buffer = [w & 0xff, (w >> 8) & 0xff] # this is platform independent (w could be little or big endian)
         ok = self.vWriteBytes(slvAddress, cmd, buffer, use_pec=use_pec)  # includes the read-back verify
