@@ -195,7 +195,7 @@ PART_INFORMATION = {
             "part_number": ("CW-PN_SPINEL", "110282S-02"),
         },
         "LEANPACK_TEST": {
-            "test_program_id": ("CP-SQ_SPINEL", "110282S_SPINEL_Leanpack-Test_A"),
+            "test_program_id": ("CP-SQ_SPINEL", "110282S_SPINEL_Leanpack-Test_B"),
             "part_number": ("CP-PN_SPINEL", "110282S-02"),
         }
     }
