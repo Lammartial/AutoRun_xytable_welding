@@ -195,9 +195,9 @@ class BQStudioFileFlasher:
                                 continue                   
                     continue
 
-                elif current_line.startswith("SWB:"):
-                    # Write block
-                    result, data = self._handle_line(current_line[4:], line_number)
+                elif current_line.startswith("SWB:") or current_line.startswith("W:"):
+                    # Write block/bytes
+                    result, data = self._handle_line(current_line[2:], line_number) if current_line.startswith("W:") else self._handle_line(current_line[4:], line_number)
                     if not result:
                         if is_file_validation:
                             validation_result = False
@@ -250,9 +250,9 @@ class BQStudioFileFlasher:
                                 f"Error in SMBus communication during \"write command\" command in line {line_number}!")
                             break
 
-                elif current_line.startswith("SCL:"):
+                elif current_line.startswith("SCL:") or current_line.startswith("C:"):
                     # Read and compare block
-                    address, data = self._handle_line(current_line[4:], line_number)
+                    address, data = self._handle_line(current_line[2:], line_number) if current_line.startswith("C:") else self._handle_line(current_line[4:], line_number)
                     if not result:
                         if is_file_validation:
                             validation_result = False
