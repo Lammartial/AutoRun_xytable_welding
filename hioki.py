@@ -358,25 +358,19 @@ class Hioki_BT3561A(Eth2SerialDevice):
             list: array[0]: float, resistance, Ω mode
                   array[1]: float, voltage, V mode
         """
-        resp = True
-        result = np.array([])
-        nplist = []
         function_type = self.get_function().strip()
         #[BT3561A] :READ? Execute single measurement using BT3561A.
-        val = self.read()
+        val = self.read().strip()
         try:
-            print("FUNC", function_type)
+            #print("FUNC", function_type)
             if ("RV" in function_type):
                 lst = val.split(',')
-                nplist.append(float(lst[0]))
-                nplist.append(float(lst[1]))
+                nplist = [float(lst[0]), float(lst[1])]
             else:
-                nplist.append(float(resp))
-                nplist.append(float(0))
+                nplist = [float(val), float(0)]
         except Exception:
             raise
-        result = np.array(nplist)
-        return result
+        return np.array(nplist)
 
     def set_raw_command(self, msg: str) -> bool:
         """

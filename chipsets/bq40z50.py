@@ -645,6 +645,39 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         #         f.write(self._maybe_hexlify(flash, True))
         return self._maybe_hexlify(flash, hexi)
 
+
+    def read_flash_block_verified(self, flash_address: int, length: int = 32,  hexi: bool | str | None = None) -> str | bytearray | None:
+        # using the read multiple & compare strategy from smbus module which cannot be used here directly:
+        # for flash read we need to reset the address by a separate write before read, so we need to pack
+        # the algorithm around it here.
+        d = {}
+        ex = None
+        # we are re-using the verification settings from the smbus module
+        vcnt = self.bus._verify_rounds
+        vpause = self.bus.pause_us
+        for _ in range(0, vcnt):
+            try:
+                buf = self.read_flash_block(flash_address, length, hexi=hexi)
+                if buf:
+                    # use the read bytes as key into a dict which helds the count of equal re-reads
+                    k = bytes(buf)
+                    if k in d:
+                        d[k] += 1
+                    else:
+                        d[k] = 1
+                    if d[k] > vcnt // 2:
+                        return self._maybe_hexlify(k, hexi)  # good!
+            except OSError as e:
+                ex = e
+                pass
+            if vpause > 0:
+                sleep(vpause / 1000000)
+        if ex is not None:
+            raise ex
+        else:
+            return None  # bad!
+
+
     def write_flash_block(self, flash_address: int, block_data: bytes | bytearray) -> bool:
         """Writes a defined data block (array) into the bq chip data flash at a defined flash address.
 
@@ -1455,63 +1488,6 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "scd2":  unpack_from("<b", buf, 0)[0],
         }))
 
-    # def read_mib(self, address: int, length: int, hexi: bool | None = False) -> str|tuple:
-    #     """
-    #      Reads 32 bytes of Manufacturer info block, starting at address 0x4041.
-
-    #     Args:
-    #         length (int): length of manufacturer info data
-    #         hexi (bool): True - returns tuple of ASCII codes, False - returns string
-
-    #     Returns:
-    #         str | tuple:  Manufacturer info block A01 - (A01 + length)
-    #     """
-    #     hexi = bool(hexi)
-    #     length = int(length)
-    #     assert((length) > 0 and (length <= 32)), ValueError('Invalid block length. Allowed length is 1 .. 32')
-    #     assert((address >= 0x4041) and (address <= 0x4060)), ValueError('Invalid address. Allowed 0x4041 .. 0x4060')
-    #     assert((address-1) + length <= 0x4060), ValueError('Invalid data length or start address. Block of data out of range 0x4041 ..0x4060')
-    #     if not hexi:
-    #         # string
-    #         mib: bytearray = self.read_flash_block(address, length=32, hexi=False)
-    #         mib_str = "".join(map(chr, mib))
-    #         mib_str = mib_str[0:length]
-    #         return mib_str
-    #     else:
-    #         return self.read_flash_block(address, length=32, hexi=True)
-
-    # def write_mib(self, data: str, length: int, address: int) -> bool:
-    #     """
-    #     Writes "length" bytes of "data" to Manufacturer info block, starting at "address"
-
-    #     Args:
-    #         data (tuple): manufacturer info data (dec or hex)
-    #         length (int): length of manufacturer info data
-    #         address (int): starting address
-
-    #     Returns:
-    #         bool: True - success, False - failed
-    #     """
-    #     data = str(data)
-    #     length = int(length)
-    #     address = int(address)
-    #     assert((length) > 0 and (length <= 32)), ValueError('Invalid block length. Allowed length is 1 .. 32')
-    #     assert((address >= 0x4041) and (address <= 0x4060)), ValueError('Invalid address. Allowed 0x4041 .. 0x4060')
-    #     assert((address-1) + len(data) <= 0x4060), ValueError('Invalid data length or start address. Block of data out of range 0x4041 ..0x4060')
-    #     try:
-    #         start_ind = address - 0x4041
-    #         stop_ind = start_ind + len(data)
-    #         mib = self.read_mib(0x4041, 32, hexi=False)
-    #         #udi : str = "12345678123456781234567812345678"
-    #         #ss : str = ''.join(map(str,data))
-    #         new_mib : str = (mib[:start_ind] + data[:length] + mib[stop_ind:])
-    #         new_mib = bytearray(new_mib.encode("ascii"))
-    #         #print(new_mib)
-    #         res = self.write_flash_block(0x4041, new_mib)
-    #     except Exception:
-    #         raise
-    #     return res
-
 
     def write_pcba_udi_block(self, udi_block: str) -> bool:
         """
@@ -1534,6 +1510,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         assert(len(clean_udi) >= 2 and len(clean_udi) <= 15), ValueError(f"Clean UDI length={len(clean_udi)} not between 2 and 15.")
         return self.write_flash_block(0x4041, bytes(clean_udi, encoding="utf-8"))
 
+
     def read_pcba_udi_block(self) -> str:
         """
         Reads specific RRC prefix and PCBA serial number from the Manufacturer info block.
@@ -1542,8 +1519,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             str: pcba udi block
         """
-        return self.read_flash_block(0x4041, 15).decode()
-
+        #return self.read_flash_block(0x4041, 15).decode()
+        return self.read_flash_block_verified(0x4041, 15).decode()
 
 
     def write_serial_number_block(self, sn: str) -> bool:
@@ -1561,6 +1538,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         buffer = bytes(sn, encoding="utf-8")
         return self.write_flash_block(0x4052, buffer)
 
+
     def read_serial_number_block(self) -> str:
         """
         Reads serial number from the Manufacturer info block.
@@ -1569,7 +1547,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             str: serial number block
         """
-        return self.read_flash_block(0x4052, 14).decode()
+        #return self.read_flash_block(0x4052, 14).decode()
+        return self.read_flash_block_verified(0x4052, 14).decode()
 
 
 
@@ -1597,7 +1576,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             str: Internal Use Indexing Byte
         """
-        return self.read_flash_block(0x4051, 1).decode()
+        #return self.read_flash_block(0x4051, 1).decode()
+        return self.read_flash_block_verified(0x4051, 1).decode()
 
 
     def read_firmware_revision(self) -> str:
@@ -1608,7 +1588,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             str: firmware_revision
         """
-        return self.read_flash_block(0x405F, 2).decode()
+        #return self.read_flash_block(0x405F, 2).decode()
+        return self.read_flash_block_verified(0x405F, 2).decode()
 
 
     def set_manufacturer_date(self) -> bool:
