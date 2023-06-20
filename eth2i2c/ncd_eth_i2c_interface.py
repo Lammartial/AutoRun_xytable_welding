@@ -81,7 +81,7 @@ class I2CPort(I2CBase):
         The string has the format "<ip address>:<port>:<i2c address>"
         Example: "192.168.1.56:2101:0x40"
         """
-        return f"NCD ETH-to-I2C bridge at {self._host}:{self._port}:0x{self.last_i2c_address:02X}"
+        return f"NCD ETH-to-I2C bridge at {self._host}:{self._port}:0x{(self.last_i2c_address & 0xff):02X}"
 
     def __repr__(self) -> str:
         return f"I2CPort({self.ncd_interface_address}, timeout_s={self.timeout_s}, open_connection={self._open_connection})"
@@ -425,32 +425,47 @@ class I2CPort(I2CBase):
 
 #--------------------------------------------------------------------------------------------------
 
-if __name__ == "__main__":
+def test_interface(resource_str: str) -> None:
     from rrc.i2cbus import BusMux
     from rrc.smbus import BusMaster
     from rrc.chipsets.bq40z50 import BQ40Z50R1
 
-    ## Initialize the logging
-    logger_init(filename_base=None)  ## init root logger with different filename
-    _log = getLogger(__name__, DEBUG)
-
-    #I2C_BRIDGE_RESOURCE_STR = "172.21.101.11:2101"
-    I2C_BRIDGE_RESOURCE_STR = "192.168.69.77:2101"
-    dev = I2CPort(I2C_BRIDGE_RESOURCE_STR)
+    print("Test NCD API compatibility")
+    dev = I2CPort(resource_str)
     mux = BusMux(dev, 0x70)
     bus = BusMaster(dev)
     bat = BQ40Z50R1(bus)
+    _= [print(f"DEVICE: {item}") for item in [dev,mux,bus,bat]]
     print("Change clock frequency - RRC: ", str(dev.i2c_change_clock_frequency(100000)))
     #print("Change clock frequency - NCD: ", str(dev.i2c_change_clock_frequency_ncd(38000)))
     #dev.writeto(0x77, bytearray([0x02]))
     for c in range(1, 9):
         mux.setChannel(c)
         print(f"Channel {c}:", str(dev.i2c_bus_scan()))
-    mux.setChannel(6)
-    #print(str(dev.get_i2c_port()))
-    print(bat.device_name())
-    print(bat.design_capacity())
-    print(bat.design_voltage())
+    mux.setChannel(1)
+    if bat.isReady():
+        print("Found SmartBattery:")
+        print(bat.device_name())
+        print(bat.design_capacity())
+        print(bat.design_voltage())
 
+#--------------------------------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    from time import perf_counter
+
+    ## Initialize the logging
+    logger_init(filename_base=None)  ## init root logger with different filename
+    _log = getLogger(__name__, DEBUG)
+
+    tic = perf_counter()
+
+    #I2C_BRIDGE_RESOURCE_STR = "172.21.101.11:2101"
+    I2C_BRIDGE_RESOURCE_STR = "192.168.69.77:2101"
+
+    test_interface(I2C_BRIDGE_RESOURCE_STR)
+
+    toc = perf_counter()
+    print(f"DONE in {toc - tic:0.4f} seconds.")
 
 # END OF FILE

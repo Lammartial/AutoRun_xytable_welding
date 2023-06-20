@@ -40,7 +40,7 @@ class BusMux:
         self.current_mask = 0x00  # shadow register; initial value after reset -> no channels active
 
     def __str__(self) -> str:
-        return f"I²C bus MUX on bus {self.i2c} having slave address of 0x{self.address:02x}, channel mask 0x{self.current_mask:02x}"
+        return f"I²C bus MUX on bus {self.i2c} having slave address of 0x{(self.address & 0xff):02X}, channel mask 0x{(self.current_mask & 0xff):02X}"
 
     def __repr__(self) -> str:
         return f"BusMux({repr(self.i2c)}, {self.address})"
@@ -313,7 +313,7 @@ if __name__ == "__main__":
     for n in range(1,9):
         mux.setChannel(n)
         print(ncd.i2c_bus_scan())
-        
+
     # mux.setChannel(1)
     # _log.info(mux.getChannels())
     # _log.info(bus.readWord(0x0b,0x09))
