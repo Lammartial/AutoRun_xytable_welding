@@ -823,7 +823,8 @@ class SPSStateMachine(SPSStateMachineBase):
                         self.program_no = self.dev.read_program_no()
                         if self.program_no != self.next_program_no:
                             # retry until program is being set
-                            raise(_MyBreak)  # simulate an early break
+                            # simulate an early break:
+                            raise _MyBreak(f"PRG_NO: {self.program_no} != {self.next_program_no}")
                     else:
                         #self.welding_parameters = None  # signal not to store ths set again
                         print(f"Program {self.program_no} already set.")
@@ -844,7 +845,7 @@ class SPSStateMachine(SPSStateMachineBase):
                 case other:
                     self.set_state(SPSStates.START)
 
-        except _MyBreak:
+        except _MyBreak as ex:
             pass  # simulate break from match
         except ModbusException as ex:
             #print(f"SPS: {ex}")
