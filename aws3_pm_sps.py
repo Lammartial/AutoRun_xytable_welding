@@ -432,6 +432,11 @@ class SPSStateMachineBase(object):
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 
+class _MyBreak(Exception): pass
+
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+
 class SPSStateMachineRotating(SPSStateMachineBase):
 
     def __init__(self, dev: AWS3Modbus | str, program_sequence: List[int] = [1], have_read_measurements: bool = False) -> None:
@@ -596,10 +601,9 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                         self.program_no = self.dev.read_program_no()
                         print("T2:", perf_counter()-t0)
                         if self.program_no != self.next_program_no:
-                            #
-                            # ??? consequence ???
-                            #
-                            pass
+                            # retry until program is being set
+                            # simulate an early break
+                            raise _MyBreak(f"PRG_NO: {self.program_no} != {self.next_program_no}")
                     else:
                         print(f"Program {self.program_no} already set.")
                     if self.have_read_measurements:
@@ -620,6 +624,9 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                 case other:
                     self.set_state(SPSStates.START)
 
+        except _MyBreak as ex:
+            self._log.error(f"BREAK: {ex}")
+            pass  # simulate break from match
         except ModbusException as ex:
             #print(f"SPS: {ex}")
             self._log.error(f"SPS: {ex}")
@@ -644,8 +651,6 @@ class SPSStateMachineRotating(SPSStateMachineBase):
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
-
-class _MyBreak(Exception): pass
 
 class SPSStateMachine(SPSStateMachineBase):
     """This is the "production" state machine.
@@ -823,7 +828,8 @@ class SPSStateMachine(SPSStateMachineBase):
                         self.program_no = self.dev.read_program_no()
                         if self.program_no != self.next_program_no:
                             # retry until program is being set
-                            raise(_MyBreak)  # simulate an early break
+                            # simulate an early break
+                            raise _MyBreak(f"PRG_NO: {self.program_no} != {self.next_program_no}")
                     else:
                         #self.welding_parameters = None  # signal not to store ths set again
                         print(f"Program {self.program_no} already set.")
@@ -1323,10 +1329,11 @@ if __name__ == '__main__':
 
     #_default_yaml_filepath_ = Path(__file__).parent / "aws_readings"
     _default_yaml_filepath_ = Path(__file__).parent / "../.." / "logs" / "aws_readings"
+    _product_list = ["RRC2020B", "RRC2040B", "RRC2054S", "RRC2040-2S", "RRC2054-2S", "SPINEL"]
 
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("--development", action="store_true", help="Activate development mode.")
-    parser.add_argument("--product", choices=["RRC2020B", "RRC2040B"], action="store", default=None, help="Set a product for simulated DSP interface.")
+    parser.add_argument("--product", choices=_product_list, action="store", default=None, help="Set a product for simulated DSP interface.")
     parser.add_argument("--store", action="store_true", help="Enable read and store of measurements. If development (no UDI), data is store to YAML files.")
     parser.add_argument("--filepath", action="store", default=_default_yaml_filepath_, help="Path and filename prefix for file stored measurements")
     parser.add_argument("--simulate_scan", action="store_true", help="Set a product for simulated UDI scan interface.")
