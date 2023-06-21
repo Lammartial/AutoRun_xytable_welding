@@ -1278,19 +1278,23 @@ class ProcessScanner(mp.Process):
         proc_name = self.name
         _cfg, _dsp = _create_interfaces()
         _, resource_str = _cfg.get_resource_strings_for_socket(0)
-        scanner = create_barcode_scanner(resource_str)
+        scanner = None
         if not self.simulate_scan:
             while True:
                 _udi = None
                 try:
+                    if not scanner:
+                        scanner = create_barcode_scanner(resource_str)
                     _udi = scanner.request(None, timeout=None).strip()
                 except TimeoutError:
                     pass  # this is ok to keep the loop running
                 except Exception as ex:
                     # this is a real failure to stop this process
                     print(f"Cannot connect scanner {resource_str}: {ex}")
-                    print(f"{proc_name}:End")
-                    return
+                    print(f"Trying to reconnect scanner.")
+                    scanner = None
+                    #print(f"{proc_name}:End")
+                    #return
                 if _udi:
                     msg = {"udi_scanned": _udi}
                     #self.ui_queue.put(msg)  # this goes to the UI process
