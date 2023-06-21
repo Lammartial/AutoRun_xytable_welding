@@ -72,10 +72,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self._pf_status = None  # shadow copy
 
     def __str__(self) -> str:
-        return f"SmartBattery with BQ40Z50 chipset at 0x{self.address} on {str(self.bus)}"
+        return f"SmartBattery with BQ40Z50 chipset at 0x{(self.address & 0xff):02X} on {str(self.bus)}"
 
     def __repr__(self) -> str:
-        return f"BQ40Z50R1({repr(self.bus)}, slvAddress={self.address}, pec={self.pec})"
+        return f"BQ40Z50R1({repr(self.bus)}, slvAddress={(self.address & 0xff):02X}, pec={self.pec})"
 
     #----------------------------------------------------------------------------------------------
 
@@ -96,7 +96,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         try:
             self.operation_status() # if other chipset, this read will raise exception
             dev = self.device_type()
-            self.firmware_version()            
+            self.firmware_version()
             if dev == 0x4500: # RRC2054xx, RRC21xx
                 if self._firmware_version["version"] & 0xff00 == 0x0100: # RRC2054, RRC2054-2, ...
                     yesno=True
@@ -320,7 +320,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         #
         return self.unseal(0x8D21FAC3, 0x63DB2CE4)  # low-word goes first to battery
 
-    
+
     def wait_for_operation_status_flag(self, os_key: str, state: bool, retries: int = 20, pause_on_retry: float = 0.1) -> bool:
         """Wait for flags on operation_status()."""
         retries = int(retries)
@@ -328,8 +328,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             try:
                 self.operation_status()  # => update the self._operation_status attribute
                 if bool(self._operation_status[os_key]) == state:
-                    break                                                           
-                sleep(pause_on_retry)  
+                    break
+                sleep(pause_on_retry)
             except OSError as ex:
                 sleep(pause_on_retry)
             finally:
@@ -648,8 +648,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     def read_flash_block_verified(self, flash_address: int, length: int = 32,  hexi: bool | str | None = None) -> str | bytearray | None:
         # using the read multiple & compare strategy from smbus module which cannot be used here directly:
-        # for flash read we need to reset the address by a separate write before read, so we need to pack 
-        # the algorithm around it here. 
+        # for flash read we need to reset the address by a separate write before read, so we need to pack
+        # the algorithm around it here.
         d = {}
         ex = None
         # we are re-using the verification settings from the smbus module
@@ -664,7 +664,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                     if k in d:
                         d[k] += 1
                     else:
-                        d[k] = 1                    
+                        d[k] = 1
                     if d[k] > vcnt // 2:
                         return self._maybe_hexlify(k, hexi)  # good!
             except OSError as e:
@@ -764,7 +764,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def read_manufacturer_block(self, command: int, length: int | None, max_retries: int = 5) -> bytearray:
         """
         Sends a command via Manufacturer Block Access and reads data.
-        Repeats up to 5 times if the command has been sent and recieved are not equal. 
+        Repeats up to 5 times if the command has been sent and recieved are not equal.
 
         Args:
             command (int): command number
@@ -799,7 +799,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             OrderedDict: _description_
         """
-        buf = self.read_manufacturer_block(command=0x0071, length=32)        
+        buf = self.read_manufacturer_block(command=0x0071, length=32)
         self._manufacturing_dastatus1 = OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
@@ -823,7 +823,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return _od2t(self._manufacturing_dastatus1)  # Teststand interface
 
     def manufacturing_dastatus2(self, celsius: bool = True, hexi: bool | str | None = None) -> tuple:
-        buf = self.read_manufacturer_block(command=0x0072, length=16)         
+        buf = self.read_manufacturer_block(command=0x0072, length=16)
         self._manufacturing_dastatus2 = OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
@@ -843,14 +843,14 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         #self.manufacturer_access = 0xf081  # output CCADC Cal
         buf = self.manufacturer_block_access
         buf = buf[2:]  # slice command
-        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 24): 
+        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 24):
             raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
         self._ccadc_cal = OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),  # all blocks of bytes as they are - but hexlified as it looks better in JSON files later ...
             "counter":        unpack_from("<B", buf, 0)[0],
             "status":         unpack_from("<b", buf, 1)[0],
             "current_cc":     unpack_from("<h", buf, 2)[0]*1e-3,  # mA, signed short, little endian, current (coulomb counter)
-            "cell_voltage_1": unpack_from("<h", buf, 4)[0]*1e-3,   # mV, signed short, little endian,  
+            "cell_voltage_1": unpack_from("<h", buf, 4)[0]*1e-3,   # mV, signed short, little endian,
             "cell_voltage_2": unpack_from("<h", buf, 6)[0]*1e-3,  # mV, signed short, little endian,
             "cell_voltage_3": unpack_from("<h", buf, 8)[0]*1e-3,  # mV, signed short, little endian,
             "cell_voltage_4": unpack_from("<h", buf, 10)[0]*1e-3,  # mV, signed short, little endian,
@@ -894,7 +894,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def calib_read_adc_cell_voltage(self, samples: int = 4, shorted: bool = False, timeout: float = 5.0) -> float:
         """
         Enables the calibration mode of the battery if not set already, then
-        measures the voltage for Cell 1, averages "samples" readings for higher accuracy, 
+        measures the voltage for Cell 1, averages "samples" readings for higher accuracy,
         returning the mean value.
 
         ATTENTION: its important to use Cell 1 voltage, not the others to get needed accuracy!
@@ -923,20 +923,20 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         else:
             self.manufacturer_access = 0xf081  # output CCADC Cal
         voltage: float = 0
-        #n = 8  # take 8 measurements, including the base   
+        #n = 8  # take 8 measurements, including the base
         for _ in range(0, samples):
             # wait the 8-bit counter changed by 2 -> overflow need to be respected!
             self._wait_for_adc_update(2, timeout, t0_ns=t0)
             # now get the ADCs from the last block read with corrected signs
             voltage += _get_adc_reading(1)
         # calc mean values
-        if (samples != 0): voltage = voltage/samples  
+        if (samples != 0): voltage = voltage/samples
         else: voltage = 0
         return float(voltage)
 
     def calib_write_cell_voltage_gain(self, cell_voltages: Tuple[float], shorted: bool = False) -> Tuple[np.array, int]:
         """
-        Cells Voltage Calibration. 
+        Cells Voltage Calibration.
 
         Args:
             cell_voltages (Tuple[float]): measured (known) cells voltage, Volts
@@ -945,17 +945,17 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
         Returns:
             tuple:
-                (np.array) calibrated cell voltage measurements (V) : len = len(given cell_voltage), 
-                (int) bat_gain               
-            
+                (np.array) calibrated cell voltage measurements (V) : len = len(given cell_voltage),
+                (int) bat_gain
+
         """
         n_cell = len(cell_voltages)
         if (n_cell > 4):
             raise IndexError("Cells voltage list index out of range.")
         for i in range(n_cell):
-            cell_voltages[i] = float(cell_voltages[i]) 
+            cell_voltages[i] = float(cell_voltages[i])
         # 1. average adc cell_1 voltage
-        # Raw ADC data. 3.6 V == 19.45  
+        # Raw ADC data. 3.6 V == 19.45
         adc_cell_voltage = self.calib_read_adc_cell_voltage(shorted=shorted)
         # 2. calculate cell_gain
         # adc_cell_voltage == 0 => Exception
@@ -963,7 +963,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # 3. write cell_gain
         block = self.read_flash_block(0x4000)  # one page, no extras
         bytes_cell_gain = cell_gain.to_bytes(2, byteorder='little', signed=True)
-        block[0:2] = bytes_cell_gain  # 0x4000/0x4001     
+        block[0:2] = bytes_cell_gain  # 0x4000/0x4001
         self.write_flash_block(0x4000, block)
         # 4. Return calibrated cell_voltages
         self._ms_toggle_helper("cal_test", False, 0x002d)
@@ -974,7 +974,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     def calib_read_adc_bat_voltage(self,  samples: int = 4, shorted: bool = False,  timeout: float = 5.0) -> float:
         """Enables the calibration mode of the battery if not set already, then
-        measures battery voltage, averages "samples" readings for higher accuracy, 
+        measures battery voltage, averages "samples" readings for higher accuracy,
         returning the mean value.
 
         Args:
@@ -1002,7 +1002,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self._wait_for_adc_update(2, timeout, t0_ns=t0)
             # now get the ADCs from the last block read with corrected signs
             self._read_ccadc_cal()
-            adc_bat_voltage += self._ccadc_cal[f"bat_voltage"] 
+            adc_bat_voltage += self._ccadc_cal[f"bat_voltage"]
         if (samples != 0): adc_bat_voltage = adc_bat_voltage/samples
         else: adc_bat_voltage = 0
         return float(adc_bat_voltage)
@@ -1018,20 +1018,20 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
         Returns:
             float: calibrated battery voltage.
-            tuple: 
+            tuple:
                 (float) calibrated battery voltage (V),
                 (int) bat_gain
 
         """
-        bat_voltage = float(bat_voltage) 
-        # 1. average adc bat voltage 
-        # Raw ADC data. 10.8 V == ~14.4  
+        bat_voltage = float(bat_voltage)
+        # 1. average adc bat voltage
+        # Raw ADC data. 10.8 V == ~14.4
         adc_bat_voltage = self.calib_read_adc_bat_voltage(shorted=shorted)
         # 2. calculate bat_gain
         # adc_bat_voltage == 0 => Exception
         bat_gain: int = int(bat_voltage / adc_bat_voltage * 65536)
         # 3. write bat_gain
-        block = self.read_flash_block(0x4000)  # one page, no extras   
+        block = self.read_flash_block(0x4000)  # one page, no extras
         bytes_bat_gain = bat_gain.to_bytes(2, byteorder='little', signed=False)
         block[4:6] = bytes_bat_gain  # 0x4004/0x4005
         self.write_flash_block(0x4000, block)
@@ -1043,7 +1043,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     def calib_read_adc_pack_voltage(self,  samples: int = 4, shorted: bool = False,  timeout: float = 5.0) -> float:
         """Enables the calibration mode of the battery if not set already, then
-        measures package voltage, averages "samples" readings for higher accuracy, 
+        measures package voltage, averages "samples" readings for higher accuracy,
         returning the mean value.
 
         Args:
@@ -1071,7 +1071,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self._wait_for_adc_update(2, timeout, t0_ns=t0)
             # now get the ADCs from the last block read with corrected signs
             self._read_ccadc_cal()
-            adc_pack_voltage += self._ccadc_cal[f"pack_voltage"] 
+            adc_pack_voltage += self._ccadc_cal[f"pack_voltage"]
         if (samples != 0): adc_pack_voltage = adc_pack_voltage/samples
         else: adc_pack_voltage = 0
         return float(adc_pack_voltage)
@@ -1090,16 +1090,16 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 (float) calibrated package voltage (V),
                 (int) pack_gain
         """
-        pack_voltage = float(pack_voltage) 
-        # 1. average adc bat voltage 
-        # Raw ADC data. 10.8 V == ~14.25  
+        pack_voltage = float(pack_voltage)
+        # 1. average adc bat voltage
+        # Raw ADC data. 10.8 V == ~14.25
         adc_pack_voltage = self.calib_read_adc_pack_voltage(shorted=shorted)
         # 2. calculate bat_gain
         # adc_pack_voltage == 0 => Exception
         pack_gain: int = int(pack_voltage/adc_pack_voltage*65536)
         # 3. write bat_gain
         block = self.read_flash_block(0x4000)  # one page, no extras
-        #print(block)  
+        #print(block)
         bytes_pack_gain = pack_gain.to_bytes(2, byteorder='little', signed=False)
         block[2:4] = bytes_pack_gain  # 0x4002/0x4003
         self.write_flash_block(0x4000, block)
@@ -1112,7 +1112,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def calib_read_adc_current(self,  samples: int = 4, shorted: bool = False,  timeout: float = 5.0) -> float:
         """
         Enables the calibration mode of the battery if not set already, then
-        measures current_cc, averages "samples" readings for higher accuracy, 
+        measures current_cc, averages "samples" readings for higher accuracy,
         returning the mean value.
 
         Args:
@@ -1140,10 +1140,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self._wait_for_adc_update(2, timeout, t0_ns=t0)
             # now get the ADCs from the last block read with corrected signs
             self._read_ccadc_cal()
-            adc_curr += self._ccadc_cal[f"current_cc"] 
-        if (samples != 0): 
+            adc_curr += self._ccadc_cal[f"current_cc"]
+        if (samples != 0):
             adc_curr = adc_curr / samples
-        else: 
+        else:
             adc_curr = 0
         return adc_curr
 
@@ -1157,18 +1157,18 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 internal short on the coulomb counter inputs (SRP, SRN). Defaults to False.
 
         Returns:
-            tuple: 
-                (float) calibrated current (A), 
-                (float) bq_st_cc_gain, 
-                (float) cc_gain, 
-                (float) capacity_gain, 
+            tuple:
+                (float) calibrated current (A),
+                (float) bq_st_cc_gain,
+                (float) cc_gain,
+                (float) capacity_gain,
                 (float) adc_current
 
         """
         current = float(current)
-        # 1. average adc current 
+        # 1. average adc current
         adc_current = self.calib_read_adc_current(shorted=shorted)
-        # 2. calculate current_gain, capacity_gain. 
+        # 2. calculate current_gain, capacity_gain.
         # adc_current == 0 => Exception
         #cc_gain = 3.58422                  # default
         if adc_current != 0:
@@ -1176,17 +1176,17 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         else:
             cc_gain = 3.58422
         capacity_gain = float(cc_gain * 298261.6178)
-        # 3. write bat_gain        
+        # 3. write bat_gain
         bytes_cc_gain = bytearray(struct.pack("<f", cc_gain))         # 4 bytes
         bytes_cap_gain = bytearray(struct.pack("<f", capacity_gain))  # 4 bytes
         block = self.read_flash_block(0x4000)  # one page, no extras
         block[6:10] = bytes_cc_gain    # 0x4006/7/8/9
         block[10:14] = bytes_cap_gain  # 0x400a/b/c/d
-        #block = (block[:6]                
+        #block = (block[:6]
         #        + bytes_cc_gain   # 0x4006/7/8/9
         #        + bytes_cap_gain  # 0x400a/b/c/d
         #        + block[14:])     # brackets to avoid linter failure
-        #if len(block) != 32: raise Exception("Fuck the Energiesparlampe!")      
+        #if len(block) != 32: raise Exception("Fuck the Energiesparlampe!")
         self.write_flash_block(0x4000, block)
         # 4. Return calibrated current
         self._ms_toggle_helper("cal_test", False, 0x002d)
@@ -1204,7 +1204,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
         Args:
             temp (Tuple[int]): temperature TS1 ... TS4, degrees C
-            approx_loops (int): how many calibration loops should be done ? 
+            approx_loops (int): how many calibration loops should be done ?
 
         Returns:
             tuple:
@@ -1236,7 +1236,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                     # Limit dt -128 <= dt <= 127
                     if dt < -128: dt = -128
                     if dt > 127: dt = 127
-                    _b = struct.pack("b", dt)        
+                    _b = struct.pack("b", dt)
                 else:
                     _b = b'\x00'
                 new_offset += _b
@@ -1250,7 +1250,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         res = [dastatus2[2 + i] for i in range(n_ts)]
         # return the measurements and offsets for documentation
         return np.array(res), *[struct.unpack_from("<b", new_offset[i:])[0] for i in range(4)]
-        
+
     def _ms_toggle_helper(self, ms_key: str, enable: bool, ma_cmd: int, retries: int = 5, pause_on_retry: float = 0.1) -> bool:
         """Internal function to set a defined state using toggle and manufacturing_status() reads for control.
 
@@ -1272,16 +1272,16 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 if bool(self._manufacturing_status[ms_key]) != bool(enable):
                     if not _toggle_issued:
                         self.manufacturer_access = ma_cmd  # need to toggle
-                        _toggle_issued = True                       
+                        _toggle_issued = True
                     else:
                         # already issued the toggle command -> wait for correct state
                         pass
-                    if pause_on_retry: 
+                    if pause_on_retry:
                         sleep(pause_on_retry)
                 else:
-                    pass  # already on the target state -> do not pause  
+                    pass  # already on the target state -> do not pause
             except OSError as ex:
-                if pause_on_retry: 
+                if pause_on_retry:
                     sleep(pause_on_retry)
             finally:
                 retries -= 1
@@ -1313,12 +1313,12 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                     else:
                         # already issued the toggle command -> wait for correct state
                         pass
-                    if pause_on_retry: 
+                    if pause_on_retry:
                         sleep(pause_on_retry)
                 else:
-                    pass  # already on the target state -> do not pause  
+                    pass  # already on the target state -> do not pause
             except OSError as ex:
-                if pause_on_retry: 
+                if pause_on_retry:
                     sleep(pause_on_retry)
             finally:
                 retries -= 1
@@ -1386,7 +1386,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         latest gauging status prior to a reset.
         """
         self.manufacturer_access = 0x0021
-    
+
     def set_gauging(self, enable: bool) -> bool:
         return self._ms_toggle_helper("gauge_en", enable, 0x0021)
 
@@ -1430,7 +1430,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.manufacturer_access = 0x0025
 
     def set_black_box_recorder(self, enable: bool) -> bool:
-        return self._ms_toggle_helper("bbr_en", enable, 0x0025)    
+        return self._ms_toggle_helper("bbr_en", enable, 0x0025)
 
     def toggle_fuse_control(self):
         self.manufacturer_access = 0x0026
@@ -1456,7 +1456,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     def reset_device(self):
         self.manufacturer_access = 0x0041
-    
+
     #def reset_device_0x0012(self):  # backward compatibility command
     #    self.manufacturer_access = 0x0012
 
@@ -1488,7 +1488,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "scd2":  unpack_from("<b", buf, 0)[0],
         }))
 
-    
+
     def write_pcba_udi_block(self, udi_block: str) -> bool:
         """
         Writes specific RRC prefix and PCBA serial number into Manufacturer info block.
@@ -1501,7 +1501,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             bool: True - success, False - failed
         """
-        
+
         if "PCBA" in udi_block:
             # strip PCBA from udi
             clean_udi = udi_block.replace("PCBA", "")
@@ -1549,7 +1549,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
         #return self.read_flash_block(0x4052, 14).decode()
         return self.read_flash_block_verified(0x4052, 14).decode()
-    
+
 
 
     def write_internal_use_indexing(self, index_byte: str) -> bool:
@@ -1607,7 +1607,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         except Exception:
             raise
         return bool(res)
-    
+
     def set_pack_sn(self, sn: str) -> bool:
         """
         Writes and verifies pack serial number to the register 0x1C SerialNumber()
@@ -1654,13 +1654,13 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
         buf =  self.current()
         return float(buf[0])
-    
+
 
     def _decode_safety_status(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:
         os = unpack("<L", buf)[0]
         return OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
-            # data come little endian 
+            # data come little endian
             "RSVD": ((os>>30) & 0x3),  # Reserved. Do not use.
             "OCDL":  ((os>>29) & 1),  # Overcurrent in Discharge
             "COVL": ((os>>28) & 1),  #  Cell Overvoltage Latch
@@ -1693,15 +1693,15 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "COV": ((os>>1) & 1),  #  Cell Overvoltage
             "CUV": ((os>>0) & 1),  #  Cell Undervoltage
         })
-        
+
 
     def safety_status(self, hexi: bool | str | None = None) -> tuple:
         self.manufacturer_access = 0x0051
         buf = self.manufacturer_data
-        self._safety_status = self._decode_safety_status(buf, hexi=hexi) 
+        self._safety_status = self._decode_safety_status(buf, hexi=hexi)
         return _od2t(self._safety_status)  # Teststand interface
-    
-    
+
+
     def get_safety_status(self) -> str:
         """
         Returns safety status register to log it.
@@ -1720,7 +1720,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         os = unpack("<L", buf)[0]
         return OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
-            # data come little endian 
+            # data come little endian
             "TS4": ((os>>31) & 1),  #  Open Thermistor–TS4 Failure
             "TS3": ((os>>30) & 1),  #  Open Thermistor–TS3 Failure
             "TS2": ((os>>29) & 1),  #  Open Thermistor–TS2 Failure
@@ -1759,9 +1759,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def safety_status(self, hexi: bool | str | None = None) -> tuple:
         self.manufacturer_access = 0x0053
         buf = self.manufacturer_data
-        self._pf_status = self._decode_safety_status(buf, hexi=hexi) 
+        self._pf_status = self._decode_safety_status(buf, hexi=hexi)
         return _od2t(self._pf_status)  # Teststand interface
-    
+
 
     def get_pf_status(self) -> str:
         """
@@ -1774,8 +1774,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.manufacturer_access = 0x0053
         buf = self.manufacturer_data
         self._pf_status = self._decode_pf_status(buf)
-        return str(buf)        
-    
+        return str(buf)
+
 
     def reset_errors(self) -> None:
         """
@@ -1787,7 +1787,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # Permanent Fail Data Reset
         self.manufacturer_access = 0x0029
         #dummy = self.read_manufacturer_block(command=0x0029, length=None)
-    
+
     def check_no_errors(self) -> bool:
         """
         Checks Safety Status and Permanent Fail Status.
@@ -1797,7 +1797,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
         no_errs = True
         # Safety status
-        
+
         self.manufacturer_access = 0x0051
         buf = self.manufacturer_data
         for i in range(len(buf)):
@@ -1813,7 +1813,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     def ts_DeviceName(self) -> str:
         pass
-    
+
 #--------------------------------------------------------------------------------------------------
 # -R2-
 #--------------------------------------------------------------------------------------------------
@@ -1828,7 +1828,7 @@ class BQ40Z50R2(BQ40Z50R1):
     #
     # !! NO NEED to overwrite __str__() !!
     #
-    
+
     def __repr__(self) -> str:
         return f"BQ40Z50R2({repr(self.bus)}, slvAddress={self.address}, pec={self.pec})"
 
@@ -1872,7 +1872,7 @@ if __name__ == "__main__":
     ### Initialize the logging
     #logger_init(filename_base=None)  ## init root logger
     #_log = getLogger(__name__, DEBUG)
-    
+
     print("NO TESTS: ", __file__)
 
     #

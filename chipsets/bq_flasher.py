@@ -59,7 +59,7 @@ class BQStudioFileFlasher:
     flasher.validate_and_program_fw_file()
     """
 
-    def __init__(self, battery: ChipsetTexasInstruments, firmware_file: Path | str = None, 
+    def __init__(self, battery: ChipsetTexasInstruments, firmware_file: Path | str = None,
                  show_progressbar: bool = False, color: str = None, test_socket: int = -1):
         """Initialize a class instance."""
         self.battery = battery
@@ -163,9 +163,9 @@ class BQStudioFileFlasher:
                 current_line = current_line.strip()
                 line_number += 1
 
-                # we can open the progress bar only here as we need to know the size 
+                # we can open the progress bar only here as we need to know the size
                 #if self._progress:
-                #    self._print_progress_bar(line_number, line_count)                
+                #    self._print_progress_bar(line_number, line_count)
 
                 if current_line.startswith(";"):
                     # Line is a comment
@@ -192,12 +192,12 @@ class BQStudioFileFlasher:
                             if self._progress:
                                 self._print_progress_bar(line_number, line_count)
                             if time_ms < 25:  # cut this wait
-                                continue                   
+                                continue
                     continue
 
-                elif current_line.startswith("SWB:"):
-                    # Write block
-                    result, data = self._handle_line(current_line[4:], line_number)
+                elif current_line.startswith("SWB:") or current_line.startswith("W:"):
+                    # Write block/bytes
+                    result, data = self._handle_line(current_line[2:], line_number) if current_line.startswith("W:") else self._handle_line(current_line[4:], line_number)
                     if not result:
                         if is_file_validation:
                             validation_result = False
@@ -250,9 +250,9 @@ class BQStudioFileFlasher:
                                 f"Error in SMBus communication during \"write command\" command in line {line_number}!")
                             break
 
-                elif current_line.startswith("SCL:"):
+                elif current_line.startswith("SCL:") or current_line.startswith("C:"):
                     # Read and compare block
-                    address, data = self._handle_line(current_line[4:], line_number)
+                    address, data = self._handle_line(current_line[2:], line_number) if current_line.startswith("C:") else self._handle_line(current_line[4:], line_number)
                     if not result:
                         if is_file_validation:
                             validation_result = False
@@ -316,9 +316,10 @@ class BQStudioFileFlasher:
                     if not is_file_validation:
                         validation_result = int(1)  # ???
                         break
-       
-        self._progress.close()
-        self._progress = None
+
+        if self._progress:
+            self._progress.close()
+            self._progress = None
 
         return validation_result
 
@@ -369,7 +370,7 @@ class BQStudioFileFlasher:
         else:
             _log.error("No firmware file specified. Use the set_firmware_file() method to select a firmware file.")
             return False
-        
+
     def recover_fw_file(self) -> bool:
         """Prepare the battery and program it with the given fw file.
 
@@ -378,7 +379,7 @@ class BQStudioFileFlasher:
         Returns:
             bool: Result of the fw programming.
         """
-        result: bool = False 
+        result: bool = False
         _log = getLogger(__name__, DEBUG)
         if self.firmware_file is not None:
             return self.__process_file(is_file_validation=False)

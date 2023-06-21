@@ -645,6 +645,7 @@ class SPSStateMachineRotating(SPSStateMachineBase):
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 
+class _MyBreak(Exception): pass
 
 class SPSStateMachine(SPSStateMachineBase):
     """This is the "production" state machine.
@@ -741,8 +742,8 @@ class SPSStateMachine(SPSStateMachineBase):
                             self.lock_machine() # lock machine to have control for read measurements
                             self.last_counter_ax1 = self.counter_ax1
                             print(f"Counters: Ax1={self.counter_ax1}")
-                            # read status again AFTER the counter has changed
-                            _, _status = self.dev.is_machine_ready()
+                            ## read status again AFTER the counter has changed
+                            #_, _status = self.dev.is_machine_ready()
                             self.welding_status = _status  # store result
                             self.set_state(SPSStates.CHECK_WELDING_RESULT)
                             _do_pause = False
@@ -821,10 +822,8 @@ class SPSStateMachine(SPSStateMachineBase):
                         #sleep(self._throttle_pause)  # throttle polling
                         self.program_no = self.dev.read_program_no()
                         if self.program_no != self.next_program_no:
-                            #
-                            # ??? consequence ???
-                            #
-                            pass
+                            # retry until program is being set
+                            raise(_MyBreak)  # simulate an early break
                     else:
                         #self.welding_parameters = None  # signal not to store ths set again
                         print(f"Program {self.program_no} already set.")
@@ -845,6 +844,8 @@ class SPSStateMachine(SPSStateMachineBase):
                 case other:
                     self.set_state(SPSStates.START)
 
+        except _MyBreak:
+            pass  # simulate break from match
         except ModbusException as ex:
             #print(f"SPS: {ex}")
             self._log.error(f"SPS: {ex}")
@@ -1278,19 +1279,23 @@ class ProcessScanner(mp.Process):
         proc_name = self.name
         _cfg, _dsp = _create_interfaces()
         _, resource_str = _cfg.get_resource_strings_for_socket(0)
-        scanner = create_barcode_scanner(resource_str)
+        scanner = None
         if not self.simulate_scan:
             while True:
                 _udi = None
                 try:
+                    if not scanner:
+                        scanner = create_barcode_scanner(resource_str)
                     _udi = scanner.request(None, timeout=None).strip()
                 except TimeoutError:
                     pass  # this is ok to keep the loop running
                 except Exception as ex:
                     # this is a real failure to stop this process
                     print(f"Cannot connect scanner {resource_str}: {ex}")
-                    print(f"{proc_name}:End")
-                    return
+                    print(f"Trying to reconnect scanner.")
+                    scanner = None
+                    #print(f"{proc_name}:End")
+                    #return
                 if _udi:
                     msg = {"udi_scanned": _udi}
                     #self.ui_queue.put(msg)  # this goes to the UI process
