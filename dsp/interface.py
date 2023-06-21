@@ -48,7 +48,7 @@ class DspInterface:
     def __init__(self, api_base_url: str, local_result_file: str | Path ) -> None:
 
         self.API_BASE_URL = api_base_url
-        self.LOCAL_RESULT_FILE = Path(local_result_file) if local_result_file else None
+        self.LOCAL_RESULT_FILE = Path(local_result_file) if (local_result_file and (local_result_file != "")) else None
 
     def __str__(self) -> str:
         return f"Interface to DSP REST API on {self.API_BASE_URL}"

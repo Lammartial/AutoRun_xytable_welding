@@ -360,7 +360,7 @@ class Hioki_BT3561A(Eth2SerialDevice):
         """
         function_type = self.get_function().strip()
         #[BT3561A] :READ? Execute single measurement using BT3561A.
-        val = self.read().strip()
+        val = self.read().replace(" ", "").strip()  # remove all spaces and other non printables
         try:
             #print("FUNC", function_type)
             if ("RV" in function_type):
