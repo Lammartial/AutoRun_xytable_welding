@@ -645,6 +645,7 @@ class SPSStateMachineRotating(SPSStateMachineBase):
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 
+class _MyBreak(Exception): pass
 
 class SPSStateMachine(SPSStateMachineBase):
     """This is the "production" state machine.
@@ -741,8 +742,8 @@ class SPSStateMachine(SPSStateMachineBase):
                             self.lock_machine() # lock machine to have control for read measurements
                             self.last_counter_ax1 = self.counter_ax1
                             print(f"Counters: Ax1={self.counter_ax1}")
-                            # read status again AFTER the counter has changed
-                            _, _status = self.dev.is_machine_ready()
+                            ## read status again AFTER the counter has changed
+                            #_, _status = self.dev.is_machine_ready()
                             self.welding_status = _status  # store result
                             self.set_state(SPSStates.CHECK_WELDING_RESULT)
                             _do_pause = False
@@ -821,10 +822,8 @@ class SPSStateMachine(SPSStateMachineBase):
                         #sleep(self._throttle_pause)  # throttle polling
                         self.program_no = self.dev.read_program_no()
                         if self.program_no != self.next_program_no:
-                            #
-                            # ??? consequence ???
-                            #
-                            pass
+                            # retry until program is being set
+                            raise(_MyBreak)  # simulate an early break
                     else:
                         #self.welding_parameters = None  # signal not to store ths set again
                         print(f"Program {self.program_no} already set.")
@@ -845,6 +844,8 @@ class SPSStateMachine(SPSStateMachineBase):
                 case other:
                     self.set_state(SPSStates.START)
 
+        except _MyBreak:
+            pass  # simulate break from match
         except ModbusException as ex:
             #print(f"SPS: {ex}")
             self._log.error(f"SPS: {ex}")
