@@ -850,7 +850,7 @@ class SPSStateMachine(SPSStateMachineBase):
                 case other:
                     self.set_state(SPSStates.START)
 
-        except _MyBreak:
+        except _MyBreak as ex:
             pass  # simulate break from match
         except ModbusException as ex:
             #print(f"SPS: {ex}")
