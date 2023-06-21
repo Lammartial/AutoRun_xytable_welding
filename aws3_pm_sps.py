@@ -940,7 +940,7 @@ class ProcessSPS(mp.Process):
 
     def __init__(self, command_queue: mp.JoinableQueue, response_queue: mp.Queue) -> None:
         mp.Process.__init__(self)
-        global DEBUG, ENABLE_UDI_SCAN, PRODUCTION_MODE, SIMULATED_DSP_PRODUCT, STORE_MEASUREMENTS
+        global DEBUG, ENABLE_UDI_SCAN, PRODUCTION_MODE, SIMULATED_DSP_PRODUCT, STORE_MEASUREMENTS, SCAN_UDI_FORCE_RESTART
 
         self._log = getLogger(__name__, DEBUG)
         self.command_queue = command_queue
@@ -950,6 +950,7 @@ class ProcessSPS(mp.Process):
         self.have_read_measurements = True if STORE_MEASUREMENTS is not None else False
         self.measurements_filepath = Path(STORE_MEASUREMENTS) if STORE_MEASUREMENTS is not None else None
         self.production_mode = PRODUCTION_MODE
+        self.scan_udi_force_restart = SCAN_UDI_FORCE_RESTART
 
 
     def collect_parameters(self, cfg: StationConfiguration, dsp: DspInterface) -> Tuple[List[int], str, str, str]:
@@ -1207,7 +1208,7 @@ class ProcessSPS(mp.Process):
                     print(f"{proc_name}: {cmd}")
                     if "udi_scanned" in cmd:
                         # check if we are NOT in the middle of a sequence or at start position:
-                        if _udi is None or (SM.sequence_pos == 0):
+                        if _udi is None or (SM.sequence_pos == 0) or self.scan_udi_force_restart:
                             # forward the UDI to the UI
                             _verify_udi = cmd["udi_scanned"]
                             if "CELL" in _verify_udi:
@@ -1329,6 +1330,7 @@ if __name__ == '__main__':
     parser.add_argument("--store", action="store_true", help="Enable read and store of measurements. If development (no UDI), data is store to YAML files.")
     parser.add_argument("--filepath", action="store", default=_default_yaml_filepath_, help="Path and filename prefix for file stored measurements")
     parser.add_argument("--simulate_scan", action="store_true", help="Set a product for simulated UDI scan interface.")
+    parser.add_argument("--block_scan_udi", action="store_false", help="To block scan UDI in the middle of a sequence. If false scn UDI at any time resets sequence to start.")
 
     args = parser.parse_args()
 
@@ -1337,7 +1339,7 @@ if __name__ == '__main__':
     SIMULATE_UDI_SCAN = args.simulate_scan
     SIMULATED_DSP_PRODUCT = args.product
     STORE_MEASUREMENTS = args.filepath if args.store else None
-
+    SCAN_UDI_FORCE_RESTART = not args.block_scan_udi
 
     p = None
     w = None
