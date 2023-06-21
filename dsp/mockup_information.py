@@ -2,33 +2,6 @@
 # Mockup Data for mockup_server and DSP SIMULATION interface
 #
  
-MOCK_PARTNUMBER = {
-    "RRC2020B": {
-        "product":        "100496-17",
-        "pre_assembly":   "412031-16",
-        "pcba":           "411828-05",
-    },
-    "RRC2040B": {
-        "product":        "100498-17",
-        "pre_assembly":   "412036-16",
-        "pcba":           "411829-05",
-    },
-	"RRC2040-2S": {
-        "product":        "100559S-10",
-        "pre_assembly":   "411842-05",
-        "pcba":           "410136-08",
-    },
-	"RRC2054S": {
-        "product":        "100568S-14",
-        "pre_assembly":   "411863-05",
-        "pcba":           "411824-04",
-    },
-	"RRC2054-2S": {
-        "product":        "110064S-08",
-        "pre_assembly":   "412080-01",
-        "pcba":           "411857-03",
-    }
-}
  
 #
 # Parameters in the form key:value -> key:payload

@@ -54,7 +54,6 @@ class UdiItem(BaseModel):
     udi: str
 
 
-from rrc.dsp.mockup_information import MOCK_PARTNUMBER
 from rrc.dsp.mockup_information import PART_INFORMATION
 
 
@@ -67,9 +66,6 @@ async def root():
 async def get_serial(test_type, station_id, line_id, test_socket, udi, response: Response):
     global next_serial, lock_next_serial, lock_serial_db
 
-    # set the product to test for mockup: "RRC2040B" or "RRC2020B"
-    #_product_name = "RRC2020B"
-    #_mock = MOCK_PARTNUMBER[_product_name]
     if not (("CELL" in udi) or ("PCBA" in udi)):
         response.status_code = status.HTTP_406_NOT_ACCEPTABLE
         return { "error": "UDI is blacklisted", "code": 7, "udi": udi }
@@ -103,7 +99,6 @@ async def send_udi(item: UdiItem, response: Response):
 #     # set the product to test for mockup: "RRC2040B" or "RRC2020B"
 #     _product_name = "RRC2020B"
 #     #_product_name = "RRC2040B"
-#     #_mock = MOCK_PARTNUMBER[_product_name]
 #     _mock = PART_INFORMATION[_product_name]
 
 #     _fhm = _mock["CELL_WELDING"]
@@ -125,7 +120,7 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
     #_product_name = "RRC2054S"
     #_product_name = "SPINEL"
     _product_name = "RRC2040-2S"
-    #_mock = MOCK_PARTNUMBER[_product_name]
+    #_product_name = "RRC2054-2S"
     _mock = PART_INFORMATION[_product_name]
 
     # #_serial = random.randint(1, 47236513)
