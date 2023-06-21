@@ -679,7 +679,7 @@ class M3400(AdhocVisaDevice):
         self.send(f"VOLTAGE:SLEW:POS {pos}")
 
 
-    def configure_cc_mode(self, current: float, resistance: float, voltage_limit_high: float, voltage_limit_low: float,
+    def configure_cc_mode(self, current: float, resistance: float | None, voltage_limit_high: float, voltage_limit_low: float,
                             power_limit: float, set_output: bool = False) -> None:
         """Switches the PSU into CC priority mode. 
         
@@ -716,7 +716,7 @@ class M3400(AdhocVisaDevice):
         self.set_function("CURR")               # enable CC priority 
         self.send("FUNC:MODE FIX")
         self.send(f"CURR {current:0.2f}")       # set current for CC priority mode
-        if resistance is not None:
+        if (resistance is not None) and (resistance > 0):
             self.send(f"SINK:RES {resistance:0.3f}")
             self.send("SINK:RES:STATE 1")
         else:
@@ -730,14 +730,14 @@ class M3400(AdhocVisaDevice):
             self.set_output_state(0)  # make sure output is OFF
         self.set_function("CURR")  # CC priority
         self.send(f"POW:LIM:NEG {-abs(power_limit):0.2f}")
-        self.send(f"POW:LIM:POS 0.0") # always fixed!
+        self.send(f"POW:LIM:POS +1") # always fixed!
         #self.send(f"CURR:LIM:NEG {-abs(current_limit*1.1):0.3f}")
         #self.send(f"CURR:LIM:POS 0.0") # always fixed!
         self.send(f"VOLT:LIM:LOW 0.0") # always fixed!
         self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
         #self.send(f"VOLT {voltage_limit_high:0.2f}")
         self.send(f"CURR {-abs(current):0.3f}")
-        if resistance is not None:
+        if (resistance is not None) and (resistance > 0):
             self.send(f"SINK:RES {resistance:0.3f}")
             self.send("SINK:RES:STATE 1")
         else:
@@ -749,7 +749,7 @@ class M3400(AdhocVisaDevice):
         if self.last_mode != "VOLT":
             self.set_output_state(0)  # make sure output is OFF
         self.set_function("VOLT")
-        self.send(f"POW:LIM:NEG 0.0") # always fixed!
+        self.send(f"POW:LIM:NEG -1") # always fixed!
         self.send(f"POW:LIM:POS {abs(power_limit):0.2f}")
         self.send(f"CURR:LIM:NEG 0.0") # always fixed!
         self.send(f"CURR:LIM:POS {abs(current_limit):0.3f}")
