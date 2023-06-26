@@ -43,6 +43,7 @@ class AWS3Modbus(ModbusClient):
         self._welding_waveforms = None
         self._welding_measurements = None
         self._welding_parameters = None
+        self._toggle_bits = None
 
     def __str__(self) -> str:
         return f"AWS3 Welder Modbus connection on {repr(self.client)}"
@@ -75,6 +76,7 @@ class AWS3Modbus(ModbusClient):
     def setup_device(self):
         self.set_machine_byteorder()  # switch byte order to default
         self.machine_name = self.read_name().strip()
+        self._toggle_bits = self._read_toggle_bits()
 
     def set_machine_byteorder(self, bo: int = 3) -> None:
         """
@@ -101,6 +103,22 @@ class AWS3Modbus(ModbusClient):
             "ok": 1 if (bits[6] and bits[7]) else 0  # combine both axes: both need to be good
         }
         return bits[0], d
+
+
+    def _read_toggle_bits(self) -> int:
+        bits = self.read_coils(121-1, 8, unit_address=3)
+        # create two bit pattern from the toggle bits just read
+        return int(((1<<0) if bits[4] else 0) | ((1<<1) if bits[5] else 0))
+
+
+    def is_toggle_bit_changed(self) -> bool:
+        _n: int = self._read_toggle_bits()
+        # both bits have to be changed
+        changed: bool = ((self._toggle_bits ^ _n) == 0x03)
+        if changed:
+            self._toggle_bits = _n  # store for next round
+        return changed
+
 
     def read_machine_lock_status(self) -> tuple:
         self._sync_modbus_timing()
@@ -130,7 +148,6 @@ class AWS3Modbus(ModbusClient):
         ec: BinaryPayloadBuilder = self.getEncoder()
         ec.add_32bit_int(2)  # = login ingenieur
         return self.write_registers(208-1, ec.to_registers(), unit_address=3)
-
 
 
 

@@ -330,12 +330,14 @@ class SPSStates(Enum):
     START = 0
     INIT = 2
     SYNC_ON_MACHINE_COUNTER = 3
-    SHOW_PROGRAM_STEP = 4
-    FETCH_NEXT_PROGRAM = 5
-    WAIT_READY_TO_SET_PROGRAM = 6
-    SET_PROGRAM_ON_MACHINE = 7
-    SEQUENCE_DONE = 8
-    CHECK_WELDING_RESULT = 10
+    SYNC_ON_TOGGLE_BIT = 4
+    WAIT_MACHINE_READY = 5
+    SHOW_PROGRAM_STEP = 6
+    FETCH_NEXT_PROGRAM = 7
+    WAIT_READY_TO_SET_PROGRAM = 8
+    SET_PROGRAM_ON_MACHINE = 9
+    SEQUENCE_DONE = 10
+    CHECK_WELDING_RESULT = 11
     FAILED = 77
     POSITION_PASSED = 87
     PASSED = 88
@@ -732,13 +734,36 @@ class SPSStateMachine(SPSStateMachineBase):
                 case SPSStates.SHOW_PROGRAM_STEP:
                     print(f"Program step: {self.sequence_pos} of {len(self.program_sequence)}")
                     print(f"Program set {self.program_no}")
-                    self.set_state(SPSStates.SYNC_ON_MACHINE_COUNTER)
+                    #self.set_state(SPSStates.SYNC_ON_MACHINE_COUNTER)
+                    self.set_state(SPSStates.SYNC_ON_TOGGLE_BIT)
 
-                case SPSStates.SYNC_ON_MACHINE_COUNTER:
+                case SPSStates.SYNC_ON_TOGGLE_BIT:
+                    _do_pause = True
+                    if self.dev.is_toggle_bit_changed():
+                        self.set_state(SPSStates.WAIT_MACHINE_READY)
+                        _do_pause = False
+                    if _do_pause:
+                        sleep(self._throttle_pause)  # throttle polling
+
+                case SPSStates.WAIT_MACHINE_READY:
                     _do_pause = True
                     _machine_ready, _status = self.dev.is_machine_ready()
                     if _machine_ready:
+                        self.lock_machine() # lock machine to have control for read measurements
+                        self.welding_status = _status  # store result
                         self.counter_ax1 = self.dev.read_axis_counter(1)
+                        self.last_counter_ax1 = self.counter_ax1
+                        print(f"Counters: Ax1={self.counter_ax1}")
+                        self.set_state(SPSStates.CHECK_WELDING_RESULT)
+                        _do_pause = False
+                    if _do_pause:
+                        sleep(self._throttle_pause)  # throttle polling
+
+                # !!! UNUSED !!!
+                case SPSStates.SYNC_ON_MACHINE_COUNTER:  # changed from counter to toggle bits
+                    _do_pause = True
+                    _machine_ready, _status = self.dev.is_machine_ready()
+                    if _machine_ready:
                         #  Check if welding is done and read the result,
                         #  then proceed to check if pass or failed.
                         diffcount = self.counter_ax1 - self.last_counter_ax1
