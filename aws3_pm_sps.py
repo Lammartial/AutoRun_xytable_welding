@@ -829,6 +829,7 @@ class SPSStateMachine(SPSStateMachineBase):
                         if self.program_no != self.next_program_no:
                             # retry until program is being set
                             # simulate an early break
+                            sleep(self._throttle_pause)  # throttle polling
                             raise _MyBreak(f"PRG_NO: {self.program_no} != {self.next_program_no}")
                     else:
                         #self.welding_parameters = None  # signal not to store ths set again
