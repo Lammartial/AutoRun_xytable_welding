@@ -457,7 +457,7 @@ if __name__ == "__main__":
     #LINE_NETWORK = "172.25.101"  # VN line 1
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
-    feasa = FEASA_CH9121(f"{LINE_NETWORK}.31:3000")  # PCBA test, socket 0
+    feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:3000", termination="\n")  # PCBA test, socket 0
     #feasa = FEASA_CH9121(f"{LINE_NETWORK}.33:3000")  # PCBA test, socket 1
     #feasa = FEASA_CH9121(f"{LINE_NETWORK}.35:3000")  # PCBA test, socket 2
 
@@ -468,9 +468,9 @@ if __name__ == "__main__":
     #i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101") # socket 1
     #i2cbus = I2CPort(f"{LINE_NETWORK}.34:2101") # socket 2
 
-    mux = BusMux(i2cbus, address=0x77)
+    mux = BusMux(i2cbus, address=0x70)
     for i in range(8):
-        mux.setChannel(i + 1)
+        mux.setChannel(i )
         print("CH:", i, i2cbus.i2c_bus_scan())
 
     calib = CalibrationStorage(I2CMuxedBus(i2cbus, mux, 1))
@@ -499,6 +499,6 @@ if __name__ == "__main__":
     #rack_test(bat, gpio, vsim, calib, feasa, psu1, psu2, daq)
     #test_fuse_pin_cellside(bat, gpio, vsim, calib, feasa, psu1, psu2, daq)
     #test_lvl2_heater(bat, gpio, vsim, calib, feasa, psu1, psu2, daq)
-    psu_mode_test(bat, gpio, vsim, calib, feasa, psu1, psu2, daq)
+    #psu_mode_test(bat, gpio, vsim, calib, feasa, psu1, psu2, daq)
 
 # END OF FILE
