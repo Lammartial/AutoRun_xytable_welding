@@ -245,6 +245,7 @@ class WindowUI(object):
             a = self.q_res.get()
             #print("UI:", a)
             _do_update = False
+            _play_soundfile = None
             if a:
                 if "resource_str" in a:
                     self.var_label_resource_str.set(a["resource_str"])
@@ -293,7 +294,7 @@ class WindowUI(object):
                 if "udi_rejected" in a:
                     self.label_udi.config(background="orange", foreground="black")
                     self.var_label_udi.set("UDI REJECTED")
-                    PlaySound("./sounds/error-buzz", SND_FILENAME)
+                    _play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz")
                     print("UI:REJECTED UDI")
                     _do_update = True
                     pass
@@ -303,18 +304,33 @@ class WindowUI(object):
                     print("UI:BLACKLISTED UDI")
                     _do_update = True
                     pass
+                if "welding_check" in a:
+                    # position of welding
+                    _fgcolor = "white"
+                    if "passed" in a["welding_check"]:
+                        self.label_udi.config(background="LimeGreen", foreground=_fgcolor)
+                    else:
+                        self.label_udi.config(background="OrangeRed", foreground=_fgcolor)
+                        _play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz-hard")
+                    self.var_label_udi.set(a["udi"])
+                    print("UI:RESULT")
+                    _do_update = True
                 if "result" in a:
-                    _fgcolor = "black" if "\n" in a["udi"] else "white"
+                    # result overall
+                    #_fgcolor = "black" if "\n" in a["udi"] else "white"
+                    _fgcolor = "black"
                     if "passed" in a["result"]:
                         self.label_udi.config(background="green", foreground=_fgcolor)
                     else:
                         self.label_udi.config(background="red", foreground=_fgcolor)
-                        PlaySound("./sounds/error-buzz-hard", SND_FILENAME)
+                        #_play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz")
                     self.var_label_udi.set(a["udi"])
                     print("UI:RESULT")
                     _do_update = True
             if _do_update:
                 self.root.update()
+            if _play_soundfile:
+                PlaySound(_play_soundfile, SND_FILENAME)                
         self._id_after = self.mainframe.after(50, lambda: self.process_command_queue())
 
 
@@ -1187,11 +1203,12 @@ class ProcessSPS(mp.Process):
                             # KNAUP!
                             if SM.welding_status["reject"] > 0:
                                 # update UI (red) while read waveforms taking a lot of time
-                                self.response_queue.put({"result": "failed", "udi": _udi})
+                                self.response_queue.put({"welding_check": "failed", "udi": _udi})
                             if SM.welding_status["ok"] > 0:
                                 # update UI (green) while read waveforms taking a lot of time
-                                self.response_queue.put({"result": "passed", "udi": _udi})
+                                self.response_queue.put({"welding_check": "passed", "udi": _udi})
                         case SPSStates.FAILED:
+                            # complete sequence has failed
                             self.response_queue.put({"result": "failed", "udi": f"{_udi}\nSCAN NEXT UDI"})  # update UI (red)
                             if _udi:
                                 _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)

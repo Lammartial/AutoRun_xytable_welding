@@ -106,9 +106,9 @@ class AWS3Modbus(ModbusClient):
 
 
     def _read_toggle_bits(self) -> int:
-        bits = self.read_coils(121-1, 8, unit_address=3)
+        bits = self.read_coils(125-1, 2, unit_address=3)
         # create two bit pattern from the toggle bits just read
-        return int(((1<<0) if bits[4] else 0) | ((1<<1) if bits[5] else 0))
+        return int(((1<<0) if bits[0] else 0) | ((1<<1) if bits[1] else 0))
 
 
     def is_toggle_bit_changed(self) -> bool:
@@ -642,6 +642,9 @@ class AWS3Modbus_DUMMY(object):
 
     def set_machine_byteorder(self, bo: int = 3):
         pass
+
+    def is_toggle_bit_changed(self) -> bool:
+        return True
 
     def is_machine_ready(self) -> tuple:
         return True, {"ready": 1, "ok": 1, "reject": 0}
