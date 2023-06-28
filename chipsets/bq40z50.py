@@ -961,8 +961,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # adc_cell_voltage == 0 => Exception
         cell_gain: int = int(cell_voltages[0]/adc_cell_voltage*65536)
         # 3. write cell_gain
-        #block = self.read_flash_block(0x4000)  # one page, no extras
-        block = self.read_flash_block_verified(0x4000)  # one page, no extras
+        block = self.read_flash_block(0x4000)  # one page, no extras
+        #block = self.read_flash_block_verified(0x4000)  # one page, no extras
         bytes_cell_gain = cell_gain.to_bytes(2, byteorder='little', signed=True)
         block[0:2] = bytes_cell_gain  # 0x4000/0x4001
         self.write_flash_block(0x4000, block)
@@ -1032,8 +1032,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # adc_bat_voltage == 0 => Exception
         bat_gain: int = int(bat_voltage / adc_bat_voltage * 65536)
         # 3. write bat_gain
-        #block = self.read_flash_block(0x4000)  # one page, no extras
-        block = self.read_flash_block_verified(0x4000)  # one page, no extras
+        block = self.read_flash_block(0x4000)  # one page, no extras
+        #block = self.read_flash_block_verified(0x4000)  # one page, no extras
         bytes_bat_gain = bat_gain.to_bytes(2, byteorder='little', signed=False)
         block[4:6] = bytes_bat_gain  # 0x4004/0x4005
         self.write_flash_block(0x4000, block)
@@ -1100,8 +1100,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # adc_pack_voltage == 0 => Exception
         pack_gain: int = int(pack_voltage/adc_pack_voltage*65536)
         # 3. write bat_gain
-        #block = self.read_flash_block(0x4000)  # one page, no extras
-        block = self.read_flash_block_verified(0x4000)  # one page, no extras
+        block = self.read_flash_block(0x4000)  # one page, no extras
+        #block = self.read_flash_block_verified(0x4000)  # one page, no extras
         #print(block)
         bytes_pack_gain = pack_gain.to_bytes(2, byteorder='little', signed=False)
         block[2:4] = bytes_pack_gain  # 0x4002/0x4003
@@ -1182,8 +1182,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # 3. write bat_gain
         bytes_cc_gain = bytearray(struct.pack("<f", cc_gain))         # 4 bytes
         bytes_cap_gain = bytearray(struct.pack("<f", capacity_gain))  # 4 bytes
-        #block = self.read_flash_block(0x4000)  # one page, no extras
-        block = self.read_flash_block_verified(0x4000)  # one page, no extras
+        block = self.read_flash_block(0x4000)  # one page, no extras
+        #block = self.read_flash_block_verified(0x4000)  # one page, no extras
         block[6:10] = bytes_cc_gain    # 0x4006/7/8/9
         block[10:14] = bytes_cap_gain  # 0x400a/b/c/d
         #block = (block[:6]
@@ -1224,8 +1224,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # need to do some loops to approximat deviation to 0
         for m in range(0, int(approx_loops)):
             # 1. Read TS1...TS4 offset
-            #block = self.read_flash_block(0x4000)  # one page (32 bytes), no extras
-            block = self.read_flash_block_verified(0x4000)  # one page (32 bytes), no extras
+            block = self.read_flash_block(0x4000)  # one page (32 bytes), no extras
+            #block = self.read_flash_block_verified(0x4000)  # one page (32 bytes), no extras
             # convert 4 temperature offsets to *signed* bytes
             ts_offset = [struct.unpack_from("<b", block[i:])[0] for i in range(0x15, 0x19)]
             # 2. Read appropriate temperature from the DAStatus2()
