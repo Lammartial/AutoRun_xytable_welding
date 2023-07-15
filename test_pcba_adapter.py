@@ -266,6 +266,38 @@ def psu_mode_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO,
 
 #--------------------------------------------------------------------------------------------------
 
+def bat_flash_test(bat: BQ40Z50R1, psu1: M3400, psu2: M3400) -> None:    
+    print("PSU Output on")
+    psu2.configure_supply(10.8, 2.4, 50, 1)    
+    sleep(1.0)  # wait PSU powered up
+    print("PSU1", psu1.get_all_measurements())
+    print("PSU2", psu2.get_all_measurements())
+    #print("Safety Status:", bat.get_safety_status())
+    #print("Safety Status details:", bat._safety_status)
+    #print("PSU Output off")
+    vsim.enable_all_cell_channels()
+    vsim.set_cell_n_voltage(1, 3.6)
+    vsim.set_cell_n_voltage(2, 3.6)
+    vsim.set_cell_n_voltage(3, 3.6)
+    psu1.configure_supply(10.8, 0.05, 50, 1)    
+    sleep(2.5)
+    print(bat.isReady())    
+    psu1.set_output_state(0)
+    
+    #BQStudioFileFlasher(bat, "../../Battery-PCBA-Test/filestore") / "BQFS_3411842-05_A_Ametrie_RRC2040-2S.bq.fs"
+    flasher = BQStudioFileFlasher(bat, firmware_file=Path("C:/Production/Battery-PCBA-Test/filestore") / "DFFS_3411842-05_A_Ametrie_RRC2040-2S.df.fs", show_progressbar=True, test_socket=0)
+    res = flasher.program_fw_file()
+    print("FLASH:", res)
+    
+
+    psu1.set_output_state(0)
+    psu2.set_output_state(0)
+    vsim.initialize()
+
+
+#--------------------------------------------------------------------------------------------------
+
+
 
 def test_feasa_only(feasa: FEASA_CH9121):
     print("Issue capture command...")
@@ -275,6 +307,24 @@ def test_feasa_only(feasa: FEASA_CH9121):
     print(feasa.get_rgbi_num(0))
     print("getRGBI##3")
     print(feasa.get_rgbi_num(3))
+
+#--------------------------------------------------------------------------------------------------
+
+def test_calibration_storage_only(calib: CalibrationStorage):
+    print("Read calibration EEPROM values")
+    #print("Inventory Number: ", calib.load_inventory_number())    
+    print("Shunt Resistance: ", calib.load_shunt_resistance_ohm())
+    print("Leakage Current: ", calib.load_leakcurrent_amps())
+
+
+def test_relay_only(gpio: RelayBoard4Relay4GPIO):
+    gpio.set_gpio_n_as_output(7)
+    for i in range(3):
+        gpio.set_gpio_n_high(7)
+        sleep(0.5)
+        gpio.set_gpio_n_low(7)
+        sleep(0.5)
+
 
 
 #--------------------------------------------------------------------------------------------------
@@ -468,9 +518,9 @@ if __name__ == "__main__":
     #i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101") # socket 1
     #i2cbus = I2CPort(f"{LINE_NETWORK}.34:2101") # socket 2
 
-    mux = BusMux(i2cbus, address=0x70)
-    for i in range(8):
-        mux.setChannel(i )
+    mux = BusMux(i2cbus, address=0x77)
+    for i in range(1,9,1):
+        mux.setChannel(i)
         print("CH:", i, i2cbus.i2c_bus_scan())
 
     calib = CalibrationStorage(I2CMuxedBus(i2cbus, mux, 1))
@@ -500,5 +550,9 @@ if __name__ == "__main__":
     #test_fuse_pin_cellside(bat, gpio, vsim, calib, feasa, psu1, psu2, daq)
     #test_lvl2_heater(bat, gpio, vsim, calib, feasa, psu1, psu2, daq)
     #psu_mode_test(bat, gpio, vsim, calib, feasa, psu1, psu2, daq)
+    #test_relay_only(gpio)
+    #test_calibration_storage_only(calib)
+    bat_flash_test(bat, psu1, psu2)
+    
 
 # END OF FILE
