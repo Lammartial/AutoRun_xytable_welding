@@ -144,9 +144,9 @@ class I2CPort(I2CBase):
             raise NCDSelfTestFailedError(self)
         # check if we have an RRC interface on OLIMEX board:
         if self.__data_exchange(bytes([0xCF, 0x42])) != bytes([0x55]):
-            self.interface_is_rrc = True
-        else:
             self.interface_is_rrc = False
+        else:
+            self.interface_is_rrc = True
 
 
     def writeto(self, i2c_address_7bit: int, data: bytearray) -> int:
@@ -195,7 +195,7 @@ class I2CPort(I2CBase):
         """
         i2c_address_7bit = int(i2c_address_7bit)
         if not self.is_valid_7bit_address(i2c_address_7bit):
-            raise NCD_I2CInvalidAddressError(i2c_address_7bit, self)        
+            raise NCD_I2CInvalidAddressError(i2c_address_7bit, self)
         if (size <= 0) or ((not self.interface_is_rrc and size > 100) or (self.interface_is_rrc and size > 255)):
             raise NCD_I2CInvalidParametersError(i2c_address_7bit, self)
 
@@ -242,8 +242,8 @@ class I2CPort(I2CBase):
 
         # RRC implmentation
         if size < 0 or size > 255:
-            raise NCD_I2CInvalidParametersError(i2c_address_7bit, self)   
-             
+            raise NCD_I2CInvalidParametersError(i2c_address_7bit, self)
+
         self.last_i2c_address = i2c_address_7bit
         tx_payload = bytes([NCD_I2C_WRITE_READ, i2c_address_7bit, size, delay_ms]) + data
         rx_payload = self.__data_exchange(tx_payload)
@@ -282,13 +282,15 @@ class I2CPort(I2CBase):
         return list(rx_payload)
 
 
-    def i2c_change_clock_frequency(self, frequency: int, timeout_ms: int = 1000) -> list:
+    def i2c_change_clock_frequency(self, frequency: int, timeout_ms: int = None) -> list:
         # RRC specific function !
-        tx_payload = bytes([0xCF]) + pack(">L", frequency) + pack(">L", timeout_ms)  # to 32 bit unsigned
+        tx_payload = bytes([0xCF]) \
+                        + pack(">L", frequency) \
+                        + (pack(">L", timeout_ms) if timeout_ms else bytes())  # to 32 bit unsigned each
         rx_payload = self.__data_exchange(tx_payload)
         self.__check_for_errors(rx_payload)
         return list(rx_payload)
-    
+
 
     # -------------------------------------------------------------------------
     # internal functions
@@ -453,11 +455,13 @@ def test_interface(resource_str: str) -> None:
 
     print("Test NCD API compatibility")
     dev = I2CPort(resource_str)
+    print("API is RRC:", dev.interface_is_rrc)
     mux = BusMux(dev, 0x70)
     bus = BusMaster(dev)
     bat = BQ40Z50R1(bus)
     _= [print(f"DEVICE: {item}") for item in [dev,mux,bus,bat]]
     print("Change clock frequency - RRC: ", str(dev.i2c_change_clock_frequency(77000)))
+    print("Change clock frequency and timeout - RRC: ", str(dev.i2c_change_clock_frequency(55000, timeout_ms = 33)))
     #print("Change clock frequency - NCD: ", str(dev.i2c_change_clock_frequency_ncd(38000)))
     #dev.writeto(0x77, bytearray([0x02]))
     for c in range(1, 9):
@@ -469,6 +473,8 @@ def test_interface(resource_str: str) -> None:
         print(bat.device_name())
         print(bat.design_capacity())
         print(bat.design_voltage())
+    else:
+        print("No SmartBattery found")
 
 #--------------------------------------------------------------------------------------------------
 
