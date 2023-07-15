@@ -153,12 +153,7 @@ class BusMaster:
     def _retry_read_helper(self, slvAddress: int, cmd: int, count: int) -> bytearray:
         for n in range(0, self._retry_limit):
             try:
-                if count <= 16:
-                    buf = self.i2c.readfrom_mem(slvAddress, cmd, count)
-                else:
-                    self.i2c.writeto(slvAddress, bytearray([cmd]))
-                    buf = self.i2c.readfrom(slvAddress, count)
-                # print("SMBUS_readbytes", hexlify(buf).decode()) # DEBUG
+                buf = self.i2c.readfrom_mem(slvAddress, cmd, count)
                 return buf
             except OSError:
                 if n == self._retry_limit - 1:
