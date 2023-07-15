@@ -233,10 +233,10 @@ class I2CPort(I2CBase):
             raise NCD_I2CInvalidParametersError(i2c_address_7bit, self)
 
         if (not self.interface_is_rrc) and (size > 16):
-            if size < 0 or size > 100:
-                raise NCD_I2CInvalidParametersError(i2c_address_7bit, self)
-            # the NCD interface has a limitation for this access to 16 bytes read
-            # so transform into single write then read
+            # the NCD ETH-I2C converter can only read up to 16 bytes in a
+            # write-read operation, but can read up to 100 bytes in a read-only operation.
+            # Size checks are done in these functions, so no need to check sizes here.
+            # -> so transform into single write then read
             self.writeto(i2c_address_7bit, data)
             return self.readfrom(i2c_address_7bit, size)
 
