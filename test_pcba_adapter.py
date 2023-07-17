@@ -312,9 +312,9 @@ def test_feasa_only(feasa: FEASA_CH9121):
 
 def test_calibration_storage_only(calib: CalibrationStorage):
     print("Read calibration EEPROM values")
-    #print("Inventory Number: ", calib.load_inventory_number())    
+    print("Inventory Number: ", calib.load_inventory_number())    
     print("Shunt Resistance: ", calib.load_shunt_resistance_ohm())
-    print("Leakage Current: ", calib.load_leakcurrent_amps())
+    [print(f"Leakage Current: {i}# {calib.load_leakcurrent_amps(i)}") for i in range(3)]
 
 
 def test_relay_only(gpio: RelayBoard4Relay4GPIO):
@@ -551,8 +551,8 @@ if __name__ == "__main__":
     #test_lvl2_heater(bat, gpio, vsim, calib, feasa, psu1, psu2, daq)
     #psu_mode_test(bat, gpio, vsim, calib, feasa, psu1, psu2, daq)
     #test_relay_only(gpio)
-    #test_calibration_storage_only(calib)
-    bat_flash_test(bat, psu1, psu2)
+    test_calibration_storage_only(calib)
+    #bat_flash_test(bat, psu1, psu2)
     
 
 # END OF FILE

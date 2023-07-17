@@ -456,7 +456,7 @@ def test_interface(resource_str: str) -> None:
     print("Test NCD API compatibility")
     dev = I2CPort(resource_str)
     print("API is RRC:", dev.interface_is_rrc)
-    mux = BusMux(dev, 0x70)
+    mux = BusMux(dev, 0x77)
     bus = BusMaster(dev)
     bat = BQ40Z50R1(bus)
     _= [print(f"DEVICE: {item}") for item in [dev,mux,bus,bat]]
