@@ -461,7 +461,7 @@ def test_interface(resource_str: str) -> None:
     bat = BQ40Z50R1(bus)
     _= [print(f"DEVICE: {item}") for item in [dev,mux,bus,bat]]
     print("Change clock frequency - RRC: ", str(dev.i2c_change_clock_frequency(77000)))
-    print("Change clock frequency and timeout - RRC: ", str(dev.i2c_change_clock_frequency(55000, timeout_ms = 33)))    
+    print("Change clock frequency and timeout - RRC: ", str(dev.i2c_change_clock_frequency(55000, timeout_ms = 33)))
     #print("Change clock frequency - NCD: ", str(dev.i2c_change_clock_frequency_ncd(38000)))
     #dev.writeto(0x77, bytearray([0x02]))
     for c in range(1, 9):

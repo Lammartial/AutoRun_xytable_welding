@@ -233,7 +233,7 @@ def psu_mode_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO,
 
     # verify that PSU does not trigger battery protection
     print("PSU Output on")
-    psu2.configure_supply(10.8, 2.4, 50, 1)    
+    psu2.configure_supply(10.8, 2.4, 50, 1)
     sleep(1.0)  # wait PSU powered up
     print("PSU1", psu1.get_all_measurements())
     print("PSU2", psu2.get_all_measurements())
@@ -244,7 +244,7 @@ def psu_mode_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO,
     vsim.set_cell_n_voltage(1, 3.6)
     vsim.set_cell_n_voltage(2, 3.6)
     vsim.set_cell_n_voltage(3, 3.6)
-    psu1.configure_supply(10.8, 0.05, 50, 1)    
+    psu1.configure_supply(10.8, 0.05, 50, 1)
     sleep(2.5)
     print(bat.isReady())
     psu1.set_output_state(0)
@@ -255,7 +255,7 @@ def psu_mode_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO,
     bat.set_chg_fet(True)
     bat.set_dsg_fet(True)
     bat.operation_status()
-    print(bat._operation_status)    
+    print(bat._operation_status)
     psu1.set_output_state(1)
     print("PSU1", psu1.get_all_measurements())
 
@@ -266,11 +266,11 @@ def psu_mode_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO,
 
 #--------------------------------------------------------------------------------------------------
 
-def bat_flash_test(bat: BQ40Z50R1, psu1: M3400, psu2: M3400) -> None:    
+def bat_flash_test(bat: BQ40Z50R1, psu1: M3400, psu2: M3400) -> None:
     from time import perf_counter, strftime, localtime
 
     print("PSU Output on")
-    psu2.configure_supply(10.8, 0.1, 50, 1)    
+    psu2.configure_supply(10.8, 0.1, 50, 1)
     sleep(1.0)  # wait PSU powered up
     print("PSU1", psu1.get_all_measurements())
     print("PSU2", psu2.get_all_measurements())
@@ -281,21 +281,21 @@ def bat_flash_test(bat: BQ40Z50R1, psu1: M3400, psu2: M3400) -> None:
     vsim.set_cell_n_voltage(1, 3.6)
     vsim.set_cell_n_voltage(2, 3.6)
     vsim.set_cell_n_voltage(3, 3.6)
-    psu1.configure_supply(10.8, 0.08, 50, 1)    
+    psu1.configure_supply(10.8, 0.08, 50, 1)
     sleep(2.5)
-    print(bat.isReady())    
+    print(bat.isReady())
     psu1.set_output_state(0)
     sleep(0.5)
 
     filestore = Path("C:/Production/Battery-PCBA-Test/filestore")
 
-    recover = BQStudioFileFlasher(bat, firmware_file=filestore / "SCD_3412036-02_B_Tansanit-B_RRC2040_Recovery.bq.fs", show_progressbar=True, test_socket=0)    
-    
+    recover = BQStudioFileFlasher(bat, firmware_file=filestore / "SCD_3412036-02_B_Tansanit-B_RRC2040_Recovery.bq.fs", show_progressbar=True, test_socket=0)
+
     #flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "BQFS_3411842-05_A_Ametrie_RRC2040-2S.bq.fs", show_progressbar=True, test_socket=0)
     flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "DFFS_3411842-05_A_Ametrie_RRC2040-2S.df.fs", show_progressbar=True, test_socket=0)
-    #flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "SCD_3411863-05_A_Jade_RRC2054_BMS_Files.df.fs", show_progressbar=True, test_socket=0)    
+    #flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "SCD_3411863-05_A_Jade_RRC2054_BMS_Files.df.fs", show_progressbar=True, test_socket=0)
     #flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "SCD_3411863-05_A_Jade_RRC2054_BMS_Files.bq.fs", show_progressbar=True, test_socket=0)
-    
+
     tic = perf_counter()
     print(f"Start: {strftime('%H:%M:%S', localtime())}")
 
@@ -303,13 +303,37 @@ def bat_flash_test(bat: BQ40Z50R1, psu1: M3400, psu2: M3400) -> None:
     #res = flasher.program_fw_file()
 
     toc = perf_counter()
-    print(f"Need {toc - tic:0.4f} seconds")    
+    print(f"Need {toc - tic:0.4f} seconds")
     print("FLASH:", res)
-    
+
 
     psu1.set_output_state(0)
     psu2.set_output_state(0)
     vsim.initialize()
+
+
+
+def bat_flash_test_debug(bat: BQ40Z50R1) -> None:
+    from time import perf_counter, strftime, localtime
+
+    #filestore = Path("C:/Production/Battery-PCBA-Test/filestore")
+    filestore = Path("../../Battery-PCBA-Test/filestore")
+
+    recover = BQStudioFileFlasher(bat, firmware_file=filestore / "SCD_3412036-02_B_Tansanit-B_RRC2040_Recovery.bq.fs", show_progressbar=True, test_socket=0)
+    tic = perf_counter()
+    print(f"Start: {strftime('%H:%M:%S', localtime())}")
+    #res = recover.recover_fw_file()
+    for i in range(0x4000, 0x6000, 32):
+        #res = bat.read_flash_block(i)
+        #data, ok = bat.readBlock(0x44)
+        data = bat.bus.i2c.readfrom(0x0b, 32)
+        print(len(data))
+        length = bat.bus.i2c.writeto(0x0b, data)
+    res = True
+    toc = perf_counter()
+    print(f"Need {toc - tic:0.4f} seconds")
+    print("FLASH:", res)
+
 
 
 #--------------------------------------------------------------------------------------------------
@@ -329,7 +353,7 @@ def test_feasa_only(feasa: FEASA_CH9121):
 
 def test_calibration_storage_only(calib: CalibrationStorage):
     print("Read calibration EEPROM values")
-    print("Inventory Number: ", calib.load_inventory_number())    
+    print("Inventory Number: ", calib.load_inventory_number())
     print("Shunt Resistance: ", calib.load_shunt_resistance_ohm())
     [print(f"Leakage Current: {i}# {calib.load_leakcurrent_amps(i)}") for i in range(3)]
 
@@ -531,10 +555,11 @@ if __name__ == "__main__":
     #test_feasa_only(feasa)
     #exit()
 
-    i2cbus = I2CPort(f"{LINE_NETWORK}.31:2101") # socket 0
+    #i2cbus = I2CPort(f"{LINE_NETWORK}.31:2101") # socket 0
     #i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101") # socket 1
     #i2cbus = I2CPort(f"{LINE_NETWORK}.34:2101") # socket 2
-    print("Change clock frequency and timeout - RRC: ", str(i2cbus.i2c_change_clock_frequency(100000, timeout_ms=10)))
+    i2cbus = I2CPort("192.168.69.77:2101") # HOMEGROW
+    #print("Change clock frequency and timeout - RRC: ", str(i2cbus.i2c_change_clock_frequency(100000, timeout_ms=10)))
 
     mux = BusMux(i2cbus, address=0x77)
     for c in range(1,9):
@@ -543,7 +568,11 @@ if __name__ == "__main__":
 
     calib = CalibrationStorage(I2CMuxedBus(i2cbus, mux, 1))
     smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 2), retry_limit=7, verify_rounds=3, pause_us=50)
-    bat = BQ40Z50R1(smbus)    
+    bat = BQ40Z50R1(smbus)
+
+    bat_flash_test_debug(bat)
+    exit()
+
     gpio = RelayBoard4Relay4GPIO(I2CMuxedBus(i2cbus, mux, 3))
     vsim = CellVoltageSimulation(I2CMuxedBus(i2cbus, mux, 4))
     vsim.initialize()
@@ -571,6 +600,5 @@ if __name__ == "__main__":
     #test_relay_only(gpio)
     #test_calibration_storage_only(calib)
     bat_flash_test(bat, psu1, psu2)
-    
 
 # END OF FILE
