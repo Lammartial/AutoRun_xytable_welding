@@ -267,8 +267,10 @@ def psu_mode_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO,
 #--------------------------------------------------------------------------------------------------
 
 def bat_flash_test(bat: BQ40Z50R1, psu1: M3400, psu2: M3400) -> None:    
+    from time import perf_counter, strftime, localtime
+
     print("PSU Output on")
-    psu2.configure_supply(10.8, 2.4, 50, 1)    
+    psu2.configure_supply(10.8, 0.1, 50, 1)    
     sleep(1.0)  # wait PSU powered up
     print("PSU1", psu1.get_all_measurements())
     print("PSU2", psu2.get_all_measurements())
@@ -279,14 +281,29 @@ def bat_flash_test(bat: BQ40Z50R1, psu1: M3400, psu2: M3400) -> None:
     vsim.set_cell_n_voltage(1, 3.6)
     vsim.set_cell_n_voltage(2, 3.6)
     vsim.set_cell_n_voltage(3, 3.6)
-    psu1.configure_supply(10.8, 0.05, 50, 1)    
+    psu1.configure_supply(10.8, 0.08, 50, 1)    
     sleep(2.5)
     print(bat.isReady())    
     psu1.set_output_state(0)
+    sleep(0.5)
+
+    filestore = Path("C:/Production/Battery-PCBA-Test/filestore")
+
+    recover = BQStudioFileFlasher(bat, firmware_file=filestore / "SCD_3412036-02_B_Tansanit-B_RRC2040_Recovery.bq.fs", show_progressbar=True, test_socket=0)    
     
-    #BQStudioFileFlasher(bat, "../../Battery-PCBA-Test/filestore") / "BQFS_3411842-05_A_Ametrie_RRC2040-2S.bq.fs"
-    flasher = BQStudioFileFlasher(bat, firmware_file=Path("C:/Production/Battery-PCBA-Test/filestore") / "DFFS_3411842-05_A_Ametrie_RRC2040-2S.df.fs", show_progressbar=True, test_socket=0)
-    res = flasher.program_fw_file()
+    #flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "BQFS_3411842-05_A_Ametrie_RRC2040-2S.bq.fs", show_progressbar=True, test_socket=0)
+    flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "DFFS_3411842-05_A_Ametrie_RRC2040-2S.df.fs", show_progressbar=True, test_socket=0)
+    #flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "SCD_3411863-05_A_Jade_RRC2054_BMS_Files.df.fs", show_progressbar=True, test_socket=0)    
+    #flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "SCD_3411863-05_A_Jade_RRC2054_BMS_Files.bq.fs", show_progressbar=True, test_socket=0)
+    
+    tic = perf_counter()
+    print(f"Start: {strftime('%H:%M:%S', localtime())}")
+
+    res = recover.recover_fw_file()
+    #res = flasher.program_fw_file()
+
+    toc = perf_counter()
+    print(f"Need {toc - tic:0.4f} seconds")    
     print("FLASH:", res)
     
 
@@ -461,8 +478,8 @@ def test_fuse_pin_cellside(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO,
     print(f"Cell Stack: {daq.get_VDC_rounded(15,3)}V") # 10.8
 
     bat.set_fet_control(False) # OFF
-    bat.set_chg_fet(False)
-    bat.set_dsg_fet(False)
+    bat.set_chg_fet(True)
+    bat.set_dsg_fet(True)
     sleep(0.5)
     _ = bat.operation_status()
     print(bat._operation_status)
@@ -507,25 +524,26 @@ if __name__ == "__main__":
     #LINE_NETWORK = "172.25.101"  # VN line 1
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
-    feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:3000", termination="\n")  # PCBA test, socket 0
+    feasa = FEASA_CH9121(f"{LINE_NETWORK}.31:3000", termination="\n")  # PCBA test, socket 0
     #feasa = FEASA_CH9121(f"{LINE_NETWORK}.33:3000")  # PCBA test, socket 1
     #feasa = FEASA_CH9121(f"{LINE_NETWORK}.35:3000")  # PCBA test, socket 2
 
     #test_feasa_only(feasa)
     #exit()
 
-    i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101") # socket 0
+    i2cbus = I2CPort(f"{LINE_NETWORK}.31:2101") # socket 0
     #i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101") # socket 1
     #i2cbus = I2CPort(f"{LINE_NETWORK}.34:2101") # socket 2
+    print("Change clock frequency and timeout - RRC: ", str(i2cbus.i2c_change_clock_frequency(100000, timeout_ms=10)))
 
     mux = BusMux(i2cbus, address=0x77)
-    for i in range(1,9,1):
-        mux.setChannel(i)
-        print("CH:", i, i2cbus.i2c_bus_scan())
+    for c in range(1,9):
+        mux.setChannel(c)
+        print("CH:", c, i2cbus.i2c_bus_scan())
 
     calib = CalibrationStorage(I2CMuxedBus(i2cbus, mux, 1))
     smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 2), retry_limit=7, verify_rounds=3, pause_us=50)
-    bat = BQ40Z50R1(smbus)
+    bat = BQ40Z50R1(smbus)    
     gpio = RelayBoard4Relay4GPIO(I2CMuxedBus(i2cbus, mux, 3))
     vsim = CellVoltageSimulation(I2CMuxedBus(i2cbus, mux, 4))
     vsim.initialize()
@@ -551,8 +569,8 @@ if __name__ == "__main__":
     #test_lvl2_heater(bat, gpio, vsim, calib, feasa, psu1, psu2, daq)
     #psu_mode_test(bat, gpio, vsim, calib, feasa, psu1, psu2, daq)
     #test_relay_only(gpio)
-    test_calibration_storage_only(calib)
-    #bat_flash_test(bat, psu1, psu2)
+    #test_calibration_storage_only(calib)
+    bat_flash_test(bat, psu1, psu2)
     
 
 # END OF FILE

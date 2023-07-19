@@ -150,7 +150,7 @@ class I2CPort(I2CBase):
 
 
     def writeto(self, i2c_address_7bit: int, data: bytearray) -> int:
-        """Send a bytearray (up to 100 bytes) to the specified I2C address and return the number of sent bytes.
+        """Send a bytearray (up to 100/255 bytes NCD/RRC) to the specified I2C address and return the number of sent bytes.
 
         Args:
             i2c_address_7bit (int): 7-bit I2C address of the target device
@@ -166,7 +166,7 @@ class I2CPort(I2CBase):
         i2c_address_7bit = int(i2c_address_7bit)
         if not self.is_valid_7bit_address(i2c_address_7bit):
             raise NCD_I2CInvalidAddressError(i2c_address_7bit, self)
-        if (not self.interface_is_rrc and len(data) > 100) or (self.interface_is_rrc and len(data) > 255):
+        if (not self.interface_is_rrc and (len(data) > 100)) or (self.interface_is_rrc and (len(data) > 255)):
             raise NCD_I2CInvalidParametersError(i2c_address_7bit, self)
 
         self.last_i2c_address = i2c_address_7bit
@@ -196,7 +196,7 @@ class I2CPort(I2CBase):
         i2c_address_7bit = int(i2c_address_7bit)
         if not self.is_valid_7bit_address(i2c_address_7bit):
             raise NCD_I2CInvalidAddressError(i2c_address_7bit, self)
-        if (size <= 0) or ((not self.interface_is_rrc and size > 100) or (self.interface_is_rrc and size > 255)):
+        if (size <= 0) or ((not self.interface_is_rrc and (size > 100)) or (self.interface_is_rrc and (size > 255))):
             raise NCD_I2CInvalidParametersError(i2c_address_7bit, self)
 
         self.last_i2c_address = i2c_address_7bit
@@ -241,7 +241,7 @@ class I2CPort(I2CBase):
             return self.readfrom(i2c_address_7bit, size)
 
         # RRC implmentation
-        if size < 0 or size > 255:
+        if (size < 0) or (size > 255):
             raise NCD_I2CInvalidParametersError(i2c_address_7bit, self)
 
         self.last_i2c_address = i2c_address_7bit
@@ -461,7 +461,7 @@ def test_interface(resource_str: str) -> None:
     bat = BQ40Z50R1(bus)
     _= [print(f"DEVICE: {item}") for item in [dev,mux,bus,bat]]
     print("Change clock frequency - RRC: ", str(dev.i2c_change_clock_frequency(77000)))
-    print("Change clock frequency and timeout - RRC: ", str(dev.i2c_change_clock_frequency(55000, timeout_ms = 33)))
+    print("Change clock frequency and timeout - RRC: ", str(dev.i2c_change_clock_frequency(55000, timeout_ms = 33)))    
     #print("Change clock frequency - NCD: ", str(dev.i2c_change_clock_frequency_ncd(38000)))
     #dev.writeto(0x77, bytearray([0x02]))
     for c in range(1, 9):
@@ -487,8 +487,8 @@ if __name__ == "__main__":
 
     tic = perf_counter()
 
-    #I2C_BRIDGE_RESOURCE_STR = "172.21.101.30:2101"
-    I2C_BRIDGE_RESOURCE_STR = "192.168.69.77:2101"
+    I2C_BRIDGE_RESOURCE_STR = "172.21.101.30:2101"
+    #I2C_BRIDGE_RESOURCE_STR = "192.168.69.77:2101"
 
     test_interface(I2C_BRIDGE_RESOURCE_STR)
 
