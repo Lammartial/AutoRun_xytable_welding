@@ -68,8 +68,8 @@ class BusMaster:
 
     @retry_limit.setter
     def retry_limit(self, value: int):
-        if not (isinstance(value, int) and (value >= 1) and (value <= 10)):
-            raise ValueError("Retry count limit must be an integer 1 ... 10")
+        if not (isinstance(value, int) and (value >= 1) and (value <= 1000)):
+            raise ValueError("Retry count limit must be an integer 1 ... 1000")
         self._retry_limit = value
 
     # ----------------------------------------------------------------------------------------------
