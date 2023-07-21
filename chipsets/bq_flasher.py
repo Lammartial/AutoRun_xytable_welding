@@ -150,8 +150,9 @@ class BQStudioFileFlasher:
     #----------------------------------------------------------------------------------------------
     def __process_file(self, is_file_validation: bool) -> bool:
         _log = getLogger(__name__, DEBUG)
-        validation_result = True
+        validation_result: bool = True
         result: bool = True
+        prg_result: bool = True
         with open(self.firmware_file, "r") as file:
             line_count = len(file.readlines())  # Get the number of line in the file. Only needed for the progress bar
             file.seek(0)
@@ -199,8 +200,8 @@ class BQStudioFileFlasher:
                     # Write block/bytes
                     result, data = self._handle_line(current_line[2:], line_number) if current_line.startswith("W:") else self._handle_line(current_line[4:], line_number)
                     if not result:
-                        if is_file_validation:
-                            validation_result = False
+                        validation_result = False
+                        if is_file_validation:                            
                             continue
                         else:
                             break
@@ -209,6 +210,7 @@ class BQStudioFileFlasher:
                         if self.battery.writeBlock(data[0], bytearray(data[1:])):
                             continue
                         else:
+                            prg_result = False 
                             _log.error(
                                 f"Error in SMBus communication during \"write block\" command in line {line_number}!")
                             break
@@ -217,8 +219,8 @@ class BQStudioFileFlasher:
                     # Write word
                     result, data = self._handle_line(current_line[4:], line_number)
                     if not result:
+                        validation_result = False
                         if is_file_validation:
-                            validation_result = False
                             continue
                         else:
                             break
@@ -228,6 +230,7 @@ class BQStudioFileFlasher:
                         if self.battery.writeWord(data[0], word):
                             continue
                         else:
+                            prg_result = False
                             _log.error(
                                 f"Error in SMBus communication during \"write word\" command in line {line_number}!")
                             break
@@ -246,6 +249,7 @@ class BQStudioFileFlasher:
                         if self.battery.writeBytes(data[0], bytes()):
                             continue
                         else:
+                            prg_result = False
                             _log.error(
                                 f"Error in SMBus communication during \"write command\" command in line {line_number}!")
                             break
@@ -269,12 +273,14 @@ class BQStudioFileFlasher:
                         if response[1]:
                             received_data = list(response[0])
                         else:
+                            prg_result = False
                             _log.error(
                                 f"Error in SMBus communication during \"compare block\" command in line {line_number}!")
                             break
                         if received_data == expected_data:
                             continue
                         else:
+                            prg_result = False
                             _log.error(
                                 f"Error while comparing data. Expected and received data don't match. (Line: {line_number})")
                             _log.error(f"Expected data: {expected_data}")
@@ -298,6 +304,7 @@ class BQStudioFileFlasher:
                         if response[1]:
                             received_data = response[0]
                         else:
+                            prg_result = False
                             _log.error(
                                 f"Error in SMBus communication during \"compare word\" command in line {line_number}!")
                             break
@@ -314,14 +321,14 @@ class BQStudioFileFlasher:
                     _log.error(f"Unknown command in line {line_number}: \"{current_line}\"")
                     validation_result = False
                     if not is_file_validation:
-                        validation_result = int(1)  # ???
+                        prg_result = False
                         break
 
         if self._progress:
             self._progress.close()
             self._progress = None
 
-        return validation_result
+        return validation_result if is_file_validation else prg_result
 
     #----------------------------------------------------------------------------------------------
     def validate_file(self) -> bool:

@@ -48,11 +48,7 @@ class AT24HC02C:
             raise ValueError(f"Number of bytes to read for I2C EEPROM at address 0x{self.i2c_address_7bit:02X} is "
                              f"invalid. Must be between 0 and {AT24HC02C.memory_size - 1}. You selected {number_of_bytes}.")
         self.__validate_word_address(word_address)
-
-        # We are splitting up write and read because the NCD ETH-I2C converter can only read up to 16 bytes in a
-        # write-read operation, but can read up to 100 bytes in a read-only operation.
-        self.i2c.writeto(self.i2c_address_7bit, bytearray([word_address]))
-        return self.i2c.readfrom(self.i2c_address_7bit, number_of_bytes)
+        return self.i2c.readfrom_mem(self.i2c_address_7bit, bytearray([word_address]), number_of_bytes)
 
     def read_page(self, page) -> bytearray:
         """Read 8 bytes from the specified page and return them.

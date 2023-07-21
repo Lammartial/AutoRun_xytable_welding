@@ -13,7 +13,7 @@ class CalibrationStorageReadError(Exception):
 
     def __str__(self):
         return f"Error while reading the {self.what} from {self.eeprom}. " \
-               f"The {self.what} could not be clearly read. You can try again, but it looks like you have to reprogram" \
+               f"The {self.what} could not be clearly read. You can try again, but it looks like you have to reprogram " \
                f"the {self.what}."
 
 
@@ -204,7 +204,7 @@ def test_write_read(storage: CalibrationStorage):
     sleep(0.5)
     storage.store_inventory_number(inv)
     sleep(0.5)
-    storage.store_leakcurrent_amps(amps)
+    storage.store_leakcurrent_amps(0, amps)
     sleep(0.5)
 
     readback = storage.load_shunt_resistance_ohm()
@@ -221,7 +221,7 @@ def test_write_read(storage: CalibrationStorage):
         print(f"Inv FAIL!")
     print(f"Test value: {inv}  Readback: {readback}")
 
-    readback = storage.load_leakcurrent_amps()    
+    readback = storage.load_leakcurrent_amps(0)    
     if amps == readback:
         print("Leakage offset Success!")
     else:
@@ -231,7 +231,7 @@ def test_write_read(storage: CalibrationStorage):
     # clear
     storage.store_shunt_resistance_ohm(0.0)
     storage.store_inventory_number("00000000")
-    storage.store_leakcurrent_amps(0.0)
+    storage.store_leakcurrent_amps(0, 0.0)
 
 def test_print_stored_values(storage: CalibrationStorage):
     ohm = storage.load_shunt_resistance_ohm()
@@ -250,7 +250,7 @@ if __name__ == "__main__":
     from rrc.eth2i2c import I2CPort
     from rrc.i2cbus import BusMux, I2CMuxedBus
 
-    i2c = I2CPort("172.25.101.30:2101")  # 30 / 32 / 34
+    i2c = I2CPort("172.21.101.30:2101")  # 30 / 32 / 34
     # print(i2c_port.i2c_bus_scan())
     mux = BusMux(i2c, 0x77)
     bus = I2CMuxedBus(i2c, mux, 1)
