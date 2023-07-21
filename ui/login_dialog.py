@@ -58,7 +58,7 @@ def validate_user_id(card_id: str) -> Tuple[bool, dict]:
         user = {
             "username": rows[0][0],
             "pwd": rows[0][1],
-            "access": rows[0][2],
+            "access": int(rows[0][2]),
         }
         if user["access"] == 0:
             # has no access!
@@ -213,7 +213,7 @@ def identify_user(allow_manual_edit:bool = False) -> Tuple[bool, str, str]:
 
     _log = getLogger(__name__, DEBUG)
 
-    _user = { "username": "", "pwd": "" }
+    _user = { "username": "", "pwd": "", "access": 0 }
     _login = False
     p = None
     w = None
@@ -231,7 +231,7 @@ def identify_user(allow_manual_edit:bool = False) -> Tuple[bool, str, str]:
     finally:
         pass
 
-    return _login, _user["username"], _user["pwd"]
+    return _login, _user["username"], _user["pwd"], _user["access"]
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
