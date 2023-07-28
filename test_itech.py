@@ -195,6 +195,32 @@ def test_m3900_some(m3900: M3900) -> bool:
     print(m3900.get_voltage_rounded(3))
 
 
+def test_2x_m3400_short(psu1: M3400, psu2 :M3400) -> bool:
+    from time import perf_counter, strftime, localtime
+
+    print("PSU Output on")
+    current = 2.0
+    voltage = 10.8
+    psu2.configure_supply(voltage, 0.1, 50, 1)
+    sleep(1.0)  # wait PSU powered up
+    print("PSU1", psu1.get_all_measurements())
+    print("PSU2", psu2.get_all_measurements())
+    psu1.configure_sink(-current, 5.0, -2.4, voltage*0.1, -80, 0)
+    sleep(1)
+    psu2.configure_supply(voltage, current*1.2, 100, 1)
+    print("PSU1", psu1.get_all_measurements())
+    print("PSU2", psu2.get_all_measurements())    
+    psu1.set_output_state(1)
+    print("PSU1", psu1.get_all_measurements())
+    print("PSU2", psu2.get_all_measurements())
+    sleep(3)
+    psu1.configure_sink(-current, 5.0, -2.4, voltage*0.1, -80, 1)
+    sleep(1)
+    psu1.set_output_state(0)
+    sleep(1)
+    psu2.set_output_state(0)
+    
+
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
@@ -205,39 +231,30 @@ if __name__ == "__main__":
     #logger_init(filename_base=None)  ## init root logger with different filename
     #_log = getLogger(__name__, DEBUG)
 
+    #LINE_NETWORK = "172.25.101"  # VN line 1
+    LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
     rm = ResourceManager()
     print(rm.list_resources())
 
 
-    # # predefined resource ID
-    # M3902_IP_STR = "TCPIP0::172.21.101.51::inst0::INSTR"
-    # # 1. Create an instance of ITECH_DEV class
-    # # using multi-channel communication
-    # m3902 = M3900(M3902_IP_STR, 0)
-    # # 2. IMPORTANT! Set remote control mode.
-    # m3902.initialize_device()
-    # # 3. Do some stuff
-    # test_m3900_modes(m3902)
-
-
-
-    # there is one ETH bridge for 6 PSUs
-    #E1206_IP_STR = "TCPIP0::172.25.101.24::inst0::INSTR"
-    #m3412 = [M3400(E1206_IP_STR, i) for i in range(1,7)]
-    #test_m3400_some(m3412[0])
+    # there is one ETH bridge for 6 PSUs    
+    psu1 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=1)  # socket 0, 1, and 2 share
+    psu2 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=2)  # socket 0, 1, and 2 share
     
+    test_2x_m3400_short(psu1, psu2)
+
     # m = M3400("TCPIP0::172.25.101.51::inst0::INSTR")
     # print('IDN:' +str(m.request('*IDN?')))
     # print('ERROR', m.read_system_error())
     # print(m.get_all_measurements())
 
-    m = M3900("TCPIP0::172.21.101.46::inst0::INSTR")
-    print('IDN:' +str(m.request('*IDN?')))
-    print('ERROR', m.read_system_error())
-    print(m.get_all_measurements())
+    #m = M3900("TCPIP0::172.21.101.37::inst0::INSTR")
+    #print('IDN:' +str(m.request('*IDN?')))
+    #print('ERROR', m.read_system_error())
+    #print(m.get_all_measurements())
 
-    test_m3900_some(m)
+    #test_m3900_some(m)
 
     # for m in m3412[:]:
     #     print('IDN:' +str(m.request('*IDN?')))

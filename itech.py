@@ -235,7 +235,12 @@ class M3400(AdhocVisaDevice):
         Args:
             state (int):  1 - On, 0 - Off
         """
-        # trick to use function in NI Teststand
+        if (state == 0):
+            if self.last_mode == "CURR":
+                self.send(f"CURR 0")
+            else:
+                self.send(f"VOLT 0")
+
         self.send(f"OUTP {int(state)}")
         #r = self.request(f"OUTPUT:STATE {int(state)};OUTPUT:STATE?")
         #return int(r) == int(state)
@@ -243,15 +248,15 @@ class M3400(AdhocVisaDevice):
         #self._helper_wait_for_result("OUTP?", [str(int(state))])  # wait for correct output state
         return True
 
-    # def get_output_state(self) -> int:
-    #     """
-    #     This command sets the output state of the power supply.
-    #     IT M3400 and M3900 devices.
+    def get_output_state(self) -> int:
+        """
+        This command reads the output state of the power supply.
+        IT M3400 and M3900 devices.
 
-    #     Returns:
-    #         int: state, 1 - On, 0 - Off
-    #     """
-    #     return int(self.request("OUTP?"))
+        Returns:
+            int: state, 1 - On, 0 - Off
+        """
+        return int(self.request("OUTP?"))
 
 
     # def set_sense_state(self, state: int) -> None:
@@ -703,8 +708,10 @@ class M3400(AdhocVisaDevice):
         if (current * power_limit) < 0:
             raise ValueError("Parameters current and power_limit need to have same sign.")
 
-        if self.last_mode != "CURR":
-            self.set_output_state(0)            # make sure output is OFF
+        _outp = self.get_output_state()
+        if _outp and self.last_mode != "CURR":
+            self.set_output_state(0)  # make sure output is OFF
+            _outp = 0  # switched off
             self.send(f"VOLT {voltage_limit_high:0.2f}")
             # make sure the current limits are set high enough
             self.send(f"CURR:LIM:NEG MIN")
@@ -717,17 +724,34 @@ class M3400(AdhocVisaDevice):
         self.send("FUNC:MODE FIX")
         self.send(f"CURR {current:0.2f}")       # set current for CC priority mode
         if (resistance is not None) and (resistance > 0):
+            # fucking ITECH always starts with 1000ohms even if we set the resistance before
+            # need to keep this order!
+            self.send("SINK:RES:STATE 1") 
             self.send(f"SINK:RES {resistance:0.3f}")
-            self.send("SINK:RES:STATE 1")
         else:
             self.send("SINK:RES:STATE 0")
-        self.set_output_state(1 if set_output else 0)
+        # make sure that we do not send another OUTP=0
+        # if the output is disabled already. This would 
+        # reset resistance priority! 
+        if not _outp and set_output:
+            # need to switch on
+            self.set_output_state(1)
+        if _outp and not set_output:
+            # need to switch off
+            self.set_output_state(0)
+        # in any other case: do not send the OUTP command
+        # to avoid a reset of some parameters.
+        #self.set_output_state(1 if set_output else 0)
+        
+
 
     def configure_sink(self, current: float, resistance: float | None,
                        current_limit: float, voltage_limit_high: float,
                        power_limit: float, set_output: bool = False) -> None:
-        if self.last_mode != "CURR":
+        _outp = self.get_output_state()
+        if _outp and self.last_mode != "CURR":
             self.set_output_state(0)  # make sure output is OFF
+            _outp = 0  # switched off
         self.set_function("CURR")  # CC priority
         self.send(f"POW:LIM:NEG {-abs(power_limit):0.2f}")
         self.send(f"POW:LIM:POS +1") # always fixed!
@@ -738,16 +762,31 @@ class M3400(AdhocVisaDevice):
         #self.send(f"VOLT {voltage_limit_high:0.2f}")
         self.send(f"CURR {-abs(current):0.3f}")
         if (resistance is not None) and (resistance > 0):
+            # fucking ITECH always starts with 1000ohms even if we set the resistance before
+            # need to keep this order!
+            self.send("SINK:RES:STATE 1") 
             self.send(f"SINK:RES {resistance:0.3f}")
-            self.send("SINK:RES:STATE 1")
         else:
             self.send("SINK:RES:STATE 0")
-            #self.send(f"CURR {-abs(current):0.3f}")
-        self.set_output_state(1 if set_output else 0)
+        # make sure that we do not send another OUTP=0
+        # if the output is disabled already. This would 
+        # reset resistance priority! 
+        if not _outp and set_output:
+            # need to switch on
+            self.set_output_state(1)
+        if _outp and not set_output:
+            # need to switch off
+            self.set_output_state(0)
+        # in any other case: do not send the OUTP command
+        # to avoid a reset of some parameters.
+        #self.set_output_state(1 if set_output else 0)
+
 
     def configure_supply(self, voltage: float, current_limit: float, power_limit: float, set_output: bool = False) -> None:
-        if self.last_mode != "VOLT":
+        _outp = self.get_output_state()
+        if _outp and self.last_mode != "VOLT":
             self.set_output_state(0)  # make sure output is OFF
+            _outp = 0  # switched off
         self.set_function("VOLT")
         self.send(f"POW:LIM:NEG -1") # always fixed!
         self.send(f"POW:LIM:POS {abs(power_limit):0.2f}")
@@ -758,7 +797,18 @@ class M3400(AdhocVisaDevice):
         #self.send(f"CURR {abs(current_limit):0.3f}")
         self.send(f"VOLT {voltage:0.2f}")
         self.send("SINK:RES:STATE 0")
-        self.set_output_state(1 if set_output else 0)
+        # make sure that we do not send another OUTP=0
+        # if the output is disabled already. This would 
+        # reset resistance priority! 
+        if not _outp and set_output:
+            # need to switch on
+            self.set_output_state(1)
+        if _outp and not set_output:
+            # need to switch off
+            self.set_output_state(0)
+        # in any other case: do not send the OUTP command
+        # to avoid a reset of some parameters.
+        #self.set_output_state(1 if set_output else 0)
 
 
 #--------------------------------------------------------------------------------------------------
@@ -897,8 +947,8 @@ class M3900(M3400):
     def set_output_state(self, state: int) -> None:
         super().set_output_state(int(state))
 
-    #def get_output_state(self) -> int:
-    #    return super().get_output_state()
+    def get_output_state(self) -> int:
+        return super().get_output_state()
 
     #def set_current(self, curr: float) -> None:
     #    super().set_current(curr)
@@ -1001,9 +1051,12 @@ class M3900(M3400):
         if (current * power_limit) < 0:
             raise ValueError("Parameters current and power_limit need to have same sign.")
 
-        if self.last_mode != "CURR":
-            # was in different mode before: need to prepare settings
-            self.set_output_state(0)            # make sure output is OFF
+        _outp = self.get_output_state()
+        if _outp and self.last_mode != "CURR":
+            # was in different mode before: 
+            # need to switch off and to prepare settings
+            self.set_output_state(0)  # make sure output is OFF
+            _outp = 0  # switched off
             #
             # Fix setup of M3900 to work correctly: use VOLT xx, then set device to CV priority mode
             # to allow changing the CURRENT limits before switching to CC prio. Otherwise, the
@@ -1017,7 +1070,6 @@ class M3900(M3400):
             #print(self.read_system_error())
             self.send(f"CURR:LIM:POS MAX")
             #print(self.read_system_error())
-   
 
         self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
         #print(self.read_system_error())
@@ -1040,9 +1092,19 @@ class M3900(M3400):
         # DO NOT use current limits in CC priority mode, it Causes an internal error of the M3900
 
         self.send("SINK:RES:STATE 0")
-        #print(self.read_system_error())
-        self.set_output_state(1 if set_output else 0)
-        #print(self.read_system_error())
+        
+        # make sure that we do not send another OUTP=0
+        # if the output is disabled already. This would 
+        # reset resistance priority! 
+        if not _outp and set_output:
+            # need to switch on
+            self.set_output_state(1)
+        if _outp and not set_output:
+            # need to switch off
+            self.set_output_state(0)
+        # in any other case: do not send the OUTP command
+        # to avoid a reset of some parameters.
+        #self.set_output_state(1 if set_output else 0)
 
 
     def configure_sink(self, current: float, resistance: float | None,
