@@ -143,11 +143,22 @@ class I2CPort(I2CBase):
         if self.__data_exchange(bytes([0xFE, 0x21])) != bytes([0x55]):
             raise NCDSelfTestFailedError(self)
         # check if we have an RRC interface on OLIMEX board:
-        if self.__data_exchange(bytes([0xCF, 0x42])) != bytes([0x55]):
-            self.interface_is_rrc = False
-        else:
-            self.interface_is_rrc = True
-
+        _save_timeout = self.timeout_s
+        if self._open_connection:
+            self.close()
+        self.timeout_s = 1.0
+        self.__connect_socket()
+        self.interface_is_rrc = False
+        try:
+            if self.__data_exchange(bytes([0xCF, 0x42]), retries=1) == bytes([0x55]):
+                self.interface_is_rrc = True
+        except NCDTimeoutError as ex:
+            # it's not a RRC OLIMEX board -> must be original NCD.io
+            pass
+        self.close()
+        if self._open_connection:
+            self.timeout_s = _save_timeout
+            self.__connect_socket()
 
     def writeto(self, i2c_address_7bit: int, data: bytearray) -> int:
         """Send a bytearray (up to 100/255 bytes NCD/RRC) to the specified I2C address and return the number of sent bytes.
@@ -460,14 +471,17 @@ def test_interface(resource_str: str) -> None:
     bus = BusMaster(dev)
     bat = BQ40Z50R1(bus)
     _= [print(f"DEVICE: {item}") for item in [dev,mux,bus,bat]]
-    print("Change clock frequency - RRC: ", str(dev.i2c_change_clock_frequency(77000)))
-    print("Change clock frequency and timeout - RRC: ", str(dev.i2c_change_clock_frequency(55000, timeout_ms = 33)))
-    #print("Change clock frequency - NCD: ", str(dev.i2c_change_clock_frequency_ncd(38000)))
-    #dev.writeto(0x77, bytearray([0x02]))
-    for c in range(1, 9):
-        mux.setChannel(c)
-        print(f"Channel {c}:", str(dev.i2c_bus_scan()))
-    mux.setChannel(1)
+    if dev.interface_is_rrc:
+        print("Change clock frequency - RRC: ", str(dev.i2c_change_clock_frequency(77000)))
+        print("Change clock frequency and timeout - RRC: ", str(dev.i2c_change_clock_frequency(55000, timeout_ms = 33)))
+        #print("Change clock frequency - NCD: ", str(dev.i2c_change_clock_frequency_ncd(38000)))
+        #dev.writeto(0x77, bytearray([0x02]))
+        for c in range(1, 9):
+            mux.setChannel(c)
+            print(f"Channel {c}:", str(dev.i2c_bus_scan()))
+        mux.setChannel(1)
+    else:
+        print(str(dev.i2c_bus_scan()))
     if bat.isReady():
         print("Found SmartBattery:")
         print(bat.device_name())
@@ -487,7 +501,7 @@ if __name__ == "__main__":
 
     tic = perf_counter()
 
-    I2C_BRIDGE_RESOURCE_STR = "172.21.101.30:2101"
+    I2C_BRIDGE_RESOURCE_STR = "172.25.102.20:2101"
     #I2C_BRIDGE_RESOURCE_STR = "192.168.69.77:2101"
 
     test_interface(I2C_BRIDGE_RESOURCE_STR)
