@@ -91,7 +91,6 @@ class I2CPort(I2CBase):
 
     def open(self) -> None:
         self.__connect_socket()
-        self.__data_exchange = self.__ethernet_exchange_wrapper
         #self.soft_reset()  # add to prevent any side effects from failed tests
         self.self_test()   # raises if anything wrong
 
@@ -133,32 +132,24 @@ class I2CPort(I2CBase):
 
 
     def self_test(self) -> None:
-        """Perform the 2-way self test of the converter.
+        """Perform the 2-way self test of the converter and checks for API.
 
         Raises:
             NCDSelfTestFailedError: Raised if the selftest of the converter fails.
         """
 
-        # Test command has the payload 0xFE 0x21. Response should be 0x55
-        if self.__data_exchange(bytes([0xFE, 0x21])) != bytes([0x55]):
+        # Test command has the payload 0xFE 0x21.
+        #   Response from NCD.io should be 0x55
+        #   Response from RRC OLIMEX should be 0x55,0x42
+        _response = self.__data_exchange(bytes([0xFE, 0x21]))
+        if _response == bytes([0x55, 0x42]):
+            self.interface_is_rrc = True  # RRC OLIMEX board
+        elif _response == bytes([0x55]):
+            self.interface_is_rrc = False  # NCD.io board
+        else:
+            # no valid result
             raise NCDSelfTestFailedError(self)
-        # check if we have an RRC interface on OLIMEX board:
-        _save_timeout = self.timeout_s
-        if self._open_connection:
-            self.close()
-        self.timeout_s = 1.0
-        self.__connect_socket()
-        self.interface_is_rrc = False
-        try:
-            if self.__data_exchange(bytes([0xCF, 0x42]), retries=1) == bytes([0x55]):
-                self.interface_is_rrc = True
-        except NCDTimeoutError as ex:
-            # it's not a RRC OLIMEX board -> must be original NCD.io
-            pass
-        self.close()
-        if self._open_connection:
-            self.timeout_s = _save_timeout
-            self.__connect_socket()
+
 
     def writeto(self, i2c_address_7bit: int, data: bytearray) -> int:
         """Send a bytearray (up to 100/255 bytes NCD/RRC) to the specified I2C address and return the number of sent bytes.
@@ -347,7 +338,7 @@ class I2CPort(I2CBase):
         packet += checksum.to_bytes(1, 'little')
         return packet
 
-    def __ethernet_exchange_wrapper(self, tx_payload: bytes, retries: int = 3) -> bytes:
+    def __data_exchange(self, tx_payload: bytes, retries: int = 3) -> bytes:
         """
         Performs the ethernet exchange and tries to reconnect the socket if the exchange failed.
         Number of retries can be specified
@@ -360,7 +351,7 @@ class I2CPort(I2CBase):
         """
         while retries > 0:
             try:
-                return self.__ethernet_exchange(tx_payload)
+                return self.__socket_exchange(tx_payload)
             except Exception as e:
                 #_log = getLogger(__name__, 2)
                 #_log.debug(f"NCD Retries {retries}")
@@ -370,7 +361,7 @@ class I2CPort(I2CBase):
                 if retries == 0:
                     raise e
 
-    def __ethernet_exchange(self, tx_payload: bytes) -> bytes:
+    def __socket_exchange(self, tx_payload: bytes) -> bytes:
         # Send data
         tx_packet = self.__wrap_payload_in_packet(tx_payload)
 
@@ -501,7 +492,8 @@ if __name__ == "__main__":
 
     tic = perf_counter()
 
-    I2C_BRIDGE_RESOURCE_STR = "172.25.102.20:2101"
+    I2C_BRIDGE_RESOURCE_STR = "172.21.101.30:2101"  # HOM
+    #I2C_BRIDGE_RESOURCE_STR = "172.25.102.20:2101"  # VN
     #I2C_BRIDGE_RESOURCE_STR = "192.168.69.77:2101"
 
     test_interface(I2C_BRIDGE_RESOURCE_STR)

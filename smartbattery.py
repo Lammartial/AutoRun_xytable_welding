@@ -155,11 +155,11 @@ class IntData:
     def update(self):
         v, ok = self._battery.readWordVerified(self._cmd)  # try to update the value
         # v, ok = self._battery.readWord(self._cmd) # try to update the value
-        if ok: 
-            #self.read = int.from_bytes(v.to_bytes(2, byteorder="little", signed=False), 
+        if ok:
+            #self.read = int.from_bytes(v.to_bytes(2, byteorder="little", signed=False),
             #                           byteorder="little", signed=True)  # update & convert to signed int
             self.read = unpack("<h", pack("<H", v))[0]  # update & convert to signed int
-        return ok    
+        return ok
 
     @property
     def value(self) -> int:
@@ -532,10 +532,10 @@ class Battery:
     # --------------------------------------------
 
     def __str__(self) -> str:
-        return f"SmartBattery at 0x{self.address} on {self.smbus}"
+        return f"SmartBattery at 0x{self.address} on {self.bus}"
 
     def __repr__(self) -> str:
-        return f"Battery({repr(self.smbus)}, slvAddress={self.slvAddress}, pec={self.pec})"
+        return f"Battery({repr(self.bus)}, slvAddress={self.address}, pec={self.pec})"
 
     # --------------------------------------------
     def _maybe_hexlify(self, what: bytes | bytearray, hexi: None | bool | str) -> bytes | bytearray | str:
@@ -1016,17 +1016,19 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    ncd = I2CPort("192.168.1.56", 2101)
-    #print(ncd.i2c_bus_scan())
+    i2cbus = I2CPort("192.168.69.77", 2101)
+    print(i2cbus.i2c_bus_scan())
 
-    bus = BusMaster(ncd)
-    bat = Battery(bus)
-    mux = BusMux(ncd, address=0x77)
-    if not mux.setChannel(2): raise Exception("Bullshit")
+    smbus = BusMaster(i2cbus, retry_limit=7, verify_rounds=3, pause_us=50)
+    bat = Battery(smbus)
+    mux = BusMux(i2cbus, address=0x70)
+    for c in range(1,9):
+        mux.setChannel(c)
+        print("CH:", c, i2cbus.i2c_bus_scan())
 
     # print(bat.voltage())
     #print(bat.readBlock(6))
-    _log.debug(bat.device_name())
+    print(bat.device_name())
     # print(bat.voltage())
     # print(f"S: {bat.is_sealed()}")
     # print(f"FA: {bat.is_full_access()}")
