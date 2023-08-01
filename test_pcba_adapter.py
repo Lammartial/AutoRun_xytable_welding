@@ -326,9 +326,9 @@ def bat_flash_test_debug(bat: BQ40Z50R1) -> None:
     for i in range(0x4000, 0x6000, 32):
         #res = bat.read_flash_block(i)
         #data, ok = bat.readBlock(0x44)
-        data = bat.bus.i2c.readfrom(0x0b, 32)
+        data = bat.bus.i2c.readfrom_mem(0x0b, 0x12, 32)
         print(len(data))
-        length = bat.bus.i2c.writeto(0x0b, data)
+        #length = bat.bus.i2c.writeto(0x0b, data)
     res = True
     toc = perf_counter()
     print(f"Need {toc - tic:0.4f} seconds")
@@ -548,14 +548,14 @@ if __name__ == "__main__":
     #LINE_NETWORK = "172.25.101"  # VN line 1
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
-    feasa = FEASA_CH9121(f"{LINE_NETWORK}.31:3000", termination="\n")  # PCBA test, socket 0
+    feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:3000", termination="\n")  # PCBA test, socket 0
     #feasa = FEASA_CH9121(f"{LINE_NETWORK}.33:3000")  # PCBA test, socket 1
     #feasa = FEASA_CH9121(f"{LINE_NETWORK}.35:3000")  # PCBA test, socket 2
 
     #test_feasa_only(feasa)
     #exit()
 
-    #i2cbus = I2CPort(f"{LINE_NETWORK}.31:2101") # socket 0
+    #i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101") # socket 0
     #i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101") # socket 1
     #i2cbus = I2CPort(f"{LINE_NETWORK}.34:2101") # socket 2
     i2cbus = I2CPort("192.168.69.77:2101") # HOMEGROW
