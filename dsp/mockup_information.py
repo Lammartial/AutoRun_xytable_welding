@@ -192,12 +192,18 @@ PART_INFORMATION = {
     # RRC Spinel
     #
     "SPINEL": {
+        "CELL_TEST": {
+            # Cell Test (Teststand):
+            "test_program_id": ("CW-SQ_SPINEL", "110282S_SPINEL_Cell-Test_A"),
+            "part_number": ("CW-PN_SPINEL", "110282S-02"),
+        },
         "CELL_WELDING": {
             # Cell Welding PRT IDs:
             "test_program_id": ("CW-SQ_SPINEL", "A"),
             "part_number": ("CW-PN_SPINEL", "110282S-02"),
         },
         "LEANPACK_TEST": {
+            # EOL Test with Corepack hardware (Teststand)
             "test_program_id": ("CP-SQ_SPINEL", "110282S_SPINEL_Leanpack-Test_B"),
             "part_number": ("CP-PN_SPINEL", "110282S-02"),
         }

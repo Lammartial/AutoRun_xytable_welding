@@ -462,20 +462,28 @@ def test_teststand_line_interfaces(
         _test_run_3 = dsp_lean_par.ts_get_parameter_for_testrun("LEANPACK_TEST", "DUMMY_4", line_id, 0)
         _log.info(f"TESTRUN: {_test_run_3}")
         # ... more sockets ?
-        ok, serial = dsp_lean_par.ts_get_serial_number_for_udi(udi_cell)
-        _log.info(f"SERIAL from cell udi: {serial}")
-        ok, serial = dsp_lean_par.ts_get_serial_number_for_udi(udi_pcba)
-        _log.info(f"SERIAL from pcba udi: {serial}")
-        ok, serial = dsp_lean_par.ts_get_serial_number_for_udi(",".join([udi_cell, udi_pcba]))
-        _log.info(f"SERIAL: {serial}")
+        if 1:
+            _udi_to_send = f"{udi_cell},"
+            ok, serial = dsp_lean_par.ts_get_serial_number_for_udi(_udi_to_send)
+            _log.info(f"SERIAL from cell udi: {serial}")
+        if 0:
+            _udi_to_send = f"{udi_pcba},"
+            ok, serial = dsp_lean_par.ts_get_serial_number_for_udi(_udi_to_send)
+            _log.info(f"SERIAL from pcba udi: {serial}")
+        if 0:
+            _udi_to_send = ",".join([udi_cell, udi_pcba])
+            ok, serial = dsp_lean_par.ts_get_serial_number_for_udi(_udi_to_send)
+            _log.info(f"SERIAL: {serial}")
         # simulate test
         sleep(1)
+
         # send result to DSP (EOL like, so the serial has to be NONE ZERO!)
+        dsp_lean_res.api = dsp_lean_par.api.copy() 
         dsp_lean_res.ts_send_result_for_testrun(
             "P",
             datetime.utcnow().isoformat(),
             (2 + random()*3),  # simulate execution time
-            udi_cell,
+            _udi_to_send,
             serial
         )
 
