@@ -478,7 +478,7 @@ def test_teststand_line_interfaces(
         sleep(1)
 
         # send result to DSP (EOL like, so the serial has to be NONE ZERO!)
-        dsp_lean_res.api = dsp_lean_par.api.copy() 
+        dsp_lean_res.api = dsp_lean_par.api.copy()
         dsp_lean_res.ts_send_result_for_testrun(
             "P",
             datetime.utcnow().isoformat(),
@@ -534,10 +534,9 @@ if __name__ == "__main__":
 
     # define the route
     API_URL = "http://127.0.0.1:8000"  # our mockup-server
-    #API_URL = "http://172.25.100.42:8000"
-    #API_URL = "http://sv-production-vn:8000"
-    #API_URL = "http://172.22.2.40:9929"  # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
-    #API_URL = "http://172.25.100.9"  # ports 9925..9929 Orbis DSP REST API @RRCVN
+    #API_URL = "http://172.22.2.40"     # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
+    #API_URL = "http://sv-mes-dsp-de.rrc"  # Orbis DSP REST API @RRC
+    #API_URL = "http://172.25.100.9"   # ports 9925..9929 Orbis DSP REST API @RRCVN
 
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
     #test_interface(dsp)
