@@ -8,6 +8,7 @@ Implemented as REST API
 from typing import Tuple, List
 import json
 import requests
+import ast
 from datetime import datetime
 from pathlib import Path
 from time import sleep
@@ -169,7 +170,10 @@ class DspInterface:
             _log.debug(f"Result to send: {result}")
             response = requests.post(f"{self.API_BASE_URL}/REPORT_TEST_RESULT", json=result)
             _log.debug(response)
+            
             if response.status_code not in [200, 202]:
+                _log.warning(ast.literal_eval(response.content))
+                #_log.debug(response.content.encode("latin-1", "backslashreplace").decode("unicode-escape"))
                 # did not work, so keep this record for next round
                 _remaining_list.append(result)
         return _remaining_list
@@ -381,17 +385,18 @@ def test_teststand_line_interfaces(
         line_id: int = 1,
         udi_cell: str = "1CELL000000005A2",
         udi_pcba: str = "1PCBA163512635",
+        test_result: str = "P"
     ) -> None:
 
     serial = None
-    if ":" in _API_URL:
+    if (len(_API_URL.split(":")) == 3):
         # use own, single port, e.g. our mockup server
         dsp_cell   = DspInterface(_API_URL, None)      # CELL test socket / ws102
         dsp_pcba   = DspInterface(_API_URL, None)      # PCBA test socket / ws103
         dsp_core   = DspInterface(_API_URL, None)      # Corepack test socket / ws111
         dsp_eol    = DspInterface(_API_URL, None)      # EOL test socket / ws113
         dsp_lean_par = DspInterface(_API_URL, None)    # = Corepack test socket / ws111
-        dsp_lean_res = DspInterface(_API_URL, None)    # EOL test socket / ws113
+        dsp_lean = DspInterface(_API_URL, None)    # EOL test socket / ws113
         dsp_weld = DspInterface(_API_URL, None)        # welding station ws112
     else:
         # use the standard ports from Orbis
@@ -400,20 +405,20 @@ def test_teststand_line_interfaces(
         dsp_core   = DspInterface(f"{_API_URL}:9927", None)      # Corepack test socket / ws111
         dsp_eol    = DspInterface(f"{_API_URL}:9928", None)      # EOL test socket / ws113
         dsp_lean_par = DspInterface(f"{_API_URL}:9927", None)    # = Corepack test socket / ws111
-        dsp_lean_res = DspInterface(f"{_API_URL}:9928", None)    # EOL test socket / ws113
+        dsp_lean = DspInterface(f"{_API_URL}:9928", None)        # EOL test socket / ws113
         dsp_weld = DspInterface(f"{_API_URL}:9929", None)        # welding station ws112
 
     #----------------------
     # CELL TEST
     # request parameter
-    if 1:
+    if 0:
         _test_run_1 = dsp_cell.ts_get_parameter_for_testrun("CELL_TEST", "DUMMY_1", line_id, 0)
         _log.info(f"TESTRUN: {_test_run_1}")
         # simulate test
         sleep(1)
         # send result to DSP
         dsp_cell.ts_send_result_for_testrun(
-            "P",
+            test_result,
             datetime.utcnow().isoformat(),
             (2 + random()*3),  # simulate execution time
             udi_cell,
@@ -423,7 +428,7 @@ def test_teststand_line_interfaces(
     #----------------------
     # WELDING
     # request parameter
-    if 1:
+    if 0:
         _welding_1 = dsp_weld.ts_get_parameter_for_testrun("CELL_WELDING", "DUMMY_2", line_id, 0)
         _log.info(f"WELDING: {_welding_1}")
         ok, response  = dsp_weld.send_udi_upfront(udi_cell)
@@ -432,7 +437,7 @@ def test_teststand_line_interfaces(
         sleep(1)
         # send result to DSP
         dsp_weld.ts_send_result_for_testrun(
-            "P",
+            test_result,
             datetime.utcnow().isoformat(),
             (2 + random()*3),  # simulate execution time
             udi_cell,
@@ -449,7 +454,7 @@ def test_teststand_line_interfaces(
         sleep(1)
         # send result to DSP
         dsp_pcba.ts_send_result_for_testrun(
-            "P",
+            test_result,
             datetime.utcnow().isoformat(),
             (2 + random()*3),  # simulate execution time
             ",".join([udi_cell,udi_pcba]),
@@ -459,28 +464,31 @@ def test_teststand_line_interfaces(
     #----------------------
     # Leanpack TEST
     if 1:
-        _test_run_3 = dsp_lean_par.ts_get_parameter_for_testrun("LEANPACK_TEST", "DUMMY_4", line_id, 0)
+        _test_run_3 = dsp_lean.ts_get_parameter_for_testrun("HARDPACK_TEST", "DUMMY_4", line_id, 0)
         _log.info(f"TESTRUN: {_test_run_3}")
+
+        dsp_lean.api["part_number"] = "100496-17" # patch
+        dsp_lean.api["test_program_id"] = "100496-17_EOL-Test_A" # patch
         # ... more sockets ?
         if 1:
             _udi_to_send = f"{udi_cell},"
-            ok, serial = dsp_lean_par.ts_get_serial_number_for_udi(_udi_to_send)
+            ok, serial = dsp_lean.ts_get_serial_number_for_udi(_udi_to_send)
             _log.info(f"SERIAL from cell udi: {serial}")
         if 0:
-            _udi_to_send = f"{udi_pcba},"
-            ok, serial = dsp_lean_par.ts_get_serial_number_for_udi(_udi_to_send)
+            _udi_to_send = f",{udi_pcba}"
+            ok, serial = dsp_lean.ts_get_serial_number_for_udi(_udi_to_send)
             _log.info(f"SERIAL from pcba udi: {serial}")
         if 0:
             _udi_to_send = ",".join([udi_cell, udi_pcba])
-            ok, serial = dsp_lean_par.ts_get_serial_number_for_udi(_udi_to_send)
+            ok, serial = dsp_lean.ts_get_serial_number_for_udi(_udi_to_send)
             _log.info(f"SERIAL: {serial}")
         # simulate test
         sleep(1)
 
         # send result to DSP (EOL like, so the serial has to be NONE ZERO!)
-        dsp_lean_res.api = dsp_lean_par.api.copy()
-        dsp_lean_res.ts_send_result_for_testrun(
-            "P",
+        #dsp_lean_res.api = dsp_lean_par.api.copy()
+        dsp_lean.ts_send_result_for_testrun(
+            test_result,
             datetime.utcnow().isoformat(),
             (2 + random()*3),  # simulate execution time
             _udi_to_send,
@@ -533,14 +541,17 @@ if __name__ == "__main__":
     LOCAL_RESULT_FILE = Path(".") / ".." / "filestore" / "unsent_results.json"
 
     # define the route
-    API_URL = "http://127.0.0.1:8000"  # our mockup-server
+    #API_URL = "http://127.0.0.1:8000"  # our mockup-server
     #API_URL = "http://172.22.2.40"     # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
-    #API_URL = "http://sv-mes-dsp-de.rrc"  # Orbis DSP REST API @RRC
+    API_URL = "http://mes-dsp-de.rrc"  # Orbis DSP REST API @RRC
     #API_URL = "http://172.25.100.9"   # ports 9925..9929 Orbis DSP REST API @RRCVN
 
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
     #test_interface(dsp)
-    test_teststand_line_interfaces(API_URL)
+    #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000254", udi_pcba="1PCBA00000000254")
+    test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000255", udi_pcba="1PCBA00000000255", test_result="P")
+    #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000256", udi_pcba="1PCBA00000000256")
+    #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000257", udi_pcba="1PCBA00000000257")
 
     # dsp_ws102 = DspInterface(f"{API_URL}:9925", None)
     # dsp_ws103 = DspInterface(f"{API_URL}:9926", None)
