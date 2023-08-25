@@ -239,10 +239,21 @@ if __name__ == "__main__":
 
 
     # there is one ETH bridge for 6 PSUs    
-    psu1 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=1)  # socket 0, 1, and 2 share
-    psu2 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=2)  # socket 0, 1, and 2 share
+    #psu1 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=1)  # socket 0, 1, and 2 share
+    #psu2 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=2)  # socket 0, 1, and 2 share
+    psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=1)  # socket 0, 1, and 2 share
+    psu2 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=2)  # socket 0, 1, and 2 share
     
     test_2x_m3400_short(psu1, psu2)
+
+    # from rrc.eth2serial import SCPIRemoteDevice
+    # psu = SCPIRemoteDevice(f"{LINE_NETWORK}.37:30000")
+    # print(psu.request("*IDN?"))  # Base device
+    # sleep(0.03)
+    # for c in range(1,7):
+    #     print(psu.request(f":CHAN {c};*IDN?"))
+    #     sleep(0.03)
+    # #print(psu.request(":OUTP?"))
 
     # m = M3400("TCPIP0::172.25.101.51::inst0::INSTR")
     # print('IDN:' +str(m.request('*IDN?')))
