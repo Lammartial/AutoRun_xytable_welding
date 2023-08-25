@@ -1,4 +1,4 @@
-from rrc.eth2serial.base import Eth2Serial_SockSingleConnection_Device
+#from rrc.eth2serial.base import Eth2Serial_SockSingleConnection_Device
 from rrc.eth2serial.base import Eth2SerialDevice
 from time import sleep
 import numpy as np
@@ -27,10 +27,8 @@ from rrc.custom_logging import getLogger, logger_init
 
 class Hioki_BT3561A(Eth2SerialDevice):
 
-    #def __init__(self, host: str, port: int, termination: str = "\r\n"):
-    #     super().__init__(host, port, termination)
     def __init__(self, resource_str: str, termination: str = "\r\n"):
-        super().__init__(resource_str, termination)
+        super().__init__(resource_str, termination, open_connection=False)
 
     def __str__(self) -> str:
         return f"Hioki BT3561A device on {super().__str__()}"
@@ -411,12 +409,15 @@ class Hioki_BT3561A(Eth2SerialDevice):
 # SW1001
 #--------------------------------------------------------------------------------------------------
 
-class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
+#class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
+class Hioki_SW1001(Eth2SerialDevice):
+    
+    # !!!!! IMPORTANT !!!!!!
+    # For normal operation HIOKI SW1001 must stay connected via socket
+    # !!!!! IMPORTANT !!!!!!
 
-    #def __init__(self, host: str, port: int, termination: str = "\r\n"):
-    #    super().__init__(host, port, termination)
     def __init__(self, resource_str: str, termination: str = "\r\n"):
-        super().__init__(resource_str, termination)
+        super().__init__(resource_str, termination, open_connection=True)  # open socket and keep it connected!
 
     def __repr__(self) -> str:
         return super().__repr__()

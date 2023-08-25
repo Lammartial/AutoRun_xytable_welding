@@ -201,7 +201,7 @@ class Eth2SerialDevice(object):
     def connect_socket(self, timeout: float | None = None) -> socket:
         # setting self._keep_connection_open to True leaves the connection 
         # open as long as the instance lives
-        if self._keep_connection_open and self.socket and not is_socket_closed(self.socket):
+        if self._keep_connection_open and self.socket: # and not is_socket_closed(self.socket):
             if timeout:
                 self.socket.settimeout(timeout)  # modifies the timeout also for following use !!
             return self.socket
