@@ -51,7 +51,7 @@ class I2CPort(I2CBase):
             host (str): hostname IP address of the converter
             port (int): port used for the communication. Default setting is 2101.
             timeout_s (float, optional): Timeout for network communication in seconds. Defaults to 5s.
-            open_connectuion (bool, optional): If True, the socket connection is opened on init(). Defaults to True.
+            open_connectuion (bool, optional): If True, the socket connection is opened on init() and kept open until closed. Defaults to True.
 
         Raises:
             NCDSelfTestFailedError: Raised if the selftest of the converter fails.
