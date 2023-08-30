@@ -13,7 +13,7 @@ class SCPIRemoteDevice(Eth2SerialDevice):
         super().__init__(resource_str, termination)
 
     def request(self, msg: str | None, timeout: float | None = 3, limit: int = 0, encoding: str | None = "utf-8") -> str:
-        return super().request(msg, timeout, limit, encoding).replace("\r", "\n")
+        return super().request(msg, timeout, limit, encoding).replace(self.termination, "")
 
 
 #--------------------------------------------------------------------------------------------------
