@@ -225,17 +225,18 @@ def test_2x_m3400_short(psu1: M3400, psu2 :M3400) -> bool:
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     from time import sleep
-    from pyvisa import ResourceManager
+    #from pyvisa import ResourceManager
 
     ## Initialize the logging
     #logger_init(filename_base=None)  ## init root logger with different filename
     #_log = getLogger(__name__, DEBUG)
 
     #LINE_NETWORK = "172.25.101"  # VN line 1
-    LINE_NETWORK = "172.21.101"  # HOM Warehouse
+    LINE_NETWORK = "172.25.102"  # VN line 2
+    #LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
-    rm = ResourceManager()
-    print(rm.list_resources())
+    #rm = ResourceManager()
+    #print(rm.list_resources())
 
 
     # there is one ETH bridge for 6 PSUs    
@@ -246,8 +247,9 @@ if __name__ == "__main__":
     
     # test_2x_m3400_short(psu1, psu2)
 
-    from rrc.eth2serial import Eth2SerialDevice
-    psu = Eth2SerialDevice(f"{LINE_NETWORK}.46:30000", termination="\n")
+    #from rrc.eth2serial import Eth2SerialDevice
+    #psu = Eth2SerialDevice(f"{LINE_NETWORK}.46:30000", termination="\n")
+    psu = M3900(f"{LINE_NETWORK}.46:30000")
     print(psu.request("*IDN?"))  # Base device
     # sleep(0.03)
     # for c in range(1,7):

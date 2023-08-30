@@ -103,11 +103,17 @@ def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900) -> None:
     #print("Voltage slew rates:")
     #print(psu.request("VOLTAGE:SLEW:NEG?"))
     #print(psu.request("VOLTAGE:SLEW:POS?"))
-    
+
+
+    gpio.switch_to_battery_tester_measurement()
+    sleep(0.5)
+    a = bt.measure()
+    print("HIOKI", type(a), a)
+
     gpio.switch_to_psu_measurement()
     sleep(0.5)
     psu.set_output_state(0)
-    print("PSU", psu.get_all_measurements())    
+    print("PSU", psu.get_all_measurements())
 
     # check PSU charge mode
     print("PSU Output on")
@@ -115,9 +121,16 @@ def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900) -> None:
    
     psu_print_error_queue(psu)
 
+    #psu.send("VOLT 14.5")
+    #psu.send("CURR 0.5")
+    #psu.send("OUTP 1")
+    psu.send("REM:SENS 0")
+    print(psu.request("REMote:SENSe?"))
+    print(psu.request("REMote:SENSe:STATE?"))
     #psu.configure_cc_mode(0.3, 6.9*1.15, 6.9*0.80, 50, 1)
-    psu.configure_cc_mode(0.3, 12.55, 10.0, 50, 1)
-
+    #psu.configure_cc_mode(0.3, 14.55, 10.0, 50, 0)
+    psu.configure_supply(15.0, 0.3, 50, 0)
+    psu.set_output_state(1)
 
     # Device need to be configured for CC mode to change I slopes
     #psu.configure_current_rise_times(pos="MIN", neg="MIN")
@@ -136,6 +149,7 @@ def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900) -> None:
     #psu.send(f"VOLTAGE:LIM:LOW 13.00")
     #psu.send(f"VOLTAGE:LIM:HIGH 13.00")
     psu.set_output_state(0)
+    psu.initialize_device()
 
     psu.configure_charge_mode(0.25, 12.55, 10.0, 50, 1)
     psu_print_error_queue(psu)
@@ -145,11 +159,11 @@ def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900) -> None:
     #print("PSU Output off")
     psu.set_output_state(0)
     sleep(0.5)
-    psu.configure_discharge_mode(-1.501, 13.55, 4.0, -50, 1)
+    psu.configure_discharge_mode(-1.501, 15.55, 4.0, -50, 1)
     psu_print_error_queue(psu)
     sleep(1)
     print("PSU", psu.get_all_measurements())
-    psu.configure_discharge_mode(-2.000, 13.55, 4.0, -50, 1)
+    psu.configure_discharge_mode(-2.000, 15.55, 4.0, -50, 1)
     psu_print_error_queue(psu)
     sleep(1)
     print("PSU", psu.get_all_measurements())
@@ -243,7 +257,8 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    LINE_NETWORK = "172.25.101"  # VN line 1
+    #LINE_NETWORK = "172.25.101"  # VN line 1
+    LINE_NETWORK = "172.25.102"  # VN line 2    
     #LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
     i2cbus = I2CPort(f"{LINE_NETWORK}.40:2101") # socket 0
@@ -259,9 +274,11 @@ if __name__ == "__main__":
     gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
     gpio.switch_to_psu_measurement()
     sleep(0.5)
-    psu = M3900(f"TCPIP0::{LINE_NETWORK}.46::inst0::INSTR")  # socket 0
-    #psu = M3900(f"TCPIP0::{LINE_NETWORK}.47::inst0::INSTR")  # socket 1
-    
+    #psu = M3900(f"TCPIP0::{LINE_NETWORK}.46::inst0::INSTR")  # visa socket 0
+    #psu = M3900(f"TCPIP0::{LINE_NETWORK}.47::inst0::INSTR")  # visa socket 1
+    psu = M3900(f"{LINE_NETWORK}.46:30000")  # socket 0
+    #psu = M3900(f"{LINE_NETWORK}.47:30000")  # socket 1
+
     psu.set_output_state(0)
     print("INIT Hioki")
     bt = Hioki_BT3561A(f"{LINE_NETWORK}.44:23", termination="\r\n")  # socket 0

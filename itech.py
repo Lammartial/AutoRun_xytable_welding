@@ -2,7 +2,6 @@ from typing import List, Tuple
 from time import sleep
 from rrc.eth2serial import Eth2SerialDevice
 
-import math
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
@@ -40,7 +39,7 @@ class M3400(Eth2SerialDevice):
         """
         
         super().__init__(resource_str, termination="\n")  # configure the itech device socket
-
+ 
         self.last_mode = "??"  # not yet set
         self.dev_channel = dev_channel
         self.initialize_device()
@@ -75,11 +74,11 @@ class M3400(Eth2SerialDevice):
 
     def initialize_device(self) -> None:
         self.send("SYST:REM")     # set remote control ON
+        self.send("OUTP 0")       # set OUTPUT OFF
         self.reset_device()       # Reset device
         #self.send("OFF:VOLT CONST")  # CONST or ZERO -> for CC priority mode
         #self.send("FUNC:MODE FIX")   # FIX, LIST, BATT, BEM
         self.send("SENS:STAT 1")  # set sense state ON
-        self.send("OUTP 0")       # set OUTPUT OFF
         sleep(0.25)
 
     #----------------------------------------------------------------------------------------------
@@ -94,7 +93,7 @@ class M3400(Eth2SerialDevice):
 
         """
         self.send("*RST")      # Reset device
-        self.send("SYST:CLE")  # Clear system status register
+        self.send("SYST:CLE")  # Clear system status register        
 
     #----------------------------------------------------------------------------------------------
 
@@ -201,11 +200,11 @@ class M3400(Eth2SerialDevice):
         Args:
             state (int):  1 - On, 0 - Off
         """
-        if (state == 0):
-            if self.last_mode == "CURR":
-                self.send(f"CURR 0")
-            else:
-                self.send(f"VOLT 0")
+        # if (state == 0):
+        #     if self.last_mode == "CURR":
+        #         self.send(f"CURR 0")
+        #     else:
+        #         self.send(f"VOLT 0")
 
         self.send(f"OUTP {int(state)}")
         #r = self.request(f"OUTPUT:STATE {int(state)};OUTPUT:STATE?")
@@ -877,8 +876,10 @@ class M3900(M3400):
         VOLTage:SLEW:MAXimum ON
         """
 
-        self.send("*RST")       # Reset device
+        self.send("*RST")      # Reset device
         self.send("SYST:CLE")  # Clear error queue
+        self.send("OUTP:PROT:CLE")  # clear protection status
+
 
 
     #def set_remote_control(self) -> None:
