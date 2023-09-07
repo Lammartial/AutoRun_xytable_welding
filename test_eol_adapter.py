@@ -40,7 +40,10 @@ def psu_print_error_queue(psu) -> None:
 
 def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3400) -> None:
 
-    print("INP2", gpio.read_input(2))    
+    gpio.switch_to_psu_measurement()
+    sleep(0.75)
+    print("INP2", gpio.read_input(2))  
+
     print("Test PSU:")
 
     psu_print_error_queue(psu)
@@ -52,9 +55,13 @@ def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3400) -> None:
     print(psu.request("CURRENT:SLEW:NEG?"))
     print(psu.request("CURRENT:SLEW:POS?"))
 
-    #psu.configure_supply(12.55, 1.0, 50, set_output=1)
-    psu.configure_cc_mode(1.0, 5.0, 10.8, 1, 100, set_output=1)
-    sleep(1.5)
+    
+    # wakeup the battery by current
+    #psu.configure_cc_mode(0.1, None, 10.8, 10.8*0.1, 50, set_output=1)
+    psu.configure_supply(10.8, 0.1, 50, set_output=1)
+    
+
+    sleep(0.75)
     print("supply", psu.get_all_measurements())    
     psu_print_error_queue(psu)
     print(bat.current())
@@ -68,6 +75,7 @@ def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3400) -> None:
     #print(bat.device_name())
 
     psu.set_output_state(0) 
+    sleep(0.75)
 
     psu.configure_sink(-2.0, 5.0, -2.0*1.1, 10.8, -100, 1)
     sleep(1.5)
@@ -89,6 +97,7 @@ if __name__ == "__main__":
     _log = getLogger(__name__, DEBUG)
 
     LINE_NETWORK = "172.25.101"  # VN line 1
+    #LINE_NETWORK = "172.25.102"  # VN line 2    
     #LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
     i2cbus = I2CPort(f"{LINE_NETWORK}.50:2101") # socket 0
@@ -123,9 +132,8 @@ if __name__ == "__main__":
     #     sleep(0.5)
     # exit(1)
 
-    gpio.switch_to_psu_measurement()
-    
-    psu = M3400(f"TCPIP0::{LINE_NETWORK}.51::inst0::INSTR")
+
+    psu = M3400(f"{LINE_NETWORK}.51:30000")
         
     psu_test(bat, gpio, psu)
 
