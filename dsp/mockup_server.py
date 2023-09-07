@@ -116,8 +116,8 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
 
     # set the product to test for mockup: "RRC2040B" or "RRC2020B"
     #_product_name = "RRC2020B"
-    #_product_name = "RRC2040B"
-    _product_name = "RRC2054S"
+    _product_name = "RRC2040B"
+    #_product_name = "RRC2054S"
     #_product_name = "SPINEL"
     #_product_name = "RRC2040-2S"
     #_product_name = "RRC2054-2S"
