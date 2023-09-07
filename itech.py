@@ -265,6 +265,7 @@ class M3400(Eth2SerialDevice):
     #     """
     #     cmd = "OUTP:REV?"
     #     return int(self.request(cmd, 2000))
+    
 
     #[SOURce:]CURRent[:LEVel][:IMMediate][:AMPLitude] <NRf+>
     def set_current(self, curr: float) -> None:
