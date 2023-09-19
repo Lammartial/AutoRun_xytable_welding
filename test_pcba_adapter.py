@@ -544,6 +544,7 @@ def test_fuse_pin_cellside(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO,
     psu2.set_output_state(0)
     vsim.power_down_all_cell_channels()
 
+
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -551,10 +552,9 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    #LINE_NETWORK = "172.25.101"  # VN line 1
-    LINE_NETWORK = "172.21.101"  # HOM Warehouse
+    LINE_NETWORK = "172.25.101"  # VN line 1
+    #LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
-    feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:3000", termination="\n")  # PCBA test, socket 0
     feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:3000", termination="\n")  # PCBA test, socket 0
     #feasa = FEASA_CH9121(f"{LINE_NETWORK}.33:3000")  # PCBA test, socket 1
     #feasa = FEASA_CH9121(f"{LINE_NETWORK}.35:3000")  # PCBA test, socket 2
@@ -562,8 +562,8 @@ if __name__ == "__main__":
     #test_feasa_only(feasa)
     #exit()
 
-    i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101") # socket 0
-    #i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101") # socket 1
+    #i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101") # socket 0
+    i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101") # socket 1
     #i2cbus = I2CPort(f"{LINE_NETWORK}.34:2101") # socket 2
     #i2cbus = I2CPort("192.168.69.77:2101") # HOMEGROW
     print("Change clock frequency and timeout - RRC: ", 
