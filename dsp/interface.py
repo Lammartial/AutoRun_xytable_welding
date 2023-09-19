@@ -400,13 +400,14 @@ def test_teststand_line_interfaces(
         dsp_weld = DspInterface(_API_URL, None)        # welding station ws112
     else:
         # use the standard ports from Orbis
-        dsp_cell   = DspInterface(f"{_API_URL}:9925", None)      # CELL test socket / ws102
-        dsp_pcba   = DspInterface(f"{_API_URL}:9926", None)      # PCBA test socket / ws103
-        dsp_core   = DspInterface(f"{_API_URL}:9927", None)      # Corepack test socket / ws111
-        dsp_eol    = DspInterface(f"{_API_URL}:9928", None)      # EOL test socket / ws113
-        dsp_lean_par = DspInterface(f"{_API_URL}:9927", None)    # = Corepack test socket / ws111
-        dsp_lean = DspInterface(f"{_API_URL}:9928", None)        # EOL test socket / ws113
-        dsp_weld = DspInterface(f"{_API_URL}:9929", None)        # welding station ws112
+        _line_offset = 10 * (line_id - 1)
+        dsp_cell   = DspInterface(f"{_API_URL}:{9925 + _line_offset}", None)      # CELL test socket / ws102
+        dsp_pcba   = DspInterface(f"{_API_URL}:{9926 + _line_offset}", None)      # PCBA test socket / ws103
+        dsp_core   = DspInterface(f"{_API_URL}:{9927 + _line_offset}", None)      # Corepack test socket / ws111
+        dsp_eol    = DspInterface(f"{_API_URL}:{9928 + _line_offset}", None)      # EOL test socket / ws113
+        dsp_lean_par = DspInterface(f"{_API_URL}:{9927 + _line_offset}", None)    # = Corepack test socket / ws111
+        dsp_lean = DspInterface(f"{_API_URL}:{9928 + _line_offset}", None)        # EOL test socket / ws113
+        dsp_weld = DspInterface(f"{_API_URL}:{9929 + _line_offset}", None)        # welding station ws112
 
     #----------------------
     # CELL TEST
@@ -464,7 +465,7 @@ def test_teststand_line_interfaces(
     #----------------------
     # Leanpack TEST
     if 1:
-        _test_run_3 = dsp_lean.ts_get_parameter_for_testrun("LEANPACK_TEST", "DUMMY_4", int(line_id), 0)
+        _test_run_3 = dsp_lean.ts_get_parameter_for_testrun("LEANPACK_TEST", "DUMMY_4", line_id, 0)
         _log.info(f"TESTRUN: {_test_run_3}")
 
         #dsp_lean.api["part_number"] = "100496-17" # patch
@@ -485,15 +486,15 @@ def test_teststand_line_interfaces(
         # simulate test
         sleep(1)
 
-        # send result to DSP (EOL like, so the serial has to be NONE ZERO!)
-        #dsp_lean_res.api = dsp_lean_par.api.copy()
-        dsp_lean.ts_send_result_for_testrun(
-            test_result,
-            datetime.utcnow().isoformat(),
-            (2 + random()*3),  # simulate execution time
-            _udi_to_send,
-            serial
-        )
+        # # send result to DSP (EOL like, so the serial has to be NONE ZERO!)
+        # #dsp_lean_res.api = dsp_lean_par.api.copy()
+        # dsp_lean.ts_send_result_for_testrun(
+        #     test_result,
+        #     datetime.utcnow().isoformat(),
+        #     (2 + random()*3),  # simulate execution time
+        #     _udi_to_send,
+        #     serial
+        # )
 
     # ...
 
