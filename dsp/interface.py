@@ -464,11 +464,11 @@ def test_teststand_line_interfaces(
     #----------------------
     # Leanpack TEST
     if 1:
-        _test_run_3 = dsp_lean.ts_get_parameter_for_testrun("HARDPACK_TEST", "DUMMY_4", line_id, 0)
+        _test_run_3 = dsp_lean.ts_get_parameter_for_testrun("LEANPACK_TEST", "DUMMY_4", int(line_id), 0)
         _log.info(f"TESTRUN: {_test_run_3}")
 
-        dsp_lean.api["part_number"] = "100496-17" # patch
-        dsp_lean.api["test_program_id"] = "100496-17_EOL-Test_A" # patch
+        #dsp_lean.api["part_number"] = "100496-17" # patch
+        #dsp_lean.api["test_program_id"] = "100496-17_EOL-Test_A" # patch
         # ... more sockets ?
         if 1:
             _udi_to_send = f"{udi_cell},"
@@ -543,13 +543,14 @@ if __name__ == "__main__":
     # define the route
     #API_URL = "http://127.0.0.1:8000"  # our mockup-server
     #API_URL = "http://172.22.2.40"     # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
-    API_URL = "http://mes-dsp-de.rrc"  # Orbis DSP REST API @RRC
-    #API_URL = "http://172.25.100.9"   # ports 9925..9929 Orbis DSP REST API @RRCVN
+    #API_URL = "http://mes-dsp-de.rrc"  # Orbis DSP REST API @RRC
+    API_URL = "http://172.25.100.9"   # ports 9925..9929 Orbis DSP REST API @RRCVN
 
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
     #test_interface(dsp)
+    test_teststand_line_interfaces(API_URL, udi_cell="1CELL000000020EB", udi_pcba="", test_result="P", line_id=2)
     #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000254", udi_pcba="1PCBA00000000254")
-    test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000255", udi_pcba="1PCBA00000000255", test_result="P")
+    #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000255", udi_pcba="1PCBA00000000255", test_result="P")
     #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000256", udi_pcba="1PCBA00000000256")
     #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000257", udi_pcba="1PCBA00000000257")
 
