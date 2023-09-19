@@ -884,8 +884,8 @@ if __name__ == "__main__":
     #BT_PORT = 23                    # BT3561A port
     #SW_IP_STR = "192.168.1.201"     # SW1001 IP addr
     #SW_PORT = 23                    # SW1001 port
-    BT_resource_string = "172.21.101.44:23"
-    #SW_resource_string = "192.168.1.201:23"
+    #BT_resource_string = "172.21.101.44:23"
+    BT_resource_string = "172.25.102.44:23"
 
     # 1. Create an instance of 20 channel MUXER with HIOKI ACIR measurement device class
     #hioki = Hioki_Cell_Tester(BT_resource_string, SW_resource_string)
@@ -897,8 +897,10 @@ if __name__ == "__main__":
 
     print(hioki.init())
 
-    print(hioki.measure())
-
+    for i in range(1000):
+        print(hioki.measure())
+        sleep(0.1)
+    pass
     # *IDN?
     #print('BT3561A ID: ', hioki.bt.get_idn())
 
