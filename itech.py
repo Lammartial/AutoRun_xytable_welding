@@ -1,8 +1,7 @@
 from typing import List, Tuple
 from time import sleep
-from rrc.visa import AdhocVisaDevice
+from rrc.eth2serial import Eth2SerialDevice
 
-import math
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
@@ -21,71 +20,37 @@ from rrc.custom_logging import getLogger, logger_init
 
 
 #--------------------------------------------------------------------------------------------------
-class M3400(AdhocVisaDevice):
-    #
-    # Currently there are two backends available: The one included in pyvisa,
-    # which uses the IVI library (include NI-VISA, Keysight VISA, R&S VISA, tekVISA etc.),
-    # and the backend provided by pyvisa-py, which is a pure python implementation
-    # of the VISA library.
-    # If no backend is specified, pyvisa uses the IVI backend if any IVI library
-    # has been installed (see next section for details). Failing that, it uses the
-    # pyvisa-py backend.
-    # explicit Python backend:  rm = ResourceManager('@py')
-    # explicit IVI lib backend: rm = ResourceManager('Path to library')
-#--------------------------------------------------------------------------------------------------
-    # Commands:
-    #
-    # For measuring purpose:
-    #
-	# + MEASure[:SCALar]:CURRent[:DC]?
-	# + MEASure[:SCALar]:VOLTage[:DC]?
-	# + MEASure[:SCALar]:UUT:TEMPerature?
-	# + MEASure?
-    #
-    #For device setup and state determination:
-    #
-	# + OUTPut[:STATe] <bool>
-	# + SENSe[:REMote][:STATe] <bool>
-	# + OUTPut:REVerse[:STATe]?
-	# + [SOURce:]CURRent[:LEVel][:IMMediate][:AMPLitude] <NRf+>
-	# + [SOURce:]CURRent[:LEVel]:LIMit:POSitive <NRf+>
-	# + [SOURce:]CURRent[:LEVel]:LIMit:NEGative <NRf+>
-	# + [SOURce:]CURRent[:OVER]:PROTection[:LEVel] <NRf+>
-	# + [SOURce:]CURRent:UNDer:PROTection[:LEVel] <NRf+>
-    #
-	# + [SOURce:]VOLTage[:LEVel][:IMMediate][:AMPLitude] <NRf+>
-	# + [SOURce:]VOLTage[:LEVel]:LIMit[:HIGH] <NRf+>
-	# + [SOURce:]VOLTage[:LEVel]:LIMit:LOW <NRf+>
-	# + [SOURce:]VOLTage[:OVER]:PROTection[:LEVel] <NRf+>
-	# + [SOURce:]VOLTage:UNDer:PROTection[:LEVel] <NRf+>
 
+class M3400(Eth2SerialDevice):
 
     def __init__(self, resource_str: str, dev_channel: int = 0):
-        """
-        Initialize the object with VISA resource string (IP name).
-        Example "TCPIP0::192.168.1.101::inst0::INSTR"
+        """Initialize the object with IP resource string to connect on socket.
+        
+        Example "192.168.1.101:30000" (30000 is default socket of ITECH devices)
 
-        In fact this M3400 device is using an IT-E1206 LAN gateway to access the PSUs behind.
-
-        We have 6 PSUs indexed from channel 1 to 6. The communication module
-        Eth2SerialVisaDevice takes care about the routing command.
+        In fact this M3432 device is using an IT-E1206 LAN gateway to access the PSUs behind.
+        We have 6 PSUs indexed from channel 1 to 6. The communication module takes care about
+        the routing command by overwriting the send/request functions herein.
 
         Args:
-            resource_str (str): visa resource string
+            resource_str (str): resource string in the form IP[:socket]
             dev_channel (int, optional): indexes the real PSU behind the gateway, 0=off, 1..6. Defaults to 0.
 
         """
-        super().__init__(resource_str, read_termination="\n", write_termination="\n", pause_on_retry=50)  # configure the itech VISA device
+        
+        super().__init__(resource_str, termination="\n")  # configure the itech device socket
+ 
         self.last_mode = "??"  # not yet set
         self.dev_channel = dev_channel
         self.initialize_device()
 
+
     def __str__(self) -> str:
-        return f"M3400 VISA device on {super().__str__()}"
+        return f"M3400 device at {self.host}:{self.port}, channel={self.dev_channel}"
 
     def __repr__(self) -> str:
-        return f"M3400({self.resource_str}, {self.dev_channel})"
-
+        return f"M3400('{self.host}:{self.port}', {self.dev_channel}, termination='{self.termination}')"
+    
     #----------------------------------------------------------------------------------------------
     # insert the channel to message strings for this device
 
@@ -96,24 +61,24 @@ class M3400(AdhocVisaDevice):
             _query = f"CHAN {self.dev_channel};{msg}"
         else:
             _query = msg
-        super().send(_query, pause_after_write=15, timeout=timeout, retries=3)
+        super().send(_query, pause_after_write=15, timeout=timeout/1000, retries=3)
 
     def request(self, msg: str, timeout: int = 3000) -> str:
         if (self.dev_channel > 0):
             _query = f"CHAN {self.dev_channel};{msg}"
         else:
             _query = msg
-        return super().request(_query, pause_after_write=30, timeout=timeout, retries=3).strip()
+        return super().request(_query, pause_after_write=30, timeout=timeout/1000, retries=3).strip()
 
     #----------------------------------------------------------------------------------------------
 
     def initialize_device(self) -> None:
         self.send("SYST:REM")     # set remote control ON
+        self.send("OUTP 0")       # set OUTPUT OFF
         self.reset_device()       # Reset device
         #self.send("OFF:VOLT CONST")  # CONST or ZERO -> for CC priority mode
         #self.send("FUNC:MODE FIX")   # FIX, LIST, BATT, BEM
         self.send("SENS:STAT 1")  # set sense state ON
-        self.send("OUTP 0")       # set OUTPUT OFF
         sleep(0.25)
 
     #----------------------------------------------------------------------------------------------
@@ -128,7 +93,7 @@ class M3400(AdhocVisaDevice):
 
         """
         self.send("*RST")      # Reset device
-        self.send("SYST:CLE")  # Clear system status register
+        self.send("SYST:CLE")  # Clear system status register        
 
     #----------------------------------------------------------------------------------------------
 
@@ -235,11 +200,11 @@ class M3400(AdhocVisaDevice):
         Args:
             state (int):  1 - On, 0 - Off
         """
-        if (state == 0):
-            if self.last_mode == "CURR":
-                self.send(f"CURR 0")
-            else:
-                self.send(f"VOLT 0")
+        # if (state == 0):
+        #     if self.last_mode == "CURR":
+        #         self.send(f"CURR 0")
+        #     else:
+        #         self.send(f"VOLT 0")
 
         self.send(f"OUTP {int(state)}")
         #r = self.request(f"OUTPUT:STATE {int(state)};OUTPUT:STATE?")
@@ -300,6 +265,7 @@ class M3400(AdhocVisaDevice):
     #     """
     #     cmd = "OUTP:REV?"
     #     return int(self.request(cmd, 2000))
+    
 
     #[SOURce:]CURRent[:LEVel][:IMMediate][:AMPLitude] <NRf+>
     def set_current(self, curr: float) -> None:
@@ -812,28 +778,32 @@ class M3400(AdhocVisaDevice):
 
 
 #--------------------------------------------------------------------------------------------------
+#
+# M3900 Device
+#
 #--------------------------------------------------------------------------------------------------
 
 class M3900(M3400):
 
     def __init__(self, resource_str: str, dev_channel: int = 0):
-        """
-        Initialize the object with VISA resource string (IP name).
-        Example "TCPIP0::192.168.1.101::inst0::INSTR"
+        """Initialize the object with IP resource string to connect on socket.
+        
+        Example "192.168.1.101:30000" (30000 is default socket of ITECH devices)
 
         Args:
-            resource_str (str): visa resource string
+            resource_str (str): resource string in the form IP[:socket]
             dev_channel (int, optional): 0=off, 1 .. n selects a proprietary device behind the gateway. Defaults to 0.
 
         """
         super().__init__(resource_str, dev_channel)
         pass
 
+  
     def __str__(self) -> str:
-        return f"M3900 VISA device on {super().__str__()}"
+        return f"M3900 device at {self.host}:{self.port}, channel={self.dev_channel}"
 
     def __repr__(self) -> str:
-        return f"M3900({self.resource_str}, {self.dev_channel})"
+        return f"M3900('{self.host}:{self.port}', {self.dev_channel}, termination='{self.termination}')"
 
     #----------------------------------------------------------------------------------------------
     # insert the channel to message strings for this device
@@ -845,14 +815,14 @@ class M3900(M3400):
             _query = f"CHAN {self.dev_channel};{msg}"
         else:
             _query = msg
-        super().send(_query, timeout=timeout)
+        super().send(_query, timeout=timeout/1000)
 
     def request(self, msg: str, timeout: int = 3000) -> str:
         if (self.dev_channel > 0):
             _query = f"CHAN {self.dev_channel};{msg}"
         else:
             _query = msg
-        return super().request(_query, timeout=timeout).strip()
+        return super().request(_query, timeout=timeout/1000).strip()
 
     #----------------------------------------------------------------------------------------------
     # common function repeated as trampoline for TestStand only :-(
@@ -907,8 +877,10 @@ class M3900(M3400):
         VOLTage:SLEW:MAXimum ON
         """
 
-        self.send("*RST")       # Reset device
+        self.send("*RST")      # Reset device
         self.send("SYST:CLE")  # Clear error queue
+        self.send("OUTP:PROT:CLE")  # clear protection status
+
 
 
     #def set_remote_control(self) -> None:
@@ -1052,7 +1024,7 @@ class M3900(M3400):
             raise ValueError("Parameters current and power_limit need to have same sign.")
 
         _outp = self.get_output_state()
-        if _outp and self.last_mode != "CURR":
+        if self.last_mode != "CURR":
             # was in different mode before: 
             # need to switch off and to prepare settings
             self.set_output_state(0)  # make sure output is OFF
@@ -1070,7 +1042,7 @@ class M3900(M3400):
             #print(self.read_system_error())
             self.send(f"CURR:LIM:POS MAX")
             #print(self.read_system_error())
-
+   
         self.send(f"VOLT:LIM:HIGH {voltage_limit_high:0.2f}")
         #print(self.read_system_error())
         self.send(f"VOLT:LIM:LOW {voltage_limit_low:0.2f}")

@@ -292,15 +292,21 @@ def bat_flash_test(bat: BQ40Z50R1, psu1: M3400, psu2: M3400) -> None:
     recover = BQStudioFileFlasher(bat, firmware_file=filestore / "SCD_3412036-02_B_Tansanit-B_RRC2040_Recovery.bq.fs", show_progressbar=True, test_socket=0)
 
     #flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "BQFS_3411842-05_A_Ametrie_RRC2040-2S.bq.fs", show_progressbar=True, test_socket=0)
+    # Need 63.0579 seconds @100kHz with OLIMEX
+    # Need 59.1005 seconds @100kHz with NCD.io
+
     flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "DFFS_3411842-05_A_Ametrie_RRC2040-2S.df.fs", show_progressbar=True, test_socket=0)
+    # Need 13.0589 seconds @100kHz with OLIMEX
+    # Need 13.1763 seconds @100kHz with NCD.io
+    
     #flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "SCD_3411863-05_A_Jade_RRC2054_BMS_Files.df.fs", show_progressbar=True, test_socket=0)
     #flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "SCD_3411863-05_A_Jade_RRC2054_BMS_Files.bq.fs", show_progressbar=True, test_socket=0)
 
     tic = perf_counter()
     print(f"Start: {strftime('%H:%M:%S', localtime())}")
 
-    res = recover.recover_fw_file()
-    #res = flasher.program_fw_file()
+    #res = recover.recover_fw_file()
+    res = flasher.program_fw_file()
 
     toc = perf_counter()
     print(f"Need {toc - tic:0.4f} seconds")
@@ -326,9 +332,9 @@ def bat_flash_test_debug(bat: BQ40Z50R1) -> None:
     for i in range(0x4000, 0x6000, 32):
         #res = bat.read_flash_block(i)
         #data, ok = bat.readBlock(0x44)
-        data = bat.bus.i2c.readfrom(0x0b, 32)
+        data = bat.bus.i2c.readfrom_mem(0x0b, 0x12, 32)
         print(len(data))
-        length = bat.bus.i2c.writeto(0x0b, data)
+        #length = bat.bus.i2c.writeto(0x0b, data)
     res = True
     toc = perf_counter()
     print(f"Need {toc - tic:0.4f} seconds")
@@ -538,6 +544,7 @@ def test_fuse_pin_cellside(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO,
     psu2.set_output_state(0)
     vsim.power_down_all_cell_channels()
 
+
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -545,21 +552,22 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    #LINE_NETWORK = "172.25.101"  # VN line 1
-    LINE_NETWORK = "172.21.101"  # HOM Warehouse
+    LINE_NETWORK = "172.25.101"  # VN line 1
+    #LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
-    feasa = FEASA_CH9121(f"{LINE_NETWORK}.31:3000", termination="\n")  # PCBA test, socket 0
+    feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:3000", termination="\n")  # PCBA test, socket 0
     #feasa = FEASA_CH9121(f"{LINE_NETWORK}.33:3000")  # PCBA test, socket 1
     #feasa = FEASA_CH9121(f"{LINE_NETWORK}.35:3000")  # PCBA test, socket 2
 
     #test_feasa_only(feasa)
     #exit()
 
-    #i2cbus = I2CPort(f"{LINE_NETWORK}.31:2101") # socket 0
-    #i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101") # socket 1
+    #i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101") # socket 0
+    i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101") # socket 1
     #i2cbus = I2CPort(f"{LINE_NETWORK}.34:2101") # socket 2
-    i2cbus = I2CPort("192.168.69.77:2101") # HOMEGROW
-    #print("Change clock frequency and timeout - RRC: ", str(i2cbus.i2c_change_clock_frequency(100000, timeout_ms=10)))
+    #i2cbus = I2CPort("192.168.69.77:2101") # HOMEGROW
+    print("Change clock frequency and timeout - RRC: ", 
+          str(i2cbus.i2c_change_clock_frequency(150000, timeout_ms=50)))
 
     mux = BusMux(i2cbus, address=0x77)
     for c in range(1,9):
@@ -570,8 +578,8 @@ if __name__ == "__main__":
     smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 2), retry_limit=7, verify_rounds=3, pause_us=50)
     bat = BQ40Z50R1(smbus)
 
-    bat_flash_test_debug(bat)
-    exit()
+    #bat_flash_test_debug(bat)
+    #exit()
 
     gpio = RelayBoard4Relay4GPIO(I2CMuxedBus(i2cbus, mux, 3))
     vsim = CellVoltageSimulation(I2CMuxedBus(i2cbus, mux, 4))

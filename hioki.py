@@ -1,4 +1,4 @@
-from rrc.eth2serial.base import Eth2Serial_SockSingleConnection_Device
+#from rrc.eth2serial.base import Eth2Serial_SockSingleConnection_Device
 from rrc.eth2serial.base import Eth2SerialDevice
 from time import sleep
 import numpy as np
@@ -27,8 +27,6 @@ from rrc.custom_logging import getLogger, logger_init
 
 class Hioki_BT3561A(Eth2SerialDevice):
 
-    #def __init__(self, host: str, port: int, termination: str = "\r\n"):
-    #     super().__init__(host, port, termination)
     def __init__(self, resource_str: str, termination: str = "\r\n"):
         super().__init__(resource_str, termination)
 
@@ -411,12 +409,15 @@ class Hioki_BT3561A(Eth2SerialDevice):
 # SW1001
 #--------------------------------------------------------------------------------------------------
 
-class Hioki_SW1001(Eth2Serial_SockSingleConnection_Device):
 
-    #def __init__(self, host: str, port: int, termination: str = "\r\n"):
-    #    super().__init__(host, port, termination)
+class Hioki_SW1001(Eth2SerialDevice):
+    
+    # !!!!! IMPORTANT !!!!!!
+    # For normal operation HIOKI SW1001 must stay connected via socket
+    # !!!!! IMPORTANT !!!!!!
+
     def __init__(self, resource_str: str, termination: str = "\r\n"):
-        super().__init__(resource_str, termination)
+        super().__init__(resource_str, termination, open_connection=True)  # open socket and keep it connected!
 
     def __repr__(self) -> str:
         return super().__repr__()
@@ -883,8 +884,8 @@ if __name__ == "__main__":
     #BT_PORT = 23                    # BT3561A port
     #SW_IP_STR = "192.168.1.201"     # SW1001 IP addr
     #SW_PORT = 23                    # SW1001 port
-    BT_resource_string = "172.21.101.44:23"
-    #SW_resource_string = "192.168.1.201:23"
+    #BT_resource_string = "172.21.101.44:23"
+    BT_resource_string = "172.25.102.44:23"
 
     # 1. Create an instance of 20 channel MUXER with HIOKI ACIR measurement device class
     #hioki = Hioki_Cell_Tester(BT_resource_string, SW_resource_string)
@@ -896,8 +897,10 @@ if __name__ == "__main__":
 
     print(hioki.init())
 
-    print(hioki.measure())
-
+    for i in range(1000):
+        print(hioki.measure())
+        sleep(0.1)
+    pass
     # *IDN?
     #print('BT3561A ID: ', hioki.bt.get_idn())
 

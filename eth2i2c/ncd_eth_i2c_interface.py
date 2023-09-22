@@ -15,15 +15,6 @@ from rrc.custom_logging import getLogger, logger_init
 
 # --------------------------------------------------------------------------- #
 
-# From internet:
-# 100KHz: AA 06 BC 32 01 01 00 00 A0
-# 38KHz:  AA 06 BC 32 01 01 00 01 A1
-# 200KHz: AA 06 BC 32 01 01 00 02 A2
-# 300KHz: AA 06 BC 32 01 01 00 03 A3
-# 400KHz: AA 06 BC 32 01 01 00 04 A4
-#         [AA bytecount][c1, c2, u1, u2, u3, u4][checksum]
-#              API       payload
-
 NCD_DEFAULT_TIMEOUT_S = 5
 
 NCD_HEADER = 0xAA
@@ -48,6 +39,7 @@ NCD_PACKET_CHECKSUM_INDEX = -1
 NCD_PACKET_OVERHEAD = 3
 
 
+#--------------------------------------------------------------------------------------------------
 
 class I2CPort(I2CBase):
     """A class to control the NCD Ethernet to I2C converter"""
@@ -59,7 +51,7 @@ class I2CPort(I2CBase):
             host (str): hostname IP address of the converter
             port (int): port used for the communication. Default setting is 2101.
             timeout_s (float, optional): Timeout for network communication in seconds. Defaults to 5s.
-            open_connectuion (bool, optional): If True, the socket connection is opened on init(). Defaults to True.
+            open_connectuion (bool, optional): If True, the socket connection is opened on init() and kept open until closed. Defaults to True.
 
         Raises:
             NCDSelfTestFailedError: Raised if the selftest of the converter fails.
@@ -91,7 +83,6 @@ class I2CPort(I2CBase):
 
     def open(self) -> None:
         self.__connect_socket()
-        self.__data_exchange = self.__ethernet_exchange_wrapper
         #self.soft_reset()  # add to prevent any side effects from failed tests
         self.self_test()   # raises if anything wrong
 
@@ -133,32 +124,24 @@ class I2CPort(I2CBase):
 
 
     def self_test(self) -> None:
-        """Perform the 2-way self test of the converter.
+        """Perform the 2-way self test of the converter and checks for API.
 
         Raises:
             NCDSelfTestFailedError: Raised if the selftest of the converter fails.
         """
 
-        # Test command has the payload 0xFE 0x21. Response should be 0x55
-        if self.__data_exchange(bytes([0xFE, 0x21])) != bytes([0x55]):
+        # Test command has the payload 0xFE 0x21.
+        #   Response from NCD.io should be 0x55
+        #   Response from RRC OLIMEX should be 0x55,0x42
+        _response = self.__data_exchange(bytes([0xFE, 0x21]))
+        if _response == bytes([0x55, 0x42]):
+            self.interface_is_rrc = True  # RRC OLIMEX board
+        elif _response == bytes([0x55]):
+            self.interface_is_rrc = False  # NCD.io board
+        else:
+            # no valid result
             raise NCDSelfTestFailedError(self)
-        # check if we have an RRC interface on OLIMEX board:
-        _save_timeout = self.timeout_s
-        if self._open_connection:
-            self.close()
-        self.timeout_s = 1.0
-        self.__connect_socket()
-        self.interface_is_rrc = False
-        try:
-            if self.__data_exchange(bytes([0xCF, 0x42]), retries=1) == bytes([0x55]):
-                self.interface_is_rrc = True
-        except NCDTimeoutError as ex:
-            # it's not a RRC OLIMEX board -> must be original NCD.io
-            pass
-        self.close()
-        if self._open_connection:
-            self.timeout_s = _save_timeout
-            self.__connect_socket()
+
 
     def writeto(self, i2c_address_7bit: int, data: bytearray) -> int:
         """Send a bytearray (up to 100/255 bytes NCD/RRC) to the specified I2C address and return the number of sent bytes.
@@ -174,6 +157,7 @@ class I2CPort(I2CBase):
             InvalidI2CAddressError: If the I2C address is invalid.
             InvalidParametersError: If the length of data is invalid. (> 100)
         """
+
         i2c_address_7bit = int(i2c_address_7bit)
         if not self.is_valid_7bit_address(i2c_address_7bit):
             raise NCD_I2CInvalidAddressError(i2c_address_7bit, self)
@@ -204,6 +188,7 @@ class I2CPort(I2CBase):
             InvalidI2CAddressError: If the I2C address is invalid.
             InvalidParametersError: If size is invalid. (<= 0 or > 100)
         """
+
         i2c_address_7bit = int(i2c_address_7bit)
         if not self.is_valid_7bit_address(i2c_address_7bit):
             raise NCD_I2CInvalidAddressError(i2c_address_7bit, self)
@@ -233,6 +218,7 @@ class I2CPort(I2CBase):
             InvalidI2CAddressError: If the I2C address is invalid.
             InvalidParametersError: If size is invalid. (<= 0 or >100 on NCD or >255 on RRC)
         """
+
         i2c_address_7bit = int(i2c_address_7bit)
         if not self.is_valid_7bit_address(i2c_address_7bit):
             raise NCD_I2CInvalidAddressError(i2c_address_7bit, self)
@@ -271,15 +257,25 @@ class I2CPort(I2CBase):
 
 
     def i2c_change_clock_frequency_ncd(self, frequency: int) -> list:
-        # From internet:
-        # 100KHz: AA 06 BC 32 01 01 00 00 A0
-        # 38KHz:  AA 06 BC 32 01 01 00 01 A1
-        # 200KHz: AA 06 BC 32 01 01 00 02 A2
-        # 300KHz: AA 06 BC 32 01 01 00 03 A3
-        # 400KHz: AA 06 BC 32 01 01 00 04 A4
-        #         [AA bytecount][c1, c2, u1, u2, u3, u4][checksum]
-        #              API       payload
-        # AA=170, BC=188
+        """This function SHOULD work with NCD boards, but it DOES NOT!
+        
+        From internet:
+            100KHz: AA 06 BC 32 01 01 00 00 A0
+            38KHz:  AA 06 BC 32 01 01 00 01 A1
+            200KHz: AA 06 BC 32 01 01 00 02 A2
+            300KHz: AA 06 BC 32 01 01 00 03 A3
+            400KHz: AA 06 BC 32 01 01 00 04 A4
+                    [AA bytecount][c1, c2, u1, u2, u3, u4][checksum]
+                        API       payload
+            AA=170, BC=188
+
+        Args:
+            frequency (int): _description_
+
+        Returns:
+            list: _description_
+        """
+
         tx_payload = bytes([0xBC,0x32,0x01,0x01,0x00])
         if   frequency ==  38000: tx_payload += bytes([0x01])
         elif frequency == 200000: tx_payload += bytes([0x02])
@@ -287,14 +283,28 @@ class I2CPort(I2CBase):
         elif frequency == 400000: tx_payload += bytes([0x04])
         else: tx_payload += bytes([0x00])
         rx_payload = self.__data_exchange(tx_payload)
-        #_log = getLogger(__name__, DEBUG)
-        #_log.info(rx_payload)
         self.__check_for_errors(rx_payload)
         return list(rx_payload)
 
 
     def i2c_change_clock_frequency(self, frequency: int, timeout_ms: int = None) -> list:
-        # RRC specific function !
+        """Allows to change the clock speed and transaction timeout on the fly.
+        
+        RRC API specific function only !
+
+        Args:
+            frequency (int): _description_
+            timeout_ms (int, optional): _description_. Defaults to None.
+
+        Returns:
+            list: _description_
+        """
+
+        if not self.interface_is_rrc:
+            # just ignore it so that you could use this function with NCD 
+            # board or with ours using same code!
+            return []
+        
         tx_payload = bytes([0xCF]) \
                         + pack(">L", frequency) \
                         + (pack(">L", timeout_ms) if timeout_ms else bytes())  # to 32 bit unsigned each
@@ -347,30 +357,30 @@ class I2CPort(I2CBase):
         packet += checksum.to_bytes(1, 'little')
         return packet
 
-    def __ethernet_exchange_wrapper(self, tx_payload: bytes, retries: int = 3) -> bytes:
-        """
-        Performs the ethernet exchange and tries to reconnect the socket if the exchange failed.
+    def __data_exchange(self, tx_payload: bytes, retries: int = 3) -> bytes:
+        """Performs the ethernet exchange and tries to reconnect the socket if the exchange failed.
         Number of retries can be specified
+
         Args:
-            tx_payload:
-            retries:
+            tx_payload (bytes): _description_
+            retries (int, optional): _description_. Defaults to 3.
+
+        Raises:
+            e: _description_
 
         Returns:
-
+            bytes: _description_
         """
         while retries > 0:
             try:
-                return self.__ethernet_exchange(tx_payload)
+                return self.__socket_exchange(tx_payload)
             except Exception as e:
-                #_log = getLogger(__name__, 2)
-                #_log.debug(f"NCD Retries {retries}")
-                #sleep(0.05)
                 self.__connect_socket()
                 retries -= 1
                 if retries == 0:
                     raise e
 
-    def __ethernet_exchange(self, tx_payload: bytes) -> bytes:
+    def __socket_exchange(self, tx_payload: bytes) -> bytes:
         # Send data
         tx_packet = self.__wrap_payload_in_packet(tx_payload)
 
@@ -501,7 +511,8 @@ if __name__ == "__main__":
 
     tic = perf_counter()
 
-    I2C_BRIDGE_RESOURCE_STR = "172.25.102.20:2101"
+    I2C_BRIDGE_RESOURCE_STR = "172.21.101.30:2101"  # HOM
+    #I2C_BRIDGE_RESOURCE_STR = "172.25.102.20:2101"  # VN
     #I2C_BRIDGE_RESOURCE_STR = "192.168.69.77:2101"
 
     test_interface(I2C_BRIDGE_RESOURCE_STR)

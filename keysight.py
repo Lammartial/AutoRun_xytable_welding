@@ -1,4 +1,5 @@
 from rrc.visa import AdhocVisaDevice
+from rrc.eth2serial import Eth2SerialDevice
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
@@ -17,44 +18,84 @@ from rrc.custom_logging import getLogger, logger_init
 
 # --------------------------------------------------------------------------- #
 
-#--------------------------------------------------------------------------------------------------
-class DAQ970A(AdhocVisaDevice):
-    #
-    # Currently there are two backends available: The one included in pyvisa,
-    # which uses the IVI library (include NI-VISA, Keysight VISA, R&S VISA, tekVISA etc.),
-    # and the backend provided by pyvisa-py, which is a pure python implementation
-    # of the VISA library.
-    # If no backend is specified, pyvisa uses the IVI backend if any IVI library
-    # has been installed (see next section for details). Failing that, it uses the
-    # pyvisa-py backend.
-    # explicit Python backend:  rm = ResourceManager('@py')
-    # explicit IVI lib backend: rm = ResourceManager('Path to library')
-#--------------------------------------------------------------------------------------------------
 
-    # This could be a way to avoid try ... except in each function
-    #def e(methodtoRun, *args):
-    #    try:
-    #        methodtoRun(*args)    # pass arguments along
-    #    except Exception as inst:
-    #        print(type(inst))    # the exception instance
-    #        print(inst.args)     # arguments stored in .args
-    #        print(inst)          # __str__ allows args to be printed directly,
 
+# #--------------------------------------------------------------------------------------------------
+# class DAQ970A(AdhocVisaDevice):
+#     #
+#     # Currently there are two backends available: The one included in pyvisa,
+#     # which uses the IVI library (include NI-VISA, Keysight VISA, R&S VISA, tekVISA etc.),
+#     # and the backend provided by pyvisa-py, which is a pure python implementation
+#     # of the VISA library.
+#     # If no backend is specified, pyvisa uses the IVI backend if any IVI library
+#     # has been installed (see next section for details). Failing that, it uses the
+#     # pyvisa-py backend.
+#     # explicit Python backend:  rm = ResourceManager('@py')
+#     # explicit IVI lib backend: rm = ResourceManager('Path to library')
+# #--------------------------------------------------------------------------------------------------
+
+#     # This could be a way to avoid try ... except in each function
+#     #def e(methodtoRun, *args):
+#     #    try:
+#     #        methodtoRun(*args)    # pass arguments along
+#     #    except Exception as inst:
+#     #        print(type(inst))    # the exception instance
+#     #        print(inst.args)     # arguments stored in .args
+#     #        print(inst)          # __str__ allows args to be printed directly,
+
+#     def __init__(self, resource_str: str, card_slot: int = 1):
+#         """
+#         Initialize the object with visa resource string (IP name).
+#         Example "TCPIP0::192.168.1.101::inst0::INSTR"
+
+#         Args:
+#             resource_str (str): visa resource string
+#             card_slot (int, optional): Selects a measurement channel card on slot 1..3. Defaults to 1 
+
+#         """
+#         super().__init__(resource_str, read_termination="\n", write_termination=None, pause_on_retry=10)  # configure the itech VISA device
+#         self.change_card_slot(card_slot)  # also sets the self.card_slot
+
+#     def __str__(self) -> str:
+#         return f"DAQ970A VISA device on {super().__str__()}"
+
+#     def __repr__(self) -> str:
+#         return f"DAQ970A({self.resource_str}, {self.card_slot})"
+
+#     #----------------------------------------------------------------------------------------------
+#     # insert the channel to message strings for this device
+
+#     def send(self, msg: str, timeout: int = 3000) -> None:
+#         super().send(msg, pause_after_write=10, timeout=timeout, retries=3)
+
+#     def request(self, msg: str, timeout: int = 5000) -> str:
+#         return super().request(msg, pause_after_write=80, timeout=timeout, retries=5).strip()
+
+#--------------------------------------------------------------------------------------------------
+class DAQ970A(Eth2SerialDevice):
+    """Defines the Keysight DAQ970A datalogger interface as a simple socket communication.
+
+    Avoids need for VISA devices.
+
+    Args:
+        SCPIRemoteDevice (_type_): _description_
+    """
+  
     def __init__(self, resource_str: str, card_slot: int = 1):
         """
-        Initialize the object with visa resource string (IP name).
-        Example "TCPIP0::192.168.1.101::inst0::INSTR"
+        Initialize the object with resource string (IP name:socket).
+        Example "192.168.1.101:5025"
 
         Args:
-            resource_str (str): visa resource string
+            resource_str (str): resource string in the format IP[:SOCKET]
             card_slot (int, optional): Selects a measurement channel card on slot 1..3. Defaults to 1 
 
         """
-        super().__init__(resource_str, read_termination="\n", write_termination=None, pause_on_retry=10)  # configure the itech VISA device
+        super().__init__(resource_str, termination="\n", open_connection=False)  # The hioki expects to have connect/disconnect for each command
         self.change_card_slot(card_slot)  # also sets the self.card_slot
 
     def __str__(self) -> str:
-        return f"DAQ970A VISA device on {super().__str__()}"
+        return f"DAQ970A device on {super().__str__()}"
 
     def __repr__(self) -> str:
         return f"DAQ970A({self.resource_str}, {self.card_slot})"
@@ -63,10 +104,10 @@ class DAQ970A(AdhocVisaDevice):
     # insert the channel to message strings for this device
 
     def send(self, msg: str, timeout: int = 3000) -> None:
-        super().send(msg, pause_after_write=10, timeout=timeout, retries=3)
+        super().send(msg, timeout=timeout, pause_after_write=10, retries=3)
 
     def request(self, msg: str, timeout: int = 5000) -> str:
-        return super().request(msg, pause_after_write=80, timeout=timeout, retries=5).strip()
+        return super().request(msg, timeout=timeout, pause_after_write=80, retries=5).strip()
 
     
     #----------------------------------------------------------------------------------------------
@@ -362,34 +403,10 @@ if __name__ == "__main__":
     logger_init(filename_base="local_log")  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    res : float = 0
-
-    # predefined resource ID
-    DAQ970A_IP_STR = "TCPIP0::172.25.101.36::inst0::INSTR"
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    # TESTS have been moved out to module: test_keysight.py
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
    
-    # 1. Create an instance of DAQ970A class
-    chn = 1  # = socket index + 1
-    daq970a = DAQ970A(DAQ970A_IP_STR, chn)
-
-    # 2. Do some stuff
-    #print(daq970a.selftest())
-
-    res = daq970a.get_resistance(5)
-    print(res)
-
-    #print(daq970a.get_4w_resistance(1,2))
-
-    #print(daq970a.get_VDC(1,3))
-
-    #print(daq970a.get_VAC(1,4))
-
-    # for i in range(50):
-    #     print(daq970a.get_temp(channel=3,tran_type="FRTD", rtd_resist= 1000, fth_type= 0, tc_type=""))
-    #     print(daq970a.get_ADC(channel= 22, scale= "1 mA"))
-    #     print(daq970a.get_VDC(channel=20))
-
-    # #print(daq970a.get_temp(1, 1, "DEF", 0, 0, "B"))
-
     print("DONE.")
 
 # END OF FILE

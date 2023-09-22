@@ -225,24 +225,38 @@ def test_2x_m3400_short(psu1: M3400, psu2 :M3400) -> bool:
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     from time import sleep
-    from pyvisa import ResourceManager
+    #from pyvisa import ResourceManager
 
     ## Initialize the logging
     #logger_init(filename_base=None)  ## init root logger with different filename
     #_log = getLogger(__name__, DEBUG)
 
     #LINE_NETWORK = "172.25.101"  # VN line 1
-    LINE_NETWORK = "172.21.101"  # HOM Warehouse
+    LINE_NETWORK = "172.25.102"  # VN line 2
+    #LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
-    rm = ResourceManager()
-    print(rm.list_resources())
+    #rm = ResourceManager()
+    #print(rm.list_resources())
 
 
     # there is one ETH bridge for 6 PSUs    
-    psu1 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=1)  # socket 0, 1, and 2 share
-    psu2 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=2)  # socket 0, 1, and 2 share
+    #psu1 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=1)  # socket 0, 1, and 2 share
+    #psu2 = M3400(f"TCPIP0::{LINE_NETWORK}.37::inst0::INSTR", dev_channel=2)  # socket 0, 1, and 2 share
+    # psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=1)  # socket 0, 1, and 2 share
+    # psu2 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=2)  # socket 0, 1, and 2 share
     
-    test_2x_m3400_short(psu1, psu2)
+    # test_2x_m3400_short(psu1, psu2)
+
+    #from rrc.eth2serial import Eth2SerialDevice
+    #psu = Eth2SerialDevice(f"{LINE_NETWORK}.46:30000", termination="\n")
+    psu = M3900(f"{LINE_NETWORK}.46:30000")
+    print(psu.request("*IDN?"))  # Base device
+    # sleep(0.03)
+    # for c in range(1,7):
+    #     print(psu.request(f":CHAN {c};*IDN?"))
+    #     sleep(0.03)
+    print(psu.request(":OUTP?"))
+    print(psu.request(":FETC:VOLT?"))
 
     # m = M3400("TCPIP0::172.25.101.51::inst0::INSTR")
     # print('IDN:' +str(m.request('*IDN?')))
