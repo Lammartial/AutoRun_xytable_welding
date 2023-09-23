@@ -66,7 +66,9 @@ def query_measurements(engine: sa.Engine, start_ts: datetime, end_ts: datetime, 
     _join_start_ts = (datetime.combine(start_ts, datetime.min.time()) - timedelta(hours=1)).isoformat()
     _join_end_ts = (datetime.combine(end_ts, datetime.min.time()) + timedelta(hours=1)).isoformat()
     _pn_pattern = f"AND ur.PART_NUMBER='{part_number}'" if part_number else ""
-    _dt_pattern = f"ur.START_DATE_TIME >= '{start_ts}' AND ur.START_DATE_TIME < '{end_ts}'" if use_start_date_time else f" ur.ts >= '{start_ts}' AND ur.ts < '{end_ts}'"
+    #_dt_pattern = f"ur.START_DATE_TIME >= '{start_ts}' AND ur.START_DATE_TIME < '{end_ts}'" if use_start_date_time else f" ur.ts >= '{start_ts}' AND ur.ts < '{end_ts}'"
+    _dt_pattern = f"ur.START_DATE_TIME BETWEEN '{start_ts}' AND '{end_ts}'" if use_start_date_time else f" ur.ts BETWEEN '{start_ts}' AND '{end_ts}'"
+
     _order_pattern = f"ORDER BY ur.START_DATE_TIME" if use_start_date_time else "ORDER BY ur.ts"
     if "trackr2" in str(engine).lower():
         # --- old teststand layout ---
