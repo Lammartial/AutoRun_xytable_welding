@@ -1,0 +1,516 @@
+from typing import List, Tuple
+from enum import Enum
+import multiprocessing as mp
+import itertools
+import tkinter as tk
+import tkinter.ttk as ttk
+import json
+import yaml
+from hashlib import md5
+from base64 import b64decode, b64encode
+from time import sleep, perf_counter
+from pathlib import Path
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from datetime import timezone, datetime
+from winsound import PlaySound, SND_FILENAME
+
+from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
+
+# import SQL managing modules
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+from rrc.dbcon import get_protocol_db_connector
+from rrc.barcode_scanner import create_barcode_scanner
+
+# --------------------------------------------------------------------------- #
+# Logging
+# --------------------------------------------------------------------------- #
+DEBUG = 1   # set to 0 for production
+from rrc.custom_logging import getLogger, logger_init
+
+# this is necessary to enable modbus logging
+_log_fp = Path(__file__).parent / "../.." / "logs"
+#logger_init(filename_base=_log_fp / "aws3_sps")  ## init root logger with different filename
+logger_init(filename_base=None)
+_log = getLogger(__name__, DEBUG)
+
+
+# --------------------------------------------------------------------------- #
+
+PRODUCTION_MODE: int = None # is being overwritten by argument
+ENABLE_UDI_SCAN: int = None  # is being overwritten by argument
+
+#--------------------------------------------------------------------------------------------------
+
+import random
+import string
+
+def get_random_letter_string(length):
+    # choose from all lowercase letter
+    letters = string.ascii_lowercase
+    numbers = string.digits
+    return "".join(random.choice(letters) for i in range(length))
+
+def get_random_digits_string(length):
+    # choose from all digits
+    numbers = string.digits
+    return "".join(random.choice(numbers) for i in range(length))
+
+def get_hash(o: dict) -> bytes:
+    """Create a 24 base64 encoded characters hash of a dict.
+
+    Args:
+        o (dict): an dict
+
+    Returns:
+        str: hash as base64 encoded byte array
+    """
+    _s = json.dumps(o, sort_keys=True, ensure_ascii=True)
+    _h = md5(_s.encode("utf8")).digest()
+    return b64encode(_h)
+
+#--------------------------------------------------------------------------------------------------
+
+class WindowUI(object):
+
+    def __init__(self, command_queue: mp.Queue, response_queue: mp.Queue, title: str = "PEEL TEST DIALOG"):
+        global DEBUG, PRODUCTION_MODE
+
+        self._log = getLogger(__name__, DEBUG)
+        self.q_cmd = command_queue
+        self.q_scan = response_queue
+        row_itr = itertools.count()
+
+        # Create the Tk root and mainframe.
+        self.root = tk.Tk()
+
+        self.var_label_position = tk.StringVar(self.root, "")
+        self.var_label_program = tk.StringVar(self.root, "")
+        self.var_label_part_number = tk.StringVar(self.root, "")
+        self.var_label_sequence = tk.StringVar(self.root, "")
+        self.var_label_sequence_revision = tk.StringVar(self.root, "")
+        self.var_label_sequence_length = tk.StringVar(self.root, "")
+        self.var_label_resource_str = tk.StringVar(self.root, "")
+        self.var_label_udi = tk.StringVar(self.root, "")
+
+        self.root.withdraw()  # hide window
+        self.root.title(title)
+        # set App icon
+        # if we have an ICO file we can simply use this:
+        self.root.iconbitmap(Path(__file__).resolve().parent / "ui" / "robot-icon.ico")
+        # Simply set the theme
+        self.root.tk.call("source", Path(__file__).resolve().parent / "ui" / "theme_sv.tcl")
+        self.root.tk.call("set_theme", "light")
+        style = ttk.Style()
+        #style.theme_use("alt")
+
+        # for some reasonm the winfo_width() and _heihgt() do not show correct values here
+        #_w = root.winfo_width()
+        #_h = root.winfo_height()
+        _padall = 8
+        _w = 300  # width set manually
+        _w = int(self.root.winfo_screenwidth() / 2)
+        _h = self.root.winfo_screenheight()
+        # Set a minsize for the window
+        self.root.minsize(self.root.winfo_width(), self.root.winfo_height())
+        self.root.minsize(_w, int(_h/2))
+        #_x = int((self.root.winfo_screenwidth() / 2) - (_w / 2))
+        _x = int(self.root.winfo_screenwidth() - _w - _padall)
+        _y = int((self.root.winfo_screenheight() / 2) - (_h / 2))
+        self.root.geometry(f"{_w}x{_h}+{_x}+{_y}")
+        #
+        # setup widgets
+        #
+        #self.mainframe = self.root
+        self.mainframe = ttk.Frame(self.root, pad=(_padall,_padall,_padall,_padall), takefocus=True)
+
+        #self.mainframe.pack(fill=tk.BOTH)
+        # configure the column width equally to center everything nicely
+
+        self.mainframe.grid(row=0, column=0, sticky="NESW")
+        #self.mainframe.grid_rowconfigure(0, weight=1)
+        self.mainframe.grid_columnconfigure(0, weight=1)
+        self.mainframe.grid_columnconfigure(1, weight=1)
+        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
+
+
+        # Labels
+
+        _colspan = 2
+        #_row = next(row_itr)
+        label_1 = ttk.Label(self.mainframe,text="PART NUMBER",justify="center", font=("-size", 10))
+        label_1.grid(row=next(row_itr), column=0, columnspan=_colspan , ipady=5)
+        label_2 = ttk.Label(self.mainframe,
+                            textvariable=self.var_label_part_number,
+                            justify="center", font=("-size", 16, "-weight", "bold"))
+        label_2.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
+        # label_s = ttk.Label(self.mainframe,
+        #                     textvariable=self.var_label_sequence,
+        #                     justify="center", font=("-size", 10, "-weight", "bold"))
+        # label_s.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
+        if PRODUCTION_MODE:
+            self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center",
+                                       font=("-size", 14, "-weight", "bold"), background="gray", foreground="black")
+            self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=50, sticky="ew")
+        else:
+            self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center", font=("-size", 12))
+            self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5, sticky="ew")
+
+        #_row = next(row_itr)
+        label3 = ttk.Label(self.mainframe,text="SEQUENCE POS",justify="center", font=("-size", 10))
+        label3.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
+        label4 = ttk.Label(self.mainframe,
+                            textvariable=self.var_label_position,
+                            justify="center", font=("-size", 20, "-weight", "bold"))
+        label4.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
+
+        label5 = ttk.Label(self.mainframe,text="PROGRAM",justify="center",font=("-size", 18))
+        label5.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
+        label6 = ttk.Label(self.mainframe,
+            textvariable=self.var_label_program,
+            justify="center", font=("-size", 32, "-weight", "bold"))
+        label6.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
+
+        if not PRODUCTION_MODE:
+            # Buttons
+            _row = next(row_itr)
+            style.configure('B1.TButton', foreground="red", background='#232323')
+            style.map('B1.TButton', background=[("active","#ff0000")])
+            style.configure('B2.TButton', foreground="green", background='#232323')
+            style.map('B2.TButton', background=[("active","#ff0000")])
+            #style.configure('TButton', background = 'red', foreground = 'green', width = 20, borderwidth=1, focusthickness=3, focuscolor='none')
+
+            step_back_button = ttk.Button(self.mainframe, text="STEP BACK",  style="B1.TButton",
+                command=lambda: self.q_cmd.put({"move_counter": -1}))
+            step_back_button.grid(row=_row, column=0, ipady=50, ipadx=20, sticky=tk.NSEW)
+
+            step_forward_button = ttk.Button(self.mainframe, text="STEP FORWARD",  style="B2.TButton",
+                command=lambda: self.q_cmd.put({"move_counter": +1}))
+            step_forward_button.grid(row=_row, column=1, ipady=50, ipadx=5, sticky=tk.NSEW)
+
+            # separator = ttk.Separator(self.mainframe)
+            # separator.grid(row=next(row_itr), column=0, columnspan=2, padx=(20, 10), pady=10, sticky="ew")
+            reset_seq_button = ttk.Button(self.mainframe, text="RESET SEQUENCE",
+                command=lambda: self.q_cmd.put({"reset_counter": 0}))
+            #ok_button.bind("<Return>", _accept_udi)
+            #ok_button.bind("<Key-Escape>", _cancel)
+            reset_seq_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, sticky=tk.NSEW)
+            #ok_button.grid_forget()
+
+
+        # Some more information labels
+        _row = next(row_itr)
+        #label_10 = ttk.Label(self.mainframe, textvariable=self.var_label_sequence, font=("-size", 8))
+        #label_10.grid(row=_row, column=0,  ipady=10)
+        label_10 = ttk.Label(self.mainframe, anchor=tk.CENTER, textvariable=self.var_label_sequence_length, font=("-size", 8))
+        label_10.grid(row=_row, column=0,  ipady=10, sticky="ew")
+        label_11 = ttk.Label(self.mainframe, anchor=tk.CENTER, textvariable=self.var_label_sequence_revision, font=("-size", 8))
+        label_11.grid(row=_row, column=1, ipady=10, sticky="ew")
+
+        label_12 = ttk.Label(self.mainframe, textvariable=self.var_label_resource_str, font=("-size", 8))
+        label_12.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
+
+        # Sizegrip
+        #sizegrip = ttk.Sizegrip(self.root)
+        #sizegrip.grid(row=100, column=100, padx=(0, 5), pady=(0, 5))
+
+        ## Add an information widget.
+        #label = ttk.Label(mainframe, text=f'\nWelcome to hello_world*4.py.\n')
+        #label.grid(column=0, row=next(row_itr), sticky='w')
+
+        # schedule queue processing callback
+        self._id_after = self.mainframe.after(0, lambda: self.process_command_queue())
+
+        self.root.update()
+        self.root.deiconify()
+        self.root.focus_force()  # this is to activate the window again (important after programmatically closed)
+
+        if not PRODUCTION_MODE:
+            reset_seq_button.focus_set()
+
+
+    def process_command_queue(self):
+        if not self.q_scan.empty():
+            a = self.q_scan.get()
+            #print("UI:", a)
+            _do_update = False
+            _play_soundfile = None
+            if a:
+                if "resource_str" in a:
+                    self.var_label_resource_str.set(a["resource_str"])
+                    #print("UI:UPDATE RESOURCE")
+                    _do_update = True
+                if "revision" in a:
+                    self.var_label_sequence_revision.set(f'Rev.: {a["revision"]}')
+                    #print("UI:UPDATE REVISION")
+                    _do_update = True
+                if "part_number" in a:
+                    self.var_label_part_number.set(a["part_number"])
+                    #print("UI:UPDATE PART NUMBER")
+                    _do_update = True
+                if "sequence" in a:
+                    self.var_label_sequence.set(a["sequence"])
+                    self.var_label_sequence_length.set(f'Seq. length: {len(a["sequence"])}')
+                    #print("UI:UPDATE SEQUENCE")
+                    _do_update = True
+                if "position" in a:
+                    _txt = a["position"]
+                    # !!!
+                    # WE show Postion 1-based (!ROBERT)
+                    # !!!
+                    self.var_label_position.set((_txt + 1) if _txt != -1 else "")
+                    #print("UI:UPDATE COUNTER")
+                    _do_update = True
+                if "program" in a:
+                    _txt = a["program"]
+                    self.var_label_program.set(_txt if _txt != -1 else "")
+                    #print("UI:UPDATE PROGRAM")
+                    _do_update = True
+                if "udi" in a:
+                    if a["udi"] is None:
+                        self.label_udi.config(background="gray", foreground="black")
+                        self.var_label_udi.set("PLEASE SCAN UDI")
+                        print("UI:RESET UDI")
+                    else:
+                        self.label_udi.config(background="blue", foreground="white")
+                        self.var_label_udi.set(a["udi"])
+                    _do_update = True
+                if "udi_scanned" in a:
+                    self.label_udi.config(background="lightblue", foreground="black")
+                    self.var_label_udi.set(a["udi_scanned"])
+                    print("UI:UPDATE UDI")
+                    _do_update = True
+                if "udi_rejected" in a:
+                    self.label_udi.config(background="orange", foreground="black")
+                    self.var_label_udi.set("UDI REJECTED")
+                    _play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz")
+                    print("UI:REJECTED UDI")
+                    _do_update = True
+                    pass
+                if "udi_not_confirmed" in a:
+                    self.label_udi.config(background="orange", foreground="red")
+                    self.var_label_udi.set(a["udi_not_confirmed"])
+                    print("UI:BLACKLISTED UDI")
+                    _do_update = True
+                    pass
+                if "welding_check" in a:
+                    # position of welding
+                    _fgcolor = "white"
+                    if "passed" in a["welding_check"]:
+                        self.label_udi.config(background="LimeGreen", foreground=_fgcolor)
+                    else:
+                        self.label_udi.config(background="OrangeRed", foreground=_fgcolor)
+                        _play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz-hard")
+                    self.var_label_udi.set(a["udi"])
+                    print("UI:RESULT")
+                    _do_update = True
+                if "result" in a:
+                    # result overall
+                    #_fgcolor = "black" if "\n" in a["udi"] else "white"
+                    _fgcolor = "black"
+                    if "passed" in a["result"]:
+                        self.label_udi.config(background="green", foreground=_fgcolor)
+                    else:
+                        self.label_udi.config(background="red", foreground=_fgcolor)
+                        #_play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz")
+                    self.var_label_udi.set(a["udi"])
+                    print("UI:RESULT")
+                    _do_update = True
+            if _do_update:
+                self.root.update()
+            if _play_soundfile:
+                PlaySound(_play_soundfile, SND_FILENAME)
+        self._id_after = self.mainframe.after(50, lambda: self.process_command_queue())
+
+
+    def run_mainloop(self):
+        self.root.mainloop()
+
+
+
+
+#--------------------------------------------------------------------------------------------------
+# *** PROCESS ***
+#
+
+def _esc(v) -> str:
+    """Return the value v as either string with parentheses or number.
+
+    Intended to be used with sql statements.
+
+    Args:
+        v (Any): Does expect v being a basic type of either float,int, bytes or str.
+
+    Returns:
+        str: String with parentheses or plain number as string without parentheses.
+    """
+    if v is None:
+        # None -> NULL
+        return "NULL"
+    else:
+        if isinstance(v, (int,float)):
+            return str(v)
+        else:
+            return f"'{v}'"
+
+
+def esc_values(lst: List[tuple]) -> str:
+    """
+    Converts a list of key,value tuples into comma separated list of key=value string.
+    The List is separated by comma.
+
+    Intended to be used with sql statements.
+
+    Args:
+        lst (List[tuple]): _description_
+
+    Returns:
+        str: "key=value|'value', ..."
+    """
+    return ",".join([f"{k}={_esc(v)}" for k,v in lst])
+
+
+def collect_parameters(self) -> List:
+    """
+
+    Raises:
+        Exception: _description_
+    """
+
+    _part_number = "???"
+    _sequence_revision = "???"
+    print(f"PART NUMBER: {_part_number}")
+    # 4. we need the program sequence of the AWS welder for the given part number
+    print("Requesting database for sequence...")
+    # 3. create the database interface (recreate it here as the connecton could time-out otherwise)
+    engine, session_maker = get_protocol_db_connector()
+    with session_maker() as session:
+        response = session.execute(text(
+                f"SELECT revision,program_sequence,parameter FROM `spsconfig` AS sc "+\
+                f"  WHERE sc.part_number={_esc(_part_number)} "+\
+                f"  AND sc.revision={_esc(_sequence_revision)}"
+                #f"  ORDER BY revision DESC"
+                ))
+        rows = response.fetchall()
+    if len(rows) == 0:
+        # not found! -> do not proceed
+        raise Exception(f"No Data in Database for part {_part_number} found, cannot proceed!")
+    print(f"Got record: {rows[0]}")
+    return rows[0]
+
+
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+#
+# *** SCANNER ***
+#
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+
+class ProcessScanner(mp.Process):
+
+    def __init__(self, resource_str: str, ui_queue: mp.Queue) -> None:
+        mp.Process.__init__(self)
+        global DEBUG, SIMULATE_UDI_SCAN
+        self._log = getLogger(__name__, DEBUG)
+        self.ui_queue = ui_queue
+        self.simulate_scan = SIMULATE_UDI_SCAN
+        self.resource_str = resource_str
+
+    def run(self) -> None:
+        """
+        This is the process context in which we run the scanner.
+        Create all relevant objects from here!
+        """
+
+        proc_name = self.name
+        resource_str = self.resource_str
+        scanner = None
+        if not self.simulate_scan:
+            while True:
+                _udi = None
+                try:
+                    if not scanner:
+                        scanner = create_barcode_scanner(resource_str)
+                    _udi = scanner.request(None, timeout=None).strip()
+                except TimeoutError:
+                    pass  # this is ok to keep the loop running
+                except Exception as ex:
+                    # this is a real failure to stop this process
+                    print(f"Cannot connect scanner {resource_str}: {ex}")
+                    print(f"Trying to reconnect scanner.")
+                    scanner = None
+                    #print(f"{proc_name}:End")
+                    #return
+                    sleep(1.5)  # give a bit untile reconnect
+                if _udi:
+                    msg = {"udi_scanned": _udi}
+                    self.ui_queue.put(msg)  # this goes to the UI process
+
+        else:
+            # ********** Simulation Profile *************
+            #while True:
+            sleep(5.0)
+            _udi = "1CELL" + get_random_digits_string(12)
+            self.ui_queue.put({"udi_scanned": _udi})
+            sleep(3.0)
+                # add some steps
+            #    for n in range(6):
+            #        sleep(1.0)
+            #        self.ui_queue.put({"move_counter": 1})
+
+
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+
+
+if __name__ == '__main__':
+    # need to initialize logger on load
+
+    print("=== PEEL TEST DIALOG ===")
+
+    _default_scanner_resource = "COM1"
+    #_default_yaml_filepath_ = Path(__file__).parent / "aws_readings"
+    _default_yaml_filepath_ = Path(__file__).parent / "../.." / "logs" / "peel_test"
+    _product_list = ["RRC2020B", "RRC2040B", "RRC2054S", "RRC2040-2S", "RRC2054-2S", "SPINEL"]
+
+    parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--development", action="store_true", help="Activate development mode.")
+    parser.add_argument("--product", choices=_product_list, action="store", default=None, help="Set a product for simulated DSP interface.")
+    parser.add_argument("--filepath", action="store", default=_default_yaml_filepath_, help="Path and filename prefix for file stored measurements")
+    parser.add_argument("--scannerport", action="store", default=_default_scanner_resource, help="Resource string for scanner, which can be IP:PORT or local PORT.")
+    parser.add_argument("--simulate_scan", action="store_true", help="Set a product for simulated UDI scan interface.")
+    parser.add_argument("--block_scan_udi", action="store_false", help="To block scan UDI in the middle of a sequence. If false scn UDI at any time resets sequence to start.")
+
+    args = parser.parse_args()
+
+    PRODUCTION_MODE = not args.development
+    ENABLE_UDI_SCAN = (PRODUCTION_MODE or args.simulate_scan)
+    SIMULATE_UDI_SCAN = args.simulate_scan
+    SCAN_UDI_FORCE_RESTART = not args.block_scan_udi
+
+    w = None
+    s = None
+    try:
+        # Establish communication queues
+        q_cmd = mp.Queue()
+        q_scan = mp.Queue()
+        # start UI in this process waiting for user input
+        w = WindowUI(q_cmd, q_scan)
+        # start sub-process for scanner
+        s = ProcessScanner(args.scannerport, q_scan)
+        s.start()
+        w.run_mainloop()
+    except KeyboardInterrupt as kx:
+        # user stopped process
+        pass
+    finally:
+        # Add a poison pill
+        #q_cmd.put(None)
+        if s and s.is_alive():
+            s.terminate()
+            s.join(timeout=0.5)  # short process ...
+
+# END OF FILE
