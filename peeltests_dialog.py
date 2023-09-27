@@ -1,12 +1,18 @@
 from sys import maxsize
 from typing import List, Tuple
 from enum import Enum
+import os
+import json
+import yaml
+import pandas as pd
 import multiprocessing as mp
 import itertools
 import tkinter as tk
 import tkinter.ttk as ttk
-import json
-import yaml
+#import ttkbootstrap as ttk
+#from ttkbootstrap.constants import *
+#import sv_ttk
+
 from hashlib import md5
 from base64 import b64decode, b64encode
 from time import sleep, perf_counter
@@ -14,6 +20,7 @@ from pathlib import Path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from datetime import timezone, datetime
 from winsound import PlaySound, SND_FILENAME
+from random import randint
 
 from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
 
@@ -38,13 +45,15 @@ _log = getLogger(__name__, DEBUG)
 
 # --------------------------------------------------------------------------- #
 
-PRODUCTION_MODE: int = None # is being overwritten by argument
+PRODUCTION_MODE: int = None  # is being overwritten by argument
 ENABLE_UDI_SCAN: int = None  # is being overwritten by argument
+EXCELFILES_SEARCH_PATH: Path = None  # where to search for peel tester measurement excel files
 
 #--------------------------------------------------------------------------------------------------
 
 import random
 import string
+
 
 def get_random_letter_string(length):
     # choose from all lowercase letter
@@ -52,10 +61,12 @@ def get_random_letter_string(length):
     numbers = string.digits
     return "".join(random.choice(letters) for i in range(length))
 
+
 def get_random_digits_string(length):
     # choose from all digits
     numbers = string.digits
     return "".join(random.choice(numbers) for i in range(length))
+
 
 def get_hash(o: dict) -> bytes:
     """Create a 24 base64 encoded characters hash of a dict.
@@ -70,17 +81,40 @@ def get_hash(o: dict) -> bytes:
     _h = md5(_s.encode("utf8")).digest()
     return b64encode(_h)
 
+
+def find_excel_for_udi(udi: str) -> Path:
+    global EXCELFILES_SEARCH_PATH
+
+    files = sorted(EXCELFILES_SEARCH_PATH.glob(f"*{udi}*.xls*"), key=os.path.getmtime)  # sort in ASCending time
+    #files = reversed(sorted(list(EXCELFILES_SEARCH_PATH.glob(f"**/*{udi}.xls*"))))
+    return files[-1]  # last one is most recent
+
+def read_excel_of_peeltester(fp: Path) -> pd.DataFrame:
+    df = pd.read_excel(fp)
+    # we need to finde the line range which contains the interesting data in the first 4 columns
+    start_line = df.loc[df.iloc[:,0] == "No."].index.values[0]    # !! Critical: could change when PeelTester software changes !!
+    end_line = df.loc[df.iloc[:,0] == "Maximum"].index.values[0]  # !! Critical: could change when PeelTester software changes !!
+    forces_df = df.iloc[(start_line + 1):end_line, [0,1,2,3]]
+    forces_df.rename(columns={
+        forces_df.columns[0]: "No.",
+        forces_df.columns[1]: "MaxForce (N)",
+        forces_df.columns[2]: "MinForce (N)",
+        forces_df.columns[3]: "AvgForce (N)"
+    }, inplace=True)
+    return forces_df.astype({"No.": "int32", "MaxForce (N)": "float64", "MinForce (N)": "float64", "AvgForce (N)": "float64" })
+
+
 #--------------------------------------------------------------------------------------------------
 
 
 class WindowUI(object):
 
-    def __init__(self, command_queue: mp.Queue, response_queue: mp.Queue, title: str = "PEEL TEST DIALOG"):
+    def __init__(self, command_queue: mp.Queue, scan_queue: mp.Queue, title: str = "PEEL TEST DIALOG"):
         global DEBUG, PRODUCTION_MODE
 
         self._log = getLogger(__name__, DEBUG)
         self.q_cmd = command_queue
-        self.q_scan = response_queue
+        self.q_scan = scan_queue
         row_itr = itertools.count()
 
         # Create the Tk root and mainframe.
@@ -99,8 +133,10 @@ class WindowUI(object):
         # Simply set the theme
         self.root.tk.call("source", Path(__file__).resolve().parent / "ui" / "theme_sv.tcl")
         self.root.tk.call("set_theme", "light")
-        style = ttk.Style()
+        # This is where the magic happens
+        #sv_ttk.set_theme("light")
         #style.theme_use("alt")
+        style = ttk.Style()
 
         # for some reasonm the winfo_width() and _heihgt() do not show correct values here
         #_w = root.winfo_width()
@@ -122,15 +158,35 @@ class WindowUI(object):
         # setup widgets
         #
         # button
-        style.configure('B1.TButton', foreground="red", background='#232323')
+        style.configure('W.Toggle.TButton', font = ('calibri', 16, 'bold',))
+        style.map("W.Toggle.TButton", foreground = [("active", "blue"), ("!active", "black")])
+        #style.map("W.Toggle.TButton", foreground = [("active", "lightgreen"), ("!active", "green")])
+        #style.map("W.Toggle.TButton", foreground = [("active", "red"), ("!active", "darkred")])
+
+        #style.configure('W.Toggle.TButton', font =('calibri', 10, 'bold', 'underline'), foreground = 'red')
+        #style.configure('C.TButton.TLabel', padding=[30,10,50,60])
+        #style.configure('C.TLabel', foreground = 'black', width = 20, borderwidth=1, focusthickness=4, focuscolor="none")
+        #style.map("C.TLabel",
+        #    foreground = [('pressed','red'),('active','blue')],
+        #    background = [('pressed','!disabled','black'),('active','gray')],
+        #    relief=[('pressed', 'sunken'),
+        #            ('!pressed', 'raised')]
+        #)
+        #style.configure('TButton', background = 'gray', foreground = 'black', width = 20, borderwidth=1, focusthickness=4, focuscolor="none")
+        # style.map("TButton",
+        #   background = [("active", "red"), ("!active", "blue")],
+        #   foreground = [("active", "yellow"), ("!active", "red")])
+        # style.map("TButton.Button.label", background = "gray", foreground="yellow")
+        #style.map('TButton', foreground=[('active','green')], background=[('active','orange')])
+        #style.configure('B1.TButton', foreground="red", background='#232323')
         #style.map('B1.TButton', background=[("active","#ff0000")])
 
         self.mainframe = self._create_head_ui(self.root)
         self.mainframe.pack(side="top", fill="both", expand=True)
         #self.mainframe.grid(column=0, row=0, sticky=tk.NSEW)
-        self.positions_ui, e_pos = self._create_position_ui(self.root, 20)
-        #self.positions_ui.grid(column=0, row=1, sticky=tk.NSEW)
+        self.positions_ui, e_pos = self._create_position_ui(self.root, 10)
         self.positions_ui.pack(side="top", fill="both", expand=True)
+        #self.positions_ui.grid(column=0, row=1, sticky=tk.NSEW)
 
         # _colspan = 2
         # #_row = next(row_itr)
@@ -245,14 +301,14 @@ class WindowUI(object):
         e_op = ttk.Entry(frame, textvariable=self.var_operator_id)
         e_op.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
         _row += 1
-        ttk.Label(frame, text="").grid(row=_row, column=0, columnspan=2, ipady=20)
+        ttk.Label(frame, text="").grid(row=_row, column=0, columnspan=2, ipady=10)
         _row += 1
         ttk.Label(frame, text="Part Number", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
-        e_pn = ttk.Entry(frame, textvariable=self.var_part_number)
+        e_pn = ttk.Entry(frame, textvariable=self.var_part_number, state="disabled")
         e_pn.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
         _row += 1
         ttk.Label(frame, text="UDI", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
-        e_udi = ttk.Entry(frame, textvariable=self.var_udi)
+        e_udi = ttk.Entry(frame, textvariable=self.var_udi, state="disabled")
         e_udi.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
         _row += 1
         ttk.Label(frame, text="").grid(row=_row, column=0, columnspan=2, ipady=10)
@@ -260,13 +316,59 @@ class WindowUI(object):
 
         save_button = ttk.Button(frame,
             text="SAVE to DB",
-            style="B1.TButton",
+            #style="Accent.TButton",
+            #style="Toggle.TButton",
+            style="W.Toggle.TButton",
+
             #command=lambda: self.q_cmd.put({"move_counter": -1})
         )  # grid does NOT return self object, so we need to split the grid call!
+        # save_button = tk.Button(frame,
+        #     text="SAVE to DB",
+        #     bg='grey',
+        #     fg='black',
+        #     relief='flat',
+        #     width=20
+        # )
         save_button.grid(row=1, column=3, columnspan=2, rowspan=4, ipady=30, ipadx=15)
         save_button.focus_set()
 
         return frame
+
+
+    def _update_position_ui(self, frame: ttk.Frame, number_of_positions: int) -> Tuple[ttk.Frame, List[Tuple]]:
+        count_columns, count_rows = frame.grid_size()
+
+        _row = 1
+        ttk.Label(frame, text=f"Welding Position", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
+        ttk.Label(frame, text=f"Visual Inspection Before", justify="left").grid(row=_row, column=1, sticky=tk.NSEW)
+        ttk.Label(frame, text=f"Peel Force Ax1", justify="left").grid(row=_row, column=2, sticky=tk.NSEW)
+        ttk.Label(frame, text=f"Peel Force Ax2", justify="left").grid(row=_row, column=3, sticky=tk.NSEW)
+        ttk.Label(frame, text=f"Visual Inspection After", justify="left").grid(row=_row, column=4, sticky=tk.NSEW)
+        _row += 1
+        ttk.Separator(frame, orient="horizontal").grid(row=_row, column=0,columnspan=5, ipady=2, sticky=tk.NSEW)
+
+        # we need to generate the vars dynamically
+        self.var_peelforce_ax1 = [tk.DoubleVar(self.root, None) for i in range(number_of_positions)]
+        self.var_peelforce_ax2 = [tk.DoubleVar(self.root, None) for i in range(number_of_positions)]
+        self.var_visual_inspection_ax1 = [tk.BooleanVar(self.root, None) for i in range(number_of_positions)]
+        self.var_visual_inspection_ax2 = [tk.BooleanVar(self.root, None) for i in range(number_of_positions)]
+        e_pos = []
+        _row += 1
+        for i in range(number_of_positions):
+            ttk.Label(frame, text=f"Position {i}:", justify="left").grid(row=_row, column=0, sticky=tk.NSEW),
+            _visual_inspection_ax1 = ttk.Checkbutton(frame, variable=self.var_visual_inspection_ax1[i], onvalue=1, offvalue=0)
+            _visual_inspection_ax1.grid(row=_row, column=1)
+            _peelforce_ax1 = ttk.Entry(frame, textvariable=self.var_peelforce_ax1[i])
+            _peelforce_ax1.grid(row=_row, column=2)
+            _peelforce_ax2 = ttk.Entry(frame, textvariable=self.var_peelforce_ax2[i])
+            _peelforce_ax2.grid(row=_row, column=3)
+            _visual_inspection_ax2 = ttk.Checkbutton(frame, variable=self.var_visual_inspection_ax2[i], onvalue=1, offvalue=0)
+            _visual_inspection_ax2.grid(row=_row, column=4)
+            # list them for later access
+            e_pos.append((_peelforce_ax1, _peelforce_ax2, _visual_inspection_ax1, _visual_inspection_ax2))
+            _row += 1
+
+        return frame, e_pos
 
 
     def _create_position_ui(self, root: tk.Tk, number_of_positions: int) -> Tuple[ttk.Frame, List[Tuple]]:
@@ -283,37 +385,8 @@ class WindowUI(object):
         frame.grid_columnconfigure(2, weight=1)
         frame.grid_columnconfigure(3, weight=1)
         frame.grid_columnconfigure(4, weight=1)
+        return self._update_position_ui(frame, number_of_positions)
 
-        _row = 1
-        ttk.Label(frame, text=f"Welding Position", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
-        ttk.Label(frame, text=f"Peel Force Ax1", justify="left").grid(row=_row, column=1, sticky=tk.NSEW)
-        ttk.Label(frame, text=f"Peel Force Ax2", justify="left").grid(row=_row, column=2, sticky=tk.NSEW)
-        ttk.Label(frame, text=f"Visual Inspection Ax1", justify="left").grid(row=_row, column=3, sticky=tk.NSEW)
-        ttk.Label(frame, text=f"Visual Inspection Ax2", justify="left").grid(row=_row, column=4, sticky=tk.NSEW)
-        _row += 1
-        ttk.Separator(frame, orient="horizontal").grid(row=_row, column=0,columnspan=5, ipady=2, sticky=tk.NSEW)
-
-        # we need to generate the vars dynamically
-        self.var_peelforce_ax1 = [tk.DoubleVar(self.root, None) for i in range(number_of_positions)]
-        self.var_peelforce_ax2 = [tk.DoubleVar(self.root, None) for i in range(number_of_positions)]
-        self.var_visual_inspection_ax1 = [tk.BooleanVar(self.root, None) for i in range(number_of_positions)]
-        self.var_visual_inspection_ax2 = [tk.BooleanVar(self.root, None) for i in range(number_of_positions)]
-        e_pos = []
-        _row += 1
-        for i in range(number_of_positions):
-            ttk.Label(frame, text=f"Position {i}:", justify="left").grid(row=_row, column=0, sticky=tk.NSEW),
-            _peelforce_ax1 = ttk.Entry(frame, textvariable=self.var_peelforce_ax1[i])
-            _peelforce_ax1.grid(row=_row, column=1)
-            _peelforce_ax2 = ttk.Entry(frame, textvariable=self.var_peelforce_ax2[i])
-            _peelforce_ax2.grid(row=_row, column=2)
-            _visual_inspection_ax1 = ttk.Checkbutton(frame, variable=self.var_visual_inspection_ax1[i], onvalue=1, offvalue=0)
-            _visual_inspection_ax1.grid(row=_row, column=3)
-            _visual_inspection_ax2 = ttk.Checkbutton(frame, variable=self.var_visual_inspection_ax2[i], onvalue=1, offvalue=0)
-            _visual_inspection_ax2.grid(row=_row, column=4)
-            # list them for later access
-            e_pos.append((_peelforce_ax1, _peelforce_ax2, _visual_inspection_ax1, _visual_inspection_ax2))
-            _row += 1
-        return frame, e_pos
 
     def process_command_queue(self):
         if not self.q_scan.empty():
@@ -322,86 +395,63 @@ class WindowUI(object):
             _do_update = False
             _play_soundfile = None
             if a:
-                if "resource_str" in a:
-                    self.var_label_resource_str.set(a["resource_str"])
-                    #print("UI:UPDATE RESOURCE")
-                    _do_update = True
-                if "revision" in a:
-                    self.var_label_sequence_revision.set(f'Rev.: {a["revision"]}')
-                    #print("UI:UPDATE REVISION")
-                    _do_update = True
-                if "part_number" in a:
-                    self.var_label_part_number.set(a["part_number"])
-                    #print("UI:UPDATE PART NUMBER")
-                    _do_update = True
-                if "sequence" in a:
-                    self.var_label_sequence.set(a["sequence"])
-                    self.var_label_sequence_length.set(f'Seq. length: {len(a["sequence"])}')
-                    #print("UI:UPDATE SEQUENCE")
-                    _do_update = True
-                if "position" in a:
-                    _txt = a["position"]
-                    # !!!
-                    # WE show Postion 1-based (!ROBERT)
-                    # !!!
-                    self.var_label_position.set((_txt + 1) if _txt != -1 else "")
-                    #print("UI:UPDATE COUNTER")
-                    _do_update = True
-                if "program" in a:
-                    _txt = a["program"]
-                    self.var_label_program.set(_txt if _txt != -1 else "")
-                    #print("UI:UPDATE PROGRAM")
-                    _do_update = True
-                if "udi" in a:
-                    if a["udi"] is None:
-                        self.label_udi.config(background="gray", foreground="black")
-                        self.var_label_udi.set("PLEASE SCAN UDI")
-                        print("UI:RESET UDI")
-                    else:
-                        self.label_udi.config(background="blue", foreground="white")
-                        self.var_label_udi.set(a["udi"])
-                    _do_update = True
                 if "udi_scanned" in a:
-                    self.label_udi.config(background="lightblue", foreground="black")
-                    self.var_label_udi.set(a["udi_scanned"])
-                    print("UI:UPDATE UDI")
+                    _udi = a["udi_scanned"]
+                    print("UI:UPDATE UDI:", _udi)
+                    # test of read function:
+                    try:
+                        fn = find_excel_for_udi(_udi)
+                        forces_df = read_excel_of_peeltester(fn)
+                        print(forces_df.dtypes, forces_df.head(20),)
+                        #self._update_position_ui(self.positions_ui, randint(0, len(forces_df)))
+                        self.positions_ui.destroy()
+                        self.positions_ui, _ = self._create_position_ui(self.root, randint(0, len(forces_df)))
+                        #self.positions_ui.grid(column=0, row=1, sticky=tk.NSEW)
+                        self.positions_ui.pack(side="top", fill="both", expand=True)
+                    except Exception as ex:
+                        # cannot read
+                        print(f"Cannot read data for UDI {_udi}", ex)
+
+                    #self.label_udi.config(background="lightblue", foreground="black")
+                    self.var_udi.set(_udi)
                     _do_update = True
-                if "udi_rejected" in a:
-                    self.label_udi.config(background="orange", foreground="black")
-                    self.var_label_udi.set("UDI REJECTED")
-                    _play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz")
-                    print("UI:REJECTED UDI")
-                    _do_update = True
-                    pass
-                if "udi_not_confirmed" in a:
-                    self.label_udi.config(background="orange", foreground="red")
-                    self.var_label_udi.set(a["udi_not_confirmed"])
-                    print("UI:BLACKLISTED UDI")
-                    _do_update = True
-                    pass
-                if "welding_check" in a:
-                    # position of welding
-                    _fgcolor = "white"
-                    if "passed" in a["welding_check"]:
-                        self.label_udi.config(background="LimeGreen", foreground=_fgcolor)
-                    else:
-                        self.label_udi.config(background="OrangeRed", foreground=_fgcolor)
-                        _play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz-hard")
-                    self.var_label_udi.set(a["udi"])
-                    print("UI:RESULT")
-                    _do_update = True
-                if "result" in a:
-                    # result overall
-                    #_fgcolor = "black" if "\n" in a["udi"] else "white"
-                    _fgcolor = "black"
-                    if "passed" in a["result"]:
-                        self.label_udi.config(background="green", foreground=_fgcolor)
-                    else:
-                        self.label_udi.config(background="red", foreground=_fgcolor)
-                        #_play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz")
-                    self.var_label_udi.set(a["udi"])
-                    print("UI:RESULT")
-                    _do_update = True
+
+                # if "udi_rejected" in a:
+                #     self.label_udi.config(background="orange", foreground="black")
+                #     self.var_label_udi.set("UDI REJECTED")
+                #     _play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz")
+                #     print("UI:REJECTED UDI")
+                #     _do_update = True
+                #     pass
+                # if "udi_not_confirmed" in a:
+                #     self.label_udi.config(background="orange", foreground="red")
+                #     self.var_label_udi.set(a["udi_not_confirmed"])
+                #     print("UI:BLACKLISTED UDI")
+                #     _do_update = True
+                #     pass
+                # if "welding_check" in a:
+                #     # position of welding
+                #     _fgcolor = "white"
+                #     if "passed" in a["welding_check"]:
+                #         self.label_udi.config(background="LimeGreen", foreground=_fgcolor)
+                #     else:
+                #         self.label_udi.config(background="OrangeRed", foreground=_fgcolor)
+                #         _play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz-hard")
+                #     self.var_label_udi.set(a["udi"])
+                #     print("UI:RESULT")
+                #     _do_update = True
+                # if "result" in a:
+                #     # result overall
+                #     #_fgcolor = "black" if "\n" in a["udi"] else "white"
+                #     _fgcolor = "black"
+                #     if "passed" in a["result"]:
+                #         self.label_udi.config(background="green", foreground=_fgcolor)
+                #     else:
+                #         self.label_udi.config(background="red", foreground=_fgcolor)
+                #         #_play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz")
+                #     self.var_label_udi.set(a["udi"])
+                #     print("UI:RESULT")
+                #     _do_update = True
             if _do_update:
                 self.root.update()
             if _play_soundfile:
@@ -539,15 +589,12 @@ class ProcessScanner(mp.Process):
 
         else:
             # ********** Simulation Profile *************
-            #while True:
-            sleep(5.0)
-            _udi = "1CELL" + get_random_digits_string(12)
-            self.ui_queue.put({"udi_scanned": _udi})
-            sleep(3.0)
-                # add some steps
-            #    for n in range(6):
-            #        sleep(1.0)
-            #        self.ui_queue.put({"move_counter": 1})
+            while True:
+                sleep(8.0)
+                #_udi = "1CELL" + get_random_digits_string(12)
+                _udi = "1CELL00000002555"
+                self.ui_queue.put({"udi_scanned": _udi})
+                #sleep(10.0)
 
 
 #--------------------------------------------------------------------------------------------------
@@ -561,24 +608,26 @@ if __name__ == '__main__':
     print("=== PEEL TEST DIALOG ===")
 
     _default_scanner_resource = "COM1"
-    #_default_yaml_filepath_ = Path(__file__).parent / "aws_readings"
-    _default_yaml_filepath_ = Path(__file__).parent / "../.." / "logs" / "peel_test"
+    _default_peeltester_filepath_ = Path(__file__).parent / "sampledata"
     _product_list = ["RRC2020B", "RRC2040B", "RRC2054S", "RRC2040-2S", "RRC2054-2S", "SPINEL"]
 
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("--development", action="store_true", help="Activate development mode.")
-    parser.add_argument("--product", choices=_product_list, action="store", default=None, help="Set a product for simulated DSP interface.")
-    parser.add_argument("--filepath", action="store", default=_default_yaml_filepath_, help="Path and filename prefix for file stored measurements")
+    parser.add_argument("--excelfilepath", action="store", default=_default_peeltester_filepath_, help="Path to search for peel tester output excel files containing UDI in filename.")
     parser.add_argument("--scannerport", action="store", default=_default_scanner_resource, help="Resource string for scanner, which can be IP:PORT or local PORT.")
-    parser.add_argument("--simulate_scan", action="store_true", help="Set a product for simulated UDI scan interface.")
-    parser.add_argument("--block_scan_udi", action="store_false", help="To block scan UDI in the middle of a sequence. If false scn UDI at any time resets sequence to start.")
+    parser.add_argument("--simulate_scan", action="store_false", help="Set a product for simulated UDI scan interface.")
 
     args = parser.parse_args()
 
     PRODUCTION_MODE = not args.development
     ENABLE_UDI_SCAN = (PRODUCTION_MODE or args.simulate_scan)
     SIMULATE_UDI_SCAN = args.simulate_scan
-    SCAN_UDI_FORCE_RESTART = not args.block_scan_udi
+    EXCELFILES_SEARCH_PATH = Path(args.excelfilepath)
+
+    # test of read function:
+    #fn = find_excel_for_udi("1CELL00000002555")
+    #forces_df = read_excel_of_peeltester(fn)
+    #print(forces_df.dtypes, forces_df.head(20),)
 
     w = None
     s = None
