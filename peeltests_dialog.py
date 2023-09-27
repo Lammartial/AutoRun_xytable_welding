@@ -1,3 +1,4 @@
+from sys import maxsize
 from typing import List, Tuple
 from enum import Enum
 import multiprocessing as mp
@@ -71,6 +72,7 @@ def get_hash(o: dict) -> bytes:
 
 #--------------------------------------------------------------------------------------------------
 
+
 class WindowUI(object):
 
     def __init__(self, command_queue: mp.Queue, response_queue: mp.Queue, title: str = "PEEL TEST DIALOG"):
@@ -84,14 +86,10 @@ class WindowUI(object):
         # Create the Tk root and mainframe.
         self.root = tk.Tk()
 
-        self.var_label_position = tk.StringVar(self.root, "")
-        self.var_label_program = tk.StringVar(self.root, "")
-        self.var_label_part_number = tk.StringVar(self.root, "")
-        self.var_label_sequence = tk.StringVar(self.root, "")
-        self.var_label_sequence_revision = tk.StringVar(self.root, "")
-        self.var_label_sequence_length = tk.StringVar(self.root, "")
-        self.var_label_resource_str = tk.StringVar(self.root, "")
-        self.var_label_udi = tk.StringVar(self.root, "")
+        #self.var_position = [tk.IntVar(self.root, i) for i in range(4)]
+        self.var_part_number = tk.StringVar(self.root, "")
+        self.var_operator_id = tk.StringVar(self.root, "")
+        self.var_udi = tk.StringVar(self.root, "")
 
         self.root.withdraw()  # hide window
         self.root.title(title)
@@ -108,12 +106,14 @@ class WindowUI(object):
         #_w = root.winfo_width()
         #_h = root.winfo_height()
         _padall = 8
-        _w = 300  # width set manually
-        _w = int(self.root.winfo_screenwidth() / 2)
-        _h = self.root.winfo_screenheight()
+        _w = 740  # width set manually
+        _h = 500
+        #_w = int(self.root.winfo_screenwidth() / 2)
+        #_h = self.root.winfo_screenheight()
         # Set a minsize for the window
         self.root.minsize(self.root.winfo_width(), self.root.winfo_height())
-        self.root.minsize(_w, int(_h/2))
+        #self.root.minsize(_w, int(_h/2))
+        self.root.minsize(_w, _h)
         #_x = int((self.root.winfo_screenwidth() / 2) - (_w / 2))
         _x = int(self.root.winfo_screenwidth() - _w - _padall)
         _y = int((self.root.winfo_screenheight() / 2) - (_h / 2))
@@ -121,103 +121,98 @@ class WindowUI(object):
         #
         # setup widgets
         #
-        #self.mainframe = self.root
-        self.mainframe = ttk.Frame(self.root, pad=(_padall,_padall,_padall,_padall), takefocus=True)
+        # button
+        style.configure('B1.TButton', foreground="red", background='#232323')
+        #style.map('B1.TButton', background=[("active","#ff0000")])
 
-        #self.mainframe.pack(fill=tk.BOTH)
-        # configure the column width equally to center everything nicely
+        self.mainframe = self._create_head_ui(self.root)
+        self.mainframe.pack(side="top", fill="both", expand=True)
+        #self.mainframe.grid(column=0, row=0, sticky=tk.NSEW)
+        self.positions_ui, e_pos = self._create_position_ui(self.root, 20)
+        #self.positions_ui.grid(column=0, row=1, sticky=tk.NSEW)
+        self.positions_ui.pack(side="top", fill="both", expand=True)
 
-        self.mainframe.grid(row=0, column=0, sticky="NESW")
-        #self.mainframe.grid_rowconfigure(0, weight=1)
-        self.mainframe.grid_columnconfigure(0, weight=1)
-        self.mainframe.grid_columnconfigure(1, weight=1)
-        self.root.grid_rowconfigure(0, weight=1)
-        self.root.grid_columnconfigure(0, weight=1)
+        # _colspan = 2
+        # #_row = next(row_itr)
+        # label_1 = ttk.Label(self.mainframe,text="PART NUMBER",justify="center", font=("-size", 10))
+        # label_1.grid(row=next(row_itr), column=0, columnspan=_colspan , ipady=5)
+        # label_2 = ttk.Label(self.mainframe,
+        #                     textvariable=self.var_label_part_number,
+        #                     justify="center", font=("-size", 16, "-weight", "bold"))
+        # label_2.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
+        # # label_s = ttk.Label(self.mainframe,
+        # #                     textvariable=self.var_label_sequence,
+        # #                     justify="center", font=("-size", 10, "-weight", "bold"))
+        # # label_s.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
+        # if PRODUCTION_MODE:
+        #     self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center",
+        #                                font=("-size", 14, "-weight", "bold"), background="gray", foreground="black")
+        #     self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=50, sticky="ew")
+        # else:
+        #     self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center", font=("-size", 12))
+        #     self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5, sticky="ew")
 
+        # #_row = next(row_itr)
+        # label3 = ttk.Label(self.mainframe,text="SEQUENCE POS",justify="center", font=("-size", 10))
+        # label3.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
+        # label4 = ttk.Label(self.mainframe,
+        #                     textvariable=self.var_label_position,
+        #                     justify="center", font=("-size", 20, "-weight", "bold"))
+        # label4.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
 
-        # Labels
+        # label5 = ttk.Label(self.mainframe,text="PROGRAM",justify="center",font=("-size", 18))
+        # label5.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
+        # label6 = ttk.Label(self.mainframe,
+        #     textvariable=self.var_label_program,
+        #     justify="center", font=("-size", 32, "-weight", "bold"))
+        # label6.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
 
-        _colspan = 2
-        #_row = next(row_itr)
-        label_1 = ttk.Label(self.mainframe,text="PART NUMBER",justify="center", font=("-size", 10))
-        label_1.grid(row=next(row_itr), column=0, columnspan=_colspan , ipady=5)
-        label_2 = ttk.Label(self.mainframe,
-                            textvariable=self.var_label_part_number,
-                            justify="center", font=("-size", 16, "-weight", "bold"))
-        label_2.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
-        # label_s = ttk.Label(self.mainframe,
-        #                     textvariable=self.var_label_sequence,
-        #                     justify="center", font=("-size", 10, "-weight", "bold"))
-        # label_s.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
-        if PRODUCTION_MODE:
-            self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center",
-                                       font=("-size", 14, "-weight", "bold"), background="gray", foreground="black")
-            self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=50, sticky="ew")
-        else:
-            self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center", font=("-size", 12))
-            self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5, sticky="ew")
+        # if not PRODUCTION_MODE:
+        #     # Buttons
+        #     _row = next(row_itr)
+        #     style.configure('B1.TButton', foreground="red", background='#232323')
+        #     style.map('B1.TButton', background=[("active","#ff0000")])
+        #     style.configure('B2.TButton', foreground="green", background='#232323')
+        #     style.map('B2.TButton', background=[("active","#ff0000")])
+        #     #style.configure('TButton', background = 'red', foreground = 'green', width = 20, borderwidth=1, focusthickness=3, focuscolor='none')
 
-        #_row = next(row_itr)
-        label3 = ttk.Label(self.mainframe,text="SEQUENCE POS",justify="center", font=("-size", 10))
-        label3.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
-        label4 = ttk.Label(self.mainframe,
-                            textvariable=self.var_label_position,
-                            justify="center", font=("-size", 20, "-weight", "bold"))
-        label4.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
+        #     step_back_button = ttk.Button(self.mainframe, text="STEP BACK",  style="B1.TButton",
+        #         command=lambda: self.q_cmd.put({"move_counter": -1}))
+        #     step_back_button.grid(row=_row, column=0, ipady=50, ipadx=20, sticky=tk.NSEW)
 
-        label5 = ttk.Label(self.mainframe,text="PROGRAM",justify="center",font=("-size", 18))
-        label5.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
-        label6 = ttk.Label(self.mainframe,
-            textvariable=self.var_label_program,
-            justify="center", font=("-size", 32, "-weight", "bold"))
-        label6.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
+        #     step_forward_button = ttk.Button(self.mainframe, text="STEP FORWARD",  style="B2.TButton",
+        #         command=lambda: self.q_cmd.put({"move_counter": +1}))
+        #     step_forward_button.grid(row=_row, column=1, ipady=50, ipadx=5, sticky=tk.NSEW)
 
-        if not PRODUCTION_MODE:
-            # Buttons
-            _row = next(row_itr)
-            style.configure('B1.TButton', foreground="red", background='#232323')
-            style.map('B1.TButton', background=[("active","#ff0000")])
-            style.configure('B2.TButton', foreground="green", background='#232323')
-            style.map('B2.TButton', background=[("active","#ff0000")])
-            #style.configure('TButton', background = 'red', foreground = 'green', width = 20, borderwidth=1, focusthickness=3, focuscolor='none')
-
-            step_back_button = ttk.Button(self.mainframe, text="STEP BACK",  style="B1.TButton",
-                command=lambda: self.q_cmd.put({"move_counter": -1}))
-            step_back_button.grid(row=_row, column=0, ipady=50, ipadx=20, sticky=tk.NSEW)
-
-            step_forward_button = ttk.Button(self.mainframe, text="STEP FORWARD",  style="B2.TButton",
-                command=lambda: self.q_cmd.put({"move_counter": +1}))
-            step_forward_button.grid(row=_row, column=1, ipady=50, ipadx=5, sticky=tk.NSEW)
-
-            # separator = ttk.Separator(self.mainframe)
-            # separator.grid(row=next(row_itr), column=0, columnspan=2, padx=(20, 10), pady=10, sticky="ew")
-            reset_seq_button = ttk.Button(self.mainframe, text="RESET SEQUENCE",
-                command=lambda: self.q_cmd.put({"reset_counter": 0}))
-            #ok_button.bind("<Return>", _accept_udi)
-            #ok_button.bind("<Key-Escape>", _cancel)
-            reset_seq_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, sticky=tk.NSEW)
-            #ok_button.grid_forget()
+        #     # separator = ttk.Separator(self.mainframe)
+        #     # separator.grid(row=next(row_itr), column=0, columnspan=2, padx=(20, 10), pady=10, sticky="ew")
+        #     reset_seq_button = ttk.Button(self.mainframe, text="RESET SEQUENCE",
+        #         command=lambda: self.q_cmd.put({"reset_counter": 0}))
+        #     #ok_button.bind("<Return>", _accept_udi)
+        #     #ok_button.bind("<Key-Escape>", _cancel)
+        #     reset_seq_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, sticky=tk.NSEW)
+        #     #ok_button.grid_forget()
 
 
-        # Some more information labels
-        _row = next(row_itr)
-        #label_10 = ttk.Label(self.mainframe, textvariable=self.var_label_sequence, font=("-size", 8))
-        #label_10.grid(row=_row, column=0,  ipady=10)
-        label_10 = ttk.Label(self.mainframe, anchor=tk.CENTER, textvariable=self.var_label_sequence_length, font=("-size", 8))
-        label_10.grid(row=_row, column=0,  ipady=10, sticky="ew")
-        label_11 = ttk.Label(self.mainframe, anchor=tk.CENTER, textvariable=self.var_label_sequence_revision, font=("-size", 8))
-        label_11.grid(row=_row, column=1, ipady=10, sticky="ew")
+        # # Some more information labels
+        # _row = next(row_itr)
+        # #label_10 = ttk.Label(self.mainframe, textvariable=self.var_label_sequence, font=("-size", 8))
+        # #label_10.grid(row=_row, column=0,  ipady=10)
+        # label_10 = ttk.Label(self.mainframe, anchor=tk.CENTER, textvariable=self.var_label_sequence_length, font=("-size", 8))
+        # label_10.grid(row=_row, column=0,  ipady=10, sticky="ew")
+        # label_11 = ttk.Label(self.mainframe, anchor=tk.CENTER, textvariable=self.var_label_sequence_revision, font=("-size", 8))
+        # label_11.grid(row=_row, column=1, ipady=10, sticky="ew")
 
-        label_12 = ttk.Label(self.mainframe, textvariable=self.var_label_resource_str, font=("-size", 8))
-        label_12.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
+        # label_12 = ttk.Label(self.mainframe, textvariable=self.var_label_resource_str, font=("-size", 8))
+        # label_12.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
 
-        # Sizegrip
-        #sizegrip = ttk.Sizegrip(self.root)
-        #sizegrip.grid(row=100, column=100, padx=(0, 5), pady=(0, 5))
+        # # Sizegrip
+        # #sizegrip = ttk.Sizegrip(self.root)
+        # #sizegrip.grid(row=100, column=100, padx=(0, 5), pady=(0, 5))
 
-        ## Add an information widget.
-        #label = ttk.Label(mainframe, text=f'\nWelcome to hello_world*4.py.\n')
-        #label.grid(column=0, row=next(row_itr), sticky='w')
+        # ## Add an information widget.
+        # #label = ttk.Label(mainframe, text=f'\nWelcome to hello_world*4.py.\n')
+        # #label.grid(column=0, row=next(row_itr), sticky='w')
 
         # schedule queue processing callback
         self._id_after = self.mainframe.after(0, lambda: self.process_command_queue())
@@ -226,9 +221,99 @@ class WindowUI(object):
         self.root.deiconify()
         self.root.focus_force()  # this is to activate the window again (important after programmatically closed)
 
-        if not PRODUCTION_MODE:
-            reset_seq_button.focus_set()
 
+
+
+    def _create_head_ui(self, root: tk.Tk) -> ttk.Frame:
+        _padall = 4
+        frame = ttk.Frame(root, pad=(_padall,_padall,_padall,_padall), takefocus=True)
+        frame.columnconfigure(5)
+        frame.rowconfigure(6, minsize=10)
+
+        # configure the column width equally to center everything nicely
+        #frame.grid(row=0, column=0, sticky="NESW")
+        #frame.grid_rowconfigure(0, weight=1)
+        frame.grid_columnconfigure(0, weight=2)
+        frame.grid_columnconfigure(1, weight=1)
+        frame.grid_columnconfigure(2, weight=1)
+        frame.grid_columnconfigure(3, weight=1)
+        frame.grid_columnconfigure(4, weight=1)
+
+        # Labels + entry fields
+        _row = 1
+        ttk.Label(frame, text="Operator ID", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
+        e_op = ttk.Entry(frame, textvariable=self.var_operator_id)
+        e_op.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
+        _row += 1
+        ttk.Label(frame, text="").grid(row=_row, column=0, columnspan=2, ipady=20)
+        _row += 1
+        ttk.Label(frame, text="Part Number", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
+        e_pn = ttk.Entry(frame, textvariable=self.var_part_number)
+        e_pn.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
+        _row += 1
+        ttk.Label(frame, text="UDI", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
+        e_udi = ttk.Entry(frame, textvariable=self.var_udi)
+        e_udi.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
+        _row += 1
+        ttk.Label(frame, text="").grid(row=_row, column=0, columnspan=2, ipady=10)
+        _row += 1
+
+        save_button = ttk.Button(frame,
+            text="SAVE to DB",
+            style="B1.TButton",
+            #command=lambda: self.q_cmd.put({"move_counter": -1})
+        )  # grid does NOT return self object, so we need to split the grid call!
+        save_button.grid(row=1, column=3, columnspan=2, rowspan=4, ipady=30, ipadx=15)
+        save_button.focus_set()
+
+        return frame
+
+
+    def _create_position_ui(self, root: tk.Tk, number_of_positions: int) -> Tuple[ttk.Frame, List[Tuple]]:
+        _padall = 4
+        frame = ttk.Frame(root, pad=(_padall,_padall,_padall,_padall), takefocus=False)
+        frame.columnconfigure(5)
+        #frame.rowconfigure(6, minsize=10)
+
+        # configure the column width equally to center everything nicely
+        #frame.grid(row=0, column=0, sticky="NESW")
+        #frame.grid_rowconfigure(0, weight=1)
+        frame.grid_columnconfigure(0, weight=2)
+        frame.grid_columnconfigure(1, weight=1)
+        frame.grid_columnconfigure(2, weight=1)
+        frame.grid_columnconfigure(3, weight=1)
+        frame.grid_columnconfigure(4, weight=1)
+
+        _row = 1
+        ttk.Label(frame, text=f"Welding Position", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
+        ttk.Label(frame, text=f"Peel Force Ax1", justify="left").grid(row=_row, column=1, sticky=tk.NSEW)
+        ttk.Label(frame, text=f"Peel Force Ax2", justify="left").grid(row=_row, column=2, sticky=tk.NSEW)
+        ttk.Label(frame, text=f"Visual Inspection Ax1", justify="left").grid(row=_row, column=3, sticky=tk.NSEW)
+        ttk.Label(frame, text=f"Visual Inspection Ax2", justify="left").grid(row=_row, column=4, sticky=tk.NSEW)
+        _row += 1
+        ttk.Separator(frame, orient="horizontal").grid(row=_row, column=0,columnspan=5, ipady=2, sticky=tk.NSEW)
+
+        # we need to generate the vars dynamically
+        self.var_peelforce_ax1 = [tk.DoubleVar(self.root, None) for i in range(number_of_positions)]
+        self.var_peelforce_ax2 = [tk.DoubleVar(self.root, None) for i in range(number_of_positions)]
+        self.var_visual_inspection_ax1 = [tk.BooleanVar(self.root, None) for i in range(number_of_positions)]
+        self.var_visual_inspection_ax2 = [tk.BooleanVar(self.root, None) for i in range(number_of_positions)]
+        e_pos = []
+        _row += 1
+        for i in range(number_of_positions):
+            ttk.Label(frame, text=f"Position {i}:", justify="left").grid(row=_row, column=0, sticky=tk.NSEW),
+            _peelforce_ax1 = ttk.Entry(frame, textvariable=self.var_peelforce_ax1[i])
+            _peelforce_ax1.grid(row=_row, column=1)
+            _peelforce_ax2 = ttk.Entry(frame, textvariable=self.var_peelforce_ax2[i])
+            _peelforce_ax2.grid(row=_row, column=2)
+            _visual_inspection_ax1 = ttk.Checkbutton(frame, variable=self.var_visual_inspection_ax1[i], onvalue=1, offvalue=0)
+            _visual_inspection_ax1.grid(row=_row, column=3)
+            _visual_inspection_ax2 = ttk.Checkbutton(frame, variable=self.var_visual_inspection_ax2[i], onvalue=1, offvalue=0)
+            _visual_inspection_ax2.grid(row=_row, column=4)
+            # list them for later access
+            e_pos.append((_peelforce_ax1, _peelforce_ax2, _visual_inspection_ax1, _visual_inspection_ax2))
+            _row += 1
+        return frame, e_pos
 
     def process_command_queue(self):
         if not self.q_scan.empty():
@@ -427,6 +512,7 @@ class ProcessScanner(mp.Process):
         proc_name = self.name
         resource_str = self.resource_str
         scanner = None
+        _retry_timeout = 1
         if not self.simulate_scan:
             while True:
                 _udi = None
@@ -434,6 +520,8 @@ class ProcessScanner(mp.Process):
                     if not scanner:
                         scanner = create_barcode_scanner(resource_str)
                     _udi = scanner.request(None, timeout=None).strip()
+                    # after successful scan, reset the timeout
+                    _retry_timeout = 1
                 except TimeoutError:
                     pass  # this is ok to keep the loop running
                 except Exception as ex:
@@ -443,7 +531,8 @@ class ProcessScanner(mp.Process):
                     scanner = None
                     #print(f"{proc_name}:End")
                     #return
-                    sleep(1.5)  # give a bit untile reconnect
+                    sleep(_retry_timeout)  # give a bit until reconnect
+                    _retry_timeout = min(2*_retry_timeout, 30)  # fibonacci
                 if _udi:
                     msg = {"udi_scanned": _udi}
                     self.ui_queue.put(msg)  # this goes to the UI process
