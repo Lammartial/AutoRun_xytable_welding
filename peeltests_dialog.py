@@ -184,8 +184,9 @@ class WindowUI(object):
         #self.var_position = [tk.IntVar(self.root, i) for i in range(4)]
         self.var_part_number = tk.StringVar(self.root, "")
         self.var_operator = tk.StringVar(self.root, username)
+        self.var_line_id = tk.StringVar(self.root, "")
         self.var_udi = tk.StringVar(self.root, "")
-
+        self.var_label_status = tk.StringVar(self.root, "STATUS?")
         self.root.withdraw()  # hide window
         self.root.title(title)
         # set App icon
@@ -223,25 +224,7 @@ class WindowUI(object):
         style.map("W.Toggle.TButton", foreground = [("active", "blue"), ("!active", "black")])
         #style.map("W.Toggle.TButton", foreground = [("active", "lightgreen"), ("!active", "green")])
         #style.map("W.Toggle.TButton", foreground = [("active", "red"), ("!active", "darkred")])
-
-        #style.configure('W.Toggle.TButton', font =('calibri', 10, 'bold', 'underline'), foreground = 'red')
-        #style.configure('C.TButton.TLabel', padding=[30,10,50,60])
-        #style.configure('C.TLabel', foreground = 'black', width = 20, borderwidth=1, focusthickness=4, focuscolor="none")
-        #style.map("C.TLabel",
-        #    foreground = [('pressed','red'),('active','blue')],
-        #    background = [('pressed','!disabled','black'),('active','gray')],
-        #    relief=[('pressed', 'sunken'),
-        #            ('!pressed', 'raised')]
-        #)
-        #style.configure('TButton', background = 'gray', foreground = 'black', width = 20, borderwidth=1, focusthickness=4, focuscolor="none")
-        # style.map("TButton",
-        #   background = [("active", "red"), ("!active", "blue")],
-        #   foreground = [("active", "yellow"), ("!active", "red")])
-        # style.map("TButton.Button.label", background = "gray", foreground="yellow")
-        #style.map('TButton', foreground=[('active','green')], background=[('active','orange')])
-        #style.configure('B1.TButton', foreground="red", background='#232323')
-        #style.map('B1.TButton', background=[("active","#ff0000")])
-
+        
         # to debug layout we can use colored frame backgrounds
         style.configure('Frame1.TFrame', background='red')
         style.configure('Frame2.TFrame', background='blue')
@@ -251,87 +234,10 @@ class WindowUI(object):
         self.mainframe.pack(side="top", anchor="n", fill="x", expand=False, padx=_padall, pady=_padall)
         self.positions_ui, e_pos = self._create_position_ui_and_show(self.root, 0)  # empty list
 
-        # _colspan = 2
-        # #_row = next(row_itr)
-        # label_1 = ttk.Label(self.mainframe,text="PART NUMBER",justify="center", font=("-size", 10))
-        # label_1.grid(row=next(row_itr), column=0, columnspan=_colspan , ipady=5)
-        # label_2 = ttk.Label(self.mainframe,
-        #                     textvariable=self.var_label_part_number,
-        #                     justify="center", font=("-size", 16, "-weight", "bold"))
-        # label_2.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
-        # # label_s = ttk.Label(self.mainframe,
-        # #                     textvariable=self.var_label_sequence,
-        # #                     justify="center", font=("-size", 10, "-weight", "bold"))
-        # # label_s.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
-        # if PRODUCTION_MODE:
-        #     self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center",
-        #                                font=("-size", 14, "-weight", "bold"), background="gray", foreground="black")
-        #     self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=50, sticky="ew")
-        # else:
-        #     self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center", font=("-size", 12))
-        #     self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5, sticky="ew")
-
-        # #_row = next(row_itr)
-        # label3 = ttk.Label(self.mainframe,text="SEQUENCE POS",justify="center", font=("-size", 10))
-        # label3.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
-        # label4 = ttk.Label(self.mainframe,
-        #                     textvariable=self.var_label_position,
-        #                     justify="center", font=("-size", 20, "-weight", "bold"))
-        # label4.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
-
-        # label5 = ttk.Label(self.mainframe,text="PROGRAM",justify="center",font=("-size", 18))
-        # label5.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
-        # label6 = ttk.Label(self.mainframe,
-        #     textvariable=self.var_label_program,
-        #     justify="center", font=("-size", 32, "-weight", "bold"))
-        # label6.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
-
-        # if not PRODUCTION_MODE:
-        #     # Buttons
-        #     _row = next(row_itr)
-        #     style.configure('B1.TButton', foreground="red", background='#232323')
-        #     style.map('B1.TButton', background=[("active","#ff0000")])
-        #     style.configure('B2.TButton', foreground="green", background='#232323')
-        #     style.map('B2.TButton', background=[("active","#ff0000")])
-        #     #style.configure('TButton', background = 'red', foreground = 'green', width = 20, borderwidth=1, focusthickness=3, focuscolor='none')
-
-        #     step_back_button = ttk.Button(self.mainframe, text="STEP BACK",  style="B1.TButton",
-        #         command=lambda: self.q_cmd.put({"move_counter": -1}))
-        #     step_back_button.grid(row=_row, column=0, ipady=50, ipadx=20, sticky=tk.NSEW)
-
-        #     step_forward_button = ttk.Button(self.mainframe, text="STEP FORWARD",  style="B2.TButton",
-        #         command=lambda: self.q_cmd.put({"move_counter": +1}))
-        #     step_forward_button.grid(row=_row, column=1, ipady=50, ipadx=5, sticky=tk.NSEW)
-
-        #     # separator = ttk.Separator(self.mainframe)
-        #     # separator.grid(row=next(row_itr), column=0, columnspan=2, padx=(20, 10), pady=10, sticky="ew")
-        #     reset_seq_button = ttk.Button(self.mainframe, text="RESET SEQUENCE",
-        #         command=lambda: self.q_cmd.put({"reset_counter": 0}))
-        #     #ok_button.bind("<Return>", _accept_udi)
-        #     #ok_button.bind("<Key-Escape>", _cancel)
-        #     reset_seq_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, sticky=tk.NSEW)
-        #     #ok_button.grid_forget()
-
-
-        # # Some more information labels
-        # _row = next(row_itr)
-        # #label_10 = ttk.Label(self.mainframe, textvariable=self.var_label_sequence, font=("-size", 8))
-        # #label_10.grid(row=_row, column=0,  ipady=10)
-        # label_10 = ttk.Label(self.mainframe, anchor=tk.CENTER, textvariable=self.var_label_sequence_length, font=("-size", 8))
-        # label_10.grid(row=_row, column=0,  ipady=10, sticky="ew")
-        # label_11 = ttk.Label(self.mainframe, anchor=tk.CENTER, textvariable=self.var_label_sequence_revision, font=("-size", 8))
-        # label_11.grid(row=_row, column=1, ipady=10, sticky="ew")
-
-        # label_12 = ttk.Label(self.mainframe, textvariable=self.var_label_resource_str, font=("-size", 8))
-        # label_12.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
-
-        # # Sizegrip
-        # #sizegrip = ttk.Sizegrip(self.root)
-        # #sizegrip.grid(row=100, column=100, padx=(0, 5), pady=(0, 5))
-
-        # ## Add an information widget.
-        # #label = ttk.Label(mainframe, text=f'\nWelcome to hello_world*4.py.\n')
-        # #label.grid(column=0, row=next(row_itr), sticky='w')
+        # hidden "ok" button to programmatically close this app
+        # ok_button.bind("<Return>", _accept_udi)
+        # ok_button.bind("<Key-Escape>", _cancel)
+        # ok_button.grid_forget()
 
         # schedule queue processing callback
         self._id_after = self.mainframe.after(0, lambda: self.process_command_queue())
@@ -345,7 +251,7 @@ class WindowUI(object):
 
 
     def _create_head_ui(self, root: tk.Tk) -> ttk.Frame:
-        _padall = 4
+        _padall = 8
         frame = ttk.Frame(root, pad=(_padall,_padall,_padall,_padall), takefocus=False,
                           #style="Frame2.TFrame"  # DEBUG
         )
@@ -369,15 +275,24 @@ class WindowUI(object):
         _row += 1
         ttk.Label(frame, text="").grid(row=_row, column=0, columnspan=2, ipady=10)
         _row += 1
-        ttk.Label(frame, text="Part Number", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
-        e_pn = ttk.Entry(frame, textvariable=self.var_part_number, state="disabled")
-        e_pn.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
+        ttk.Label(frame, text="LINE", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
+        e_line_id = ttk.Entry(frame, textvariable=self.var_line_id, state="disabled")
+        e_line_id.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
         _row += 1
         ttk.Label(frame, text="UDI", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
         e_udi = ttk.Entry(frame, textvariable=self.var_udi, state="disabled")
         e_udi.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
         _row += 1
-        ttk.Label(frame, text="").grid(row=_row, column=0, columnspan=2, ipady=10)
+        ttk.Label(frame, text="Part Number", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
+        e_pn = ttk.Entry(frame, textvariable=self.var_part_number, state="disabled")
+        e_pn.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
+        _row += 1
+        
+        ttk.Label(frame, text="STATUS", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
+        self.label_status = ttk.Label(frame,
+            textvariable=self.var_label_status, justify="left",
+            font=("-size", 12, "-weight", "bold"))
+        self.label_status.grid(row=_row, column=1, columnspan=4, pady=15, sticky=tk.NSEW)
         _row += 1
 
         self.save_button = ttk.Button(frame,
@@ -511,17 +426,21 @@ class WindowUI(object):
                 if "udi_scanned" in a:
                     _udi = a["udi_scanned"]
                     print("UI:UPDATE UDI:", _udi)
+                    
                     # 1) read excel file for validation of human entries
                     try:
                         fn = find_excel_for_udi(_udi)
                         forces_df = read_excel_of_peeltester(fn)
                         print(forces_df.dtypes, forces_df.head(20),)
+                        self.var_label_status.set(f"Found excel file with {len(forces_df)} force entries.")
                     except Exception as ex:
                         # cannot read
                         print(f"Cannot read data for UDI {_udi}", ex)
                         forces_df = None
+                    
                     # 2) read database for welding measurements of this UDI
                     _uut_df = self._collect_uut_information(_udi)
+
                     # 3) Prepare UI with needed positions
                     if len(_uut_df):
                         _positions = len(_uut_df)
@@ -692,10 +611,10 @@ class ProcessScanner(mp.Process):
                 sleep(5.0)
                 _udi = "1CELL" + get_random_digits_string(12)
                 self.ui_queue.put({"udi_scanned": _udi})  # FAIL
-                sleep(3.0)
+                sleep(5.0)
                 _udi = "1CELL00000002555"
                 self.ui_queue.put({"udi_scanned": _udi})  # SUCCESS (missing positions)
-                sleep(3.0)
+                sleep(5.0)
                 _udi = "1CELL00000002B84"
                 self.ui_queue.put({"udi_scanned": _udi})  # SUCCESS (full positions)
 
