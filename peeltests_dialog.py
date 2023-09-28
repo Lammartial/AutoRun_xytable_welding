@@ -109,6 +109,9 @@ def read_excel_of_peeltester(fp: Path) -> pd.DataFrame:
 
 
 def query_teststand_users_for_match(engine: sa.Engine, card_id: str, show_performance: bool = False) -> pd.DataFrame | None:
+    #
+    # UNUSED HERE - we are using the login dialog conform to Teststand
+    #
     with engine.connect() as session:
         sql=sa.text(f"""SELECT
             username,
@@ -209,8 +212,8 @@ class WindowUI(object):
         #self.root.minsize(_w, int(_h/2))
         self.root.minsize(_w, _h)
         #_x = int((self.root.winfo_screenwidth() / 2) - (_w / 2))
-        _x = int(self.root.winfo_screenwidth() - _w - _padall)
-        _y = int((self.root.winfo_screenheight() / 2) - (_h / 2))
+        _x = int((self.root.winfo_screenwidth() - _w - _padall) / 2)
+        _y = int((self.root.winfo_screenheight() - _h ) / 2)
         self.root.geometry(f"{_w}x{_h}+{_x}+{_y}")
         #
         # setup widgets
@@ -239,13 +242,14 @@ class WindowUI(object):
         #style.configure('B1.TButton', foreground="red", background='#232323')
         #style.map('B1.TButton', background=[("active","#ff0000")])
 
+        # to debug layout we can use colored frame backgrounds
+        style.configure('Frame1.TFrame', background='red')
+        style.configure('Frame2.TFrame', background='blue')
+
 
         self.mainframe = self._create_head_ui(self.root)
-        self.mainframe.pack(side="top", fill="both", expand=True)
-        #self.mainframe.grid(column=0, row=0, sticky=tk.NSEW)
-        self.positions_ui, e_pos = self._create_position_ui(self.root, 0)  # empty list
-        self.positions_ui.pack(side="top", fill="both", expand=True)
-        #self.positions_ui.grid(column=0, row=1, sticky=tk.NSEW)
+        self.mainframe.pack(side="top", anchor="n", fill="x", expand=False, padx=_padall, pady=_padall)
+        self.positions_ui, e_pos = self._create_position_ui_and_show(self.root, 0)  # empty list
 
         # _colspan = 2
         # #_row = next(row_itr)
@@ -335,13 +339,16 @@ class WindowUI(object):
         self.root.update()
         self.root.deiconify()
         self.root.focus_force()  # this is to activate the window again (important after programmatically closed)
+        self.save_button.focus_set()
 
 
 
 
     def _create_head_ui(self, root: tk.Tk) -> ttk.Frame:
         _padall = 4
-        frame = ttk.Frame(root, pad=(_padall,_padall,_padall,_padall), takefocus=True)
+        frame = ttk.Frame(root, pad=(_padall,_padall,_padall,_padall), takefocus=False,
+                          #style="Frame2.TFrame"  # DEBUG
+        )
         frame.columnconfigure(5)
         frame.rowconfigure(6, minsize=10)
 
@@ -373,7 +380,7 @@ class WindowUI(object):
         ttk.Label(frame, text="").grid(row=_row, column=0, columnspan=2, ipady=10)
         _row += 1
 
-        save_button = ttk.Button(frame,
+        self.save_button = ttk.Button(frame,
             text="SAVE to DB",
             #style="Accent.TButton",
             #style="Toggle.TButton",
@@ -388,8 +395,7 @@ class WindowUI(object):
         #     relief='flat',
         #     width=20
         # )
-        save_button.grid(row=1, column=3, columnspan=2, rowspan=4, ipady=30, ipadx=15)
-        save_button.focus_set()
+        self.save_button.grid(row=1, column=3, columnspan=2, rowspan=4, ipady=30, ipadx=15)
         return frame
 
 
@@ -425,13 +431,14 @@ class WindowUI(object):
             # list them for later access
             e_pos.append((_peelforce_ax1, _peelforce_ax2, _visual_inspection_ax1, _visual_inspection_ax2))
             _row += 1
-
         return frame, e_pos
 
 
-    def _create_position_ui(self, root: tk.Tk, number_of_positions: int) -> Tuple[ttk.Frame, List[Tuple]]:
+    def _create_position_ui_and_show(self, root: tk.Tk, number_of_positions: int) -> Tuple[ttk.Frame, List[Tuple]]:
         _padall = 4
-        frame = ttk.Frame(root, pad=(_padall,_padall,_padall,_padall), takefocus=False)
+        frame = ttk.Frame(root, pad=(_padall,_padall,_padall,_padall), takefocus=False,
+                          #style="Frame1.TFrame"  # DEBUG
+        )
         frame.columnconfigure(5)
         #frame.rowconfigure(6, minsize=10)
 
@@ -443,10 +450,16 @@ class WindowUI(object):
         frame.grid_columnconfigure(2, weight=1)
         frame.grid_columnconfigure(3, weight=1)
         frame.grid_columnconfigure(4, weight=1)
-        return self._update_position_ui(frame, number_of_positions)
+        frame, e_pos = self._update_position_ui(frame, number_of_positions)
+        # show
+        frame.pack(side="top", anchor="n", fill="both", expand=True, padx=10, pady=5)
+        return frame, e_pos
 
 
     def _collect_operator_information(self, card_id: str) -> Tuple[bool, dict]:
+        #
+        # UNUSED HERE - we are using the login dialog conform to Teststand
+        #
         print(f"CHECK ID {card_id} from database...")
         engine, _ = get_teststand_users_db_connector()
         user_df = query_teststand_users_for_match(engine, card_id)
@@ -515,11 +528,8 @@ class WindowUI(object):
                     else:
                         _positions = randint(0, len(forces_df)) if forces_df else 0
 
-                    #self._update_position_ui(self.positions_ui, randint(0, len(forces_df)))
                     self.positions_ui.destroy()
-                    self.positions_ui, _ = self._create_position_ui(self.root, _positions)
-                    #self.positions_ui.grid(column=0, row=1, sticky=tk.NSEW)
-                    self.positions_ui.pack(side="top", fill="both", expand=True)
+                    self.positions_ui, _ = self._create_position_ui_and_show(self.root, _positions)
 
                     #self.label_udi.config(background="lightblue", foreground="black")
                     self.var_udi.set(_udi)
@@ -671,7 +681,7 @@ class ProcessScanner(mp.Process):
 
         else:
             # ********** Simulation Profile *************
-            while True:
+            #while True:
                 # sleep(3.0)
                 # _card_id = "007"
                 # self.ui_queue.put({"card_id_scanned": _card_id})  # FAIL
