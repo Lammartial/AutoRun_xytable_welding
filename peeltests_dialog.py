@@ -692,10 +692,12 @@ class ProcessScanner(mp.Process):
                 sleep(5.0)
                 _udi = "1CELL" + get_random_digits_string(12)
                 self.ui_queue.put({"udi_scanned": _udi})  # FAIL
-                sleep(2.0)
+                sleep(3.0)
                 _udi = "1CELL00000002555"
-                self.ui_queue.put({"udi_scanned": _udi})  # SUCCESS
-
+                self.ui_queue.put({"udi_scanned": _udi})  # SUCCESS (missing positions)
+                sleep(3.0)
+                _udi = "1CELL00000002B84"
+                self.ui_queue.put({"udi_scanned": _udi})  # SUCCESS (full positions)
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
@@ -708,14 +710,16 @@ if __name__ == '__main__':
     print("=== PEEL TEST DIALOG ===")
 
     _default_scanner_resource = "COM1"
-    _default_peeltester_filepath_ = Path(__file__).parent / "sampledata"
+    _default_peeltester_filepath_ = Path(__file__).parent / "sampledata"  # DEVELOPMENT
+    _default_peeltester_filepath_ = Path(__file__).parent  # PRODUCTION
+
     _product_list = ["RRC2020B", "RRC2040B", "RRC2054S", "RRC2040-2S", "RRC2054-2S", "SPINEL"]
 
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("--development", action="store_true", help="Activate development mode.")
     parser.add_argument("--excelfilepath", action="store", default=_default_peeltester_filepath_, help="Path to search for peel tester output excel files containing UDI in filename.")
     parser.add_argument("--scannerport", action="store", default=_default_scanner_resource, help="Resource string for scanner, which can be IP:PORT or local PORT.")
-    parser.add_argument("--simulate_scan", action="store_false", help="Set a product for simulated UDI scan interface.")
+    parser.add_argument("--simulate_scan", action="store_true", help="Set a product for simulated UDI scan interface.")
 
     args = parser.parse_args()
 
@@ -734,7 +738,8 @@ if __name__ == '__main__':
     try:
         # STEP 1: login operator
         access = 0
-        while not access > 0:
+        username = None if PRODUCTION_MODE else "administrator"
+        while not username and not access > 0:
             ok, username, _, access = identify_user_with_title(allow_manual_edit=True, title="PEEL TEST DIALOG - User Login")
             if not ok:
                 print("User has terminated dialog.")
