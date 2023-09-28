@@ -9,6 +9,7 @@ import multiprocessing as mp
 import itertools
 import tkinter as tk
 import tkinter.ttk as ttk
+from tkinter.messagebox import showinfo
 #import ttkbootstrap as ttk
 #from ttkbootstrap.constants import *
 #import sv_ttk
@@ -21,13 +22,14 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from datetime import timezone, datetime
 from winsound import PlaySound, SND_FILENAME
 from random import randint
+import sqlalchemy as sa
 
 from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
 
 # import SQL managing modules
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from rrc.dbcon import get_protocol_db_connector
+from rrc.dbcon import get_protocol_db_connector, get_teststand_users_db_connector
 from rrc.barcode_scanner import create_barcode_scanner
 
 # --------------------------------------------------------------------------- #
@@ -102,6 +104,60 @@ def read_excel_of_peeltester(fp: Path) -> pd.DataFrame:
         forces_df.columns[3]: "AvgForce (N)"
     }, inplace=True)
     return forces_df.astype({"No.": "int32", "MaxForce (N)": "float64", "MinForce (N)": "float64", "AvgForce (N)": "float64" })
+
+
+def query_teststand_users_for_match(engine: sa.Engine, card_id: str, show_performance: bool = False) -> pd.DataFrame | None:
+    with engine.connect() as session:
+        sql=sa.text(f"""SELECT
+            username,
+            pwd,
+            access
+            FROM `teststand_users` AS mu
+            WHERE card_id='{card_id}'
+        """)
+        if show_performance:
+            tic = perf_counter()
+        print(sql)
+        df = pd.read_sql(sql, session)
+        print(f"Read {len(df)} data records.", end="")
+        if show_performance:
+            toc = perf_counter()
+            print(f"Need {toc - tic:0.4f} seconds")
+        else:
+            print()  # add only linefeed
+    return df
+
+
+def query_welding_measurements(engine: sa.Engine, udi: str, show_performance: bool = False) -> pd.DataFrame | None:
+    with engine.connect() as session:
+        sql=sa.text(f"""SELECT
+                m.ts,
+                m.udi,
+                m.counter,
+                m.position,
+                m.part_number,
+                m.line_id,
+                m.station_id,
+                m.`result`,
+                p.device_name,
+                p.program_no
+            FROM protocol.welding_measurements AS m
+            LEFT JOIN protocol.welding_parameters AS p ON (m.ref_parameter = p.hash)
+            WHERE m.udi = '{udi}'
+            ORDER BY m.ts DESC
+        """)
+        if show_performance:
+            tic = perf_counter()
+        print(sql)
+        df = pd.read_sql(sql, session)
+        print(f"Read {len(df)} data records.", end="")
+        if show_performance:
+            toc = perf_counter()
+            print(f"Need {toc - tic:0.4f} seconds")
+        else:
+            print()  # add only linefeed
+    return df
+
 
 
 #--------------------------------------------------------------------------------------------------
@@ -184,7 +240,7 @@ class WindowUI(object):
         self.mainframe = self._create_head_ui(self.root)
         self.mainframe.pack(side="top", fill="both", expand=True)
         #self.mainframe.grid(column=0, row=0, sticky=tk.NSEW)
-        self.positions_ui, e_pos = self._create_position_ui(self.root, 10)
+        self.positions_ui, e_pos = self._create_position_ui(self.root, 0)  # empty list
         self.positions_ui.pack(side="top", fill="both", expand=True)
         #self.positions_ui.grid(column=0, row=1, sticky=tk.NSEW)
 
@@ -388,6 +444,42 @@ class WindowUI(object):
         return self._update_position_ui(frame, number_of_positions)
 
 
+    def _collect_operator_information(self, card_id: str) -> Tuple[bool, dict]:
+        print(f"CHECK ID {card_id} from database...")
+        engine, _ = get_teststand_users_db_connector()
+        user_df = query_teststand_users_for_match(engine, card_id)
+
+        if len(user_df) == 0:
+            # not found! -> do not login
+            showinfo("WARNING", f"User login not found in database.")
+            return False, {}
+
+        user = {
+            "username": user_df.iloc[0, 0],
+            "pwd": user_df.iloc[0, 1],
+            "access": int(user_df.iloc[0, 2]),
+        }
+        if user["access"] == 0:
+            # has no access!
+            showinfo("WARNING", f'User {user["username"]} is not allowed to login.')
+            return False, user
+        return True, user
+
+
+    def _collect_uut_information(self, udi: str) -> Tuple[bool, pd.DataFrame]:
+        print("Requesting database for UDI to get welding positions...")
+        engine, _ = get_protocol_db_connector()
+        uut_df = query_welding_measurements(engine, udi, show_performance=True)
+        if len(uut_df) == 0:
+            # not found! -> do not proceed
+            txt = f"No Data in Database for UDI {udi} found, cannot proceed!"
+            print(txt)
+            showinfo("WARNING", txt)
+            return False, uut_df
+        print(f"Got record: {len(uut_df)}")
+        return True, uut_df
+
+
     def process_command_queue(self):
         if not self.q_scan.empty():
             a = self.q_scan.get()
@@ -395,22 +487,37 @@ class WindowUI(object):
             _do_update = False
             _play_soundfile = None
             if a:
+                if "card_id_scanned" in a:
+                    _card_id = a["card_id_scanned"]
+                    _op_ok, _operator_info = self._collect_operator_information(_card_id)
+                    if _op_ok:
+                        pass
+
                 if "udi_scanned" in a:
                     _udi = a["udi_scanned"]
                     print("UI:UPDATE UDI:", _udi)
-                    # test of read function:
+                    # 1) read excel file for validation of human entries
                     try:
                         fn = find_excel_for_udi(_udi)
                         forces_df = read_excel_of_peeltester(fn)
                         print(forces_df.dtypes, forces_df.head(20),)
-                        #self._update_position_ui(self.positions_ui, randint(0, len(forces_df)))
-                        self.positions_ui.destroy()
-                        self.positions_ui, _ = self._create_position_ui(self.root, randint(0, len(forces_df)))
-                        #self.positions_ui.grid(column=0, row=1, sticky=tk.NSEW)
-                        self.positions_ui.pack(side="top", fill="both", expand=True)
                     except Exception as ex:
                         # cannot read
                         print(f"Cannot read data for UDI {_udi}", ex)
+                        forces_df = None
+                    # 2) read database for welding measurements of this UDI
+                    _uut_df = self._collect_uut_information(_udi)
+                    # 3) Prepare UI with needed positions
+                    if len(_uut_df):
+                        _positions = len(_uut_df)
+                    else:
+                        _positions = randint(0, len(forces_df)) if forces_df else 0
+
+                    #self._update_position_ui(self.positions_ui, randint(0, len(forces_df)))
+                    self.positions_ui.destroy()
+                    self.positions_ui, _ = self._create_position_ui(self.root, _positions)
+                    #self.positions_ui.grid(column=0, row=1, sticky=tk.NSEW)
+                    self.positions_ui.pack(side="top", fill="both", expand=True)
 
                     #self.label_udi.config(background="lightblue", foreground="black")
                     self.var_udi.set(_udi)
@@ -506,33 +613,6 @@ def esc_values(lst: List[tuple]) -> str:
     return ",".join([f"{k}={_esc(v)}" for k,v in lst])
 
 
-def collect_parameters(self) -> List:
-    """
-
-    Raises:
-        Exception: _description_
-    """
-
-    _part_number = "???"
-    _sequence_revision = "???"
-    print(f"PART NUMBER: {_part_number}")
-    # 4. we need the program sequence of the AWS welder for the given part number
-    print("Requesting database for sequence...")
-    # 3. create the database interface (recreate it here as the connecton could time-out otherwise)
-    engine, session_maker = get_protocol_db_connector()
-    with session_maker() as session:
-        response = session.execute(text(
-                f"SELECT revision,program_sequence,parameter FROM `spsconfig` AS sc "+\
-                f"  WHERE sc.part_number={_esc(_part_number)} "+\
-                f"  AND sc.revision={_esc(_sequence_revision)}"
-                #f"  ORDER BY revision DESC"
-                ))
-        rows = response.fetchall()
-    if len(rows) == 0:
-        # not found! -> do not proceed
-        raise Exception(f"No Data in Database for part {_part_number} found, cannot proceed!")
-    print(f"Got record: {rows[0]}")
-    return rows[0]
 
 
 #--------------------------------------------------------------------------------------------------
@@ -590,11 +670,19 @@ class ProcessScanner(mp.Process):
         else:
             # ********** Simulation Profile *************
             while True:
-                sleep(8.0)
-                #_udi = "1CELL" + get_random_digits_string(12)
+                sleep(3.0)
+                _card_id = "007"
+                self.ui_queue.put({"card_id_scanned": _card_id})  # FAIL
+                sleep(2.0)
+                _card_id = "00"
+                self.ui_queue.put({"card_id_scanned": _card_id})  # SUCCESS
+
+                sleep(5.0)
+                _udi = "1CELL" + get_random_digits_string(12)
+                self.ui_queue.put({"udi_scanned": _udi})  # FAIL
+                sleep(2.0)
                 _udi = "1CELL00000002555"
-                self.ui_queue.put({"udi_scanned": _udi})
-                #sleep(10.0)
+                self.ui_queue.put({"udi_scanned": _udi})  # SUCCESS
 
 
 #--------------------------------------------------------------------------------------------------
