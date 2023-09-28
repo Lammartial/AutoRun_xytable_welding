@@ -22,15 +22,17 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from datetime import timezone, datetime
 from winsound import PlaySound, SND_FILENAME
 from random import randint
-import sqlalchemy as sa
 
 from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
 
 # import SQL managing modules
+import sqlalchemy as sa
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from rrc.dbcon import get_protocol_db_connector, get_teststand_users_db_connector
 from rrc.barcode_scanner import create_barcode_scanner
+from rrc.ui.login_dialog import identify_user
+
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -237,6 +239,7 @@ class WindowUI(object):
         #style.configure('B1.TButton', foreground="red", background='#232323')
         #style.map('B1.TButton', background=[("active","#ff0000")])
 
+
         self.mainframe = self._create_head_ui(self.root)
         self.mainframe.pack(side="top", fill="both", expand=True)
         #self.mainframe.grid(column=0, row=0, sticky=tk.NSEW)
@@ -387,7 +390,6 @@ class WindowUI(object):
         # )
         save_button.grid(row=1, column=3, columnspan=2, rowspan=4, ipady=30, ipadx=15)
         save_button.focus_set()
-
         return frame
 
 
@@ -670,12 +672,12 @@ class ProcessScanner(mp.Process):
         else:
             # ********** Simulation Profile *************
             while True:
-                sleep(3.0)
-                _card_id = "007"
-                self.ui_queue.put({"card_id_scanned": _card_id})  # FAIL
-                sleep(2.0)
-                _card_id = "00"
-                self.ui_queue.put({"card_id_scanned": _card_id})  # SUCCESS
+                # sleep(3.0)
+                # _card_id = "007"
+                # self.ui_queue.put({"card_id_scanned": _card_id})  # FAIL
+                # sleep(2.0)
+                # _card_id = "00"
+                # self.ui_queue.put({"card_id_scanned": _card_id})  # SUCCESS
 
                 sleep(5.0)
                 _udi = "1CELL" + get_random_digits_string(12)
@@ -720,6 +722,14 @@ if __name__ == '__main__':
     w = None
     s = None
     try:
+        # STEP 1: login operator
+        ok = False
+        access = 0
+        while not ok and not access > 0:
+            ok, username, _, access = identify_user(allow_manual_edit=True)
+
+        # STEP 2: start dialog for this operator
+        #
         # Establish communication queues
         q_cmd = mp.Queue()
         q_scan = mp.Queue()
