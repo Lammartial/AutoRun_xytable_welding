@@ -202,13 +202,13 @@ class WindowUI(object):
 
 #--------------------------------------------------------------------------------------------------
 def identify_user(allow_manual_edit:bool = False) -> Tuple[bool, str, str]:
-    """Login user to TestStand using context IDispatch interface (block of data)
+    """Login user to TestStand with fixed titel to be called from TS.
 
     Args:
-        context (dict): TestStand context
+        allow_manual_edit (bool, optional): _description_. Defaults to False.
 
     Returns:
-        Tuple[bool, str]: return values to a TestStand container that expects two types in this order.
+        Tuple[bool, str, str]: return values to a TestStand container that expects three types in this order.
     """
 
     _log = getLogger(__name__, DEBUG)
@@ -220,6 +220,41 @@ def identify_user(allow_manual_edit:bool = False) -> Tuple[bool, str, str]:
     s = None
     try:
         w = WindowUI(title="TestStand - Login", allow_manual_edit=allow_manual_edit)
+        w.run_mainloop()
+        # in w.USER are the user information; if None, nobody is logged in
+        if w.USER:
+            _user = w.USER
+            _login = True
+    except KeyboardInterrupt as kx:
+        # user stopped process
+        pass
+    finally:
+        pass
+
+    return _login, _user["username"], _user["pwd"], _user["access"]
+
+#--------------------------------------------------------------------------------------------------
+
+def identify_user_with_title(allow_manual_edit: bool = False, title: bool = "TestStand - Login") -> Tuple[bool, str, str]:
+    """Login user allowing flexible dialog title.
+
+    Args:
+        allow_manual_edit (bool, optional): _description_. Defaults to False.
+        title (bool, optional): _description_. Defaults to "TestStand - Login".
+
+    Returns:
+        Tuple[bool, str, str]:  return values as tuples.
+    """
+
+    _log = getLogger(__name__, DEBUG)
+
+    _user = { "username": "", "pwd": "", "access": 0 }
+    _login = False
+    p = None
+    w = None
+    s = None
+    try:
+        w = WindowUI(title=title, allow_manual_edit=allow_manual_edit)
         w.run_mainloop()
         # in w.USER are the user information; if None, nobody is logged in
         if w.USER:

@@ -31,7 +31,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from rrc.dbcon import get_protocol_db_connector, get_teststand_users_db_connector
 from rrc.barcode_scanner import create_barcode_scanner
-from rrc.ui.login_dialog import identify_user
+from rrc.ui.login_dialog import identify_user_with_title
 
 
 # --------------------------------------------------------------------------- #
@@ -167,7 +167,7 @@ def query_welding_measurements(engine: sa.Engine, udi: str, show_performance: bo
 
 class WindowUI(object):
 
-    def __init__(self, command_queue: mp.Queue, scan_queue: mp.Queue, title: str = "PEEL TEST DIALOG"):
+    def __init__(self, command_queue: mp.Queue, scan_queue: mp.Queue, username: str, title: str = "PEEL TEST DIALOG"):
         global DEBUG, PRODUCTION_MODE
 
         self._log = getLogger(__name__, DEBUG)
@@ -180,7 +180,7 @@ class WindowUI(object):
 
         #self.var_position = [tk.IntVar(self.root, i) for i in range(4)]
         self.var_part_number = tk.StringVar(self.root, "")
-        self.var_operator_id = tk.StringVar(self.root, "")
+        self.var_operator = tk.StringVar(self.root, username)
         self.var_udi = tk.StringVar(self.root, "")
 
         self.root.withdraw()  # hide window
@@ -356,8 +356,8 @@ class WindowUI(object):
 
         # Labels + entry fields
         _row = 1
-        ttk.Label(frame, text="Operator ID", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
-        e_op = ttk.Entry(frame, textvariable=self.var_operator_id)
+        ttk.Label(frame, text="Operator", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
+        e_op = ttk.Entry(frame, textvariable=self.var_operator, state="disabled")
         e_op.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
         _row += 1
         ttk.Label(frame, text="").grid(row=_row, column=0, columnspan=2, ipady=10)
@@ -723,18 +723,19 @@ if __name__ == '__main__':
     s = None
     try:
         # STEP 1: login operator
-        ok = False
         access = 0
-        while not ok and not access > 0:
-            ok, username, _, access = identify_user(allow_manual_edit=True)
-
+        while not access > 0:
+            ok, username, _, access = identify_user_with_title(allow_manual_edit=True, title="PEEL TEST DIALOG - User Login")
+            if not ok:
+                print("User has terminated dialog.")
+                exit()
         # STEP 2: start dialog for this operator
         #
         # Establish communication queues
         q_cmd = mp.Queue()
         q_scan = mp.Queue()
         # start UI in this process waiting for user input
-        w = WindowUI(q_cmd, q_scan)
+        w = WindowUI(q_cmd, q_scan, username)
         # start sub-process for scanner
         s = ProcessScanner(args.scannerport, q_scan)
         s.start()
