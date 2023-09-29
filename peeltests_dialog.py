@@ -149,7 +149,7 @@ def query_welding_measurements(engine: sa.Engine, udi: str, show_performance: bo
             FROM protocol.welding_measurements AS m
             LEFT JOIN protocol.welding_parameters AS p ON (m.ref_parameter = p.hash)
             WHERE m.udi = '{udi}'
-            ORDER BY m.ts DESC
+            ORDER BY m.position ASC
         """)
         if show_performance:
             tic = perf_counter()
@@ -270,22 +270,22 @@ class WindowUI(object):
         # Labels + entry fields
         _row = 1
         ttk.Label(frame, text="Operator", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
-        e_op = ttk.Entry(frame, textvariable=self.var_operator, state="disabled")
-        e_op.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
+        self.entry_operator = ttk.Entry(frame, textvariable=self.var_operator, state="disabled")
+        self.entry_operator.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
         _row += 1
         ttk.Label(frame, text="").grid(row=_row, column=0, columnspan=2, ipady=10)
         _row += 1
         ttk.Label(frame, text="LINE", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
-        e_line_id = ttk.Entry(frame, textvariable=self.var_line_id, state="disabled")
-        e_line_id.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
+        self.entry_line_id = ttk.Entry(frame, textvariable=self.var_line_id, state="disabled")
+        self.entry_line_id.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
         _row += 1
         ttk.Label(frame, text="UDI", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
-        e_udi = ttk.Entry(frame, textvariable=self.var_udi, state="disabled")
-        e_udi.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
+        self.entry_udi = ttk.Entry(frame, textvariable=self.var_udi, state="disabled")
+        self.entry_udi.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
         _row += 1
         ttk.Label(frame, text="Part Number", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
-        e_pn = ttk.Entry(frame, textvariable=self.var_part_number, state="disabled")
-        e_pn.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
+        self.entry_part_number = ttk.Entry(frame, textvariable=self.var_part_number, state="disabled")
+        self.entry_part_number.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
         _row += 1
         
         ttk.Label(frame, text="STATUS", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
@@ -439,11 +439,17 @@ class WindowUI(object):
                         forces_df = None
                     
                     # 2) read database for welding measurements of this UDI
-                    _uut_df = self._collect_uut_information(_udi)
-
+                    ok, uut_df = self._collect_uut_information(_udi)                    
                     # 3) Prepare UI with needed positions
-                    if len(_uut_df):
-                        _positions = len(_uut_df)
+                    if len(uut_df):
+                        _positions = len(uut_df)
+                        if len(uut_df) > 0:
+                            # get some overall info from the first entry of DB
+                            head_info = uut_df.iloc[0].to_dict()
+                            print(head_info)
+                            self.var_part_number.set(head_info["part_number"])
+                            self.var_line_id.set(head_info["line_id"])
+                            #head_info["ts"]
                     else:
                         _positions = randint(0, len(forces_df)) if forces_df else 0
 
