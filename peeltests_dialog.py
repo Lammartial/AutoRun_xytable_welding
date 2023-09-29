@@ -9,7 +9,7 @@ import multiprocessing as mp
 import itertools
 import tkinter as tk
 import tkinter.ttk as ttk
-from tkinter.messagebox import showinfo
+from tkinter.messagebox import showinfo, showerror, showwarning
 #import ttkbootstrap as ttk
 #from ttkbootstrap.constants import *
 #import sv_ttk
@@ -58,6 +58,8 @@ EXCELFILES_SEARCH_PATH: Path = None  # where to search for peel tester measureme
 import random
 import string
 
+def heinz(x, reason):
+    pass
 
 def get_random_letter_string(length):
     # choose from all lowercase letter
@@ -166,6 +168,8 @@ def query_welding_measurements(engine: sa.Engine, udi: str, show_performance: bo
 
 
 #--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 
 
 class WindowUI(object):
@@ -186,7 +190,14 @@ class WindowUI(object):
         self.var_operator = tk.StringVar(self.root, username)
         self.var_line_id = tk.StringVar(self.root, "")
         self.var_udi = tk.StringVar(self.root, "")
-        self.var_label_status = tk.StringVar(self.root, "STATUS?")
+        self.var_positions = tk.StringVar(self.root, "")  # need to be converted to int on validation !
+        self.var_label_status = tk.StringVar(self.root, "")
+        # these are empty list on purpose - they'll be poulated later by callbacks
+        self.var_peelforce_ax1 = [tk.DoubleVar(self.root, None) for i in range(0)]
+        self.var_peelforce_ax2 = [tk.DoubleVar(self.root, None) for i in range(0)]
+        self.var_visual_inspection_before = [tk.BooleanVar(self.root, None) for i in range(0)]
+        self.var_visual_inspection_after = [tk.BooleanVar(self.root, None) for i in range(0)]
+
         self.root.withdraw()  # hide window
         self.root.title(title)
         # set App icon
@@ -229,10 +240,18 @@ class WindowUI(object):
         style.configure('Frame1.TFrame', background='red')
         style.configure('Frame2.TFrame', background='blue')
 
-
+        # we group two layouts on top of each other: 
+        #
+        #   mainframe -> the common data of operatorand product
+        #   positions_ui -> dynamic list of positions to enter by operator
+        #
+        self.vcmd_callback = self.root.register(self.validate_positions_change)
+        self.positions_ui = None  # the self.positions_ui will be created by the positons change callback! 
         self.mainframe = self._create_head_ui(self.root)
         self.mainframe.pack(side="top", anchor="n", fill="x", expand=False, padx=_padall, pady=_padall)
-        self.positions_ui, e_pos = self._create_position_ui_and_show(self.root, 0)  # empty list
+        # the self.positions_ui will be created by the positons change callback! 
+        self.validate_positions_change(force=True)  # we need to trigger a change validation here to create a zero list
+        #self.positions_ui = self._create_position_ui_and_show(self.root, 0)  # empty list
 
         # hidden "ok" button to programmatically close this app
         # ok_button.bind("<Return>", _accept_udi)
@@ -248,8 +267,32 @@ class WindowUI(object):
         self.save_button.focus_set()
 
 
+    def validate_positions_change(self, force: bool = False) -> bool: 
+        # using focusout as event
+        try:
+            value = int(self.var_positions.get())     
+            if (not force) and (value == len(self.var_peelforce_ax1)):
+                return True
+            if not (value >= 0) and (value < 30):
+                return False
+            if self.positions_ui:
+                self.positions_ui.destroy()
+            self.positions_ui = self._create_position_ui_and_show(self.root, value)
+            return True
+        except Exception as ex:
+            pass  # ignore
+        return False
+    
+    
+    #----------------------------------------------------------------------------------------------
+    
 
+    def qualify_and_save_to_db(self):
+        
+        if not self.qualify_save_button_state():
+            showerror("ERROR", "Cannot save to database")
 
+    #----------------------------------------------------------------------------------------------
     def _create_head_ui(self, root: tk.Tk) -> ttk.Frame:
         _padall = 8
         frame = ttk.Frame(root, pad=(_padall,_padall,_padall,_padall), takefocus=False,
@@ -273,7 +316,7 @@ class WindowUI(object):
         self.entry_operator = ttk.Entry(frame, textvariable=self.var_operator, state="disabled")
         self.entry_operator.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
         _row += 1
-        ttk.Label(frame, text="").grid(row=_row, column=0, columnspan=2, ipady=10)
+        ttk.Label(frame, text="").grid(row=_row, column=0, columnspan=2)
         _row += 1
         ttk.Label(frame, text="LINE", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
         self.entry_line_id = ttk.Entry(frame, textvariable=self.var_line_id, state="disabled")
@@ -287,7 +330,13 @@ class WindowUI(object):
         self.entry_part_number = ttk.Entry(frame, textvariable=self.var_part_number, state="disabled")
         self.entry_part_number.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
         _row += 1
-        
+        ttk.Label(frame, text="Positions", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
+        self.entry_positions = ttk.Entry(frame, textvariable=self.var_positions,
+                                         validatecommand=self.vcmd_callback,
+                                         validate="focusout",
+                                         state="disabled" if PRODUCTION_MODE else "enabled")        
+        self.entry_positions.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)        
+        _row += 1
         ttk.Label(frame, text="STATUS", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
         self.label_status = ttk.Label(frame,
             textvariable=self.var_label_status, justify="left",
@@ -300,8 +349,8 @@ class WindowUI(object):
             #style="Accent.TButton",
             #style="Toggle.TButton",
             style="W.Toggle.TButton",
-
-            #command=lambda: self.q_cmd.put({"move_counter": -1})
+            #state="disabled",
+            command=lambda: self.qualify_and_save_to_db(),
         )  # grid does NOT return self object, so we need to split the grid call!
         # save_button = tk.Button(frame,
         #     text="SAVE to DB",
@@ -314,7 +363,8 @@ class WindowUI(object):
         return frame
 
 
-    def _update_position_ui(self, frame: ttk.Frame, number_of_positions: int) -> Tuple[ttk.Frame, List[Tuple]]:
+    #----------------------------------------------------------------------------------------------
+    def _update_position_ui(self, frame: ttk.Frame, number_of_positions: int) -> ttk.Frame:
         count_columns, count_rows = frame.grid_size()
 
         _row = 1
@@ -329,27 +379,26 @@ class WindowUI(object):
         # we need to generate the vars dynamically
         self.var_peelforce_ax1 = [tk.DoubleVar(self.root, None) for i in range(number_of_positions)]
         self.var_peelforce_ax2 = [tk.DoubleVar(self.root, None) for i in range(number_of_positions)]
-        self.var_visual_inspection_ax1 = [tk.BooleanVar(self.root, None) for i in range(number_of_positions)]
-        self.var_visual_inspection_ax2 = [tk.BooleanVar(self.root, None) for i in range(number_of_positions)]
+        self.var_visual_inspection_before = [tk.BooleanVar(self.root, None) for i in range(number_of_positions)]
+        self.var_visual_inspection_after = [tk.BooleanVar(self.root, None) for i in range(number_of_positions)]
         e_pos = []
         _row += 1
         for i in range(number_of_positions):
             ttk.Label(frame, text=f"Position {i}:", justify="left").grid(row=_row, column=0, sticky=tk.NSEW),
-            _visual_inspection_ax1 = ttk.Checkbutton(frame, variable=self.var_visual_inspection_ax1[i], onvalue=1, offvalue=0)
-            _visual_inspection_ax1.grid(row=_row, column=1)
+            _visual_inspection_before = ttk.Checkbutton(frame, variable=self.var_visual_inspection_before[i], onvalue=1, offvalue=0)
+            _visual_inspection_before.grid(row=_row, column=1)
             _peelforce_ax1 = ttk.Entry(frame, textvariable=self.var_peelforce_ax1[i])
             _peelforce_ax1.grid(row=_row, column=2)
             _peelforce_ax2 = ttk.Entry(frame, textvariable=self.var_peelforce_ax2[i])
             _peelforce_ax2.grid(row=_row, column=3)
-            _visual_inspection_ax2 = ttk.Checkbutton(frame, variable=self.var_visual_inspection_ax2[i], onvalue=1, offvalue=0)
-            _visual_inspection_ax2.grid(row=_row, column=4)
-            # list them for later access
-            e_pos.append((_peelforce_ax1, _peelforce_ax2, _visual_inspection_ax1, _visual_inspection_ax2))
+            _visual_inspection_after = ttk.Checkbutton(frame, variable=self.var_visual_inspection_after[i], onvalue=1, offvalue=0)
+            _visual_inspection_after.grid(row=_row, column=4)
             _row += 1
-        return frame, e_pos
+        return frame
 
 
-    def _create_position_ui_and_show(self, root: tk.Tk, number_of_positions: int) -> Tuple[ttk.Frame, List[Tuple]]:
+    #----------------------------------------------------------------------------------------------
+    def _create_position_ui_and_show(self, root: tk.Tk, number_of_positions: int) -> ttk.Frame:
         _padall = 4
         frame = ttk.Frame(root, pad=(_padall,_padall,_padall,_padall), takefocus=False,
                           #style="Frame1.TFrame"  # DEBUG
@@ -365,12 +414,32 @@ class WindowUI(object):
         frame.grid_columnconfigure(2, weight=1)
         frame.grid_columnconfigure(3, weight=1)
         frame.grid_columnconfigure(4, weight=1)
-        frame, e_pos = self._update_position_ui(frame, number_of_positions)
+        frame  = self._update_position_ui(frame, number_of_positions)
         # show
         frame.pack(side="top", anchor="n", fill="both", expand=True, padx=10, pady=5)
-        return frame, e_pos
+        return frame
 
 
+    #----------------------------------------------------------------------------------------------
+    def qualify_save_button_state(self) -> bool:
+        try:
+            _positions = int(self.var_positions.get())
+            # check number of entries is equal positions definition
+            ok = ((_positions > 0) and
+                len(self.var_peelforce_ax1) == _positions and
+                len(self.var_peelforce_ax2) == _positions and
+                len(self.var_visual_inspection_before) == _positions and
+                len(self.var_visual_inspection_after) == _positions and
+                # check if all vars have values (the visual inspections cannot be checked!)
+                all([(v.get() and (float(v.get()) > 0)) for v in self.var_peelforce_ax1]) and
+                all([(v.get() and (float(v.get()) > 0)) for v in self.var_peelforce_ax2])
+            ) 
+        except Exception as ex:
+            ok = False
+        #self.save_button.state = "enabled" if ok else "disabled"
+        return ok
+
+    #----------------------------------------------------------------------------------------------
     def _collect_operator_information(self, card_id: str) -> Tuple[bool, dict]:
         #
         # UNUSED HERE - we are using the login dialog conform to Teststand
@@ -396,6 +465,7 @@ class WindowUI(object):
         return True, user
 
 
+    #----------------------------------------------------------------------------------------------
     def _collect_uut_information(self, udi: str) -> Tuple[bool, pd.DataFrame]:
         print("Requesting database for UDI to get welding positions...")
         engine, _ = get_protocol_db_connector()
@@ -430,31 +500,31 @@ class WindowUI(object):
                     # 1) read excel file for validation of human entries
                     try:
                         fn = find_excel_for_udi(_udi)
-                        forces_df = read_excel_of_peeltester(fn)
-                        print(forces_df.dtypes, forces_df.head(20),)
-                        self.var_label_status.set(f"Found excel file with {len(forces_df)} force entries.")
+                        self.forces_df = read_excel_of_peeltester(fn)
+                        print(self.forces_df.dtypes, self.forces_df.head(20),)
+                        self.var_label_status.set(f"Found excel file with {len(self.forces_df)} force entries.")
                     except Exception as ex:
                         # cannot read
                         print(f"Cannot read data for UDI {_udi}", ex)
-                        forces_df = None
+                        self.forces_df = None
                     
                     # 2) read database for welding measurements of this UDI
-                    ok, uut_df = self._collect_uut_information(_udi)                    
+                    ok, self.uut_df = self._collect_uut_information(_udi)                    
                     # 3) Prepare UI with needed positions
-                    if len(uut_df):
-                        _positions = len(uut_df)
-                        if len(uut_df) > 0:
+                    if len(self.uut_df):
+                        _positions = len(self.uut_df)
+                        if len(self.uut_df) > 0:
                             # get some overall info from the first entry of DB
-                            head_info = uut_df.iloc[0].to_dict()
+                            head_info = self.uut_df.iloc[0].to_dict()
                             print(head_info)
                             self.var_part_number.set(head_info["part_number"])
                             self.var_line_id.set(head_info["line_id"])
                             #head_info["ts"]
                     else:
-                        _positions = randint(0, len(forces_df)) if forces_df else 0
+                        _positions = randint(0, len(self.forces_df)) if self.forces_df else 0
 
-                    self.positions_ui.destroy()
-                    self.positions_ui, _ = self._create_position_ui_and_show(self.root, _positions)
+                    self.var_positions.set(_positions)
+                    self.validate_positions_change(force=True)  # we need to trigger a change validation here
 
                     #self.label_udi.config(background="lightblue", foreground="black")
                     self.var_udi.set(_udi)
