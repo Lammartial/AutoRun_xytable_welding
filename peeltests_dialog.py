@@ -927,7 +927,7 @@ if __name__ == '__main__':
 
     print("=== PEEL TEST DIALOG ===")
 
-    _default_scanner_resource = "COM1"
+    _default_scanner_resource = "COM1,9600,8N1"
     _default_peeltester_filepath_ = Path(__file__).parent / "sampledata"  # DEVELOPMENT
     _default_peeltester_filepath_ = Path(__file__).parent  # PRODUCTION
 
@@ -936,7 +936,7 @@ if __name__ == '__main__':
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("--development", action="store_true", help="Activate development mode.")
     parser.add_argument("--excelfilepath", action="store", default=_default_peeltester_filepath_, help="Path to search for peel tester output excel files containing UDI in filename.")
-    parser.add_argument("--scannerport", action="store", default=_default_scanner_resource, help="Resource string for scanner, which can be IP:PORT or local PORT.")
+    parser.add_argument("--scannerport", action="store", default=_default_scanner_resource, help="Resource string for scanner, which can be IP:PORT or local PORT,[baud],[8N1|8E1|8O1].")
     parser.add_argument("--simulate_scan", action="store_true", help="Set a product for simulated UDI scan interface.")
 
     args = parser.parse_args()
