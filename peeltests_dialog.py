@@ -6,7 +6,7 @@ import json
 import yaml
 import pandas as pd
 import multiprocessing as mp
-import itertools
+import itertools as it
 import tkinter as tk
 import tkinter.ttk as ttk
 from tkinter.messagebox import showinfo, showerror, showwarning
@@ -95,6 +95,7 @@ def find_excel_for_udi(udi: str) -> Path:
     #files = reversed(sorted(list(EXCELFILES_SEARCH_PATH.glob(f"**/*{udi}.xls*"))))
     return files[-1]  # last one is most recent
 
+
 def read_excel_of_peeltester(fp: Path) -> pd.DataFrame:
     df = pd.read_excel(fp)
     # we need to finde the line range which contains the interesting data in the first 4 columns
@@ -172,15 +173,54 @@ def query_welding_measurements(engine: sa.Engine, udi: str, show_performance: bo
 #--------------------------------------------------------------------------------------------------
 
 
+class PassFailCombobox(ttk.Combobox):
+    def __init__(self, *args, **kwargs):
+        _pass_fail = ("Pass", "Fail")
+        super().__init__(*args, **kwargs, values=_pass_fail, state="readonly")
+        _pd = self.tk.call('ttk::combobox::PopdownWindow', self)  # get popdownWindow reference 
+        lb = _pd + '.f.l' #get popdown listbox
+        self._bind(('bind', lb),"<KeyPress>", self.popup_key_pressed, None)
+        self.bind("<Key>", self.find_value_by_keypress)
+
+    def popup_key_pressed(self, event):
+        """Method allows by key selection if the dropdown has already opened."""
+
+        values = self.cget("values")
+        for i in it.chain(range(self.current() + 1, len(values)), range(0,self.current())):
+            if event.char.lower() == values[i][0].lower():
+                self.current(i)
+                self.icursor(i)
+                self.tk.eval(event.widget + ' selection clear 0 end')  # clear current selection
+                self.tk.eval(event.widget + ' selection set ' + str(i))  # select new element
+                self.tk.eval(event.widget + ' see ' + str(i))  # spin combobox popdown for selected element will be visible
+                return
+
+    def find_value_by_keypress(self, event) -> None:
+        """method allows user to search through Combobox values by keyboard press
+        as long as dropdown not is open."""
+
+        keypress = event.char
+        # If key pressed is a letter in alphabet 
+        if keypress.isalpha():
+            values = self.cget("values")
+            for i, c in enumerate(values):
+                if keypress.lower() in c.lower():
+                    self.current(i)
+                    return
+
+
+#--------------------------------------------------------------------------------------------------
+
+
 class WindowUI(object):
 
     def __init__(self, command_queue: mp.Queue, scan_queue: mp.Queue, username: str, title: str = "PEEL TEST DIALOG"):
-        global DEBUG, PRODUCTION_MODE
+        global DEBUG, PRODUCTION_MODE, FORCES_LIMITS_SELECTION
 
         self._log = getLogger(__name__, DEBUG)
         self.q_cmd = command_queue
         self.q_scan = scan_queue
-        row_itr = itertools.count()
+        row_itr = it.count()
 
         # Create the Tk root and mainframe.
         self.root = tk.Tk()
@@ -191,12 +231,20 @@ class WindowUI(object):
         self.var_line_id = tk.StringVar(self.root, "")
         self.var_udi = tk.StringVar(self.root, "")
         self.var_positions = tk.StringVar(self.root, "")  # need to be converted to int on validation !
+        self.var_forces_limits = tk.StringVar(self.root, "")
         self.var_label_status = tk.StringVar(self.root, "")
         # these are empty list on purpose - they'll be poulated later by callbacks
-        self.var_peelforce_ax1 = [tk.DoubleVar(self.root, None) for i in range(0)]
-        self.var_peelforce_ax2 = [tk.DoubleVar(self.root, None) for i in range(0)]
-        self.var_visual_inspection_before = [tk.BooleanVar(self.root, None) for i in range(0)]
-        self.var_visual_inspection_after = [tk.BooleanVar(self.root, None) for i in range(0)]
+        self.var_peelforce_ax1 = []
+        self.var_peelforce_ax2 = []
+        self.var_result_peelforce_ax1 = []
+        self.var_result_peelforce_ax2 = []
+        self.var_visual_inspection_before = []
+        self.var_visual_inspection_after = []
+        # to build the combobox
+        self.forces_limits_selection = FORCES_LIMITS_SELECTION
+        # these are the converted limits
+        self.limit_force_single_axis = float(0.0)
+        self.limit_forces_sum = float(0.0)
 
         self.root.withdraw()  # hide window
         self.root.title(title)
@@ -215,7 +263,7 @@ class WindowUI(object):
         #_w = root.winfo_width()
         #_h = root.winfo_height()
         _padall = 8
-        _w = 740  # width set manually
+        _w = 840  # width set manually
         _h = 500
         #_w = int(self.root.winfo_screenwidth() / 2)
         #_h = self.root.winfo_screenheight()
@@ -240,12 +288,15 @@ class WindowUI(object):
         style.configure('Frame1.TFrame', background='red')
         style.configure('Frame2.TFrame', background='blue')
 
+        
         # we group two layouts on top of each other: 
         #
         #   mainframe -> the common data of operatorand product
         #   positions_ui -> dynamic list of positions to enter by operator
         #
-        self.vcmd_callback = self.root.register(self.validate_positions_change)
+        self.vcmd_validate_positions_change = self.root.register(self.validate_positions_change)
+        self.vcmd_validate_force_limits_selection = self.root.register(self.validate_force_limits_selection)
+        self.vcmd_validate_forces_against_limits = self.root.register(self.validate_forces_against_limits)
         self.positions_ui = None  # the self.positions_ui will be created by the positons change callback! 
         self.mainframe = self._create_head_ui(self.root)
         self.mainframe.pack(side="top", anchor="n", fill="x", expand=False, padx=_padall, pady=_padall)
@@ -266,6 +317,53 @@ class WindowUI(object):
         self.root.focus_force()  # this is to activate the window again (important after programmatically closed)
         self.save_button.focus_set()
 
+    #----------------------------------------------------------------------------------------------
+
+
+    def _selection_to_limits(self):
+        s = self.var_forces_limits.get()
+        f = s.split("/")        
+        # we ignore the thickness
+        self.limit_force_single_axis = float(f[1].replace("N", ""))
+        self.limit_forces_sum = float(f[2].replace("N", ""))
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def validate_force_limits_selection(self, event) -> bool:
+        self._selection_to_limits()
+        self.validate_forces_against_limits(event)
+        return True
+
+
+    #----------------------------------------------------------------------------------------------
+
+    def validate_forces_against_limits(self, event) -> bool:
+        for i in range(len(self.var_peelforce_ax1)):
+            # check the axis forces against the selected thresholds
+            try:
+                _ax1 = float(self.var_peelforce_ax1[i].get())
+                self.var_result_peelforce_ax1[i].set("Pass" if (_ax1 >= self.limit_force_single_axis) else "Fail")
+            except Exception as ex:
+                _ax1 = 0
+                showwarning(title="Force not numeric", message=f"Please correct numeric value '{_ax1}' at Ax1 position {i}.")
+                return False
+                
+            try:
+                _ax2 = float(self.var_peelforce_ax2[i].get())
+                self.var_result_peelforce_ax2[i].set("Pass" if (_ax2 >= self.limit_force_single_axis) else "Fail")
+            except Exception as ex:
+                _ax2 = 0
+                showwarning("Force not numeric", f"Please correct numeric value '{_ax2}' at Ax2 position {i}.")
+                return False
+            
+            # check sum of axis forces
+            self.var_result_peelforces_sum[i].set("Pass" if ((_ax1 + _ax2) >= self.limit_forces_sum) else "Fail")
+        return True
+    
+    #----------------------------------------------------------------------------------------------
+
 
     def validate_positions_change(self, force: bool = False) -> bool: 
         # using focusout as event
@@ -282,15 +380,17 @@ class WindowUI(object):
         except Exception as ex:
             pass  # ignore
         return False
-    
-    
+
+
     #----------------------------------------------------------------------------------------------
-    
+
 
     def qualify_and_save_to_db(self):
         
         if not self.qualify_save_button_state():
-            showerror("ERROR", "Cannot save to database")
+            showwarning("WARNING", "Data not complete, cannot save to database yet.")
+            #showerror("ERROR", "Cannot save to database")
+
 
     #----------------------------------------------------------------------------------------------
     def _create_head_ui(self, root: tk.Tk) -> ttk.Frame:
@@ -298,7 +398,7 @@ class WindowUI(object):
         frame = ttk.Frame(root, pad=(_padall,_padall,_padall,_padall), takefocus=False,
                           #style="Frame2.TFrame"  # DEBUG
         )
-        frame.columnconfigure(5)
+        frame.columnconfigure(8)
         frame.rowconfigure(6, minsize=10)
 
         # configure the column width equally to center everything nicely
@@ -309,6 +409,9 @@ class WindowUI(object):
         frame.grid_columnconfigure(2, weight=1)
         frame.grid_columnconfigure(3, weight=1)
         frame.grid_columnconfigure(4, weight=1)
+        frame.grid_columnconfigure(5, weight=1)
+        frame.grid_columnconfigure(6, weight=1)
+        frame.grid_columnconfigure(7, weight=1)
 
         # Labels + entry fields
         _row = 1
@@ -318,10 +421,7 @@ class WindowUI(object):
         _row += 1
         ttk.Label(frame, text="").grid(row=_row, column=0, columnspan=2)
         _row += 1
-        ttk.Label(frame, text="LINE", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
-        self.entry_line_id = ttk.Entry(frame, textvariable=self.var_line_id, state="disabled")
-        self.entry_line_id.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
-        _row += 1
+        
         ttk.Label(frame, text="UDI", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
         self.entry_udi = ttk.Entry(frame, textvariable=self.var_udi, state="disabled")
         self.entry_udi.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
@@ -330,20 +430,19 @@ class WindowUI(object):
         self.entry_part_number = ttk.Entry(frame, textvariable=self.var_part_number, state="disabled")
         self.entry_part_number.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
         _row += 1
+        ttk.Label(frame, text="Line", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
+        self.entry_line_id = ttk.Entry(frame, textvariable=self.var_line_id, state="disabled")
+        self.entry_line_id.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
+        _row += 1
         ttk.Label(frame, text="Positions", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
         self.entry_positions = ttk.Entry(frame, textvariable=self.var_positions,
-                                         validatecommand=self.vcmd_callback,
+                                         validatecommand=self.vcmd_validate_positions_change,
                                          validate="focusout",
                                          state="disabled" if PRODUCTION_MODE else "enabled")        
-        self.entry_positions.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)        
-        _row += 1
-        ttk.Label(frame, text="STATUS", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
-        self.label_status = ttk.Label(frame,
-            textvariable=self.var_label_status, justify="left",
-            font=("-size", 12, "-weight", "bold"))
-        self.label_status.grid(row=_row, column=1, columnspan=4, pady=15, sticky=tk.NSEW)
-        _row += 1
+        self.entry_positions.grid(row=_row, column=1, columnspan=1, sticky=tk.NSEW)        
+        #_row += 1
 
+        # the button needs to focus before the force limits -> define here
         self.save_button = ttk.Button(frame,
             text="SAVE to DB",
             #style="Accent.TButton",
@@ -360,6 +459,28 @@ class WindowUI(object):
         #     width=20
         # )
         self.save_button.grid(row=1, column=3, columnspan=2, rowspan=4, ipady=30, ipadx=15)
+       
+       
+        ttk.Label(frame, text="Limits of Forces", justify="left").grid(row=_row, column=3, sticky=tk.NSEW)
+        self.entry_force_limits = ttk.Combobox(frame, textvariable=self.var_forces_limits, 
+                                               validate="focusout", 
+                                               validatecommand=(self.vcmd_validate_force_limits_selection, "%P"),
+                                               values=self.forces_limits_selection, state="readonly")
+        self.entry_force_limits.bind("<<ComboboxSelected>>", lambda x: self.validate_force_limits_selection(x))
+        self.entry_force_limits.current(0)  # preselect no. 1 in the list
+        self.entry_force_limits.grid(row=_row, column=4, columnspan=3, sticky=tk.NSEW)
+        self._selection_to_limits()
+        _row += 1
+        ttk.Label(frame, text="STATUS", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
+        self.label_status = ttk.Label(frame,
+            textvariable=self.var_label_status, justify="left",
+            #font=("-size", 12, "-weight", "bold"),
+            #font=("-size", 12),
+        )
+        self.label_status.grid(row=_row, column=1, columnspan=6, pady=15, sticky=tk.NSEW)
+        _row += 1
+
+       
         return frame
 
 
@@ -367,32 +488,51 @@ class WindowUI(object):
     def _update_position_ui(self, frame: ttk.Frame, number_of_positions: int) -> ttk.Frame:
         count_columns, count_rows = frame.grid_size()
 
+        _pass_fail = ("Pass", "Fail")
+
         _row = 1
-        ttk.Label(frame, text=f"Welding Position", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
-        ttk.Label(frame, text=f"Visual Inspection Before", justify="left").grid(row=_row, column=1, sticky=tk.NSEW)
-        ttk.Label(frame, text=f"Peel Force Ax1", justify="left").grid(row=_row, column=2, sticky=tk.NSEW)
-        ttk.Label(frame, text=f"Peel Force Ax2", justify="left").grid(row=_row, column=3, sticky=tk.NSEW)
-        ttk.Label(frame, text=f"Visual Inspection After", justify="left").grid(row=_row, column=4, sticky=tk.NSEW)
+        ttk.Label(frame, text=f"Welding\nPosition", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
+        ttk.Label(frame, text=f"VI\nBefore", justify="left").grid(row=_row, column=1, sticky=tk.NSEW)
+        ttk.Label(frame, text=f"Peel Force (N)\nMax Ax1", justify="left").grid(row=_row, column=2, sticky=tk.NSEW)
+        ttk.Label(frame, text=f"Result\nAx1", justify="left").grid(row=_row, column=3, sticky=tk.NSEW)
+        ttk.Label(frame, text=f"Peel Force (N)\n Max Ax2", justify="left").grid(row=_row, column=4, sticky=tk.NSEW)
+        ttk.Label(frame, text=f"Result\nAx2", justify="left").grid(row=_row, column=5, sticky=tk.NSEW)
+        ttk.Label(frame, text=f"Result\nSum", justify="left").grid(row=_row, column=6, sticky=tk.NSEW)
+        ttk.Label(frame, text=f"VI\n After", justify="left").grid(row=_row, column=7, sticky=tk.NSEW)
         _row += 1
-        ttk.Separator(frame, orient="horizontal").grid(row=_row, column=0,columnspan=5, ipady=2, sticky=tk.NSEW)
+        ttk.Separator(frame, orient="horizontal").grid(row=_row, column=0,columnspan=7, ipady=2, sticky=tk.NSEW)
 
         # we need to generate the vars dynamically
         self.var_peelforce_ax1 = [tk.DoubleVar(self.root, None) for i in range(number_of_positions)]
         self.var_peelforce_ax2 = [tk.DoubleVar(self.root, None) for i in range(number_of_positions)]
-        self.var_visual_inspection_before = [tk.BooleanVar(self.root, None) for i in range(number_of_positions)]
-        self.var_visual_inspection_after = [tk.BooleanVar(self.root, None) for i in range(number_of_positions)]
-        e_pos = []
+        self.var_result_peelforce_ax1 = [tk.StringVar(self.root, None) for i in range(number_of_positions)]
+        self.var_result_peelforce_ax2 = [tk.StringVar(self.root, None) for i in range(number_of_positions)]
+        self.var_result_peelforces_sum = [tk.StringVar(self.root, None) for i in range(number_of_positions)]
+        self.var_visual_inspection_before = [tk.StringVar(self.root, None) for i in range(number_of_positions)]
+        self.var_visual_inspection_after = [tk.StringVar(self.root, None) for i in range(number_of_positions)]
+        
         _row += 1
+        _combo_width = 8
         for i in range(number_of_positions):
             ttk.Label(frame, text=f"Position {i}:", justify="left").grid(row=_row, column=0, sticky=tk.NSEW),
-            _visual_inspection_before = ttk.Checkbutton(frame, variable=self.var_visual_inspection_before[i], onvalue=1, offvalue=0)
+            _visual_inspection_before = PassFailCombobox(frame, textvariable=self.var_visual_inspection_before[i], width=_combo_width)
             _visual_inspection_before.grid(row=_row, column=1)
-            _peelforce_ax1 = ttk.Entry(frame, textvariable=self.var_peelforce_ax1[i])
+            _peelforce_ax1 = ttk.Entry(frame, textvariable=self.var_peelforce_ax1[i], validate="focusout", validatecommand=(self.vcmd_validate_forces_against_limits, "%P"))
             _peelforce_ax1.grid(row=_row, column=2)
-            _peelforce_ax2 = ttk.Entry(frame, textvariable=self.var_peelforce_ax2[i])
-            _peelforce_ax2.grid(row=_row, column=3)
-            _visual_inspection_after = ttk.Checkbutton(frame, variable=self.var_visual_inspection_after[i], onvalue=1, offvalue=0)
-            _visual_inspection_after.grid(row=_row, column=4)
+            #_result_peelforce_ax1 = PassFailCombobox(frame, textvariable=self.var_result_peelforce_ax1[i], width=_combo_width)
+            #_result_peelforce_ax1.grid(row=_row, column=3)
+            _result_peelforce_ax1 = ttk.Checkbutton(frame, variable=self.var_result_peelforce_ax1[i], state="disabled", onvalue="Pass", offvalue="Fail")
+            _result_peelforce_ax1.grid(row=_row, column=3)
+            _peelforce_ax2 = ttk.Entry(frame, textvariable=self.var_peelforce_ax2[i], validate="focusout", validatecommand=(self.vcmd_validate_forces_against_limits, "%P"))            
+            _peelforce_ax2.grid(row=_row, column=4)
+            #_result_peelforce_ax2 = PassFailCombobox(frame, textvariable=self.var_result_peelforce_ax2[i], width=_combo_width)
+            #_result_peelforce_ax2.grid(row=_row, column=5)
+            _result_peelforce_ax2 = ttk.Checkbutton(frame, variable=self.var_result_peelforce_ax2[i], state="disabled", onvalue="Pass", offvalue="Fail")
+            _result_peelforce_ax2.grid(row=_row, column=5)
+            _result_peelforces_sum = ttk.Checkbutton(frame, variable=self.var_result_peelforces_sum[i], state="disabled", onvalue="Pass", offvalue="Fail")
+            _result_peelforces_sum.grid(row=_row, column=6)
+            _visual_inspection_after = PassFailCombobox(frame, textvariable=self.var_visual_inspection_after[i], width=_combo_width)
+            _visual_inspection_after.grid(row=_row, column=7)
             _row += 1
         return frame
 
@@ -403,9 +543,9 @@ class WindowUI(object):
         frame = ttk.Frame(root, pad=(_padall,_padall,_padall,_padall), takefocus=False,
                           #style="Frame1.TFrame"  # DEBUG
         )
-        frame.columnconfigure(5)
+        frame.columnconfigure(8)
         #frame.rowconfigure(6, minsize=10)
-
+        
         # configure the column width equally to center everything nicely
         #frame.grid(row=0, column=0, sticky="NESW")
         #frame.grid_rowconfigure(0, weight=1)
@@ -414,6 +554,9 @@ class WindowUI(object):
         frame.grid_columnconfigure(2, weight=1)
         frame.grid_columnconfigure(3, weight=1)
         frame.grid_columnconfigure(4, weight=1)
+        frame.grid_columnconfigure(5, weight=1)
+        frame.grid_columnconfigure(6, weight=1)
+        frame.grid_columnconfigure(7, weight=1)        
         frame  = self._update_position_ui(frame, number_of_positions)
         # show
         frame.pack(side="top", anchor="n", fill="both", expand=True, padx=10, pady=5)
@@ -423,17 +566,25 @@ class WindowUI(object):
     #----------------------------------------------------------------------------------------------
     def qualify_save_button_state(self) -> bool:
         try:
+            _pass_fail = ("Pass", "Fail")
             _positions = int(self.var_positions.get())
             # check number of entries is equal positions definition
             ok = ((_positions > 0) and
                 len(self.var_peelforce_ax1) == _positions and
                 len(self.var_peelforce_ax2) == _positions and
+                len(self.var_result_peelforce_ax1) == _positions and
+                len(self.var_result_peelforce_ax2) == _positions and
                 len(self.var_visual_inspection_before) == _positions and
-                len(self.var_visual_inspection_after) == _positions and
-                # check if all vars have values (the visual inspections cannot be checked!)
+                len(self.var_visual_inspection_after) == _positions)
+            ok = (ok and
                 all([(v.get() and (float(v.get()) > 0)) for v in self.var_peelforce_ax1]) and
-                all([(v.get() and (float(v.get()) > 0)) for v in self.var_peelforce_ax2])
-            ) 
+                all([(v.get() and (float(v.get()) > 0)) for v in self.var_peelforce_ax2]))
+            ok = (ok and
+                all([(v.get() and (v.get() in _pass_fail)) for v in self.var_result_peelforce_ax1]) and
+                all([(v.get() and (v.get() in _pass_fail)) for v in self.var_result_peelforce_ax2])) 
+            ok = (ok and
+                all([(v.get() and (v.get() in _pass_fail)) for v in self.var_visual_inspection_before]) and
+                all([(v.get() and (v.get() in _pass_fail)) for v in self.var_visual_inspection_after])) 
         except Exception as ex:
             ok = False
         #self.save_button.state = "enabled" if ok else "disabled"
@@ -502,7 +653,7 @@ class WindowUI(object):
                         fn = find_excel_for_udi(_udi)
                         self.forces_df = read_excel_of_peeltester(fn)
                         print(self.forces_df.dtypes, self.forces_df.head(20),)
-                        self.var_label_status.set(f"Found excel file with {len(self.forces_df)} force entries.")
+                        self.var_label_status.set(f"Found excel file with {len(self.forces_df)} entries of forces.")
                     except Exception as ex:
                         # cannot read
                         print(f"Cannot read data for UDI {_udi}", ex)
@@ -520,8 +671,14 @@ class WindowUI(object):
                             self.var_part_number.set(head_info["part_number"])
                             self.var_line_id.set(head_info["line_id"])
                             #head_info["ts"]
+                            _s = f" Found {len(self.uut_df)} welding positions in DB."
+                            _v = " Validation possible." if 2*len(self.uut_df) == len(self.forces_df) else " Cannot validate forces !"
                     else:
+                        _s = "No welding positions found in DB !"
+                        _v = ""
                         _positions = randint(0, len(self.forces_df)) if self.forces_df else 0
+                    
+                    self.var_label_status.set(self.var_label_status.get() + _s + _v)
 
                     self.var_positions.set(_positions)
                     self.validate_positions_change(force=True)  # we need to trigger a change validation here
@@ -684,13 +841,13 @@ class ProcessScanner(mp.Process):
                 # _card_id = "00"
                 # self.ui_queue.put({"card_id_scanned": _card_id})  # SUCCESS
 
-                sleep(5.0)
+                sleep(2.0)
                 _udi = "1CELL" + get_random_digits_string(12)
                 self.ui_queue.put({"udi_scanned": _udi})  # FAIL
-                sleep(5.0)
+                sleep(3.0)
                 _udi = "1CELL00000002555"
                 self.ui_queue.put({"udi_scanned": _udi})  # SUCCESS (missing positions)
-                sleep(5.0)
+                sleep(3.0)
                 _udi = "1CELL00000002B84"
                 self.ui_queue.put({"udi_scanned": _udi})  # SUCCESS (full positions)
 
@@ -722,6 +879,11 @@ if __name__ == '__main__':
     ENABLE_UDI_SCAN = (PRODUCTION_MODE or args.simulate_scan)
     SIMULATE_UDI_SCAN = args.simulate_scan
     EXCELFILES_SEARCH_PATH = Path(args.excelfilepath)
+
+    FORCES_LIMITS_SELECTION = [
+        "0.15mm / 20N / 60N",   # connector thickness / single / sum
+        "0.30mm / 70N / 140N"   # connector thickness / single / sum
+    ]
 
     # test of read function:
     #fn = find_excel_for_udi("1CELL00000002555")
