@@ -384,13 +384,44 @@ class WindowUI(object):
 
     #----------------------------------------------------------------------------------------------
 
+    def clear_dialog(self) -> None:
+        pass
 
-    def qualify_and_save_to_db(self):
+
+    def qualify_and_save_to_db(self) -> bool:
         
         if not self.qualify_save_button_state():
             showwarning("WARNING", "Data not complete, cannot save to database yet.")
             #showerror("ERROR", "Cannot save to database")
-
+            return False
+        # save the positions data set to the DB
+        df = pd.DataFrame({
+            "position": [idx for idx, v in enumerate(self.var_peelforce_ax1)],
+            "max_peelforce_ax1": [float(v.get()) for v in self.var_peelforce_ax1],
+            "max_peelforce_ax2": [float(v.get()) for v in self.var_peelforce_ax2],
+            "result_peelforce_ax1": [(v.get()[0].upper() if (v.get() and (v.get() != "")) else None) for v in self.var_result_peelforce_ax1],
+            "result_peelforce_ax2": [(v.get()[0].upper() if (v.get() and (v.get() != "")) else None) for v in self.var_result_peelforce_ax2],
+            "result_peelforces_sum": [(v.get()[0].upper() if (v.get() and (v.get() != "")) else None) for v in self.var_result_peelforces_sum],
+            "visual_inspection_before": [(v.get()[0].upper() if (v.get() and (v.get() != "")) else None) for v in self.var_visual_inspection_before],
+            "visual_inspection_after": [(v.get()[0].upper() if (v.get() and (v.get() != "")) else None) for v in self.var_visual_inspection_after], 
+        })
+        # fill in all same values
+        df["limit_peel_force_per_axis"] = self.limit_force_single_axis
+        df["limit_peel_forces_sum"] = self.limit_forces_sum
+        df["operator_name"] = self.var_operator.get()
+        df["part_number"] = self.var_part_number.get()
+        df["line_id"] = self.var_line_id.get()
+        df["udi"] = self.var_udi.get()
+        #print(df.head())
+        engine, _ = get_protocol_db_connector()
+        try:
+            df.to_sql("peel_tests", engine.connect(), if_exists="append", index=False, method="multi")
+            showinfo("Success saving to DB", f"Dataset with {len(df)} positions saved to DB.")
+            self.clear_dialog()            
+        except Exception as ex:
+            showerror("Error whils save to DB", ex)
+            return False
+        return True
 
     #----------------------------------------------------------------------------------------------
     def _create_head_ui(self, root: tk.Tk) -> ttk.Frame:
