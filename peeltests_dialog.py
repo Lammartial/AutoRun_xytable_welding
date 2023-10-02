@@ -9,7 +9,7 @@ import multiprocessing as mp
 import itertools as it
 import tkinter as tk
 import tkinter.ttk as ttk
-from tkinter.messagebox import showinfo, showerror, showwarning
+from tkinter.messagebox import showinfo, showerror, showwarning, askquestion
 #import ttkbootstrap as ttk
 #from ttkbootstrap.constants import *
 #import sv_ttk
@@ -264,7 +264,7 @@ class WindowUI(object):
         #_h = root.winfo_height()
         _padall = 8
         _w = 840  # width set manually
-        _h = 500
+        _h = 750
         #_w = int(self.root.winfo_screenwidth() / 2)
         #_h = self.root.winfo_screenheight()
         # Set a minsize for the window
@@ -388,8 +388,20 @@ class WindowUI(object):
         pass
 
 
-    def qualify_and_save_to_db(self) -> bool:
+    #----------------------------------------------------------------------------------------------
+    #
+    # Validation of data & Save to DB
+    #
+    #----------------------------------------------------------------------------------------------
         
+    def qualify_and_save_to_db(self) -> bool:
+        """_summary_
+
+        Returns:
+            bool: _description_
+        """
+        global PRODUCTION_MODE
+
         if not self.qualify_save_button_state():
             showwarning("WARNING", "Data not complete, cannot save to database yet.")
             #showerror("ERROR", "Cannot save to database")
@@ -412,14 +424,37 @@ class WindowUI(object):
         df["part_number"] = self.var_part_number.get()
         df["line_id"] = self.var_line_id.get()
         df["udi"] = self.var_udi.get()
-        #print(df.head())
+        # if we have an excel record, we can compare the forces against the excel ones
+        if len(self.forces_df) > 0:
+            # we can put the two axis lists together and compare them with the excel (both sorted!)
+            user_input = sorted(df["max_peelforce_ax1"].to_list() + df["max_peelforce_ax2"].to_list())
+            excel_input = sorted(self.forces_df["MaxForce (N)"].to_list())
+            if user_input != excel_input:
+                showwarning("Validation Failed", 
+                            f"The forces entered by user differ from the forces found in the Excel file for that UDI:\n{excel_input}\nCannot proceed!")
+                return False
+
         engine, _ = get_protocol_db_connector()
         try:
+            if not PRODUCTION_MODE:
+                sql = sa.text(f"SELECT * FROM peel_tests WHERE udi='{self.var_udi.get()}'")            
+                check_records = pd.read_sql(sql, engine)
+                if len(check_records)>0:
+                    res = askquestion("Request?", f"There are already {len(check_records)} records in DB.\nShould we delete then write again?")
+                    if res == "yes" :
+                        # do overwrite here!
+                        sql = sa.text(f"DELETE FROM peel_tests WHERE udi='{self.var_udi.get()}'")
+                        with engine.connect() as session:
+                            r = session.execute(sql)
+                            session.commit()
+                    else:
+                        showinfo("Abort save to DB", f"cannot save to DB as records altready exists.")
+                        return False
             df.to_sql("peel_tests", engine.connect(), if_exists="append", index=False, method="multi")
             showinfo("Success saving to DB", f"Dataset with {len(df)} positions saved to DB.")
-            self.clear_dialog()            
+            self.clear_dialog()  # its easier to just scan a new UDI!
         except Exception as ex:
-            showerror("Error whils save to DB", ex)
+            showerror("Error while saving to DB", ex)
             return False
         return True
 
@@ -489,7 +524,7 @@ class WindowUI(object):
         #     relief='flat',
         #     width=20
         # )
-        self.save_button.grid(row=1, column=3, columnspan=2, rowspan=4, ipady=30, ipadx=15)
+        self.save_button.grid(row=1, column=3, columnspan=5, rowspan=4, ipady=30, ipadx=15)
        
        
         ttk.Label(frame, text="Limits of Forces", justify="left").grid(row=_row, column=3, sticky=tk.NSEW)
