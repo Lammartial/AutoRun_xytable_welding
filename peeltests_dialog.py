@@ -719,11 +719,12 @@ class WindowUI(object):
                         fn = find_excel_for_udi(_udi)
                         self.forces_df = read_excel_of_peeltester(fn)
                         print(self.forces_df.dtypes, self.forces_df.head(20),)
-                        self.var_label_status.set(f"Found excel file with {len(self.forces_df)} entries of forces.")
+                        _e = f"Found Excel file with {len(self.forces_df)} entries of forces."
                     except Exception as ex:
                         # cannot read
-                        print(f"Cannot read data for UDI {_udi}", ex)
-                        self.forces_df = None
+                        print(f"Cannot read Excel file data for UDI {_udi}", ex)
+                        self.forces_df = pd.DataFrame()  # empty
+                        _e = "No Excel file found, cannot validate forces."
                     
                     # 2) read database for welding measurements of this UDI
                     ok, self.uut_df = self._collect_uut_information(_udi)                    
@@ -737,15 +738,18 @@ class WindowUI(object):
                             self.var_part_number.set(head_info["part_number"])
                             self.var_line_id.set(head_info["line_id"])
                             #head_info["ts"]
-                            _s = f" Found {len(self.uut_df)} welding positions in DB."
-                            _v = " Validation possible." if 2*len(self.uut_df) == len(self.forces_df) else " Cannot validate forces !"
+                            _p = f"Found {len(self.uut_df)} welding positions in DB."
+                            if len(self.forces_df)>0:
+                                _v = "Validation possible." if (2*len(self.uut_df) == len(self.forces_df)) \
+                                                            else "Number of entries differ: Validation not possible."
+                            else:
+                                _v = ""
                     else:
-                        _s = "No welding positions found in DB !"
+                        _p = "No welding positions found in DB !"
                         _v = ""
-                        _positions = randint(0, len(self.forces_df)) if self.forces_df else 0
+                        _positions = randint(0, len(self.forces_df)) if (len(self.forces_df) > 0) else 0
                     
-                    self.var_label_status.set(self.var_label_status.get() + _s + _v)
-
+                    self.var_label_status.set(f"{_e} {_p} {_v}")
                     self.var_positions.set(_positions)
                     self.validate_positions_change(force=True)  # we need to trigger a change validation here
 
