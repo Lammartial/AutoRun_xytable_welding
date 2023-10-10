@@ -29,6 +29,7 @@ from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
 import sqlalchemy as sa
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from rrc.dbcon import get_protocol_db_connector, get_teststand_users_db_connector
 from rrc.barcode_scanner import create_barcode_scanner
 from rrc.ui.login_dialog import identify_user_with_title
@@ -177,7 +178,7 @@ class PassFailCombobox(ttk.Combobox):
     def __init__(self, *args, **kwargs):
         _pass_fail = ("Pass", "Fail")
         super().__init__(*args, **kwargs, values=_pass_fail, state="readonly")
-        _pd = self.tk.call('ttk::combobox::PopdownWindow', self)  # get popdownWindow reference 
+        _pd = self.tk.call('ttk::combobox::PopdownWindow', self)  # get popdownWindow reference
         lb = _pd + '.f.l' #get popdown listbox
         self._bind(('bind', lb),"<KeyPress>", self.popup_key_pressed, None)
         self.bind("<Key>", self.find_value_by_keypress)
@@ -200,7 +201,7 @@ class PassFailCombobox(ttk.Combobox):
         as long as dropdown not is open."""
 
         keypress = event.char
-        # If key pressed is a letter in alphabet 
+        # If key pressed is a letter in alphabet
         if keypress.isalpha():
             values = self.cget("values")
             for i, c in enumerate(values):
@@ -283,13 +284,13 @@ class WindowUI(object):
         style.map("W.Toggle.TButton", foreground = [("active", "blue"), ("!active", "black")])
         #style.map("W.Toggle.TButton", foreground = [("active", "lightgreen"), ("!active", "green")])
         #style.map("W.Toggle.TButton", foreground = [("active", "red"), ("!active", "darkred")])
-        
+
         # to debug layout we can use colored frame backgrounds
         style.configure('Frame1.TFrame', background='red')
         style.configure('Frame2.TFrame', background='blue')
 
-        
-        # we group two layouts on top of each other: 
+
+        # we group two layouts on top of each other:
         #
         #   mainframe -> the common data of operatorand product
         #   positions_ui -> dynamic list of positions to enter by operator
@@ -297,10 +298,10 @@ class WindowUI(object):
         self.vcmd_validate_positions_change = self.root.register(self.validate_positions_change)
         self.vcmd_validate_force_limits_selection = self.root.register(self.validate_force_limits_selection)
         self.vcmd_validate_forces_against_limits = self.root.register(self.validate_forces_against_limits)
-        self.positions_ui = None  # the self.positions_ui will be created by the positons change callback! 
+        self.positions_ui = None  # the self.positions_ui will be created by the positons change callback!
         self.mainframe = self._create_head_ui(self.root)
         self.mainframe.pack(side="top", anchor="n", fill="x", expand=False, padx=_padall, pady=_padall)
-        # the self.positions_ui will be created by the positons change callback! 
+        # the self.positions_ui will be created by the positons change callback!
         self.validate_positions_change(force=True)  # we need to trigger a change validation here to create a zero list
         #self.positions_ui = self._create_position_ui_and_show(self.root, 0)  # empty list
 
@@ -322,7 +323,7 @@ class WindowUI(object):
 
     def _selection_to_limits(self):
         s = self.var_forces_limits.get()
-        f = s.split("/")        
+        f = s.split("/")
         # we ignore the thickness
         self.limit_force_single_axis = float(f[1].replace("N", ""))
         self.limit_forces_sum = float(f[2].replace("N", ""))
@@ -349,7 +350,7 @@ class WindowUI(object):
                 _ax1 = 0
                 showwarning(title="Force not numeric", message=f"Please correct numeric value '{_ax1}' at Ax1 position {i}.")
                 return False
-                
+
             try:
                 _ax2 = float(self.var_peelforce_ax2[i].get())
                 self.var_result_peelforce_ax2[i].set("Pass" if (_ax2 >= self.limit_force_single_axis) else "Fail")
@@ -357,18 +358,18 @@ class WindowUI(object):
                 _ax2 = 0
                 showwarning("Force not numeric", f"Please correct numeric value '{_ax2}' at Ax2 position {i}.")
                 return False
-            
+
             # check sum of axis forces
             self.var_result_peelforces_sum[i].set("Pass" if ((_ax1 + _ax2) >= self.limit_forces_sum) else "Fail")
         return True
-    
+
     #----------------------------------------------------------------------------------------------
 
 
-    def validate_positions_change(self, force: bool = False) -> bool: 
+    def validate_positions_change(self, force: bool = False) -> bool:
         # using focusout as event
         try:
-            value = int(self.var_positions.get())     
+            value = int(self.var_positions.get())
             if (not force) and (value == len(self.var_peelforce_ax1)):
                 return True
             if not (value >= 0) and (value < 30):
@@ -389,11 +390,21 @@ class WindowUI(object):
 
 
     #----------------------------------------------------------------------------------------------
+
+
+    def count_peelforce_data_in_db_for_udi(self, udi: str) -> int:
+        engine, _ = get_protocol_db_connector()
+        sql = sa.text(f"SELECT position FROM peel_tests WHERE udi='{udi}'")
+        check_records = pd.read_sql(sql, engine.connect())
+        return len(check_records)
+
+
+    #----------------------------------------------------------------------------------------------
     #
     # Validation of data & Save to DB
     #
     #----------------------------------------------------------------------------------------------
-        
+
     def qualify_and_save_to_db(self) -> bool:
         """_summary_
 
@@ -415,7 +426,7 @@ class WindowUI(object):
             "result_peelforce_ax2": [(v.get()[0].upper() if (v.get() and (v.get() != "")) else None) for v in self.var_result_peelforce_ax2],
             "result_peelforces_sum": [(v.get()[0].upper() if (v.get() and (v.get() != "")) else None) for v in self.var_result_peelforces_sum],
             "visual_inspection_before": [(v.get()[0].upper() if (v.get() and (v.get() != "")) else None) for v in self.var_visual_inspection_before],
-            "visual_inspection_after": [(v.get()[0].upper() if (v.get() and (v.get() != "")) else None) for v in self.var_visual_inspection_after], 
+            "visual_inspection_after": [(v.get()[0].upper() if (v.get() and (v.get() != "")) else None) for v in self.var_visual_inspection_after],
         })
         # fill in all same values
         df["limit_peel_force_per_axis"] = self.limit_force_single_axis
@@ -423,36 +434,45 @@ class WindowUI(object):
         df["operator_name"] = self.var_operator.get()
         df["part_number"] = self.var_part_number.get()
         df["line_id"] = self.var_line_id.get()
-        df["udi"] = self.var_udi.get()
+        _udi = self.var_udi.get()
+        df["udi"] = _udi
+
+        # double check if there is an excel file present meanwhile
+        self._collect_excel_information(_udi)
+
         # if we have an excel record, we can compare the forces against the excel ones
         if len(self.forces_df) > 0:
             # we can put the two axis lists together and compare them with the excel (both sorted!)
             user_input = sorted(df["max_peelforce_ax1"].to_list() + df["max_peelforce_ax2"].to_list())
             excel_input = sorted(self.forces_df["MaxForce (N)"].to_list())
             if user_input != excel_input:
-                showwarning("Validation Failed", 
+                showwarning("Validation Failed",
                             f"The forces entered by user differ from the forces found in the Excel file for that UDI:\n{excel_input}\nCannot proceed!")
                 return False
 
         engine, _ = get_protocol_db_connector()
         try:
             if not PRODUCTION_MODE:
-                sql = sa.text(f"SELECT * FROM peel_tests WHERE udi='{self.var_udi.get()}'")            
-                check_records = pd.read_sql(sql, engine)
-                if len(check_records)>0:
-                    res = askquestion("Request?", f"There are already {len(check_records)} records in DB.\nShould we delete then write again?")
+                _count_records = self.count_peelforce_data_in_db_for_udi(_udi)
+                if _count_records > 0:
+                    res = askquestion("Request?", f"There are already {_count_records} records in DB.\nShould we delete then write again?")
                     if res == "yes" :
                         # do overwrite here!
-                        sql = sa.text(f"DELETE FROM peel_tests WHERE udi='{self.var_udi.get()}'")
+                        sql = sa.text(f"DELETE FROM peel_tests WHERE udi='{_udi}'")
                         with engine.connect() as session:
                             r = session.execute(sql)
                             session.commit()
                     else:
-                        showinfo("Abort save to DB", f"cannot save to DB as records altready exists.")
+                        showwarning("Abort saving to DB", f"Cannot save to DB as records altready exists.")
                         return False
-            df.to_sql("peel_tests", engine.connect(), if_exists="append", index=False, method="multi")
+            with engine.connect() as session:
+                r = df.to_sql("peel_tests", session, if_exists="append", index=False, method="multi")
+                session.commit()
             showinfo("Success saving to DB", f"Dataset with {len(df)} positions saved to DB.")
             self.clear_dialog()  # its easier to just scan a new UDI!
+        except IntegrityError:
+            showwarning("Abort saving to DB", f"Cannot save to DB as records altready exists.")
+            return False
         except Exception as ex:
             showerror("Error while saving to DB", ex)
             return False
@@ -487,7 +507,7 @@ class WindowUI(object):
         _row += 1
         ttk.Label(frame, text="").grid(row=_row, column=0, columnspan=2)
         _row += 1
-        
+
         ttk.Label(frame, text="UDI", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
         self.entry_udi = ttk.Entry(frame, textvariable=self.var_udi, state="disabled")
         self.entry_udi.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
@@ -504,8 +524,8 @@ class WindowUI(object):
         self.entry_positions = ttk.Entry(frame, textvariable=self.var_positions,
                                          validatecommand=self.vcmd_validate_positions_change,
                                          validate="focusout",
-                                         state="disabled" if PRODUCTION_MODE else "enabled")        
-        self.entry_positions.grid(row=_row, column=1, columnspan=1, sticky=tk.NSEW)        
+                                         state="disabled" if PRODUCTION_MODE else "enabled")
+        self.entry_positions.grid(row=_row, column=1, columnspan=1, sticky=tk.NSEW)
         #_row += 1
 
         # the button needs to focus before the force limits -> define here
@@ -525,11 +545,11 @@ class WindowUI(object):
         #     width=20
         # )
         self.save_button.grid(row=1, column=3, columnspan=5, rowspan=4, ipady=30, ipadx=15)
-       
-       
+
+
         ttk.Label(frame, text="Limits of Forces", justify="left").grid(row=_row, column=3, sticky=tk.NSEW)
-        self.entry_force_limits = ttk.Combobox(frame, textvariable=self.var_forces_limits, 
-                                               validate="focusout", 
+        self.entry_force_limits = ttk.Combobox(frame, textvariable=self.var_forces_limits,
+                                               validate="focusout",
                                                validatecommand=(self.vcmd_validate_force_limits_selection, "%P"),
                                                values=self.forces_limits_selection, state="readonly")
         self.entry_force_limits.bind("<<ComboboxSelected>>", lambda x: self.validate_force_limits_selection(x))
@@ -546,7 +566,7 @@ class WindowUI(object):
         self.label_status.grid(row=_row, column=1, columnspan=6, pady=15, sticky=tk.NSEW)
         _row += 1
 
-       
+
         return frame
 
 
@@ -576,7 +596,7 @@ class WindowUI(object):
         self.var_result_peelforces_sum = [tk.StringVar(self.root, None) for i in range(number_of_positions)]
         self.var_visual_inspection_before = [tk.StringVar(self.root, None) for i in range(number_of_positions)]
         self.var_visual_inspection_after = [tk.StringVar(self.root, None) for i in range(number_of_positions)]
-        
+
         _row += 1
         _combo_width = 8
         for i in range(number_of_positions):
@@ -589,7 +609,7 @@ class WindowUI(object):
             #_result_peelforce_ax1.grid(row=_row, column=3)
             _result_peelforce_ax1 = ttk.Checkbutton(frame, variable=self.var_result_peelforce_ax1[i], state="disabled", onvalue="Pass", offvalue="Fail")
             _result_peelforce_ax1.grid(row=_row, column=3)
-            _peelforce_ax2 = ttk.Entry(frame, textvariable=self.var_peelforce_ax2[i], validate="focusout", validatecommand=(self.vcmd_validate_forces_against_limits, "%P"))            
+            _peelforce_ax2 = ttk.Entry(frame, textvariable=self.var_peelforce_ax2[i], validate="focusout", validatecommand=(self.vcmd_validate_forces_against_limits, "%P"))
             _peelforce_ax2.grid(row=_row, column=4)
             #_result_peelforce_ax2 = PassFailCombobox(frame, textvariable=self.var_result_peelforce_ax2[i], width=_combo_width)
             #_result_peelforce_ax2.grid(row=_row, column=5)
@@ -611,7 +631,7 @@ class WindowUI(object):
         )
         frame.columnconfigure(8)
         #frame.rowconfigure(6, minsize=10)
-        
+
         # configure the column width equally to center everything nicely
         #frame.grid(row=0, column=0, sticky="NESW")
         #frame.grid_rowconfigure(0, weight=1)
@@ -622,7 +642,7 @@ class WindowUI(object):
         frame.grid_columnconfigure(4, weight=1)
         frame.grid_columnconfigure(5, weight=1)
         frame.grid_columnconfigure(6, weight=1)
-        frame.grid_columnconfigure(7, weight=1)        
+        frame.grid_columnconfigure(7, weight=1)
         frame  = self._update_position_ui(frame, number_of_positions)
         # show
         frame.pack(side="top", anchor="n", fill="both", expand=True, padx=10, pady=5)
@@ -647,10 +667,10 @@ class WindowUI(object):
                 all([(v.get() and (float(v.get()) > 0)) for v in self.var_peelforce_ax2]))
             ok = (ok and
                 all([(v.get() and (v.get() in _pass_fail)) for v in self.var_result_peelforce_ax1]) and
-                all([(v.get() and (v.get() in _pass_fail)) for v in self.var_result_peelforce_ax2])) 
+                all([(v.get() and (v.get() in _pass_fail)) for v in self.var_result_peelforce_ax2]))
             ok = (ok and
                 all([(v.get() and (v.get() in _pass_fail)) for v in self.var_visual_inspection_before]) and
-                all([(v.get() and (v.get() in _pass_fail)) for v in self.var_visual_inspection_after])) 
+                all([(v.get() and (v.get() in _pass_fail)) for v in self.var_visual_inspection_after]))
         except Exception as ex:
             ok = False
         #self.save_button.state = "enabled" if ok else "disabled"
@@ -697,13 +717,26 @@ class WindowUI(object):
         return True, uut_df
 
 
+    def _collect_excel_information(self, udi) -> str:
+        try:
+            fn = find_excel_for_udi(udi)
+            self.forces_df = read_excel_of_peeltester(fn)
+            print(self.forces_df.dtypes, self.forces_df.head(20),)
+            _e = f"Found Excel file with {len(self.forces_df)} entries of forces."
+        except Exception as ex:
+            # cannot read
+            print(f"Cannot read Excel file data for UDI {udi}", ex)
+            self.forces_df = pd.DataFrame()  # empty
+            _e = "No Excel file found, cannot validate forces."
+        return _e
+
     def process_command_queue(self):
         if not self.q_scan.empty():
             a = self.q_scan.get()
             #print("UI:", a)
             _do_update = False
             _play_soundfile = None
-            if a:
+            while a:
                 if "card_id_scanned" in a:
                     _card_id = a["card_id_scanned"]
                     _op_ok, _operator_info = self._collect_operator_information(_card_id)
@@ -713,22 +746,20 @@ class WindowUI(object):
                 if "udi_scanned" in a:
                     _udi = a["udi_scanned"]
                     print("UI:UPDATE UDI:", _udi)
-                    
+
                     # 1) read excel file for validation of human entries
-                    try:
-                        fn = find_excel_for_udi(_udi)
-                        self.forces_df = read_excel_of_peeltester(fn)
-                        print(self.forces_df.dtypes, self.forces_df.head(20),)
-                        _e = f"Found Excel file with {len(self.forces_df)} entries of forces."
-                    except Exception as ex:
-                        # cannot read
-                        print(f"Cannot read Excel file data for UDI {_udi}", ex)
-                        self.forces_df = pd.DataFrame()  # empty
-                        _e = "No Excel file found, cannot validate forces."
-                    
-                    # 2) read database for welding measurements of this UDI
-                    ok, self.uut_df = self._collect_uut_information(_udi)                    
-                    # 3) Prepare UI with needed positions
+                    _e = self._collect_excel_information(_udi)
+
+                    # 2) check peelforce database for this UDI
+                    if PRODUCTION_MODE:
+                        _count_forces = self.count_peelforce_data_in_db_for_udi(_udi)
+                        if _count_forces > 0:
+                            showwarning("Warning", f"Peelforces already assigned for UDI '{_udi}'\nCannot proceed!")
+                            break  # DIRTY SANCHEZ!
+
+                    # 3) read database for welding measurements of this UDI
+                    ok, self.uut_df = self._collect_uut_information(_udi)
+                    # 4) Prepare UI with needed positions
                     if len(self.uut_df):
                         _positions = len(self.uut_df)
                         if len(self.uut_df) > 0:
@@ -748,7 +779,7 @@ class WindowUI(object):
                         _p = "No welding positions found in DB !"
                         _v = ""
                         _positions = randint(0, len(self.forces_df)) if (len(self.forces_df) > 0) else 0
-                    
+
                     self.var_label_status.set(f"{_e} {_p} {_v}")
                     self.var_positions.set(_positions)
                     self.validate_positions_change(force=True)  # we need to trigger a change validation here
@@ -756,6 +787,8 @@ class WindowUI(object):
                     #self.label_udi.config(background="lightblue", foreground="black")
                     self.var_udi.set(_udi)
                     _do_update = True
+
+                break  # DIRTY SANCHEZ!
 
                 # if "udi_rejected" in a:
                 #     self.label_udi.config(background="orange", foreground="black")
@@ -885,6 +918,7 @@ class ProcessScanner(mp.Process):
                         scanner = create_barcode_scanner(resource_str)
                     _udi = scanner.request(None, timeout=None).strip()
                     # after successful scan, reset the timeout
+                    print(_udi)
                     _retry_timeout = 1
                 except TimeoutError:
                     pass  # this is ok to keep the loop running
