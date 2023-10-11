@@ -330,7 +330,7 @@ class WindowUI(object):
             if _do_update:
                 self.root.update()
             if _play_soundfile:
-                PlaySound(_play_soundfile, SND_FILENAME)                
+                PlaySound(_play_soundfile, SND_FILENAME)
         self._id_after = self.mainframe.after(50, lambda: self.process_command_queue())
 
 
@@ -1330,6 +1330,7 @@ class ProcessScanner(mp.Process):
         _cfg, _dsp = _create_interfaces()
         _, resource_str = _cfg.get_resource_strings_for_socket(0)
         scanner = None
+        _retry_timeout = 1
         if not self.simulate_scan:
             while True:
                 _udi = None
@@ -1337,6 +1338,7 @@ class ProcessScanner(mp.Process):
                     if not scanner:
                         scanner = create_barcode_scanner(resource_str)
                     _udi = scanner.request(None, timeout=None).strip()
+                    _retry_timeout = 1
                 except TimeoutError:
                     pass  # this is ok to keep the loop running
                 except Exception as ex:
@@ -1344,6 +1346,8 @@ class ProcessScanner(mp.Process):
                     print(f"Cannot connect scanner {resource_str}: {ex}")
                     print(f"Trying to reconnect scanner.")
                     scanner = None
+                    sleep(_retry_timeout)  # give a bit until reconnect
+                    _retry_timeout = min(2*_retry_timeout, 30)  # fibonacci
                     #print(f"{proc_name}:End")
                     #return
                 if _udi:
