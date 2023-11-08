@@ -623,7 +623,10 @@ class AWS3Modbus_DUMMY(object):
     def __init__(self, connection_str: str, group_by_gateway: bool = True) -> None:
         self.client = "SIMULATION"
         self.machine_name = "DUMMY"
+        self.axis_counter = -1
         self.program_no = -1
+        self.toggle_bit_changed = False
+        self.locked = False
 
     def __enter__(self):
         return self
@@ -644,18 +647,26 @@ class AWS3Modbus_DUMMY(object):
         pass
 
     def is_toggle_bit_changed(self) -> bool:
-        return True
+        ret = self.toggle_bit_changed
+        self.toggle_bit_changed = False  # this is one-time trigger!
+        return ret
+
+    def simulate_welding_process(self) -> None:
+        self.toggle_bit_changed = True
+        self.axis_counter += 1
 
     def is_machine_ready(self) -> tuple:
         return True, {"ready": 1, "ok": 1, "reject": 0}
 
     def read_machine_lock_status(self) -> tuple:
-        return False
+        return self.locked
 
     def lock_machine_step(self) -> bool:
+        self.locked = True
         return True
 
     def unlock_machine_step(self) -> bool:
+        self.locked = False
         return True
 
     def write_program_no(self, number):
@@ -665,7 +676,7 @@ class AWS3Modbus_DUMMY(object):
         return self.program_no
 
     def read_axis_counter(self, axis: int) -> int:
-        return -1
+        return self.axis_counter
 
     def read_binary_io(self) -> dict:
         return {}

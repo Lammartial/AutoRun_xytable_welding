@@ -1,3 +1,4 @@
+from cProfile import label
 from typing import List, Tuple
 from enum import Enum
 import multiprocessing as mp
@@ -5,6 +6,7 @@ import itertools
 import tkinter as tk
 import tkinter.ttk as ttk
 import json
+from fastapi import background
 import yaml
 from hashlib import md5
 from base64 import b64decode, b64encode
@@ -46,10 +48,12 @@ getLogger("pymodbus", DEBUG)
 
 # --------------------------------------------------------------------------- #
 
+
 PRODUCTION_MODE: int = None # is being overwritten by argument
 ENABLE_UDI_SCAN: int = None  # is being overwritten by argument
 SIMULATED_DSP_PRODUCT: str = None # is being overwritten by argument
 STORE_MEASUREMENTS: str = None # is being overwritten by argument
+
 
 #--------------------------------------------------------------------------------------------------
 
@@ -79,6 +83,37 @@ def get_hash(o: dict) -> bytes:
     _s = json.dumps(o, sort_keys=True, ensure_ascii=True)
     _h = md5(_s.encode("utf8")).digest()
     return b64encode(_h)
+
+
+def show_options(wg):
+    #wg = e.widget
+    s = ttk.Style()
+    if wg['style']:
+        classe = wg['style']
+    else:
+        classe = wg.winfo_class()
+
+    print(classe)
+    layout = s.layout(classe)
+
+    btnborder = layout[0][1]
+    btn_style = s.element_options('Button.border')
+
+    btnfocus = btnborder['children'][0][1]
+    btn_style += s.element_options('Button.focus')
+
+    btnpadding = btnfocus['children'][0][1]
+    btn_style += s.element_options('Button.padding')
+
+    btnlabel = btnpadding['children'][0][1]
+    btn_style += s.element_options('Button.label')
+
+    btn_style = sorted(set(btn_style))
+
+    for o in btn_style:
+        print(o, s.lookup('TButton', o))
+
+    print('\n')
 
 #--------------------------------------------------------------------------------------------------
 
@@ -113,7 +148,7 @@ class WindowUI(object):
         self.root.tk.call("source", Path(__file__).resolve().parent / "ui" / "theme_sv.tcl")
         self.root.tk.call("set_theme", "light")
         style = ttk.Style()
-        #style.theme_use("alt")
+        style.theme_use("alt")
 
         # for some reasonm the winfo_width() and _heihgt() do not show correct values here
         #_w = root.winfo_width()
@@ -131,12 +166,8 @@ class WindowUI(object):
         #
         # setup widgets
         #
-        #self.mainframe = self.root
-        self.mainframe = ttk.Frame(self.root, pad=(_padall,_padall,_padall,_padall), takefocus=True)
-
-        #self.mainframe.pack(fill=tk.BOTH)
-        # configure the column width equally to center everything nicely
-
+        style.configure("MainFrame.TFrame")  # to change the background color dynamically on whole Window
+        self.mainframe = ttk.Frame(self.root, pad=(_padall,_padall,_padall,_padall), takefocus=True, style="MainFrame.TFrame")
         self.mainframe.grid(row=0, column=0, sticky="NESW")
         #self.mainframe.grid_rowconfigure(0, weight=1)
         self.mainframe.grid_columnconfigure(0, weight=1)
@@ -182,31 +213,63 @@ class WindowUI(object):
             justify="center", font=("-size", 32, "-weight", "bold"))
         label6.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
 
-        if not PRODUCTION_MODE:
+        #print("BUTTON-LAYOUT:", style.layout('TButton'))
+        #print("BUTTON-MAP:",    style.map("TButton"))
+        #print("BUTTON-LOOKUP:", style.lookup("TButton", "background", state=['pressed']))
+        if PRODUCTION_MODE:
+            _row = next(row_itr)
+            #
+            # 'alt' style TButton map = {'highlightcolor': [('alternate', 'black')], 'relief': [('pressed', '!disabled', 'sunken'), ('active', '!disabled', 'raised')]}
+            # NOTE: sv-style cannot change background of button, thus we fall back to "alt"
+            #
+            style.configure('ValWelding.TButton', foreground='blue')
+            style.map('ValWelding.TButton', background=[ ("pressed", "lightblue")])
+            style.configure('SkipPosition.TButton', background='blue', foreground='white', justify="center")  # "justify" is to center text of button in both lines
+            style.map('SkipPosition.TButton', background=[("active","!pressed","steel blue"),('pressed', 'lightblue')])
+
+            self.validation_welding_button = None
+            self.skip_position_button = None
+            self.is_validation_welding_mode = True
+
+            self.skip_position_button = ttk.Button(self.mainframe, text="VALIDATION WELDING\nNEXT POSITION",  style="SkipPosition.TButton",
+                command=lambda: self.q_cmd.put({"move_counter": +1}))
+            self.skip_position_button.grid(row=_row, column=0, columnspan=2, ipady=50, ipadx=5, sticky=tk.NSEW)
+            self.skip_position_button.grid_remove()
+
+            #print(self.skip_position_button.config())
+
+            self.validation_welding_button = ttk.Button(self.mainframe, text="ACTIVATE VALIDATION WELDING",  style="ValWelding.TButton",
+                command=lambda: self.q_cmd.put({"validation_welding": True}))
+            self.validation_welding_button.grid(row=_row, column=0, columnspan=2, ipady=50, ipadx=20, sticky=tk.NSEW)
+
+        else:
             # Buttons
             _row = next(row_itr)
-            style.configure('B1.TButton', foreground="red", background='#232323')
-            style.map('B1.TButton', background=[("active","#ff0000")])
-            style.configure('B2.TButton', foreground="green", background='#232323')
-            style.map('B2.TButton', background=[("active","#ff0000")])
-            #style.configure('TButton', background = 'red', foreground = 'green', width = 20, borderwidth=1, focusthickness=3, focuscolor='none')
+            #
+            # 'alt' style TButton map = {'highlightcolor': [('alternate', 'black')], 'relief': [('pressed', '!disabled', 'sunken'), ('active', '!disabled', 'raised')]}
+            #
+            style.configure('Forward.TButton', foreground="green")  #, borderwidth=4, focusthickness=3,)
+            style.map('SForward.TButton', background=[("active","!pressed","white"), ("pressed", "lightblue")])
+            style.configure('SBackward.TButton', foreground="red")
+            style.map('SBackward.TButton', background=[("active","!pressed","white"), ("pressed", "lightblue")])
+            style.configure('SReset.TButton', foreground="blue", )
+            style.map('SReset.TButton', background=[("active","!pressed","white"), ("pressed","lightblue")])
 
-            step_back_button = ttk.Button(self.mainframe, text="STEP BACK",  style="B1.TButton",
+            #print("RESET-BUTTON-LAYOUT:", style.layout('SReset.TButton'))
+            #print("RESET-BUTTON-MAP:",    style.map("SReset.TButton"))
+            #print("RESET-BUTTON-LOOKUP:", style.lookup("SReset.TButton", "background", state=['pressed']))
+
+            step_back_button = ttk.Button(self.mainframe, text="STEP BACK",  style="SBackward.TButton",
                 command=lambda: self.q_cmd.put({"move_counter": -1}))
             step_back_button.grid(row=_row, column=0, ipady=50, ipadx=20, sticky=tk.NSEW)
 
-            step_forward_button = ttk.Button(self.mainframe, text="STEP FORWARD",  style="B2.TButton",
+            step_forward_button = ttk.Button(self.mainframe, text="STEP FORWARD",  style="SForward.TButton",
                 command=lambda: self.q_cmd.put({"move_counter": +1}))
             step_forward_button.grid(row=_row, column=1, ipady=50, ipadx=5, sticky=tk.NSEW)
 
-            # separator = ttk.Separator(self.mainframe)
-            # separator.grid(row=next(row_itr), column=0, columnspan=2, padx=(20, 10), pady=10, sticky="ew")
-            reset_seq_button = ttk.Button(self.mainframe, text="RESET SEQUENCE",
+            reset_seq_button = ttk.Button(self.mainframe, text="RESET SEQUENCE", style="SReset.TButton",
                 command=lambda: self.q_cmd.put({"reset_counter": 0}))
-            #ok_button.bind("<Return>", _accept_udi)
-            #ok_button.bind("<Key-Escape>", _cancel)
             reset_seq_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, sticky=tk.NSEW)
-            #ok_button.grid_forget()
 
 
         # Some more information labels
@@ -239,6 +302,26 @@ class WindowUI(object):
         if not PRODUCTION_MODE:
             reset_seq_button.focus_set()
 
+
+    def validation_welding_mode(self, enabled: bool) -> None:
+        global PRODUCTION_MODE
+
+        self.is_validation_welding_mode = enabled
+        if PRODUCTION_MODE:
+            if self.is_validation_welding_mode:
+                self.skip_position_button.config(state="normal")
+                self.skip_position_button.grid()
+                self.validation_welding_button.grid_remove()
+            else:
+                self.skip_position_button.grid_remove()
+                #self.validation_welding_button.config(state="enabled")
+                self.validation_welding_button.grid()
+
+    def validation_done(self) -> None:
+        if PRODUCTION_MODE:
+            self.skip_position_button.config(state="disabled")
+            #self.validation_welding_button.config(state="disabled")
+            self.root.focus_set()  # removes the focus from the button
 
     def process_command_queue(self):
         if not self.q_res.empty():
@@ -285,6 +368,7 @@ class WindowUI(object):
                     else:
                         self.label_udi.config(background="blue", foreground="white")
                         self.var_label_udi.set(a["udi"])
+                    #self.validation_welding_mode(False)
                     _do_update = True
                 if "udi_scanned" in a:
                     self.label_udi.config(background="lightblue", foreground="black")
@@ -315,14 +399,25 @@ class WindowUI(object):
                     self.var_label_udi.set(a["udi"])
                     print("UI:RESULT")
                     _do_update = True
+                if "validation_welding" in a:
+                    _vw_enabled = a["validation_welding"]
+                    self.validation_welding_mode(_vw_enabled)
                 if "result" in a:
                     # result overall
+                    #self.validation_welding_mode(False)
+                    if self.is_validation_welding_mode:
+                        self.validation_done()
                     #_fgcolor = "black" if "\n" in a["udi"] else "white"
                     _fgcolor = "black"
                     if "passed" in a["result"]:
-                        self.label_udi.config(background="green", foreground=_fgcolor)
+                        _bgcolor = "green"
+                        if self.is_validation_welding_mode:
+                            _bgcolor = "dark slate gray"
                     else:
-                        self.label_udi.config(background="red", foreground=_fgcolor)
+                        _bgcolor = "red"
+                        if self.is_validation_welding_mode:
+                            _bgcolor = "violet red"
+                    self.label_udi.config(background=_bgcolor, foreground=_fgcolor)
                         #_play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz")
                     self.var_label_udi.set(a["udi"])
                     print("UI:RESULT")
@@ -330,7 +425,7 @@ class WindowUI(object):
             if _do_update:
                 self.root.update()
             if _play_soundfile:
-                PlaySound(_play_soundfile, SND_FILENAME)                
+                PlaySound(_play_soundfile, SND_FILENAME)
         self._id_after = self.mainframe.after(50, lambda: self.process_command_queue())
 
 
@@ -418,6 +513,12 @@ class SPSStateMachineBase(object):
         self.dev.close()
 
     #----------------------------------------------------------------------------------------------
+
+    def is_ready_for_commands(self) -> bool:
+        return (self.state not in [SPSStates.START, SPSStates.INIT])
+
+    #----------------------------------------------------------------------------------------------
+
 
     def set_state(self, new_state: SPSStates) -> None:
         self.state = new_state
@@ -999,6 +1100,7 @@ class ProcessSPS(mp.Process):
         self.measurements_filepath = Path(STORE_MEASUREMENTS) if STORE_MEASUREMENTS is not None else None
         self.production_mode = PRODUCTION_MODE
         self.scan_udi_force_restart = SCAN_UDI_FORCE_RESTART
+        self.welding_for_process_validation = False  # setting this to True hinders the SPS to transmit the result to MES service
 
 
     def collect_parameters(self, cfg: StationConfiguration, dsp: DspInterface) -> Tuple[List[int], str, str, str]:
@@ -1166,7 +1268,7 @@ class ProcessSPS(mp.Process):
                     # get configuration from DSP + DB connection
                     program_sequence, sequence_revision, resource_str, part_number, db_session_maker, line_id, station_id = self.collect_parameters(_cfg, _dsp)
                     print("Create new SPS state machine")
-                    if self.production_mode:
+                    if self.production_mode: # and (not self.welding_for_process_validation):
                         # production version must be started by UDI scan
                         # and can run only once
                         SM = SPSStateMachine(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
@@ -1177,6 +1279,7 @@ class ProcessSPS(mp.Process):
                         # we use a development state-machine here
                         SM = SPSStateMachineRotating(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
                         #_store_to_db = True  # DEBUG
+                        _store_to_db = self.welding_for_process_validation
                         _store_to_file = self.have_read_measurements  # depending on the command line
 
                     print(f"STATE-MACHINE: {repr(SM)}")
@@ -1216,6 +1319,7 @@ class ProcessSPS(mp.Process):
                                 print("FAILED: Store measurements enabled.")
                                 if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
                                 if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
+                            self.welding_for_process_validation = False  # need to reset validation welding after finished all positions or having a failed position in between
                             _udi = None  # finished
                         case SPSStates.POSITION_PASSED:
                             # only to store a passed welding position's measurement
@@ -1226,11 +1330,15 @@ class ProcessSPS(mp.Process):
                         case SPSStates.PASSED:
                             self.response_queue.put({"result": "passed", "udi": f"{_udi}\nSCAN NEXT UDI" })  # update UI (green)
                             if _udi:
-                                _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
+                                if not self.welding_for_process_validation:
+                                    # the validation welding mode disables the result to MES sending
+                                    # which avoids having this part counted as "scrap" in our statistics
+                                    _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                             if self.have_read_measurements:
                                 print("PASSED: Store measurements enabled.")
                                 #if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
                                 #if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
+                            self.welding_for_process_validation = False  # need to reset validation welding after finished all positions
                             _udi = None  # finished
                         case SPSStates.SET_PROGRAM_ON_MACHINE:
                             self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no})  # update UI
@@ -1242,6 +1350,7 @@ class ProcessSPS(mp.Process):
                     SM.do_one_loop()
                 # check for incomming commands
                 if not self.command_queue.empty():
+                    answer = None
                     cmd = self.command_queue.get()
                     if cmd is None:
                         # Poison pill means shutdown
@@ -1254,6 +1363,8 @@ class ProcessSPS(mp.Process):
                             SM = None
                         self.command_queue.task_done()
                         break
+                    if not SM.is_ready_for_commands():
+                        continue
                     print(f"{proc_name}: {cmd}")
                     if "udi_scanned" in cmd:
                         # check if we are NOT in the middle of a sequence or at start position:
@@ -1268,6 +1379,8 @@ class ProcessSPS(mp.Process):
                                     # need to reset the sequence
                                     SM.close()
                                     SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
+                                    self.welding_for_process_validation = False
+                                    self.response_queue.put({"validation_welding": False})
                                     answer = "OK"
                                 else:
                                     _udi = None
@@ -1297,7 +1410,16 @@ class ProcessSPS(mp.Process):
                         SM.close()
                         SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
                         answer = "OK"
+                    if "validation_welding" in cmd:
+                        self.welding_for_process_validation = cmd["validation_welding"]
+                        self.response_queue.put(cmd) # forward to UI
+                        #SM.close()
+                        #SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
+                        answer = "OK"
                     self.command_queue.task_done()
+                    if not answer:
+                        answer = f"NOT OK: UNKNOWN MESSAGE"
+                        print(answer)
                     self.response_queue.put(answer)
         except DSPInterfaceError as e:
             _log.error(str(e))
@@ -1330,6 +1452,7 @@ class ProcessScanner(mp.Process):
         _cfg, _dsp = _create_interfaces()
         _, resource_str = _cfg.get_resource_strings_for_socket(0)
         scanner = None
+        _retry_timeout = 1
         if not self.simulate_scan:
             while True:
                 _udi = None
@@ -1337,6 +1460,7 @@ class ProcessScanner(mp.Process):
                     if not scanner:
                         scanner = create_barcode_scanner(resource_str)
                     _udi = scanner.request(None, timeout=None).strip()
+                    _retry_timeout = 1
                 except TimeoutError:
                     pass  # this is ok to keep the loop running
                 except Exception as ex:
@@ -1344,6 +1468,8 @@ class ProcessScanner(mp.Process):
                     print(f"Cannot connect scanner {resource_str}: {ex}")
                     print(f"Trying to reconnect scanner.")
                     scanner = None
+                    sleep(_retry_timeout)  # give a bit until reconnect
+                    _retry_timeout = min(2*_retry_timeout, 30)  # fibonacci
                     #print(f"{proc_name}:End")
                     #return
                 if _udi:
