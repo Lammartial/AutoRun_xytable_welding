@@ -986,7 +986,7 @@ if __name__ == '__main__':
 
     FORCES_LIMITS_SELECTION = [
         "0.15mm / 20N / 60N",   # connector thickness / single / sum
-        "0.30mm / 70N / 140N"   # connector thickness / single / sum
+        "0.30mm / 35N / 100N"   # connector thickness / single / sum
     ]
 
     # test of read function:
