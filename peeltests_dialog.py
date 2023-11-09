@@ -53,6 +53,7 @@ _log = getLogger(__name__, DEBUG)
 PRODUCTION_MODE: int = None  # is being overwritten by argument
 ENABLE_UDI_SCAN: int = None  # is being overwritten by argument
 EXCELFILES_SEARCH_PATH: Path = None  # where to search for peel tester measurement excel files
+MANUAL_UDI_EDIT: bool = None  # is being overwritten by argument
 
 #--------------------------------------------------------------------------------------------------
 
@@ -216,7 +217,7 @@ class PassFailCombobox(ttk.Combobox):
 class WindowUI(object):
 
     def __init__(self, command_queue: mp.Queue, scan_queue: mp.Queue, username: str, title: str = "PEEL TEST DIALOG"):
-        global DEBUG, PRODUCTION_MODE, FORCES_LIMITS_SELECTION
+        global DEBUG, PRODUCTION_MODE, FORCES_LIMITS_SELECTION, MANUAL_UDI_EDIT
 
         self._log = getLogger(__name__, DEBUG)
         self.q_cmd = command_queue
@@ -298,6 +299,7 @@ class WindowUI(object):
         self.vcmd_validate_positions_change = self.root.register(self.validate_positions_change)
         self.vcmd_validate_force_limits_selection = self.root.register(self.validate_force_limits_selection)
         self.vcmd_validate_forces_against_limits = self.root.register(self.validate_forces_against_limits)
+        self.vcmd_validate_udi_in_db = self.root.register(self.validate_udi_in_db)
         self.positions_ui = None  # the self.positions_ui will be created by the positons change callback!
         self.mainframe = self._create_head_ui(self.root)
         self.mainframe.pack(side="top", anchor="n", fill="x", expand=False, padx=_padall, pady=_padall)
@@ -316,7 +318,10 @@ class WindowUI(object):
         self.root.update()
         self.root.deiconify()
         self.root.focus_force()  # this is to activate the window again (important after programmatically closed)
-        self.save_button.focus_set()
+        if MANUAL_UDI_EDIT:
+            self.entry_udi.focus_set()
+        else:
+            self.save_button.focus_set()
 
     #----------------------------------------------------------------------------------------------
 
@@ -332,10 +337,20 @@ class WindowUI(object):
     #----------------------------------------------------------------------------------------------
 
 
+    def validate_udi_in_db(self, event) -> bool:
+        _udi = self.var_udi.get()
+        # simulate a scan to validate UDI in database
+        self.q_scan.put({"udi_scanned": _udi})
+        return True
+
+
+    #----------------------------------------------------------------------------------------------
+
+
     def validate_force_limits_selection(self, event) -> bool:
         self._selection_to_limits()
-        self.validate_forces_against_limits(event)
-        return True
+        self.entry_force_limits.selection_clear()
+        return self.validate_forces_against_limits(event)
 
 
     #----------------------------------------------------------------------------------------------
@@ -480,6 +495,8 @@ class WindowUI(object):
 
     #----------------------------------------------------------------------------------------------
     def _create_head_ui(self, root: tk.Tk) -> ttk.Frame:
+        global MANUAL_UDI_EDIT
+
         _padall = 8
         frame = ttk.Frame(root, pad=(_padall,_padall,_padall,_padall), takefocus=False,
                           #style="Frame2.TFrame"  # DEBUG
@@ -509,8 +526,13 @@ class WindowUI(object):
         _row += 1
 
         ttk.Label(frame, text="UDI", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
-        self.entry_udi = ttk.Entry(frame, textvariable=self.var_udi, state="disabled")
+        if MANUAL_UDI_EDIT:
+            # manual edit allowed
+            self.entry_udi = ttk.Entry(frame, textvariable=self.var_udi, state="enabled", validate="focusout", validatecommand=(self.vcmd_validate_udi_in_db, "%P"))
+        else:
+            self.entry_udi = ttk.Entry(frame, textvariable=self.var_udi, state="disabled")
         self.entry_udi.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
+        
         _row += 1
         ttk.Label(frame, text="Part Number", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
         self.entry_part_number = ttk.Entry(frame, textvariable=self.var_part_number, state="disabled")
@@ -551,7 +573,8 @@ class WindowUI(object):
         self.entry_force_limits = ttk.Combobox(frame, textvariable=self.var_forces_limits,
                                                validate="focusout",
                                                validatecommand=(self.vcmd_validate_force_limits_selection, "%P"),
-                                               values=self.forces_limits_selection, state="readonly")
+                                               values=self.forces_limits_selection, 
+                                               state="readonly")
         self.entry_force_limits.bind("<<ComboboxSelected>>", lambda x: self.validate_force_limits_selection(x))
         self.entry_force_limits.current(0)  # preselect no. 1 in the list
         self.entry_force_limits.grid(row=_row, column=4, columnspan=3, sticky=tk.NSEW)
@@ -976,6 +999,7 @@ if __name__ == '__main__':
     parser.add_argument("--excelfilepath", action="store", default=_default_peeltester_filepath_, help="Path to search for peel tester output excel files containing UDI in filename.")
     parser.add_argument("--scannerport", action="store", default=_default_scanner_resource, help="Resource string for scanner, which can be IP:PORT or local PORT,[baud],[8N1|8E1|8O1].")
     parser.add_argument("--simulate_scan", action="store_true", help="Set a product for simulated UDI scan interface.")
+    parser.add_argument("--manual_udi", action="store_true", help="Enables the manual entry of an UDI in parallel to a scanner.")
 
     args = parser.parse_args()
 
@@ -983,6 +1007,7 @@ if __name__ == '__main__':
     ENABLE_UDI_SCAN = (PRODUCTION_MODE or args.simulate_scan)
     SIMULATE_UDI_SCAN = args.simulate_scan
     EXCELFILES_SEARCH_PATH = Path(args.excelfilepath)
+    MANUAL_UDI_EDIT = args.manual_udi
 
     FORCES_LIMITS_SELECTION = [
         "0.15mm / 20N / 60N",   # connector thickness / single / sum
