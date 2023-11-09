@@ -3,9 +3,9 @@
 #
 # DSP REST interface
 #
-# The DSP interface uses separate ports for each test type. 
+# The DSP interface uses separate ports for each test type.
 # So the production URL with port is to be found at the test type below.
-# For evaliuation or debugging puropses, the DSP interface can be set 
+# For evaluation or debugging puropses, the DSP interface can be set
 # globally here. Just comment one of the lines in to use our mock-up DSP.
 #
 dsp_api_base_url:  "http://127.0.0.1:8000"      # mockup on localhost
