@@ -958,25 +958,25 @@ class ProcessScanner(mp.Process):
                     msg = {"udi_scanned": _udi}
                     self.ui_queue.put(msg)  # this goes to the UI process
 
-        else:
-            # ********** Simulation Profile *************
-            #while True:
-                # sleep(3.0)
-                # _card_id = "007"
-                # self.ui_queue.put({"card_id_scanned": _card_id})  # FAIL
-                # sleep(2.0)
-                # _card_id = "00"
-                # self.ui_queue.put({"card_id_scanned": _card_id})  # SUCCESS
+        # else:
+        #     # ********** Simulation Profile *************
+        #     #while True:
+        #         # sleep(3.0)
+        #         # _card_id = "007"
+        #         # self.ui_queue.put({"card_id_scanned": _card_id})  # FAIL
+        #         # sleep(2.0)
+        #         # _card_id = "00"
+        #         # self.ui_queue.put({"card_id_scanned": _card_id})  # SUCCESS
 
-                sleep(2.0)
-                _udi = "1CELL" + get_random_digits_string(12)
-                self.ui_queue.put({"udi_scanned": _udi})  # FAIL
-                sleep(3.0)
-                _udi = "1CELL00000002555"
-                self.ui_queue.put({"udi_scanned": _udi})  # SUCCESS (missing positions)
-                sleep(3.0)
-                _udi = "1CELL00000002B84"
-                self.ui_queue.put({"udi_scanned": _udi})  # SUCCESS (full positions)
+        #         sleep(2.0)
+        #         _udi = "1CELL" + get_random_digits_string(12)
+        #         self.ui_queue.put({"udi_scanned": _udi})  # FAIL
+        #         sleep(3.0)
+        #         _udi = "1CELL00000002555"
+        #         self.ui_queue.put({"udi_scanned": _udi})  # SUCCESS (missing positions)
+        #         sleep(3.0)
+        #         _udi = "1CELL00000002B84"
+        #         self.ui_queue.put({"udi_scanned": _udi})  # SUCCESS (full positions)
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
