@@ -25,14 +25,14 @@ from rrc.custom_logging import getLogger, logger_init
 
 def create_barcode_scanner(resource_string: str) -> Eth2SerialDevice | SerialComportDevice:
     """Creates a RRC scanner depending on the resource string for abstraction.
-    It creates either a network socket scanner or a COM port scanner. 
+    It creates either a network socket scanner or a COM port scanner.
     The Termination is set to LF only.
 
     Valid resource strings:
 
     hostname:port, e.g. "172.25.101.43:2000" for IPv4 172.25.101.43 at port 2000
     comport,baud,linesettings, e.g."COM7,9600,8N1" for COM7 with 9600 baud and 8 bits No parity, 1 stop bit
-    
+
     Args:
         resource_string (str): Resource connection of the scanner.
 
@@ -43,7 +43,7 @@ def create_barcode_scanner(resource_string: str) -> Eth2SerialDevice | SerialCom
     """
 
     if "," in resource_string:
-        dev = SerialComportDevice(resource_string, termination="\n")  # COM port
+        dev = SerialComportDevice(resource_string, termination="\r")  # COM port
     else:
         dev = Eth2SerialDevice(resource_string, termination="\n")   # socket port
     return dev
@@ -52,13 +52,13 @@ def create_barcode_scanner(resource_string: str) -> Eth2SerialDevice | SerialCom
 
 def decode_rrc_udi_label(raw: str, pcba_and_cell_udi_tuple: bool = False) -> Tuple[dict, str]:
     """Decodes a Python string for UDI information of either CELL or PCBA udi.
-    
+
     If pcba_and_cell_udi_tuple set True, two UDI, separated by comma, are expected and decoded.
     e.g. 1CELL00000000505,1PCBA00000000664
 
     Args:
         raw (str): scanned string, converted into UTF-8 python string
-        pcba_and_cell_udi_tuple (bool, optional): If true, a comma separated, combined CELL and PCBA string 
+        pcba_and_cell_udi_tuple (bool, optional): If true, a comma separated, combined CELL and PCBA string
                 is expected and decoded both. If False, only one of both is expected. Defaults to False.
 
     Returns:
@@ -66,9 +66,9 @@ def decode_rrc_udi_label(raw: str, pcba_and_cell_udi_tuple: bool = False) -> Tup
                             { "CELL" or "PCBA": {serial_number: xxx, plant: yyy} }
     """
     global DEBUG
-    
+
     _log = getLogger(__name__, DEBUG)
-    
+
 
     def _records_to_result(records) -> dict:
         return {
@@ -78,7 +78,7 @@ def decode_rrc_udi_label(raw: str, pcba_and_cell_udi_tuple: bool = False) -> Tup
             }
         }
 
-    
+
     filter = re.compile(r"([\d|\w])(CELL|PCBA)([\d|\w]*)")  # only one and the first
     if pcba_and_cell_udi_tuple:
         filter = re.compile(r"([\d|\w])(CELL|PCBA)([\d|\w]*).*,.*([\d|\w])(CELL|PCBA)([\d|\w]*)")  # up to two separated by comma
@@ -86,24 +86,24 @@ def decode_rrc_udi_label(raw: str, pcba_and_cell_udi_tuple: bool = False) -> Tup
     _log.debug(m)
     result = {}
     if len(m) == 1 and (len(m[0]) == 3):
-        result = { 
-            **result, 
+        result = {
+            **result,
             **_records_to_result((m[0][1], m[0][2], m[0][0]))  # type, serial, plant
         }
     elif len(m) == 1 and (len(m[0]) == 6):
         # 1st hit
-        result = { 
-            **result, 
+        result = {
+            **result,
             **_records_to_result((m[0][1], m[0][2], m[0][0]))  # type, serial, plant
         }
         # 2nd hit
-        result = { 
-            **result, 
+        result = {
+            **result,
             **_records_to_result((m[0][1+3], m[0][2+3], m[0][0+3]))  # type, serial, plant
-        }  
+        }
     else:
-        result = { 
-            **result, 
+        result = {
+            **result,
             **_records_to_result(("UNKNOWN", "", raw))
         }
     return result, raw
@@ -145,7 +145,7 @@ def decode_rrc_product_serial_label(raw: str | bytes | bytearray) -> Tuple[dict,
             else:
                 pass
     return result, records
- 
+
 
 #--------------------------------------------------------------------------------------------------
 
@@ -198,7 +198,7 @@ def test_udi_decoder():
     global DEBUG
 
     _log = getLogger(__name__, DEBUG)
-    
+
     print("Test the UDI decoder")
     print(decode_rrc_udi_label("1CELL00000000505"))
     print(decode_rrc_udi_label("1PCBA00000000664"))
@@ -221,7 +221,7 @@ if __name__ == "__main__":
     print(f"Start: {strftime('%H:%M:%S', localtime())}")
     RESOURCE_STR = "COM3,9600,8N1"
     #RESOURCE_STR = "172.25.101.43:2000"  # VN Line 1 EOL
-    RESOURCE_STR = "172.21.101.41:2000"  # HOM Line Corepack
+    RESOURCE_STR = "172.21.101.31:2000"  # HOM Line Corepack
 
     #test_udi_decoder()
     #test_general(RESOURCE_STR)
