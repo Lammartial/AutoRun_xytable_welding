@@ -94,24 +94,24 @@ PCBA_TEST:
         scanner:     "172.21.101.31:2000"  # Eth->UART  RRC Lager
         led_ch9121:  "172.21.101.31:3000"  # Eth->UART  RRC Lager
         # Following are shared with ALL sockets
-        daq_daq970a: "TCPIP0::172.21.101.36::inst0::INSTR"
-        psu_e1206:   "TCPIP0::172.21.101.37::inst0::INSTR"
+        daq_daq970a: "172.21.101.36:30000"
+        psu_e1206:   "172.21.101.37:30000"
     "1":
       resource_strings: # already correct IP addresses
         eth_to_i2c:  "172.21.101.32:2101"
         scanner:     "172.21.101.33:2000"
         led_ch9121:  "172.21.101.33:3000"
         # Following are shared with ALL sockets
-        daq_daq970a: "TCPIP0::172.21.101.36::inst0::INSTR"
-        psu_e1206:   "TCPIP0::172.21.101.37::inst0::INSTR"  # bridge to m3400/3900 devices
+        daq_daq970a: "172.21.101.36:30000"
+        psu_e1206:   "172.21.101.37:30000"  # bridge to m3400/3900 devices
     "2":
       resource_strings:
         eth_to_i2c:  "172.21.101.34:2101"
         scanner:     "172.21.101.35:2000"
         led_ch9121:  "172.21.101.35:3000"
         # Following are shared with ALL sockets
-        daq_daq970a: "TCPIP0::172.21.101.36::inst0::INSTR"
-        psu_e1206:   "TCPIP0::172.21.101.37::inst0::INSTR"  # bridge to m3400/3900 devices
+        daq_daq970a: "172.21.101.36:30000"
+        psu_e1206:   "172.21.101.37:30000"  # bridge to m3400/3900 devices
 
 #------------------------------------------------------------------------------
 COREPACK_TEST:
@@ -136,14 +136,14 @@ COREPACK_TEST:
         eth_to_i2c:    "172.21.101.40:2101"
         scanner:       "172.21.101.41:2000"
         led_ch9121:    "172.21.101.41:3000"
-        psu_m3900:     "TCPIP0::172.21.101.46::inst0::INSTR"
+        psu_m3900:     "172.21.101.46:30000"
         icr_bt3561a:   "172.21.101.44:23"
     "1":
       resource_strings:
         eth_to_i2c:    "172.21.101.42:2101"
         scanner:       "172.21.101.43:2000"
         led_ch9121:    "172.21.101.43:3000"
-        psu_m3900:     "TCPIP0::172.21.101.47::inst0::INSTR"
+        psu_m3900:     "172.21.101.47:30000"
         icr_bt3561a:   "172.21.101.45:23"
 
 
@@ -170,7 +170,7 @@ LEANPACK_TEST:
         eth_to_i2c:    "172.21.101.40:2101"
         scanner:       "172.21.101.41:2000"
         led_ch9121:    "172.21.101.41:3000"
-        psu_m3900:     "TCPIP0::172.21.101.46::inst0::INSTR"
+        psu_m3900:     "172.21.101.46:30000"
         icr_bt3561a:   "172.21.101.44:23"
 
 
@@ -195,7 +195,7 @@ EOL_TEST:
     "0":
       resource_strings:
         eth_to_i2c:   "172.21.101.50:2101"
-        psu_m3400:    "TCPIP0::172.21.101.51::inst0::INSTR"
+        psu_m3400:    "172.21.101.51:30000"
 
 
 #------------------------------------------------------------------------------
@@ -208,7 +208,8 @@ CELL_WELDING:
       resource_strings:
         # this is a MODBUS resource string
         aws3_controller:  "tcp:172.21.101.100:502"
-        scanner:          "COM4,9600,8N1"  # Eth->UART
+        scanner:          "COM25,9600,8N1"  # Eth->UART
+        #scanner:          "172.21.101.41:2000"  # Eth->DUMMY
 
 
 # END OF FILE
