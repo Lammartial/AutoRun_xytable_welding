@@ -221,7 +221,7 @@ if __name__ == "__main__":
     print(f"Start: {strftime('%H:%M:%S', localtime())}")
     RESOURCE_STR = "COM3,9600,8N1"
     #RESOURCE_STR = "172.25.101.43:2000"  # VN Line 1 EOL
-    RESOURCE_STR = "172.21.101.41:2000"  # HOM Line Corepack
+    RESOURCE_STR = "172.21.101.31:2000"  # HOM Line Corepack
 
     #test_udi_decoder()
     #test_general(RESOURCE_STR)
