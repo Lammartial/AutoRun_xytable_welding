@@ -107,10 +107,15 @@ def read_excel_of_peeltester(fp: Path) -> pd.DataFrame:
     forces_df.rename(columns={
         forces_df.columns[0]: "No.",
         forces_df.columns[1]: "MaxForce (N)",
-        forces_df.columns[2]: "MinForce (N)",
-        forces_df.columns[3]: "AvgForce (N)"
+        #forces_df.columns[2]: "MinForce (N)",
+        #forces_df.columns[3]: "AvgForce (N)"
     }, inplace=True)
-    return forces_df.astype({"No.": "int32", "MaxForce (N)": "float64", "MinForce (N)": "float64", "AvgForce (N)": "float64" })
+    return forces_df.astype({
+        "No.": "int32",
+        "MaxForce (N)": "float64",
+        #"MinForce (N)": "float64",
+        #"AvgForce (N)": "float64"
+    })
 
 
 def query_teststand_users_for_match(engine: sa.Engine, card_id: str, show_performance: bool = False) -> pd.DataFrame | None:
@@ -392,6 +397,14 @@ class WindowUI(object):
             if self.positions_ui:
                 self.positions_ui.destroy()
             self.positions_ui = self._create_position_ui_and_show(self.root, value)
+
+            # check if we can fill the data into the dialog already
+            if len(self.forces_df) == 2 * value:
+                _forces = self.forces_df["MaxForce (N)"].to_list()
+                for _idx in range(0, value):
+                    self.var_peelforce_ax1[_idx].set(_forces[_idx*2 + 0])
+                    self.var_peelforce_ax2[_idx].set(_forces[_idx*2 + 1])
+
             return True
         except Exception as ex:
             pass  # ignore
@@ -532,7 +545,7 @@ class WindowUI(object):
         else:
             self.entry_udi = ttk.Entry(frame, textvariable=self.var_udi, state="disabled")
         self.entry_udi.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
-        
+
         _row += 1
         ttk.Label(frame, text="Part Number", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
         self.entry_part_number = ttk.Entry(frame, textvariable=self.var_part_number, state="disabled")
@@ -573,7 +586,7 @@ class WindowUI(object):
         self.entry_force_limits = ttk.Combobox(frame, textvariable=self.var_forces_limits,
                                                validate="focusout",
                                                validatecommand=(self.vcmd_validate_force_limits_selection, "%P"),
-                                               values=self.forces_limits_selection, 
+                                               values=self.forces_limits_selection,
                                                state="readonly")
         self.entry_force_limits.bind("<<ComboboxSelected>>", lambda x: self.validate_force_limits_selection(x))
         self.entry_force_limits.current(0)  # preselect no. 1 in the list
