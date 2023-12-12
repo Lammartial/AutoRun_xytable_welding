@@ -14,13 +14,13 @@ PART_INFORMATION = {
     "RRC2020B": {
         "CELL_TEST": {
             # Cell Test PRT IDs
-            "test_program_id": ("CT-SQ_2020B", "412031_RRC2020B_Cell-Test_C"),
-            "part_number": ("CT-PN_2020B", "412031-16"),  # using the pre-assembly PN
+            "test_program_id": ("CT-SQ_2020B", "412081_RRC2020B_Cell-Test_C"),
+            "part_number": ("CT-PN_2020B", "412081-16"),  # using the pre-assembly PN
         },
         "CELL_WELDING": {
             # Cell Welding PRT IDs:
             "test_program_id": ("CW-SQ_2020B", "A"),
-            "part_number": ("CW-PN_2020B", "412031-16"),  # using the pre-assembly PN
+            "part_number": ("CW-PN_2020B", "412081-16"),  # using the pre-assembly PN
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
@@ -29,8 +29,8 @@ PART_INFORMATION = {
         },
         "COREPACK_TEST": {
             # Core Pack Test PRT IDs:
-            "test_program_id": ("CP-SQ_2020B", "412031_RRC2020B_Corepack-Test_B"),
-            "part_number": ("CP-PN_2020B", "412031-16"),  # using the pre-assembly PN
+            "test_program_id": ("CP-SQ_2020B", "412081_RRC2020B_Corepack-Test_B"),
+            "part_number": ("CP-PN_2020B", "412081-16"),  # using the pre-assembly PN
         },
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
@@ -172,16 +172,16 @@ PART_INFORMATION = {
             "test_program_id": ("CW-SQ_SPINEL", "A"),
             "part_number": ("CW-PN_SPINEL", "110282S-02"),
         },
-         "LEANPACK_TEST": {
-             # EOL Test with Corepack hardware (Teststand)
-             "test_program_id": ("CP-SQ_SPINEL", "110282S_SPINEL_Leanpack-Test_C"),
-             "part_number": ("CP-PN_SPINEL", "110282S-03"),
-         },
         #"LEANPACK_TEST": {
-        #    # EOL Test with Corepack hardware (Teststand)
-        #    "test_program_id": ("CP-SQ_SPINEL", "110282S_SPINEL_Imbalance-Test"),
-        #    "part_number": ("CP-PN_SPINEL", "110282S-00"),
-        #}
+        #     # EOL Test with Corepack hardware (Teststand)
+        #     "test_program_id": ("CP-SQ_SPINEL", "110282S_SPINEL_Leanpack-Test_C"),
+        #     "part_number": ("CP-PN_SPINEL", "110282S-03"),
+        #},
+        "LEANPACK_TEST": {
+            # EOL Test with Corepack hardware (Teststand)
+            "test_program_id": ("CP-SQ_SPINEL", "110282S_SPINEL_Imbalance-Test"),
+            "part_number": ("CP-PN_SPINEL", "110282S-00"),
+        }
     }
 }
  
