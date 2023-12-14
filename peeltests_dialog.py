@@ -359,10 +359,14 @@ class WindowUI(object):
 
 
     def validate_udi_in_db(self, event) -> bool:
-        _udi = self.var_udi.get()
-        # simulate a scan to validate UDI in database
-        self.q_scan.put({"udi_scanned": _udi})
-        return True
+        if event:
+            #_udi = self.var_udi.get()
+            _udi = event
+            # simulate a scan to validate UDI in database
+            self.q_scan.put({"udi_scanned": _udi, "manual": True})
+            return True
+        else:
+            return False
 
 
     #----------------------------------------------------------------------------------------------
@@ -513,7 +517,7 @@ class WindowUI(object):
                             f"The forces entered by user differ from the forces found in the Excel file for that UDI:\n{excel_input}\nCannot proceed!")
                 return False
 
-        #return True
+        #return True  # DEBUG
 
         engine, _ = get_protocol_db_connector()
         try:
@@ -528,7 +532,7 @@ class WindowUI(object):
                             r = session.execute(sql)
                             session.commit()
                     else:
-                        showwarning("Abort saving to DB", f"Cannot save to DB as records altready exists.")
+                        showwarning("Abort saving to DB", f"Cannot save to DB as records already exists and user doesn't want to delete them first.")
                         return False
             with engine.connect() as session:
                 r = df.to_sql("peel_tests", session, if_exists="append", index=False, method="multi")
@@ -578,7 +582,9 @@ class WindowUI(object):
         ttk.Label(frame, text="UDI", justify="left").grid(row=_row, column=0, sticky=tk.NSEW)
         if MANUAL_UDI_EDIT:
             # manual edit allowed
-            self.entry_udi = ttk.Entry(frame, textvariable=self.var_udi, state="enabled", validate="focusout", validatecommand=(self.vcmd_validate_udi_in_db, "%P"))
+            #self.entry_udi = ttk.Entry(frame, textvariable=self.var_udi, state="enabled", validate="focusout", validatecommand=(self.vcmd_validate_udi_in_db, "%P"))
+            self.entry_udi = ttk.Entry(frame, textvariable=self.var_udi, state="enabled")
+            self.entry_udi.bind("<Return>", (lambda event: self.validate_udi_in_db(self.var_udi.get())))
         else:
             self.entry_udi = ttk.Entry(frame, textvariable=self.var_udi, state="disabled")
         self.entry_udi.grid(row=_row, column=1, columnspan=2, sticky=tk.NSEW)
@@ -596,7 +602,7 @@ class WindowUI(object):
         self.entry_positions = ttk.Entry(frame, textvariable=self.var_positions,
                                          validatecommand=self.vcmd_validate_positions_change,
                                          validate="focusout",
-                                         state="disabled" if PRODUCTION_MODE else "enabled")
+                                         state="disabled")
         self.entry_positions.grid(row=_row, column=1, columnspan=1, sticky=tk.NSEW)
         #_row += 1
 
@@ -862,13 +868,12 @@ class WindowUI(object):
                         #_positions = randint(0, len(self.forces_df)) if (len(self.forces_df) > 0) else 0
                         _positions = 0
 
+                    self.var_udi.set(_udi)
+                    #self.label_udi.config(background="lightblue", foreground="black")
                     self.var_label_status.set(f"{_e} {_p} {_v}")
                     self.var_positions.set(_positions)
                     self.validate_positions_change(force=True)  # we need to trigger a change validation here
 
-                    #self.label_udi.config(background="lightblue", foreground="black")
-                    if _udi != self.var_udi.get():
-                        self.var_udi.set(_udi)
                     _do_update = True
 
                 break  # DIRTY SANCHEZ!
