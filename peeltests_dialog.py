@@ -155,16 +155,31 @@ def query_welding_measurements(engine: sa.Engine, udi: str, show_performance: bo
                 m.station_id,
                 m.`result`,
                 p.device_name,
-                p.program_no
+                p.program_no,
+                e.ts as ts_peeltest,
+                e.position as position_peeltest,
+                e.limit_peel_force_per_axis as limit_peel_force_per_axis,
+                e.limit_peel_forces_sum as limit_peel_forces_sum,
+                e.max_peelforce_ax1 as max_peelforce_ax1,
+                e.result_peelforce_ax1 as result_peelforce_ax1,
+                e.max_peelforce_ax2 as max_peelforce_ax2,
+                e.result_peelforce_ax2 as result_peelforce_ax2,
+                e.visual_inspection_before as visual_inspection_before,
+                e.visual_inspection_after as visual_inspection_after,
+                e.operator_name as operator_name
             FROM protocol.welding_measurements AS m
             LEFT JOIN protocol.welding_parameters AS p ON (m.ref_parameter = p.hash)
+            LEFT JOIN protocol.peel_tests AS e ON ((m.udi = e.udi)
+                AND (m.position = e.position)
+                AND (m.part_number = e.part_number))
             WHERE m.udi = '{udi}'
             ORDER BY m.position ASC
         """)
         if show_performance:
             tic = perf_counter()
-        print(sql)
+        #print(sql)
         df = pd.read_sql(sql, session)
+        print(df.head())
         print(f"Read {len(df)} data records.", end="")
         if show_performance:
             toc = perf_counter()
@@ -241,6 +256,7 @@ class WindowUI(object):
         self.var_forces_limits = tk.StringVar(self.root, "")
         self.var_label_status = tk.StringVar(self.root, "")
         # these are empty list on purpose - they'll be poulated later by callbacks
+        self.welding_position_map = []
         self.var_peelforce_ax1 = []
         self.var_peelforce_ax2 = []
         self.var_result_peelforce_ax1 = []
@@ -405,6 +421,24 @@ class WindowUI(object):
                     self.var_peelforce_ax1[_idx].set(_forces[_idx*2 + 0])
                     self.var_peelforce_ax2[_idx].set(_forces[_idx*2 + 1])
 
+            # check if we can fill the data into the dialog either from DB query or by Excel file found
+            # DB query takes precedence over Excel file!
+            _pass_fail_map = {"P": "Pass", "F": "Fail"}
+            _true_false_map = {"P": True, "F": False}
+            for _idx, row in self.uut_df.iterrows():
+                if row["max_peelforce_ax1"] is not None:
+                    self.var_peelforce_ax1[_idx].set(row["max_peelforce_ax1"])
+                if row["result_peelforce_ax1"] is not None:
+                    self.var_result_peelforce_ax1[_idx].set(_true_false_map[row["result_peelforce_ax1"]])
+                if row["max_peelforce_ax2"] is not None:
+                    self.var_peelforce_ax2[_idx].set(row["max_peelforce_ax2"])
+                if row["result_peelforce_ax2"] is not None:
+                    self.var_result_peelforce_ax2[_idx].set(_true_false_map[row["result_peelforce_ax2"]])
+                if row["visual_inspection_before"] is not None:
+                    self.var_visual_inspection_before[_idx].set(_pass_fail_map[row["visual_inspection_before"]])
+                if row["visual_inspection_after"] is not None:
+                    self.var_visual_inspection_after[_idx].set(_pass_fail_map[row["visual_inspection_after"]])
+
             return True
         except Exception as ex:
             pass  # ignore
@@ -447,7 +481,8 @@ class WindowUI(object):
             return False
         # save the positions data set to the DB
         df = pd.DataFrame({
-            "position": [idx for idx, v in enumerate(self.var_peelforce_ax1)],
+            "position": [int(v) for v in self.welding_position_map],
+            #"position": [idx for idx, v in enumerate(self.var_peelforce_ax1)],
             "max_peelforce_ax1": [float(v.get()) for v in self.var_peelforce_ax1],
             "max_peelforce_ax2": [float(v.get()) for v in self.var_peelforce_ax2],
             "result_peelforce_ax1": [(v.get()[0].upper() if (v.get() and (v.get() != "")) else None) for v in self.var_result_peelforce_ax1],
@@ -477,6 +512,8 @@ class WindowUI(object):
                 showwarning("Validation Failed",
                             f"The forces entered by user differ from the forces found in the Excel file for that UDI:\n{excel_input}\nCannot proceed!")
                 return False
+
+        #return True
 
         engine, _ = get_protocol_db_connector()
         try:
@@ -636,7 +673,7 @@ class WindowUI(object):
         _row += 1
         _combo_width = 8
         for i in range(number_of_positions):
-            ttk.Label(frame, text=f"Position {i}:", justify="left").grid(row=_row, column=0, sticky=tk.NSEW),
+            ttk.Label(frame, text=f"Position {self.welding_position_map[i]}:", justify="left").grid(row=_row, column=0, sticky=tk.NSEW),
             _visual_inspection_before = PassFailCombobox(frame, textvariable=self.var_visual_inspection_before[i], width=_combo_width)
             _visual_inspection_before.grid(row=_row, column=1)
             _peelforce_ax1 = ttk.Entry(frame, textvariable=self.var_peelforce_ax1[i], validate="focusout", validatecommand=(self.vcmd_validate_forces_against_limits, "%P"))
@@ -699,14 +736,14 @@ class WindowUI(object):
                 len(self.var_visual_inspection_before) == _positions and
                 len(self.var_visual_inspection_after) == _positions)
             ok = (ok and
-                all([(v.get() and (float(v.get()) > 0)) for v in self.var_peelforce_ax1]) and
-                all([(v.get() and (float(v.get()) > 0)) for v in self.var_peelforce_ax2]))
+                all([((v.get() is not None) and (float(v.get()) >= 0)) for v in self.var_peelforce_ax1]) and
+                all([((v.get() is not None) and (float(v.get()) >= 0)) for v in self.var_peelforce_ax2]))
             ok = (ok and
-                all([(v.get() and (v.get() in _pass_fail)) for v in self.var_result_peelforce_ax1]) and
-                all([(v.get() and (v.get() in _pass_fail)) for v in self.var_result_peelforce_ax2]))
+                all([(v.get() is not None) for v in self.var_result_peelforce_ax1]) and
+                all([(v.get() is not None) for v in self.var_result_peelforce_ax2]))
             ok = (ok and
-                all([(v.get() and (v.get() in _pass_fail)) for v in self.var_visual_inspection_before]) and
-                all([(v.get() and (v.get() in _pass_fail)) for v in self.var_visual_inspection_after]))
+                all([((v.get() is not None) and (v.get() in _pass_fail)) for v in self.var_visual_inspection_before]) and
+                all([((v.get() is not None) and (v.get() in _pass_fail)) for v in self.var_visual_inspection_after]))
         except Exception as ex:
             ok = False
         #self.save_button.state = "enabled" if ok else "disabled"
@@ -781,6 +818,8 @@ class WindowUI(object):
 
                 if "udi_scanned" in a:
                     _udi = a["udi_scanned"]
+                    if (not _udi) or (_udi == ""):
+                        break  # no good UDI
                     print("UI:UPDATE UDI:", _udi)
 
                     # 1) read excel file for validation of human entries
@@ -796,32 +835,40 @@ class WindowUI(object):
                     # 3) read database for welding measurements of this UDI
                     ok, self.uut_df = self._collect_uut_information(_udi)
                     # 4) Prepare UI with needed positions
+                    self.welding_position_map = []
                     if len(self.uut_df):
                         _positions = len(self.uut_df)
-                        if len(self.uut_df) > 0:
+                        #_last_position = self.uut_df["position"].max()
+                        ## if we have only one single position peeled,
+                        ## we need to fill empty positions up to this position !
+                        #_positions = (_last_position + 1) if (_last_position is not None) else 0
+                        if _positions > 0:
+                            self.welding_position_map = list(sorted(self.uut_df["position"].to_list()))
                             # get some overall info from the first entry of DB
                             head_info = self.uut_df.iloc[0].to_dict()
                             print(head_info)
                             self.var_part_number.set(head_info["part_number"])
                             self.var_line_id.set(head_info["line_id"])
                             #head_info["ts"]
-                            _p = f"Found {len(self.uut_df)} welding positions in DB."
-                            if len(self.forces_df)>0:
-                                _v = "Validation possible." if (2*len(self.uut_df) == len(self.forces_df)) \
+                            _p = f"Found {_positions} welding positions in DB."
+                            if len(self.forces_df) > 0:
+                                _v = "Validation possible." if (_positions*2 == len(self.forces_df)) \
                                                             else "Number of entries differ: Validation not possible."
                             else:
                                 _v = ""
                     else:
                         _p = "No welding positions found in DB !"
                         _v = ""
-                        _positions = randint(0, len(self.forces_df)) if (len(self.forces_df) > 0) else 0
+                        #_positions = randint(0, len(self.forces_df)) if (len(self.forces_df) > 0) else 0
+                        _positions = 0
 
                     self.var_label_status.set(f"{_e} {_p} {_v}")
                     self.var_positions.set(_positions)
                     self.validate_positions_change(force=True)  # we need to trigger a change validation here
 
                     #self.label_udi.config(background="lightblue", foreground="black")
-                    self.var_udi.set(_udi)
+                    if _udi != self.var_udi.get():
+                        self.var_udi.set(_udi)
                     _do_update = True
 
                 break  # DIRTY SANCHEZ!
@@ -971,7 +1018,7 @@ class ProcessScanner(mp.Process):
                     msg = {"udi_scanned": _udi}
                     self.ui_queue.put(msg)  # this goes to the UI process
 
-        # else:
+        else:
         #     # ********** Simulation Profile *************
         #     #while True:
         #         # sleep(3.0)
@@ -990,6 +1037,11 @@ class ProcessScanner(mp.Process):
         #         sleep(3.0)
         #         _udi = "1CELL00000002B84"
         #         self.ui_queue.put({"udi_scanned": _udi})  # SUCCESS (full positions)
+                sleep(3.0)
+                _udi = "1CELL00000012709"
+                self.ui_queue.put({"udi_scanned": _udi})  # SUCCESS (some positions)
+                sleep(60.0)
+                pass
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
