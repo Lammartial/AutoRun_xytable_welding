@@ -1249,6 +1249,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             block[0x15:0x19] = new_offset
             # 4. Write new TS1...TS4 offset
             self.write_flash_block(0x4000, block)
+            sleep(0.2)
 
         # 5. Re-check temperature TS1...TS4
         dastatus2 = self.manufacturing_dastatus2()
