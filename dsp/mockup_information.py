@@ -74,28 +74,28 @@ PART_INFORMATION = {
     "RRC2054S": {
         "CELL_TEST": {
             # Cell Test PRT IDs
-            "test_program_id": ("CT-SQ_2054S", "411863_RRC2054S_Cell-Test_B"),
-            "part_number": ("CT-PN_2054S", "411863-05"),
+            "test_program_id": ("CT-SQ_2054S", "412085_RRC2054S_Cell-Test_B"),
+            "part_number": ("CT-PN_2054S", "412085-01"),
         },
         "CELL_WELDING": {
             # Cell Welding PRT IDs:
             "test_program_id": ("CW-SQ_2054S", "A"),
-            "part_number": ("CW-PN_2054S", "411863-05"),
+            "part_number": ("CW-PN_2054S", "412085-01"),
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2054S", "411824_RRC2054S_PCBA-Test_B"),
-            "part_number": ("PT-PN_2054S", "411824-04"),
+            "test_program_id": ("PT-SQ_2054S", "412100_RRC2054S_PCBA-Test_B"),
+            "part_number": ("PT-PN_2054S", "412100-01"),
         },
         "COREPACK_TEST": {
             # Core Pack Test PRT IDs:
-            "test_program_id": ("CP-SQ_2054S", "411863_RRC2054S_Corepack-Test_A"),
-            "part_number": ("CP-PN_2054S", "411863-05"),
+            "test_program_id": ("CP-SQ_2054S", "412085_RRC2054S_Corepack-Test_B"),
+            "part_number": ("CP-PN_2054S", "412085-01"),
         },
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
-            "test_program_id": ("HP-SQ_2054S", "100568S_RRC2054S_EOL-Test_A"),
-            "part_number": ("HP-PN_2054S", "100568S-14"),
+            "test_program_id": ("HP-SQ_2054S", "100568S_RRC2054S_EOL-Test_B"),
+            "part_number": ("HP-PN_2054S", "100568S-15"),
         }
     },
     #
@@ -104,28 +104,28 @@ PART_INFORMATION = {
     "RRC2040-2S": {
         "CELL_TEST": {
             # Cell Test PRT IDs
-            "test_program_id": ("CT-SQ_2040-2S", "411842_RRC2040-2S_Cell-Test_B"),
-            "part_number": ("CT-PN_2040-2S", "411842-05"),
+            "test_program_id": ("CT-SQ_2040-2S", "412084_RRC2040-2S_Cell-Test_B"),
+            "part_number": ("CT-PN_2040-2S", "412084-01"),
         },
         "CELL_WELDING": {
             # Cell Welding PRT IDs:
             "test_program_id": ("CW-SQ_2040-2S", "A"),
-            "part_number": ("CW-PN_2040-2S", "411842-05"),
+            "part_number": ("CW-PN_2040-2S", "412084-01"),
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2040-2S", "410136_RRC2040-2S_PCBA-Test_B"),
-            "part_number": ("PT-PN_2040-2S", "410136-08"),
+            "test_program_id": ("PT-SQ_2040-2S", "412101_RRC2040-2S_PCBA-Test_B"),
+            "part_number": ("PT-PN_2040-2S", "412101-01"),
         },
         "COREPACK_TEST": {
             # Core Pack Test PRT IDs:
-            "test_program_id": ("CP-SQ_2040-2S", "411842_RRC2040-2S_Corepack-Test_A"),
-            "part_number": ("CP-PN_2040-2S", "411842-08"),
+            "test_program_id": ("CP-SQ_2040-2S", "412084_RRC2040-2S_Corepack-Test_B"),
+            "part_number": ("CP-PN_2040-2S", "412084-01"),
         },
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
-            "test_program_id": ("HP-SQ_2040-2S", "100559S_RRC2040-2S_EOL-Test_A"),
-            "part_number": ("HP-PN_2040-2S", "100559S-10"),
+            "test_program_id": ("HP-SQ_2040-2S", "100559S_RRC2040-2S_EOL-Test_B"),
+            "part_number": ("HP-PN_2040-2S", "100559S-11"),
         }
     },
     #
@@ -149,12 +149,12 @@ PART_INFORMATION = {
         },
         "COREPACK_TEST": {
             # Core Pack Test PRT IDs:
-            "test_program_id": ("CP-SQ_2054-2S", "412080_RRC2054-2S_Corepack-Test_A"),
+            "test_program_id": ("CP-SQ_2054-2S", "412080_RRC2054-2S_Corepack-Test_B"),
             "part_number": ("CP-PN_2054-2S", "412080-01"),
         },
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
-            "test_program_id": ("HP-SQ_2054-2S", "110064S_RRC2054-2S_EOL-Test_A"),
+            "test_program_id": ("HP-SQ_2054-2S", "110064S_RRC2054-2S_EOL-Test_B"),
             "part_number": ("HP-PN_2054-2S", "110064S-08"),
         }
     },
