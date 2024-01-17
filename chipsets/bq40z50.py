@@ -1498,11 +1498,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def write_pcba_udi_block(self, udi_block: str) -> bool:
         """
         Writes specific RRC prefix and PCBA serial number into Manufacturer info block.
-        Addresses: A01-A08 (0x4041 .. 0x4048)
+        Addresses: A01-A15 (0x4041 .. 0x404F)
 
         Args:
-            pcba_sn (str): unique serial number for every PCBA (7 characters)
-            prefix (str, optional): specific prefix provided by RRC. Defaults to "A".
+            udi_block (str): unique serial number for every PCBA (min 2, max 15 characters, "PCBA" will be removed)
 
         Returns:
             bool: True - success, False - failed
@@ -1520,7 +1519,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def read_pcba_udi_block(self) -> str:
         """
         Reads specific RRC prefix and PCBA serial number from the Manufacturer info block.
-        Addresses: A01-A08 (0x4041 .. 0x4048)
+        Addresses: A01-A15 (0x4041 .. 0x404F)
 
         Returns:
             str: pcba udi block
@@ -1532,7 +1531,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def write_serial_number_block(self, sn: str) -> bool:
         """
         Writes serial number into Manufacturer info block.
-        Addresses: A17-A30 (0x04041+17 = 0x4052 .. 0x4060)
+        Addresses: A17-A30 (0x04041+16 = 0x4051 .. 0x405E)
 
         Args:
             sn (str): serial number (14 characters)
@@ -1542,26 +1541,28 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
         assert(len(sn) <= 14), ValueError('Serial number length more then 14 characters.')
         buffer = bytes(sn, encoding="utf-8")
-        return self.write_flash_block(0x4052, buffer)
+        if len(buffer) < 14:
+            buffer += bytes(14-len(buffer))  # append \x00 bytes if less than 14
+        return self.write_flash_block(0x4051, buffer)
 
 
     def read_serial_number_block(self) -> str:
         """
         Reads serial number from the Manufacturer info block.
-        Addresses: A17-A30 (0x4052..0x4060)
+        Addresses: A17-A30 (0x4051..0x405E)
 
         Returns:
             str: serial number block
         """
         #return self.read_flash_block(0x4052, 14).decode()
-        return self.read_flash_block_verified(0x4052, 14).decode()
-
+        return self.read_flash_block_verified(0x4051, 14).decode()
+        #return self._maybe_hexlify(self.read_flash_block_verified(0x4041, 32), True)  # verify with hex code
 
 
     def write_internal_use_indexing(self, index_byte: str) -> bool:
         """
         Writes Internal Use Indexing Byte into Manufacturer info block.
-        Addresses: A16 (0x4051)
+        Addresses: A16 (0x4050)
 
         Args:
             index (str): index value (1 character)
@@ -1570,20 +1571,20 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             bool: True - success, False - failed
         """
         assert(len(index_byte) == 1), ValueError('Index my not have more then 1 character.')
-        return self.write_flash_block(0x4051, bytes(index_byte, encoding="utf-8"))
+        return self.write_flash_block(0x4050, bytes(index_byte, encoding="utf-8"))
 
 
 
     def read_index_byte(self) -> str:
         """
         Reads Internal Use Indexing Byte from the Manufacturer info block.
-        Addresses: A16 (0x4051)
+        Addresses: A16 (0x4050)
 
         Returns:
             str: Internal Use Indexing Byte
         """
-        #return self.read_flash_block(0x4051, 1).decode()
-        return self.read_flash_block_verified(0x4051, 1).decode()
+        #return self.read_flash_block(0x4050, 1).decode()
+        return self.read_flash_block_verified(0x4050, 1).decode()
 
 
     def read_firmware_revision(self) -> str:
