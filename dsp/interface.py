@@ -472,6 +472,10 @@ def test_teststand_line_interfaces(
         #dsp_lean.api["test_program_id"] = "100496-17_EOL-Test_A" # patch
         # ... more sockets ?
         if 1:
+            _udi_to_send = f"{udi_cell}"
+            ok, serial = dsp_lean.ts_get_serial_number_for_udi(_udi_to_send)
+            _log.info(f"SERIAL from cell udi: {serial}")
+        if 0:
             _udi_to_send = f"{udi_cell},"
             ok, serial = dsp_lean.ts_get_serial_number_for_udi(_udi_to_send)
             _log.info(f"SERIAL from cell udi: {serial}")
@@ -550,7 +554,8 @@ if __name__ == "__main__":
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
     #test_interface(dsp)
     #test_teststand_line_interfaces(API_URL, udi_cell="1CELL000000020E2", udi_pcba="", test_result="P", line_id=2)    
-    test_teststand_line_interfaces(API_URL, udi_cell="1CELL000000020F0", udi_pcba="", test_result="P", line_id=2)
+    #test_teststand_line_interfaces(API_URL, udi_cell="1CELL000000020F0", udi_pcba="", test_result="P", line_id=2)
+    test_teststand_line_interfaces(API_URL, udi_cell="1CELL0000001CD67", udi_pcba="", test_result="P", line_id=2)
     #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000254", udi_pcba="1PCBA00000000254")
     #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000255", udi_pcba="1PCBA00000000255", test_result="P")
     #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000256", udi_pcba="1PCBA00000000256")
