@@ -135,12 +135,12 @@ PART_INFORMATION = {
         "CELL_TEST": {
             # Cell Test PRT IDs
             "test_program_id": ("CT-SQ_2054-2S", "412080_RRC2054-2S_Cell-Test_B"),
-            "part_number": ("CT-PN_2054-2S", "412080-01"),
+            "part_number": ("CT-PN_2054-2S", "412080-02"),
         },
         "CELL_WELDING": {
             # Cell Welding PRT IDs:
             "test_program_id": ("CW-SQ_2054-2S", "A"),
-            "part_number": ("CW-PN_2054-2S", "412080-01"),
+            "part_number": ("CW-PN_2054-2S", "412080-02"),
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
@@ -150,7 +150,7 @@ PART_INFORMATION = {
         "COREPACK_TEST": {
             # Core Pack Test PRT IDs:
             "test_program_id": ("CP-SQ_2054-2S", "412080_RRC2054-2S_Corepack-Test_B"),
-            "part_number": ("CP-PN_2054-2S", "412080-01"),
+            "part_number": ("CP-PN_2054-2S", "412080-02"),
         },
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
