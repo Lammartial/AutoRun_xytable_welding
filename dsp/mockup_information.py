@@ -182,6 +182,36 @@ PART_INFORMATION = {
             "test_program_id": ("CP-SQ_SPINEL", "110282S_SPINEL_Imbalance-Test"),
             "part_number": ("CP-PN_SPINEL", "110282S-00"),
         }
+    },
+    #
+    # RRC2020-DR
+    #
+    "RRC2020-DR": {
+        "CELL_TEST": {
+            # Cell Test PRT IDs
+            "test_program_id": ("CT-SQ_2020B", "412081_RRC2020B_Cell-Test_C"),
+            "part_number": ("CT-PN_2020B", "412081-01"),  # using the pre-assembly PN
+        },
+        "CELL_WELDING": {
+            # Cell Welding PRT IDs:
+            "test_program_id": ("CW-SQ_2020B", "A"),
+            "part_number": ("CW-PN_2020B", "412081-01"),  # using the pre-assembly PN
+        },
+        "PCBA_TEST": {
+            # PCBA Test PRT IDs:
+            "test_program_id": ("PT-SQ_2020B", "411828_RRC2020B_PCBA-Test_B"),
+            "part_number": ("PT-PN_2020B", "411828-05"),  # using the pcba part number PN
+        },
+        "COREPACK_TEST": {
+            # Core Pack Test PRT IDs:
+            "test_program_id": ("CP-SQ_2020B", "412081_RRC2020B_Corepack-Test_B"),
+            "part_number": ("CP-PN_2020B", "412081-01"),  # using the pre-assembly PN
+        },
+        "EOL_TEST": {
+            # Hard Pack (End-Of-Line) Test PRT IDs:
+            "test_program_id": ("HP-SQ_2020B", "110102_RRC2020-DR_EOL-Test_A"),
+            "part_number": ("HP-PN_2020B", "110102-14"),  # using the product number PN
+        }
     }
 }
  
