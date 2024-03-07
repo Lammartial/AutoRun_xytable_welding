@@ -115,6 +115,7 @@ if __name__ == "__main__":
 
     #_old = decrypt("Tl9SBaHNYtJim7U4mx9UxWoMuZK0tXgLzNhg/GaY+giMH5nykWOFeuU9gkMNli0GMNWa8rS42IA9iXZUoNCI7yOT+YoDzIaURHVgpA9ShXU=", 7)
     #_new = decrypt("CPPFqb90MIiM8T2FjVdV/w9kXEE8tIdPr0UCTGu+XHq5qwfV7V8W4Te5iLajWcIGUZXmyvr+IV+PAKc5sLDMHAvo4+FqD0ClJtKzN0ZTPPg=", 4)
+    #print(_old, _new)
     #exit()
 
     i2cbus = I2CPort(f"{LINE_NETWORK}.50:2101") # socket 0
