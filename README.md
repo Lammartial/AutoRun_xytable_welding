@@ -82,15 +82,18 @@ pyodbc
 pymssql
 psycopg2
 pymysql
+
+# Cipher
+pycryptodomex
 ```
 
 ### For the lazy guys (copy & paste):
 
 PIP:
-`pip wheel typing debugpy numpy==1.23 scipy pandas pytz pymodbus pyvisa SQLAlchemy pyodbc pymssql psycopg2 pymysql pyyaml pywin32 requests fastapi[all] humanfriendly pyelftools pyserial pyserial-asyncio icmplib xlrd`
+`pip wheel typing debugpy numpy==1.23 scipy pandas pytz pymodbus pyvisa SQLAlchemy pyodbc pymssql psycopg2 pymysql pyyaml pywin32 requests fastapi[all] humanfriendly pyelftools pyserial pyserial-asyncio icmplib xlrd pycryptodomex`
 
 CONDA:
-`typing pyyaml debugpy numpy==1.23 scipy pandas pytz pymodbus pyvisa SQLAlchemy pyodbc pymssql psycopg2 pymysql pywin32 requests fastapi[all] humanfriendly pyelftools pyserial pyserial-asyncio icmplib xlrd`
+`typing pyyaml debugpy numpy==1.23 scipy pandas pytz pymodbus pyvisa SQLAlchemy pyodbc pymssql psycopg2 pymysql pywin32 requests fastapi[all] humanfriendly pyelftools pyserial pyserial-asyncio icmplib xlrd pycryptodomex`
 
 consider: matplotlib, dash
 
