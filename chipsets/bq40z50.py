@@ -740,7 +740,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         raise NotImplementedError("There is no direct read access to the sha1 key for this chipset.")
 
 
-    def change_authentication_key(self, new_key: bytes | bytearray) -> bool:
+    def change_authentication_key(self, new_key: bytes | bytearray | str) -> bool:
         """Program a new authentication key.
 
         Using variant (2) from Manual:
@@ -755,9 +755,16 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         new_key = self._validate_buffer(new_key, name="new_key", length=16)
         if not self.is_unsealed(check_fullaccess=True): raise BatterySecurityError("Device is not in full access mode, cannot change authentication key.")
         buf = bytes(reversed(new_key))
-        self.manufacturer_access = 0x0037
-        self.writeBlock(Cmd.AUTHENTICATE, buf) # cannot be verified by read !
+        #buf = bytes(new_key)
+        #self.manufacturer_access = 0x0037
+        #self.manufacturer_block_access = buf
+        #self.writeBlock(Cmd.AUTHENTICATE, buf) # cannot be verified by read !
+        self.writeBlock(0x44, b"\x37\x00" + buf)
         sleep(0.52) # for bq40z50: wait 500ms
+        #self.manufacturer_access = 0x0037
+        #x_buf1, ok = self.readBytes(0x2f, 21)
+        x_buf2, ok = self.readBytes(0x44, 23)
+        hx_buf2 = hexlify(bytes(reversed(x_buf2))).decode()
         return self.authenticate(new_key) # verify if the new key is installed
 
 

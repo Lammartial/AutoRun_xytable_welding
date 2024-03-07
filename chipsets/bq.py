@@ -103,7 +103,8 @@ class ChipsetTexasInstruments(Chipset):
         rchallenge = bytes(reversed(challenge)) # swap from big to little endian byte first
         if self.writeBlock(Cmd.AUTHENTICATE, rchallenge): # NOT verified
             sleep(0.52) # for bq20z65: wait 250ms", for bq40z50: wait 500ms
-            response, ok = self.readBlock(Cmd.AUTHENTICATE)
+            #response, ok = self.readBlock(Cmd.AUTHENTICATE)
+            response, ok = self.readBytes(Cmd.AUTHENTICATE, 23)
             if ok:
                 rresponse = bytes(reversed(response))
                 #print(rresponse, rchallenge)

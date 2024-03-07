@@ -89,6 +89,14 @@ def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3400) -> None:
     psu.set_output_state(0) 
 
 
+def test_sha1_key_change(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3400):
+
+    psu.configure_supply(10.8, 0.1, 50, set_output=1)
+    #print(bat.change_authentication_key(""))  # old
+    print(bat.change_authentication_key(""))  # new
+
+
+
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -96,9 +104,9 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    LINE_NETWORK = "172.25.101"  # VN line 1
+    #LINE_NETWORK = "172.25.101"  # VN line 1
     #LINE_NETWORK = "172.25.102"  # VN line 2    
-    #LINE_NETWORK = "172.21.101"  # HOM Warehouse
+    LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
     i2cbus = I2CPort(f"{LINE_NETWORK}.50:2101") # socket 0
    
@@ -135,6 +143,8 @@ if __name__ == "__main__":
 
     psu = M3400(f"{LINE_NETWORK}.51:30000")
         
-    psu_test(bat, gpio, psu)
+    #psu_test(bat, gpio, psu)
+    test_sha1_key_change(bat, gpio, psu)
+
 
 # END OF FILE
