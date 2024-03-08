@@ -1,0 +1,11 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+# don't change line-endings on PDF
+*.pdf   -text
+
+# typical binary files
+*.bin   binary
+
+# TestStand sequence files are binary encoded
+*.seq   binary
+*.tpj   binary
