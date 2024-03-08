@@ -104,11 +104,11 @@ class ChipsetTexasInstruments(Chipset):
         if self.writeBlock(Cmd.AUTHENTICATE, rchallenge): # NOT verified
             sleep(0.52) # for bq20z65: wait 250ms", for bq40z50: wait 500ms
             #response, ok = self.readBlock(Cmd.AUTHENTICATE)
-            response, ok = self.readBytes(Cmd.AUTHENTICATE, 23)
+            response, ok = self.readBytes(Cmd.AUTHENTICATE, 23)  # NOTE: this is work-around for NCD.io interface!
             if ok:
                 rresponse = bytes(reversed(response))
-                #print(rresponse, rchallenge)
-                return (hmac2 in rresponse) and (len(hmac2) == len(rresponse))
+                #return (hmac2 in rresponse) and (len(hmac2) == len(rresponse))
+                return (hmac2 in rresponse)  # NOTE: this is work-around for NCD.io interface!
         return False
 
     def _write_key(self, key: int | bytes | bytearray | str) -> None:

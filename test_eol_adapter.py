@@ -94,11 +94,16 @@ def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3400) -> None:
 def test_sha1_key_change(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3400):
     psu.configure_supply(10.8, 0.1, 50, set_output=1)
 
-    _old = decrypt("Tl9SBaHNYtJim7U4mx9UxWoMuZK0tXgLzNhg/GaY+giMH5nykWOFeuU9gkMNli0GMNWa8rS42IA9iXZUoNCI7yOT+YoDzIaURHVgpA9ShXU=", 7)
-    print(bat.change_authentication_key(_old))  # old
+    #_old = decrypt("Tl9SBaHNYtJim7U4mx9UxWoMuZK0tXgLzNhg/GaY+giMH5nykWOFeuU9gkMNli0GMNWa8rS42IA9iXZUoNCI7yOT+YoDzIaURHVgpA9ShXU=", 7)
+    #print(bat.change_authentication_key(_old))  # old
     _new = decrypt("CPPFqb90MIiM8T2FjVdV/w9kXEE8tIdPr0UCTGu+XHq5qwfV7V8W4Te5iLajWcIGUZXmyvr+IV+PAKc5sLDMHAvo4+FqD0ClJtKzN0ZTPPg=", 4)
+    #print(bat.authenticate(_new))
     print(bat.change_authentication_key(_new))  # new
+    #print(bat.authenticate(_new))
 
+    #print(bat.change_authentication_key_cipher("Tl9SBaHNYtJim7U4mx9UxWoMuZK0tXgLzNhg/GaY+giMH5nykWOFeuU9gkMNli0GMNWa8rS42IA9iXZUoNCI7yOT+YoDzIaURHVgpA9ShXU=", 7))  # standard RRC
+    print(bat.change_authentication_key_cipher("CPPFqb90MIiM8T2FjVdV/w9kXEE8tIdPr0UCTGu+XHq5qwfV7V8W4Te5iLajWcIGUZXmyvr+IV+PAKc5sLDMHAvo4+FqD0ClJtKzN0ZTPPg=", 4))  # new key
+    
 
 
 #--------------------------------------------------------------------------------------------------
@@ -126,7 +131,7 @@ if __name__ == "__main__":
         print("CH:", i, i2cbus.i2c_bus_scan())
 
     smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 1), retry_limit=7, verify_rounds=3, pause_us=50)
-    bat = BQ40Z50R1(smbus)
+    bat = BQ40Z50R1(smbus, pec=False)
 
     temp = STS21(I2CMuxedBus(i2cbus, mux, 3))
     print(temp.start_measurement_no_hold())

@@ -24,6 +24,7 @@ from rrc.battery_errors import BatteryError, BatterySecurityError
 from rrc.smbus import BusMaster
 from rrc.smartbattery import Cmd
 from rrc.chipsets.bq import ChipsetTexasInstruments
+from rrc.chipsets.cipher import decrypt
 import struct
 from datetime import datetime
 import numpy as np
@@ -752,20 +753,44 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Args:
             string | bytes: new key in hex form or bytes
         """
+
         new_key = self._validate_buffer(new_key, name="new_key", length=16)
         if not self.is_unsealed(check_fullaccess=True): raise BatterySecurityError("Device is not in full access mode, cannot change authentication key.")
         buf = bytes(reversed(new_key))
-        #buf = bytes(new_key)
+        #
+        # NOTE: this two sequence would work, if the I²C Transfer is able to generate a real REPEATED START condition on the ReadBlock() Transfer
+        #       On NCD.io this is not the case, so we need a different work-around when using this interface.
+        #       Final Solution: use OLIMEX with our gateway firmware which provides a real write-then-read without STOP condition.  
         #self.manufacturer_access = 0x0037
-        #self.manufacturer_block_access = buf
         #self.writeBlock(Cmd.AUTHENTICATE, buf) # cannot be verified by read !
+        #sleep(0.52) # for bq40z50: wait 500ms
+        #return self.authenticate(new_key) # verify if the new key is installed
+        
+        # This is NCD.io Work around. Note that the authentication() function works only, if a readBlock(0x44) is prepended! 
         self.writeBlock(0x44, b"\x37\x00" + buf)
         sleep(0.52) # for bq40z50: wait 500ms
-        #self.manufacturer_access = 0x0037
-        #x_buf1, ok = self.readBytes(0x2f, 21)
-        x_buf2, ok = self.readBytes(0x44, 23)
-        hx_buf2 = hexlify(bytes(reversed(x_buf2))).decode()
+        _buf, ok = self.readBlock(0x44)
+        if not ok: 
+            return False
+        #_buf_hex = hexlify(bytes(reversed(_buf))).decode()  # just for debugging
+        # END OF WORK-AROUND
+        
         return self.authenticate(new_key) # verify if the new key is installed
+
+
+    def change_authentication_key_cipher(self, new_key_cipher: str, key_index: int) -> bool:
+        """Program a new authentication key which is encrypted.
+
+        Args:
+            new_key_cipher (string | bytes): new encrypted key as string or bytes
+            key_index (int): index of cipher key to use (0 ... xxx) 
+
+        Returns:
+            result of change_authentication_key() as bool
+
+        """
+
+        return self.change_authentication_key(decrypt(new_key_cipher, int(key_index)))
 
 
     def read_manufacturer_block(self, command: int, length: int | None, max_retries: int = 5) -> bytearray:
