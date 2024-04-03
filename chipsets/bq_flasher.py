@@ -65,6 +65,7 @@ class BQStudioFileFlasher:
         self.battery = battery
         self._test_socket = int(test_socket)
         self._progress = None
+        self._use_threading = False  # this is to enable a short sleep() call after each line to release the GIL lock enabling other threads
         if firmware_file:
             self.set_firmware_file(firmware_file, show_progressbar=show_progressbar, color=color)
         else:
@@ -163,6 +164,8 @@ class BQStudioFileFlasher:
             for current_line in file:
                 current_line = current_line.strip()
                 line_number += 1
+                if self._use_threading:
+                    sleep(0.00005)
 
                 # we can open the progress bar only here as we need to know the size
                 #if self._progress:
@@ -188,7 +191,8 @@ class BQStudioFileFlasher:
                         validation_result = False
                     # hide the progress bar update in the wait times
                     t0 = perf_counter()
-                    if not is_file_validation:
+                    #if not is_file_validation:
+                    if 1:
                         while perf_counter() - t0 < (time_ms / 1000):
                             if self._progress:
                                 self._print_progress_bar(line_number, line_count)
@@ -201,7 +205,7 @@ class BQStudioFileFlasher:
                     result, data = self._handle_line(current_line[2:], line_number) if current_line.startswith("W:") else self._handle_line(current_line[4:], line_number)
                     if not result:
                         validation_result = False
-                        if is_file_validation:                            
+                        if is_file_validation:
                             continue
                         else:
                             break
@@ -210,7 +214,7 @@ class BQStudioFileFlasher:
                         if self.battery.writeBlock(data[0], bytearray(data[1:])):
                             continue
                         else:
-                            prg_result = False 
+                            prg_result = False
                             _log.error(
                                 f"Error in SMBus communication during \"write block\" command in line {line_number}!")
                             break
