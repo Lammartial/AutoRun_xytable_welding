@@ -735,8 +735,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         #     self.write_flash_block(segment.address, segment.data)
 
 
+    #
     # functions that implement the older DuckTape-Javascript interface used in HK-HUB
-
+    #
     def write_flash_value_as_uint8(self, flash_address: int, value: int) -> bool:
         """Write value as unsigned byte (8 bit, 0..255).
 
@@ -747,10 +748,12 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             bool: True if write then read-verify was succesful, False otherwise.
         """
+        value = int(value)  # due to Teststand type "numeric" which is float
         if value < 0 or value > 255:
             raise ValueError(f"Value out of range for uint8 (0..255): {value}")
-        return self.write_flash_block(flash_address, bytearray(pack("B", value)))
-    
+        return self.write_flash_block(int(flash_address), bytearray(pack("B", value)))
+
+
     def write_flash_value_as_int8(self, flash_address: int, value: int) -> bool:
         """Write value as signed short (16 bit, -128..127) at the given address.
 
@@ -761,9 +764,11 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             bool: True if write then read-verify was succesful, False otherwise.
         """
+        value = int(value)  # due to Teststand type "numeric" which is float
         if value < -128 or value > 127:
             raise ValueError(f"Value out of range for int8 (-128..127): {value}")
-        return self.write_flash_block(flash_address, bytearray(pack("b", value)))
+        return self.write_flash_block(int(flash_address), bytearray(pack("b", value)))
+
 
     def write_flash_value_as_uint16(self, flash_address: int, value: int) -> bool:
         """Write value as unsigned short (16 bit, 0..65535) in 
@@ -776,9 +781,11 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             bool: True if write then read-verify was succesful, False otherwise.
         """
+        value = int(value)  # due to Teststand type "numeric" which is float
         if value < 0 or value > 65535:
             raise ValueError(f"Value out of range for uint16 (0..65535): {value}")
-        return self.write_flash_block(flash_address, bytearray(pack("<H", value)))
+        return self.write_flash_block(int(flash_address), bytearray(pack("<H", value)))
+
 
     def write_flash_value_as_int16(self, flash_address: int, value: int) -> bool:
         """Write value as signed short (16 bit, -32768..32767) in 
@@ -791,9 +798,11 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             bool: True if write then read-verify was succesful, False otherwise.
         """
+        value = int(value)  # due to Teststand type "numeric" which is float
         if value < -32768 or value > 32767:
             raise ValueError(f"Value out of range for int16 (-32768..32767): {value}")
-        return self.write_flash_block(flash_address, bytearray(pack("<h", value)))
+        return self.write_flash_block(int(flash_address), bytearray(pack("<h", value)))
+
 
     def read_authentication_key(self) -> None:
         """Returns the programmed authentication key."""
