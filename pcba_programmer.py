@@ -55,13 +55,16 @@ _log = getLogger(__name__, DEBUG)
 # define the programmer's resource strings including ports
 # each line is reflected to a line in the dialog
 PROGRAMMERS = [
-    "192.168.69.77:2101",
-    "192.168.69.78:2101",
-    "192.168.69.79:2101",
-    "192.168.69.80:2101",
-    "192.168.69.81:2101",
-    "192.168.69.82:2101",
-    "192.168.69.83:2101",
+    "172.21.101.7:2101",
+    #"172.21.101.8:2101",
+    #"172.21.101.9:2101",
+    #"192.168.69.77:2101",
+    #"192.168.69.78:2101",
+    #"192.168.69.79:2101",
+    #"192.168.69.80:2101",
+    #"192.168.69.81:2101",
+    #"192.168.69.82:2101",
+    #"192.168.69.83:2101",
 ]
 
 # --------------------------------------------------------------------------- #
@@ -69,17 +72,17 @@ PROGRAMMERS = [
 # define our products and the correct flash filename
 PRODUCT_LIST = {
     "411828": {
-        "name": "RRC2020B",
+        "name": "RRC2020B_PCBA",
         "chipset": "BQ40Z50R1",
         "firmware_file": "SCD_3412031-04_A_Rubin-B_RRC2020B.bq.fs",
     },
     "411829": {
-        "name": "RRC2040B",
+        "name": "RRC2040B_PCBA",
         "chipset": "BQ40Z50R1",
         "firmware_file": "SCD_3412036-02_B_Tansanit-B_RRC2040B.bq.fs",
     },
     "412101": {
-        "name": "RRC2040-2S",
+        "name": "RRC2040-2S_PCBA",
         "chipset": "BQ40Z50R1",
         "firmware_file": "BQFS_3411842-05_B_Ametrie_RRC2040-2S.bq.fs",
     },
@@ -87,7 +90,7 @@ PRODUCT_LIST = {
 
 # --------------------------------------------------------------------------------------------------
 
-FIRMWARE_FP = Path(__file__).parent / "../.." / "Battery-PCBA-Test/filestore"  # load firmware paths
+FIRMWARE_FP = Path(__file__).parent / "../.." / "Battery-PCBA-Test/filestore"  # path of firmware files
 PRODUCT_CHOICES = [k for k in PRODUCT_LIST.keys()]  # this is the list of part numbers to select by command line
 SIMULATE_PROGRAMMING: bool = False
 PRODUCTION_MODE: bool = True
