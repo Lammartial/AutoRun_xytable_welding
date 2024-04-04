@@ -191,8 +191,8 @@ class BQStudioFileFlasher:
                         validation_result = False
                     # hide the progress bar update in the wait times
                     t0 = perf_counter()
-                    #if not is_file_validation:
-                    if 1:
+                    if not is_file_validation:
+                    #if 1: # DEBUG - please remove!
                         while perf_counter() - t0 < (time_ms / 1000):
                             if self._progress:
                                 self._print_progress_bar(line_number, line_count)
