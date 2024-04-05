@@ -25,7 +25,6 @@ from rrc.smbus import BusMaster
 from rrc.smartbattery import Cmd
 from rrc.chipsets.bq import ChipsetTexasInstruments
 from rrc.chipsets.cipher import decrypt
-import struct
 from datetime import datetime
 import numpy as np
 
@@ -50,6 +49,27 @@ def _od2t(d: OrderedDict) -> tuple:
     """
 
     return tuple([t for t in d.values()])
+
+def _safe_int(value: int | float | str) -> int:
+    """Helper to convert a string which can be DEC or HEX into int as well 
+    as a numeric (float) into integer.
+
+    Raises ValueError() if conversion fails.
+
+    Args:
+        value (int | float | str): value to be converted to int
+
+    Returns:
+        int: converted value
+    """
+    if isinstance(value, str):
+        if "0x" in value:
+            value = int(value, base=16)
+        else:
+            value = int(value, base=10)
+    else:
+        value = int(value)  # try to convert float to int
+    return value
 
 
 ###################################################################################################
@@ -736,6 +756,75 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         #     self.write_flash_block(segment.address, segment.data)
 
 
+    #
+    # functions that implement the older DuckTape-Javascript interface used in HK-HUB
+    #
+    def write_flash_value_as_uint8(self, flash_address: int, value: int) -> bool:
+        """Write value as unsigned byte (8 bit, 0..255).
+
+        Args:
+            flash_address (int): address in flash.
+            value (int): value in the range 0..255.
+
+        Returns:
+            bool: True if write then read-verify was succesful, False otherwise.
+        """
+        value = _safe_int(value)  # due to Teststand type "numeric" which is float
+        if value < 0 or value > 255:
+            raise ValueError(f"Value out of range for uint8 (0..255): {value}")
+        return self.write_flash_block(_safe_int(flash_address), bytearray(pack("B", value)))
+
+
+    def write_flash_value_as_int8(self, flash_address: int, value: int) -> bool:
+        """Write value as signed short (16 bit, -128..127) at the given address.
+
+        Args:
+            flash_address (int): address in flash.
+            value (int): value in the range -32768..32767.
+
+        Returns:
+            bool: True if write then read-verify was succesful, False otherwise.
+        """
+        value = _safe_int(value)  # due to Teststand type "numeric" which is float
+        if value < -128 or value > 127:
+            raise ValueError(f"Value out of range for int8 (-128..127): {value}")
+        return self.write_flash_block(_safe_int(flash_address), bytearray(pack("b", value)))
+
+
+    def write_flash_value_as_uint16(self, flash_address: int, value: int) -> bool:
+        """Write value as unsigned short (16 bit, 0..65535) in 
+        LITTLE ENDIAN order (low byte first) for this chipset.
+
+        Args:
+            flash_address (int): address in flash.
+            value (int): value in the range 0..65535.
+
+        Returns:
+            bool: True if write then read-verify was succesful, False otherwise.
+        """
+        value = _safe_int(value)  # due to Teststand type "numeric" which is float
+        if value < 0 or value > 65535:
+            raise ValueError(f"Value out of range for uint16 (0..65535): {value}")
+        return self.write_flash_block(_safe_int(flash_address), bytearray(pack("<H", value)))
+
+
+    def write_flash_value_as_int16(self, flash_address: int, value: int) -> bool:
+        """Write value as signed short (16 bit, -32768..32767) in 
+        LITTLE ENDIAN order (low byte first) for this chipset.
+
+        Args:
+            flash_address (int): address in flash.
+            value (int): value in the range -32768..32767.
+
+        Returns:
+            bool: True if write then read-verify was succesful, False otherwise.
+        """
+        value = _safe_int(value)  # due to Teststand type "numeric" which is float
+        if value < -32768 or value > 32767:
+            raise ValueError(f"Value out of range for int16 (-32768..32767): {value}")
+        return self.write_flash_block(_safe_int(flash_address), bytearray(pack("<h", value)))
+
+
     def read_authentication_key(self) -> None:
         """Returns the programmed authentication key."""
         raise NotImplementedError("There is no direct read access to the sha1 key for this chipset.")
@@ -811,7 +900,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         for i in range(int(max_retries)):
             self.manufacturer_block_access = command
             res = self.manufacturer_block_access
-            rcv_command = struct.unpack("<H", res[:2])[0]
+            rcv_command = unpack("<H", res[:2])[0]
             res = res[2:]  # slice the command
             # if the expected length may variy you need to pass None to length
             if (rcv_command == command) and (((length is not None) and (len(res) == length)) or (length is None)):
@@ -1212,8 +1301,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             cc_gain = 3.58422
         capacity_gain = float(cc_gain * 298261.6178)
         # 3. write bat_gain
-        bytes_cc_gain = bytearray(struct.pack("<f", cc_gain))         # 4 bytes
-        bytes_cap_gain = bytearray(struct.pack("<f", capacity_gain))  # 4 bytes
+        bytes_cc_gain = bytearray(pack("<f", cc_gain))         # 4 bytes
+        bytes_cap_gain = bytearray(pack("<f", capacity_gain))  # 4 bytes
         block = self.read_flash_block(0x4000)  # one page, no extras
         #block = self.read_flash_block_verified(0x4000)  # one page, no extras
         block[6:10] = bytes_cc_gain    # 0x4006/7/8/9
@@ -1259,7 +1348,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             block = self.read_flash_block(0x4000)  # one page (32 bytes), no extras
             #block = self.read_flash_block_verified(0x4000)  # one page (32 bytes), no extras
             # convert 4 temperature offsets to *signed* bytes
-            ts_offset = [struct.unpack_from("<b", block[i:])[0] for i in range(0x15, 0x19)]
+            ts_offset = [unpack_from("<b", block[i:])[0] for i in range(0x15, 0x19)]
             # 2. Read appropriate temperature from the DAStatus2()
             dastatus2 = self.manufacturing_dastatus2(celsius=True)
             # convert TS1 ... TS4 from the tuple list
@@ -1273,7 +1362,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                     # Limit dt -128 <= dt <= 127
                     if dt < -128: dt = -128
                     if dt > 127: dt = 127
-                    _b = struct.pack("b", dt)
+                    _b = pack("b", dt)
                 else:
                     _b = b'\x00'
                 new_offset += _b
@@ -1287,7 +1376,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         dastatus2 = self.manufacturing_dastatus2()
         res = [dastatus2[2 + i] for i in range(n_ts)]
         # return the measurements and offsets for documentation
-        return np.array(res), *[struct.unpack_from("<b", new_offset[i:])[0] for i in range(4)]
+        return np.array(res), *[unpack_from("<b", new_offset[i:])[0] for i in range(4)]
 
     def _ms_toggle_helper(self, ms_key: str, enable: bool, ma_cmd: int, retries: int = 5, pause_on_retry: float = 0.1) -> bool:
         """Internal function to set a defined state using toggle and manufacturing_status() reads for control.

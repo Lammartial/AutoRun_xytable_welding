@@ -59,14 +59,14 @@ allow_manual_edit: bool = False
 
 #--------------------------------------------------------------------------------------------------
 
-def validate_rrc_udi(records: dict, v_str: str) -> str:    
+def validate_rrc_udi(records: dict, v_str: str) -> str:
     if v_str in records:  # check if the correct UDI type is decoded
          # return the UDI string reconstructed and stripped from any unreadables
         original = f"{records[v_str]['plant']}{v_str}{records[v_str]['serial_number']}"
         return original
     return None
 
-def validate_rrc_product_serial(records: dict, v_str: str) -> str:    
+def validate_rrc_product_serial(records: dict, v_str: str) -> str:
     if all(e in records for e in ["serial_number", "part_name"]):
         return records["serial_number"]    # return the UDI
     return None
@@ -90,12 +90,12 @@ async def aio_blocking_communication(task_id: int, tk_q: queue.Queue, resource_s
     _log = getLogger(__name__, DEBUG)
     dev = create_barcode_scanner(resource_string)
     while True:
-        _response = await dev.request_async(None)                
+        _response = await dev.request_async(None)
         if _response:
             _log.info(_response)
         else:
             continue
-      
+
         # Put the work package into the tkinter's work queue.
         while True:
             try:
@@ -174,8 +174,8 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
                     item.records, _ = item.decode(work_package)
                 if item.validate is not None:
                     # execute the validation function which should return either the UDI or serial number
-                    _s = item.validate(item.records, item.name)  
-                    if _s: 
+                    _s = item.validate(item.records, item.name)
+                    if _s:
                         item.var.set(_s)   # set the UDI or serial number
                         _valid_udi = True  # avoid pop-up
             if not _valid_udi:
@@ -191,7 +191,7 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
             block_accept_udi = False
             ok_button.invoke()
             # do NOT reschedule after()
-       
+
         # Have tkinter call this function again after the poll interval.
         mainframe._id_after["tk_callback_consumer"] = mainframe.after(poll_interval, lambda: tk_callback_consumer(tk_q, mainframe, row_itr))
 
@@ -266,7 +266,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
 
     def validate_entry(entry, action: str, index: str, current: str, change: str, trigger: str) -> bool:
         global block_accept_udi
-       
+
         if trigger in ["key", "focusout"]:
             _s = current
             if action == "0":
@@ -529,9 +529,9 @@ def identify_uut(test_socket: int, requested_udi: list, scanner_resource_str: st
     Args:
         test_socket (int): 0,1 or 2 - Teststand socket: selects the window position.
         requested_udi (list): one ore more text pattern to identify the UDI or a serial number.
-                To scan a RRC serial number, give "Serial" as pattern. Otherwise spezify the pattern 
+                To scan a RRC serial number, give "Serial" as pattern. Otherwise spezify the pattern
                 as it is being expected in the UDI code: "CELL" or "PCBA" for the likes of UDIs.
-        scanner_resource_str (str): String to identify the resource as either TCP or COM port. E.g. 
+        scanner_resource_str (str): String to identify the resource as either TCP or COM port. E.g.
                 "COM3,9600,8N1" for comport, "172.21.101.41:2000" for socket on ipaddress with port.
         allow_user_edit (bool, optional): Allows user to edit the fields. Defaults to False.
 
@@ -554,7 +554,7 @@ def identify_uut(test_socket: int, requested_udi: list, scanner_resource_str: st
     # clear the UDIs to scan from TestStand context:
     # if "SERIAL" is found in requested UDIs, the RRC serial parser is being used
     udi_to_scan = [
-        (UDIScanCtrlItem(item, decode_rrc_product_serial_label, validate_rrc_product_serial) if ("SERIAL" in item.upper()) else 
+        (UDIScanCtrlItem(item, decode_rrc_product_serial_label, validate_rrc_product_serial) if ("SERIAL" in item.upper()) else
         UDIScanCtrlItem(item, decode_rrc_udi_label, validate_rrc_udi)) for item in requested_udi
     ]
     main(_scanner, title=title, test_socket=int(test_socket))
@@ -585,12 +585,13 @@ if __name__ == '__main__':
     # ]
 
     #RESOURCE_STR = "172.21.101.41:2000"
-    RESOURCE_STR = "COM3,9600,8N1"  # Handheld scanner
-    
+    #RESOURCE_STR = "COM3,9600,8N1"  # Handheld scanner
+    RESOURCE_STR = "SIMULATION"  # select a timed simulation
+
     allow_manual_edit = True
-   
+
     identify_uut(1, ["Serial", "PCBA", "CELL"], RESOURCE_STR, allow_user_edit=False)
-       
+
     res = tuple()
     for item in udi_to_scan:
         _log.debug(f"UDI({item.name})={item.scanned_udi}")
