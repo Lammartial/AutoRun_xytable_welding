@@ -120,9 +120,9 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
     #_product_name = "RRC2040B"
     #_product_name = "RRC2054S"
     #_product_name = "SPINEL"
-    #_product_name = "RRC2040-2S"
+    _product_name = "RRC2040-2S"
     #_product_name = "RRC2054-2S"
-    _product_name = "RRC2054-2-HM"
+    #_product_name = "RRC2054-2-HM"
     
     _mock = PART_INFORMATION[_product_name]
 
