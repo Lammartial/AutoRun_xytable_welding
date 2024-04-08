@@ -10,7 +10,7 @@ barcode scanned UDI or human typed UDI or for whatever reason it is being used e
 from typing import Tuple
 import re
 
-from rrc.eth2serial import Eth2SerialDevice, tcp_send_and_receive_from_server
+from rrc.eth2serial import Eth2SerialDevice, Eth2SerialSimulationDevice, tcp_send_and_receive_from_server
 from rrc.serialport import SerialComportDevice
 
 # --------------------------------------------------------------------------- #
@@ -42,7 +42,18 @@ def create_barcode_scanner(resource_string: str) -> Eth2SerialDevice | SerialCom
 
     """
 
-    if "," in resource_string:
+    if "SIMULATION" in resource_string:
+        # this is our production scan UDI simulation
+        dev = Eth2SerialSimulationDevice(None,
+            simulated_incomming=[
+                (3000, None),   # Pause
+                (2000, "1CELL1234567890"),  # good CELL UDI
+                (2000, "1PCBA1234567890"),  # good PCBA UDI
+                (4000, "SCHROTT"),  # wrong for anything
+            ],
+            termination="\n",
+        )
+    elif "," in resource_string:
         dev = SerialComportDevice(resource_string, termination="\n")  # COM port !!! Production benutzt hier \n !!!
     else:
         dev = Eth2SerialDevice(resource_string, termination="\n")   # socket port
@@ -223,7 +234,7 @@ if __name__ == "__main__":
     #RESOURCE_STR = "172.25.101.43:2000"  # VN Line 1 EOL
     RESOURCE_STR = "172.21.101.31:2000"  # HOM Line Corepack
     RESOURCE_STR = "172.25.101.31:2000"  # VN Line 1 PCBA - socket 0
-    
+
     #test_udi_decoder()
     #test_general(RESOURCE_STR)
     test_rrc_serial_label(RESOURCE_STR)
