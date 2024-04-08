@@ -771,7 +771,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
 
     def write_flash_value_as_uint16(self, flash_address: int, value: int) -> bool:
-        """Write value as unsigned short (16 bit, 0..65535) in 
+        """Write value as unsigned short (16 bit, 0..65535) in
         LITTLE ENDIAN order (low byte first) for this chipset.
 
         Args:
@@ -788,7 +788,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
 
     def write_flash_value_as_int16(self, flash_address: int, value: int) -> bool:
-        """Write value as signed short (16 bit, -32768..32767) in 
+        """Write value as signed short (16 bit, -32768..32767) in
         LITTLE ENDIAN order (low byte first) for this chipset.
 
         Args:
@@ -828,21 +828,21 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         #
         # NOTE: this two sequence would work, if the I²C Transfer is able to generate a real REPEATED START condition on the ReadBlock() Transfer
         #       On NCD.io this is not the case, so we need a different work-around when using this interface.
-        #       Final Solution: use OLIMEX with our gateway firmware which provides a real write-then-read without STOP condition.  
+        #       Final Solution: use OLIMEX with our gateway firmware which provides a real write-then-read without STOP condition.
         #self.manufacturer_access = 0x0037
         #self.writeBlock(Cmd.AUTHENTICATE, buf) # cannot be verified by read !
         #sleep(0.52) # for bq40z50: wait 500ms
         #return self.authenticate(new_key) # verify if the new key is installed
-        
-        # This is NCD.io Work around. Note that the authentication() function works only, if a readBlock(0x44) is prepended! 
+
+        # This is NCD.io Work around. Note that the authentication() function works only, if a readBlock(0x44) is prepended!
         self.writeBlock(0x44, b"\x37\x00" + buf)
         sleep(0.52) # for bq40z50: wait 500ms
         _buf, ok = self.readBlock(0x44)
-        if not ok: 
+        if not ok:
             return False
         #_buf_hex = hexlify(bytes(reversed(_buf))).decode()  # just for debugging
         # END OF WORK-AROUND
-        
+
         return self.authenticate(new_key) # verify if the new key is installed
 
 
@@ -851,7 +851,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
         Args:
             new_key_cipher (string | bytes): new encrypted key as string or bytes
-            key_index (int): index of cipher key to use (0 ... xxx) 
+            key_index (int): index of cipher key to use (0 ... xxx)
 
         Returns:
             result of change_authentication_key() as bool
@@ -899,43 +899,62 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             OrderedDict: _description_
         """
-        buf = self.read_manufacturer_block(command=0x0071, length=32)
-        self._manufacturing_dastatus1 = OrderedDict({
-            "block": self._maybe_hexlify(buf, hexi),
-            # data come little endian
-            "cell_voltage_1": unpack_from("<H", buf, 0)[0] * 1e-3,  # mV, unsigned short, little endian
-            "cell_voltage_2": unpack_from("<H", buf, 2)[0] * 1e-3,  # mV, unsigned short, little endian
-            "cell_voltage_3": unpack_from("<H", buf, 4)[0] * 1e-3,  # mV, unsigned short, little endian
-            "cell_voltage_4": unpack_from("<H", buf, 6)[0] * 1e-3,  # mV, unsigned short, little endian
-            "bat_voltage":    unpack_from("<H", buf, 8)[0] * 1e-3,  # mV, unsigned short, little endian
-            "pack_voltage":   unpack_from("<H", buf, 10)[0] * 1e-3,  # mV, unsigned short, little endian
-            "cell_current_1": unpack_from("<h", buf, 12)[0] * 1e-3,  # mA, signed short, little endian
-            "cell_current_2": unpack_from("<h", buf, 14)[0] * 1e-3,  # mA, signed short, little endian
-            "cell_current_3": unpack_from("<h", buf, 16)[0] * 1e-3,  # mA, signed short, little endian
-            "cell_current_4": unpack_from("<h", buf, 18)[0] * 1e-3,  # mA, signed short, little endian
-            "cell_power_1":   unpack_from("<H", buf, 20)[0] * 1e-2,  # cW, signed short, little endian
-            "cell_power_2":   unpack_from("<h", buf, 22)[0] * 1e-2,  # cW, signed short, little endian
-            "cell_power_3":   unpack_from("<h", buf, 24)[0] * 1e-2,  # cW, signed short, little endian
-            "cell_power_4":   unpack_from("<h", buf, 26)[0] * 1e-2,  # cW, signed short, little endian
-            "power_calculated": unpack_from("<h", buf, 28)[0] * 1e-2,  # cW, signed short, little endian
-            "average_power":  unpack_from("<h", buf, 30)[0] * 1e-2,  # cW, signed short, little endian
-        })
+
+        _retry = 5
+        while True:
+            try:
+                buf = self.read_manufacturer_block(command=0x0071, length=32)
+                self._manufacturing_dastatus1 = OrderedDict({
+                    "block": self._maybe_hexlify(buf, hexi),
+                    # data come little endian
+                    "cell_voltage_1": unpack_from("<H", buf, 0)[0] * 1e-3,  # mV, unsigned short, little endian
+                    "cell_voltage_2": unpack_from("<H", buf, 2)[0] * 1e-3,  # mV, unsigned short, little endian
+                    "cell_voltage_3": unpack_from("<H", buf, 4)[0] * 1e-3,  # mV, unsigned short, little endian
+                    "cell_voltage_4": unpack_from("<H", buf, 6)[0] * 1e-3,  # mV, unsigned short, little endian
+                    "bat_voltage":    unpack_from("<H", buf, 8)[0] * 1e-3,  # mV, unsigned short, little endian
+                    "pack_voltage":   unpack_from("<H", buf, 10)[0] * 1e-3,  # mV, unsigned short, little endian
+                    "cell_current_1": unpack_from("<h", buf, 12)[0] * 1e-3,  # mA, signed short, little endian
+                    "cell_current_2": unpack_from("<h", buf, 14)[0] * 1e-3,  # mA, signed short, little endian
+                    "cell_current_3": unpack_from("<h", buf, 16)[0] * 1e-3,  # mA, signed short, little endian
+                    "cell_current_4": unpack_from("<h", buf, 18)[0] * 1e-3,  # mA, signed short, little endian
+                    "cell_power_1":   unpack_from("<H", buf, 20)[0] * 1e-2,  # cW, signed short, little endian
+                    "cell_power_2":   unpack_from("<h", buf, 22)[0] * 1e-2,  # cW, signed short, little endian
+                    "cell_power_3":   unpack_from("<h", buf, 24)[0] * 1e-2,  # cW, signed short, little endian
+                    "cell_power_4":   unpack_from("<h", buf, 26)[0] * 1e-2,  # cW, signed short, little endian
+                    "power_calculated": unpack_from("<h", buf, 28)[0] * 1e-2,  # cW, signed short, little endian
+                    "average_power":  unpack_from("<h", buf, 30)[0] * 1e-2,  # cW, signed short, little endian
+                })
+                break  # continue, no further retry necessary
+            except Exception as ex:
+                sleep(0.020)
+                _retry -= 1
+                if _retry == 0:
+                    raise ex  # pass throuhg the exeption
         return _od2t(self._manufacturing_dastatus1)  # Teststand interface
 
+
     def manufacturing_dastatus2(self, celsius: bool = True, hexi: bool | str | None = None) -> tuple:
-        buf = self.read_manufacturer_block(command=0x0072, length=16)
-        self._manufacturing_dastatus2 = OrderedDict({
-            "block": self._maybe_hexlify(buf, hexi),
-            # data come little endian
-            "int_temperature": unpack_from("<H", buf, 0)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-            "ts1_temperature": unpack_from("<H", buf, 2)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-            "ts2_temperature": unpack_from("<H", buf, 4)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-            "ts3_temperature": unpack_from("<H", buf, 6)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-            "ts4_temperature": unpack_from("<H", buf, 8)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-            "cell_temperature":    unpack_from("<H", buf, 10)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-            "fet_temperature":     unpack_from("<H", buf, 12)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-            "gauging_temperature": unpack_from("<H", buf, 14)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-        })
+        _retry = 5
+        while True:
+            try:
+                buf = self.read_manufacturer_block(command=0x0072, length=16)
+                self._manufacturing_dastatus2 = OrderedDict({
+                    "block": self._maybe_hexlify(buf, hexi),
+                    # data come little endian
+                    "int_temperature": unpack_from("<H", buf, 0)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+                    "ts1_temperature": unpack_from("<H", buf, 2)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+                    "ts2_temperature": unpack_from("<H", buf, 4)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+                    "ts3_temperature": unpack_from("<H", buf, 6)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+                    "ts4_temperature": unpack_from("<H", buf, 8)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+                    "cell_temperature":    unpack_from("<H", buf, 10)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+                    "fet_temperature":     unpack_from("<H", buf, 12)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+                    "gauging_temperature": unpack_from("<H", buf, 14)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+                })
+            except Exception as ex:
+                sleep(0.020)
+                _retry -= 1
+                if _retry == 0:
+                    raise ex  # pass throuhg the exeption
         return _od2t(self._manufacturing_dastatus2)  # Teststand interface
 
 
