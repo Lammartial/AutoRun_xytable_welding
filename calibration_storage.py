@@ -22,22 +22,24 @@ class CalibrationStorageReadError(Exception):
 
 class CalibrationStorage:
     """
-    A class that can access EEPROM storage via I2C (AT24HC02C) and store and load adapter 
-    calibration values like: 
+    A class that can access EEPROM storage via I2C (AT24HC02C) and store and load adapter
+    calibration values like:
         inventory number
         shunt resistance
-        leakage current 
+        leakage current
     in it.
-    The resistance and current is stored with double-precision which can hold ca. 
+    The resistance and current is stored with double-precision which can hold ca.
     16 significant digits.
     The inventory number can contain up to 8 ASCII characters without a null terminator.
     The default 7-bit i2c address is 0x50.
     Each value is stored on multiple pages for validation purposes.
     """
 
-    page_list_resistance = [0, 1, 2]  # The calibration value will be stored on multiple pages for validation
-    page_list_inventory_number = [3, 4, 5]
-    page_list_leakcurrent = [6, 7, 8, 9, 10, 11, 12]  # this uses one page for a value -> up to 7 voltage levels
+    # FIX DATA LOSS by jumper on WRITE PROTECT pin:
+    # we need to move data to upper 1kbit pages 16 to 31
+    page_list_resistance = [16+0, 16+1, 16+2]  # The calibration value will be stored on multiple pages for validation
+    page_list_inventory_number = [16+4, 16+5, 16+6]
+    page_list_leakcurrent = [16+8, 16+9, 16+10]  # this uses one page for a value -> up to 7 voltage levels
     struct_format_string_resistance = ">d"  # big-endian, double with 8 bytes
     struct_format_string_inventory_number = ">8s"  # big-endian, 8 byte string
     struct_format_string_leakcurrent = ">d"  # big-endian, double with 8 bytes
@@ -76,7 +78,7 @@ class CalibrationStorage:
                 return False
         else:
             return True
-        
+
     def __read_value(self, format_string: str, page_list: list) -> Tuple[bool, int | None]:
         read_set = set()
         # The value has been stored on multiple pages to validate it when read out.
@@ -86,7 +88,7 @@ class CalibrationStorage:
             unpacked = struct.unpack(format_string, read_back)[0]
             read_set.add(unpacked)
 
-        # If we read the same value from each page, the set will have a length of 1 
+        # If we read the same value from each page, the set will have a length of 1
         # (Sets can't have duplicates)
         if len(read_set) == 1:
             return True, read_set.pop()
@@ -112,7 +114,7 @@ class CalibrationStorage:
             raise ValueError(f"The inventory number for EEPROM at {self.eeprom.__repr__()} is too long. "
                              f"It can be at most 8 characters long. You used {len(inventory_number)} characters: \"{inventory_number}\"")
 
-        return self.__store_value(inventory_number.encode("ascii"), 
+        return self.__store_value(inventory_number.encode("ascii"),
                                   CalibrationStorage.struct_format_string_inventory_number,
                                   CalibrationStorage.page_list_inventory_number,
                                   verify=True)
@@ -142,7 +144,7 @@ class CalibrationStorage:
             bool: True if the readback was correct. False else.
         """
 
-        return self.__store_value(float(resistance_ohm), 
+        return self.__store_value(float(resistance_ohm),
                                   CalibrationStorage.struct_format_string_resistance,
                                   CalibrationStorage.page_list_resistance,
                                   verify=True)
@@ -173,8 +175,8 @@ class CalibrationStorage:
             bool: True if the readback was correct. False else.
         """
         int(index)
-        return self.__store_value(float(current_amps), 
-                                  CalibrationStorage.struct_format_string_leakcurrent, 
+        return self.__store_value(float(current_amps),
+                                  CalibrationStorage.struct_format_string_leakcurrent,
                                   [CalibrationStorage.page_list_leakcurrent[int(index)]],
                                   verify=True)
 
@@ -189,7 +191,7 @@ class CalibrationStorage:
                                   [CalibrationStorage.page_list_leakcurrent[int(index)]])
         if ok:
             return v
-        
+
         raise CalibrationStorageReadError(self.eeprom, "leakage current")
 
 
@@ -214,14 +216,14 @@ def test_write_read(storage: CalibrationStorage):
         print(f"Shunt FAIL!")
     print(f"Test value: {ohm}  Readback: {readback}")
 
-    readback = storage.load_inventory_number()    
+    readback = storage.load_inventory_number()
     if inv == readback:
         print("Inv Success!")
     else:
         print(f"Inv FAIL!")
     print(f"Test value: {inv}  Readback: {readback}")
 
-    readback = storage.load_leakcurrent_amps(0)    
+    readback = storage.load_leakcurrent_amps(0)
     if amps == readback:
         print("Leakage offset Success!")
     else:
@@ -243,7 +245,7 @@ def test_print_stored_values(storage: CalibrationStorage):
     print(amps)
 
 
-    
+
 # --------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -252,14 +254,14 @@ if __name__ == "__main__":
 
     #i2c = I2CPort("172.21.101.32:2101")  # 30 / 32 / 34
     i2c = I2CPort("172.25.101.34:2101")  # 30 / 32 / 34
-    
+
     # print(i2c_port.i2c_bus_scan())
     mux = BusMux(i2c, 0x77)
     bus = I2CMuxedBus(i2c, mux, 1)
     storage = CalibrationStorage(bus)
 
     #test_write_read(storage)
-    
+
     test_print_stored_values(storage)
 
 # END OF FILE
