@@ -18,7 +18,7 @@ import time
 import numpy as np
 import tkinter as tk
 import tkinter.ttk as ttk
-from tkinter.messagebox import showinfo
+from tkinter.messagebox import showinfo, showerror, showwarning
 from collections.abc import Iterator
 from typing import Optional, Tuple
 from pathlib import Path
@@ -179,6 +179,9 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
                         item.var.set(_s)   # set the UDI or serial number
                         _valid_udi = True  # avoid pop-up
             if not _valid_udi:
+                # here we can add an error pop-up !
+                # ...
+                showerror("Wrong UDI code type!", f"{item.records}")
                 _log.warning(f"Wrong UDI code type {item.records}")
             else:
                 # check if we are complete:
