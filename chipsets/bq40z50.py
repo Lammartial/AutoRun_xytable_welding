@@ -922,7 +922,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
 
         _retry = 5
-        while True:
+        while _retry > 0:
             try:
                 buf = self.read_manufacturer_block(command=0x0071, length=32)
                 self._manufacturing_dastatus1 = OrderedDict({
@@ -948,15 +948,15 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 break  # continue, no further retry necessary
             except Exception as ex:
                 sleep(0.020)
-                _retry -= 1
+                _retry = _retry - 1
                 if _retry == 0:
-                    raise ex  # pass throuhg the exeption
+                    raise  # pass throuhg the exeption
         return _od2t(self._manufacturing_dastatus1)  # Teststand interface
 
 
     def manufacturing_dastatus2(self, celsius: bool = True, hexi: bool | str | None = None) -> tuple:
         _retry = 5
-        while True:
+        while _retry > 0:
             try:
                 buf = self.read_manufacturer_block(command=0x0072, length=16)
                 self._manufacturing_dastatus2 = OrderedDict({
@@ -971,11 +971,12 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                     "fet_temperature":     unpack_from("<H", buf, 12)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
                     "gauging_temperature": unpack_from("<H", buf, 14)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
                 })
+                break  # continue, no further retry necessary
             except Exception as ex:
                 sleep(0.020)
-                _retry -= 1
+                _retry = _retry - 1
                 if _retry == 0:
-                    raise ex  # pass throuhg the exeption
+                    raise  # pass throuhg the exeption
         return _od2t(self._manufacturing_dastatus2)  # Teststand interface
 
 
