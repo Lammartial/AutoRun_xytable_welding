@@ -945,7 +945,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                     "power_calculated": unpack_from("<h", buf, 28)[0] * 1e-2,  # cW, signed short, little endian
                     "average_power":  unpack_from("<h", buf, 30)[0] * 1e-2,  # cW, signed short, little endian
                 })
-                break  # continue, no further retry necessary
+                _retry = -1  # continue, no further retry necessary
             except Exception as ex:
                 sleep(0.020)
                 _retry = _retry - 1
@@ -971,7 +971,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                     "fet_temperature":     unpack_from("<H", buf, 12)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
                     "gauging_temperature": unpack_from("<H", buf, 14)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
                 })
-                break  # continue, no further retry necessary
+                _retry = -1  # continue, no further retry necessary
             except Exception as ex:
                 sleep(0.020)
                 _retry = _retry - 1
