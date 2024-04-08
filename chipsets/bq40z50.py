@@ -50,6 +50,27 @@ def _od2t(d: OrderedDict) -> tuple:
 
     return tuple([t for t in d.values()])
 
+def _safe_int(value: int | float | str) -> int:
+    """Helper to convert a string which can be DEC or HEX into int as well 
+    as a numeric (float) into integer.
+
+    Raises ValueError() if conversion fails.
+
+    Args:
+        value (int | float | str): value to be converted to int
+
+    Returns:
+        int: converted value
+    """
+    if isinstance(value, str):
+        if "0x" in value:
+            value = int(value, base=16)
+        else:
+            value = int(value, base=10)
+    else:
+        value = int(value)  # try to convert float to int
+    return value
+
 
 ###################################################################################################
 #
@@ -748,10 +769,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             bool: True if write then read-verify was succesful, False otherwise.
         """
-        value = int(value)  # due to Teststand type "numeric" which is float
+        value = _safe_int(value)  # due to Teststand type "numeric" which is float
         if value < 0 or value > 255:
             raise ValueError(f"Value out of range for uint8 (0..255): {value}")
-        return self.write_flash_block(int(flash_address), bytearray(pack("B", value)))
+        return self.write_flash_block(_safe_int(flash_address), bytearray(pack("B", value)))
 
 
     def write_flash_value_as_int8(self, flash_address: int, value: int) -> bool:
@@ -764,10 +785,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             bool: True if write then read-verify was succesful, False otherwise.
         """
-        value = int(value)  # due to Teststand type "numeric" which is float
+        value = _safe_int(value)  # due to Teststand type "numeric" which is float
         if value < -128 or value > 127:
             raise ValueError(f"Value out of range for int8 (-128..127): {value}")
-        return self.write_flash_block(int(flash_address), bytearray(pack("b", value)))
+        return self.write_flash_block(_safe_int(flash_address), bytearray(pack("b", value)))
 
 
     def write_flash_value_as_uint16(self, flash_address: int, value: int) -> bool:
@@ -781,10 +802,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             bool: True if write then read-verify was succesful, False otherwise.
         """
-        value = int(value)  # due to Teststand type "numeric" which is float
+        value = _safe_int(value)  # due to Teststand type "numeric" which is float
         if value < 0 or value > 65535:
             raise ValueError(f"Value out of range for uint16 (0..65535): {value}")
-        return self.write_flash_block(int(flash_address), bytearray(pack("<H", value)))
+        return self.write_flash_block(_safe_int(flash_address), bytearray(pack("<H", value)))
 
 
     def write_flash_value_as_int16(self, flash_address: int, value: int) -> bool:
@@ -798,10 +819,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             bool: True if write then read-verify was succesful, False otherwise.
         """
-        value = int(value)  # due to Teststand type "numeric" which is float
+        value = _safe_int(value)  # due to Teststand type "numeric" which is float
         if value < -32768 or value > 32767:
             raise ValueError(f"Value out of range for int16 (-32768..32767): {value}")
-        return self.write_flash_block(int(flash_address), bytearray(pack("<h", value)))
+        return self.write_flash_block(_safe_int(flash_address), bytearray(pack("<h", value)))
 
 
     def read_authentication_key(self) -> None:
