@@ -35,17 +35,18 @@ class CalibrationStorage:
     Each value is stored on multiple pages for validation purposes.
     """
 
-    # FIX DATA LOSS by jumper on WRITE PROTECT pin:
-    # we need to move data to upper 1kbit pages 16 to 31
-    page_list_resistance = [16+0, 16+1, 16+2]  # The calibration value will be stored on multiple pages for validation
-    page_list_inventory_number = [16+4, 16+5, 16+6]
-    page_list_leakcurrent = [16+8, 16+9, 16+10]  # this uses one page for a value -> up to 7 voltage levels
+    page_list_resistance = []  # The calibration value will be stored on multiple pages for validation
+    page_list_inventory_number = []
+    page_list_leakcurrent = []  # this uses one page for a value -> up to 8 voltage levels
     struct_format_string_resistance = ">d"  # big-endian, double with 8 bytes
     struct_format_string_inventory_number = ">8s"  # big-endian, 8 byte string
     struct_format_string_leakcurrent = ">d"  # big-endian, double with 8 bytes
 
     def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x50):
         self.eeprom = AT24HC02C(i2c, int(i2c_address_7bit))
+        # FIX DATA LOSS by jumper on WRITE PROTECT pin:
+        # we need to move data to upper 1kbit pages 16 to 31
+        self.__setup_pages(16)
 
     def __str__(self) -> str:
         return f"Shunt calibration storage class, using {self.eeprom}"
@@ -94,6 +95,14 @@ class CalibrationStorage:
             return True, read_set.pop()
         else:
             return False, None
+
+    #----------------------------------------------------------------------------------------------
+
+    def __setup_pages(self, page_base) -> None:
+        self.page_list_resistance = [n + page_base for n in [0, 1, 2]]  # stored on multiple pages for validation
+        self.page_list_inventory_number = [n + page_base for n in [3, 4, 5]]  # stored on multiple pages for validation
+        self.page_list_leakcurrent = [n + page_base for n in [6, 7, 8, 9, 10, 11, 12, 13]]  # this uses one page for a value -> up to 8 voltage levels
+
 
     #----------------------------------------------------------------------------------------------
 
@@ -259,9 +268,10 @@ if __name__ == "__main__":
     mux = BusMux(i2c, 0x77)
     bus = I2CMuxedBus(i2c, mux, 1)
     storage = CalibrationStorage(bus)
-
     #test_write_read(storage)
+    test_print_stored_values(storage)  # print the default (upper) pages contents
+    storage.__setup_pages(0)
+    test_print_stored_values(storage)  # print the lower pages contents
 
-    test_print_stored_values(storage)
 
 # END OF FILE
