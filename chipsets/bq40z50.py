@@ -159,6 +159,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         _log.debug(f"FIRMWARE_VERSION: {self._firmware_version}")
         return _od2t(self._firmware_version)
 
+
     def hardware_version(self) -> int:
         """Returns the chip hardware version."""
         self.manufacturer_access = 0x0003
@@ -166,12 +167,27 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         value = unpack("<H", buf)[0]  # data come litte endian
         return value
 
+
     def chemistry_id(self) -> int:
         """Returns the OCV table chemistry ID of the battery."""
         self.manufacturer_access = 0x0006
         buf = self.manufacturer_data
         value = unpack("<H", buf)[0]  # data come litte endian
         return value
+
+
+    def read_firmware_checksum(self) -> Tuple[int, str]:
+        """ Read the Static Chem DF Signatur with BlockAccess() which is also 
+        includes the checksum.
+
+        Returns:
+            Tuple[int, str]: checksum as integer (only 16bits used), checksum as HEX string incluing 0x prefix.
+        """
+
+        buf = self.read_manufacturer_block(0x0008)
+        cs = unpack("<H", buf)[0]  # little endian unsigned 16 bit
+        return cs, f"0x{cs:0>4X}"
+
 
     def manufacturer_status(self) -> int:
         raise NotImplementedError("manufacturer_status() only available for bq20z65.")
@@ -921,8 +937,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             OrderedDict: _description_
         """
 
-        _retry = 5
-        while _retry > 0:
+        for _retry in range(5):
             try:
                 buf = self.read_manufacturer_block(command=0x0071, length=32)
                 self._manufacturing_dastatus1 = OrderedDict({
@@ -945,18 +960,15 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                     "power_calculated": unpack_from("<h", buf, 28)[0] * 1e-2,  # cW, signed short, little endian
                     "average_power":  unpack_from("<h", buf, 30)[0] * 1e-2,  # cW, signed short, little endian
                 })
-                _retry = -1  # continue, no further retry necessary
+                return _od2t(self._manufacturing_dastatus1)  # Teststand interface
             except Exception as ex:
                 sleep(0.020)
-                _retry = _retry - 1
-                if _retry == 0:
-                    raise  # pass throuhg the exeption
-        return _od2t(self._manufacturing_dastatus1)  # Teststand interface
+                _last_exception = ex
+        raise _last_exception  # pass throuhg the last exeption
 
 
     def manufacturing_dastatus2(self, celsius: bool = True, hexi: bool | str | None = None) -> tuple:
-        _retry = 5
-        while _retry > 0:
+        for _retry in range(5):
             try:
                 buf = self.read_manufacturer_block(command=0x0072, length=16)
                 self._manufacturing_dastatus2 = OrderedDict({
@@ -971,13 +983,11 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                     "fet_temperature":     unpack_from("<H", buf, 12)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
                     "gauging_temperature": unpack_from("<H", buf, 14)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
                 })
-                _retry = -1  # continue, no further retry necessary
+                return _od2t(self._manufacturing_dastatus2)  # Teststand interface
             except Exception as ex:
                 sleep(0.020)
-                _retry = _retry - 1
-                if _retry == 0:
-                    raise  # pass throuhg the exeption
-        return _od2t(self._manufacturing_dastatus2)  # Teststand interface
+                _last_exception = ex
+        raise _last_exception  # pass throuhg the last exeption
 
 
     def _read_ccadc_cal(self, hexi: bool | str | None = None) -> tuple:
