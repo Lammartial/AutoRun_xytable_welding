@@ -177,16 +177,18 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
 
     def read_firmware_checksum(self) -> Tuple[int, str]:
-        """ Read the Static Chem DF Signatur with BlockAccess() which is also 
-        includes the checksum.
+        """ Read the StaticDFSignature() and StaticChemDFSignature with 
+        BlockAccess() which should be the the checksum over the firmware.
 
         Returns:
             Tuple[int, str]: checksum as integer (only 16bits used), checksum as HEX string incluing 0x prefix.
         """
 
-        buf = self.read_manufacturer_block(0x0008)
-        cs = unpack("<H", buf)[0]  # little endian unsigned 16 bit
-        return cs, f"0x{cs:0>4X}"
+        buf1 = self.read_manufacturer_block(0x0005)
+        cs1 = unpack("<H", buf1)[0]  # little endian unsigned 16 bit
+        buf2 = self.read_manufacturer_block(0x0008)
+        cs2 = unpack("<H", buf2)[0]  # little endian unsigned 16 bit
+        return cs1, f"0x{cs1:0>4X}", cs2, f"0x{cs2:0>4X}"
 
 
     def manufacturer_status(self) -> int:
@@ -964,7 +966,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             except Exception as ex:
                 sleep(0.020)
                 _last_exception = ex
-        raise _last_exception  # pass throuhg the last exeption
+        raise Exception(f"DASTATUS 1: {_last_exception}")  # pass throuhg the last exeption
 
 
     def manufacturing_dastatus2(self, celsius: bool = True, hexi: bool | str | None = None) -> tuple:
@@ -987,7 +989,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             except Exception as ex:
                 sleep(0.020)
                 _last_exception = ex
-        raise _last_exception  # pass throuhg the last exeption
+        raise Exception(f"DASTATUS 2: {_last_exception}")  # pass throuhg the last exeption
 
 
     def _read_ccadc_cal(self, hexi: bool | str | None = None) -> tuple:
