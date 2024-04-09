@@ -51,7 +51,7 @@ def _od2t(d: OrderedDict) -> tuple:
     return tuple([t for t in d.values()])
 
 def _safe_int(value: int | float | str) -> int:
-    """Helper to convert a string which can be DEC or HEX into int as well 
+    """Helper to convert a string which can be DEC or HEX into int as well
     as a numeric (float) into integer.
 
     Raises ValueError() if conversion fails.
@@ -962,7 +962,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                     "power_calculated": unpack_from("<h", buf, 28)[0] * 1e-2,  # cW, signed short, little endian
                     "average_power":  unpack_from("<h", buf, 30)[0] * 1e-2,  # cW, signed short, little endian
                 })
-                return _od2t(self._manufacturing_dastatus1)  # Teststand interface
+                if _retry > 1:  # force two times read
+                    return _od2t(self._manufacturing_dastatus1)  # Teststand interface
+                sleep(0.005)
             except Exception as ex:
                 sleep(0.020)
                 _last_exception = ex
@@ -985,7 +987,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                     "fet_temperature":     unpack_from("<H", buf, 12)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
                     "gauging_temperature": unpack_from("<H", buf, 14)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
                 })
-                return _od2t(self._manufacturing_dastatus2)  # Teststand interface
+                if _retry > 1:  # force two times read
+                    return _od2t(self._manufacturing_dastatus2)  # Teststand interface
+                sleep(0.005)
             except Exception as ex:
                 sleep(0.020)
                 _last_exception = ex
@@ -1016,7 +1020,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         })
         return _od2t(self._ccadc_cal)
 
-    def _wait_for_adc_update(self, num_of_changes: int, timeout :int, t0_ns: int = None):
+    def _wait_for_adc_update(self, num_of_changes: int, timeout :int, t0_ns: int = None) -> None:
         """
         Reads "ManufacturerData" and waits the 8-bit counter changed by "num_of_changes".
 
@@ -1086,6 +1090,22 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         if (samples != 0): voltage = voltage/samples
         else: voltage = 0
         return float(voltage)
+
+
+    def wait_for_adc_update(self, num_of_changes: int = 2, timeout: float = 5.0) -> None:
+        """Interface function for Teststand to wait until ADC measurements have been
+        updated more than given
+
+        Raises if not updated in timeout.
+
+        Args:
+            num_of_changes (int, optional): Number of changes until return. Defaults to 2.
+            timeout (float, optional): Overall timeout in seconds. Defaults to 1.0.
+        """
+
+        self._wait_for_adc_update(num_of_changes, timeout, t0_ns=monotonic_ns())
+        return True
+
 
     def calib_write_cell_voltage_gain(self, cell_voltages: Tuple[float], shorted: bool = False) -> Tuple[np.array, int]:
         """
