@@ -288,7 +288,7 @@ if __name__ == "__main__":
     storage = CalibrationStorage(bus)
     #test_write_read(storage)
     test_print_stored_values(storage)  # print the default (upper) pages contents
-    print("Start pages st 0:")
+    print("Start pages at 0:")
     storage_old = CalibrationStorage(bus)
     storage_old._setup_pages(0)
     test_print_stored_values(storage_old)  # print the lower pages contents
