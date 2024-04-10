@@ -17,7 +17,8 @@ import numpy as np
 #     HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Office\14.0\Common\FilesPaths
 #     HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Office\16.0\Common\FilesPaths
 #
-
+# (from https://www.autodesk.com/support/technical/article/caas/sfdcarticles/sfdcarticles/How-to-install-64-bit-Microsoft-Database-Drivers-alongside-32-bit-Microsoft-Office.html)
+#
 
 pyodbc.lowercase = False
 conn = pyodbc.connect(
