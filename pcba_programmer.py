@@ -43,7 +43,7 @@ from pebble import asynchronous, concurrent, sighandler
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-DEBUG = 1   # set to 0 for production
+DEBUG = 0   # set to 0 for production
 from rrc.custom_logging import getLogger, logger_init
 
 logger_init(filename_base=None)
@@ -69,16 +69,19 @@ PRODUCT_LIST = {
         "name": "RRC2020B_PCBA",
         "chipset": "BQ40Z50R1",
         "firmware_file": "SCD_3412031-04_A_Rubin-B_RRC2020B.bq.fs",
+        "checksum": None,
     },
     "411829": {
         "name": "RRC2040B_PCBA",
         "chipset": "BQ40Z50R1",
         "firmware_file": "SCD_3412036-02_B_Tansanit-B_RRC2040B.bq.fs",
+        "checksum": None,
     },
     "412101": {
         "name": "RRC2040-2S_PCBA",
         "chipset": "BQ40Z50R1",
         "firmware_file": "BQFS_3411842-05_B_Ametrie_RRC2040-2S.bq.fs",
+        "checksum": ("61D3", "5366"),   # as hexlify value
     },
 }
 
