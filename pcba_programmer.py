@@ -2,7 +2,7 @@
 PCBA Programming Dialog for up to 8 channels programming at the same time.
 """
 from cProfile import label
-from typing import Dict, List, Self, Tuple
+from typing import Dict, List, Any, Tuple
 from enum import Enum
 import multiprocessing as mp
 import itertools
@@ -55,16 +55,10 @@ _log = getLogger(__name__, DEBUG)
 # define the programmer's resource strings including ports
 # each line is reflected to a line in the dialog
 PROGRAMMERS = [
-    "172.21.101.7:2101",
-    #"172.21.101.8:2101",
-    #"172.21.101.9:2101",
-    #"192.168.69.77:2101",
-    #"192.168.69.78:2101",
-    #"192.168.69.79:2101",
-    #"192.168.69.80:2101",
-    #"192.168.69.81:2101",
-    #"192.168.69.82:2101",
-    #"192.168.69.83:2101",
+    "172.25.101.7:2101",
+    #"172.25.101.8:2101",
+    #"172.25.101.9:2101",
+    # ... add more if needed ...
 ]
 
 # --------------------------------------------------------------------------- #
@@ -536,7 +530,7 @@ class WindowUI(object):
 
 
     @concurrent.thread
-    def task_programming(self, sock: int) -> Tuple[bool, int, Self]:
+    def task_programming(self, sock: int) -> Tuple[bool, int, Any]:
         result = self.flasher[sock].process_file()
         return result, sock, self
 
