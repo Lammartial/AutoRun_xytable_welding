@@ -280,7 +280,8 @@ if __name__ == "__main__":
     from rrc.i2cbus import BusMux, I2CMuxedBus
 
     #i2c = I2CPort("172.21.101.32:2101")  # 30 / 32 / 34
-    i2c = I2CPort("172.25.101.34:2101")  # 30 / 32 / 34
+    #i2c = I2CPort("172.25.101.34:2101")  # 30 / 32 / 34
+    i2c = I2CPort("172.25.102.34:2101")  # 30 / 32 / 34
 
     # print(i2c_port.i2c_bus_scan())
     mux = BusMux(i2c, 0x77)
