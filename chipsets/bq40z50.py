@@ -176,19 +176,32 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return value
 
 
-    def read_firmware_checksum(self) -> Tuple[int, str]:
-        """ Read the StaticDFSignature() and StaticChemDFSignature with 
-        BlockAccess() which should be the the checksum over the firmware.
+    def read_firmware_checksum(self, hexi: bool | str | None = None) -> Tuple[int | str, int | str, int | str]:
+        """Read the InstructionFlashSignature(), StaticDFSignature() and StaticChemDFSignature with 
+        BlockAccess() which should be the unique checksum over all of our firmware and configuration.
+
+        Args:
+            hexi (bool | str | None, optional): activates a conversion of data into "blocks"
+                if not None or bool and False. If bool and True "blocks" contains ascii hex nibbles.
+                Defaults to None.
 
         Returns:
-            Tuple[int, str]: checksum as integer (only 16bits used), checksum as HEX string incluing 0x prefix.
+            Tuple[int | str, int | str]: checksum as integer (only 16bits used), or as hexifyed string 
+                as the bytes come over the bus.
         """
 
-        buf1 = self.read_manufacturer_block(0x0005)
-        cs1 = unpack("<H", buf1)[0]  # little endian unsigned 16 bit
-        buf2 = self.read_manufacturer_block(0x0008)
-        cs2 = unpack("<H", buf2)[0]  # little endian unsigned 16 bit
-        return cs1, f"0x{cs1:0>4X}", cs2, f"0x{cs2:0>4X}"
+        result = ()
+        cmds = [0x0004, 0x0005, 0x0008]
+        for c in cmds:
+            buf = self.read_manufacturer_block(c, 2)
+            if hexi is not None:
+                # return as tuple of hex strings of buffer as the bytes come over the bus
+                result += (self._maybe_hexlify(buf, hexi).upper(),)
+            else:
+                # return as tuples of  decimal integer and 16bit hex-value
+                cs = unpack("<H", buf)[0]  # little endian unsigned 16 bit
+                result += (cs, f"0x{cs:0>4X}")
+        return result if hexi is None else ",".join(result)
 
 
     def manufacturer_status(self) -> int:
