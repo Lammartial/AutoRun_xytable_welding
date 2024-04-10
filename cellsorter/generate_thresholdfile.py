@@ -2,6 +2,23 @@ import pyodbc
 import pandas as pd
 import numpy as np
 
+#
+# You need to install the 64bit ODBC Microsoft Access Driver 2016
+# Download the file from Microsoft as "AccessDatabaseEngine_x64".
+#
+# How to install 64-bit Microsoft Access database engine alongside 32-bit Microsoft Office?
+# it may throw an error that alongside the 32bit version its not possible to install.
+# Then:
+#   run "AccessDatabaseEngine_x64.exe /quiet"
+#
+# then with regedit as admin,
+#
+#   delete or rename the mso.dll registry value in the following registry key:
+#     HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Office\14.0\Common\FilesPaths
+#     HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Office\16.0\Common\FilesPaths
+#
+
+
 pyodbc.lowercase = False
 conn = pyodbc.connect(
     r"Driver={Microsoft Access Driver (*.mdb, *.accdb)};" +
