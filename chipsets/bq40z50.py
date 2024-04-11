@@ -176,19 +176,32 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return value
 
 
-    def read_firmware_checksum(self) -> Tuple[int, str]:
-        """ Read the StaticDFSignature() and StaticChemDFSignature with 
-        BlockAccess() which should be the the checksum over the firmware.
+    def read_firmware_checksum(self, hexi: bool | str | None = None) -> Tuple[int | str, int | str, int | str]:
+        """Read the InstructionFlashSignature(), StaticDFSignature() and StaticChemDFSignature with 
+        BlockAccess() which should be the unique checksum over all of our firmware and configuration.
+
+        Args:
+            hexi (bool | str | None, optional): activates a conversion of data into "blocks"
+                if not None or bool and False. If bool and True "blocks" contains ascii hex nibbles.
+                Defaults to None.
 
         Returns:
-            Tuple[int, str]: checksum as integer (only 16bits used), checksum as HEX string incluing 0x prefix.
+            Tuple[int | str, int | str]: checksum as integer (only 16bits used), or as hexifyed string 
+                as the bytes come over the bus.
         """
 
-        buf1 = self.read_manufacturer_block(0x0005)
-        cs1 = unpack("<H", buf1)[0]  # little endian unsigned 16 bit
-        buf2 = self.read_manufacturer_block(0x0008)
-        cs2 = unpack("<H", buf2)[0]  # little endian unsigned 16 bit
-        return cs1, f"0x{cs1:0>4X}", cs2, f"0x{cs2:0>4X}"
+        result = ()
+        cmds = [0x0004, 0x0005, 0x0008]
+        for c in cmds:
+            buf = self.read_manufacturer_block(c, 2)
+            if hexi is not None:
+                # return as tuple of hex strings of buffer as the bytes come over the bus
+                result += (self._maybe_hexlify(buf, hexi).upper(),)
+            else:
+                # return as tuples of  decimal integer and 16bit hex-value
+                cs = unpack("<H", buf)[0]  # little endian unsigned 16 bit
+                result += (cs, f"0x{cs:0>4X}")
+        return result if hexi is None else ",".join(result)
 
 
     def manufacturer_status(self) -> int:
@@ -1070,26 +1083,32 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self._read_ccadc_cal()
             return self._ccadc_cal[f"cell_voltage_{i}"]
 
-        t0 = monotonic_ns()  # common timout over the whole function
-        # make sure that calibration test is enabled
-        self._ms_toggle_helper("cal_test", True, 0x002d)
-        sleep(0.05)
-        # enable selected raw cell voltage output on ManufacturerData()
-        if shorted:
-            self.manufacturer_access = 0xf082  # output shorted CCADC Cal
-        else:
-            self.manufacturer_access = 0xf081  # output CCADC Cal
-        voltage: float = 0
-        #n = 8  # take 8 measurements, including the base
-        for _ in range(0, samples):
-            # wait the 8-bit counter changed by 2 -> overflow need to be respected!
-            self._wait_for_adc_update(2, timeout, t0_ns=t0)
-            # now get the ADCs from the last block read with corrected signs
-            voltage += _get_adc_reading(1)
-        # calc mean values
-        if (samples != 0): voltage = voltage/samples
-        else: voltage = 0
-        return float(voltage)
+        for _retry in range(5):
+            try:
+                t0 = monotonic_ns()  # common timout over the whole function
+                # make sure that calibration test is enabled
+                self._ms_toggle_helper("cal_test", True, 0x002d)
+                sleep(0.05)
+                # enable selected raw cell voltage output on ManufacturerData()
+                if shorted:
+                    self.manufacturer_access = 0xf082  # output shorted CCADC Cal
+                else:
+                    self.manufacturer_access = 0xf081  # output CCADC Cal
+                voltage: float = 0
+                #n = 8  # take 8 measurements, including the base
+                for _ in range(0, samples):
+                    # wait the 8-bit counter changed by 2 -> overflow need to be respected!
+                    self._wait_for_adc_update(2, timeout, t0_ns=t0)
+                    # now get the ADCs from the last block read with corrected signs
+                    voltage += _get_adc_reading(1)
+                # calc mean values
+                if (samples != 0): voltage = voltage/samples
+                else: voltage = 0
+                return float(voltage)
+            except Exception as ex:
+                sleep(0.020)
+                _last_exception = ex
+        raise Exception(f"CALIB ADC CELL VOLTAGE: {_last_exception}")  # pass throuhg the last exeption
 
 
     def wait_for_adc_update(self, num_of_changes: int = 2, timeout: float = 5.0) -> None:

@@ -2,7 +2,7 @@
 PCBA Programming Dialog for up to 8 channels programming at the same time.
 """
 from cProfile import label
-from typing import Dict, List, Self, Tuple
+from typing import Dict, List, Any, Tuple
 from enum import Enum
 import multiprocessing as mp
 import itertools
@@ -55,16 +55,10 @@ _log = getLogger(__name__, DEBUG)
 # define the programmer's resource strings including ports
 # each line is reflected to a line in the dialog
 PROGRAMMERS = [
-    "172.21.101.7:2101",
-    #"172.21.101.8:2101",
-    #"172.21.101.9:2101",
-    #"192.168.69.77:2101",
-    #"192.168.69.78:2101",
-    #"192.168.69.79:2101",
-    #"192.168.69.80:2101",
-    #"192.168.69.81:2101",
-    #"192.168.69.82:2101",
-    #"192.168.69.83:2101",
+    "172.25.101.7:2101",
+    #"172.25.101.8:2101",
+    #"172.25.101.9:2101",
+    # ... add more if needed ...
 ]
 
 # --------------------------------------------------------------------------- #
@@ -75,16 +69,19 @@ PRODUCT_LIST = {
         "name": "RRC2020B_PCBA",
         "chipset": "BQ40Z50R1",
         "firmware_file": "SCD_3412031-04_A_Rubin-B_RRC2020B.bq.fs",
+        "checksum": None,
     },
     "411829": {
         "name": "RRC2040B_PCBA",
         "chipset": "BQ40Z50R1",
         "firmware_file": "SCD_3412036-02_B_Tansanit-B_RRC2040B.bq.fs",
+        "checksum": None,
     },
     "412101": {
         "name": "RRC2040-2S_PCBA",
         "chipset": "BQ40Z50R1",
         "firmware_file": "BQFS_3411842-05_B_Ametrie_RRC2040-2S.bq.fs",
+        "checksum": ("61D3", "5366"),   # as hexlify value
     },
 }
 
@@ -170,11 +167,31 @@ class MultiBQStudioFileFlasher(BQStudioFileFlasher):
                          color="black",   # should never been shown as firmware file is missing
                          firmware_file=None,  # we provide the firmware file later together with the progress bar
                          show_progressbar=False)  # we provide a different progress bar
-        self.simulate_programming = simulate_programming
-        self.socket = socket
-        self.count = 0
-        self.count_pass = 0
-        self.count_fail = 0
+        self.simulate_programming: bool = simulate_programming
+        self.socket: int = socket
+        self.count: int = 0
+        self.count_pass: int = 0
+        self.count_fail: int = 0
+        # internals
+        self._pcba_connected_counter: int = 0
+        self._PCBA_MAX_COUNTER = 50
+
+
+    def set_pcba_connected(self):
+        self._pcba_connected_counter = self._PCBA_MAX_COUNTER
+
+
+    def check_if_pcba_connected(self) -> bool:
+        
+        if self.battery.isReady():
+            self._pcba_connected_counter += 1
+            if self._pcba_connected_counter > self._PCBA_MAX_COUNTER:
+                self._pcba_connected_counter = self._PCBA_MAX_COUNTER
+        else:
+            self._pcba_connected_counter -= 1
+            if self._pcba_connected_counter < 0:
+                self._pcba_connected_counter = 0
+        return self._pcba_connected_counter > int(self._PCBA_MAX_COUNTER / 2)
 
 
     def set_firmware_file_and_widgets(self, _firmware_file: str | Path, progress_bar: EmbeddedProgressBar) -> None:
@@ -228,6 +245,13 @@ def task_done(future) -> None:
         else:
             v = win.var_label_count_fail[sock]
         v.set(v.get() + 1)
+        # signal that we are ready
+        b = win.var_button_text[sock]
+        b.set("REMOVE PCBA")
+        # wait for PCBA to be removed
+        f: MultiBQStudioFileFlasher = win.flasher[sock]
+        while f.check_if_pcba_connected():
+            pass   # wait
         # button
         win.var_button_text[sock].set("START")
         win.buttons[sock]["state"] = "normal"
@@ -250,6 +274,8 @@ class WindowUI(object):
         self._log = getLogger(__name__, DEBUG)
         self.q_cmd = command_queue
         row_itr = itertools.count()
+
+        self.selected_product: str = selected_product
 
         # Create the Tk root and mainframe.
         self.root = tk.Tk()
@@ -536,7 +562,7 @@ class WindowUI(object):
 
 
     @concurrent.thread
-    def task_programming(self, sock: int) -> Tuple[bool, int, Self]:
+    def task_programming(self, sock: int) -> Tuple[bool, int, Any]:
         result = self.flasher[sock].process_file()
         return result, sock, self
 
@@ -555,9 +581,10 @@ class WindowUI(object):
                     # check if the flasher is not yet active
                     if (sock not in self.futures) or (self.futures[sock] is None):
                         # prepare the flasher
+                        self.flasher[sock].set_pcba_connected()
                         self.flasher[sock].set_firmware_file_and_widgets(FIRMWARE_FP / fw, self.pg_bars[sock])
                         # activate the task to program with the flasher
-                        _future = self.task_programming(sock)
+                        _future: Future = self.task_programming(sock)
                         _future.add_done_callback(task_done)
                         self.futures[sock] = _future
                         # update ui
@@ -663,6 +690,24 @@ class WindowUI(object):
                 self.root.update()
             if _play_soundfile:
                 PlaySound(_play_soundfile, SND_FILENAME)
+        else:
+            pass
+            # no command to execute, we can do presence scanning
+            for sock, btn in enumerate(self.buttons):
+                if "normal" in str(btn["state"]):
+                    if (sock not in self.futures) or (self.futures[sock] is None):
+                        # we can scan for new PCBA
+                        f:MultiBQStudioFileFlasher = self.flasher[sock]
+                        if f and f.check_if_pcba_connected():
+                            # now we can activate the programming from here:
+                            btn.invoke()
+                            pass
+                    else:
+                        # flasher is in use - do not touch!
+                        pass
+                else:
+                    # either still flashing or waiting for PCBA removal
+                    pass
         self._id_after = self.mainframe.after(50, lambda: self.process_command_queue())
 
 
@@ -775,6 +820,7 @@ if __name__ == '__main__':
     SIMULATE_PROGRAMMING = args.simulate
     FIRMWARE_FP = args.filepath
     PRODUCTION_MODE = not args.development
+    
 
     p = None
     w = None
