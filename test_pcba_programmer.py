@@ -22,16 +22,16 @@ from rrc.custom_logging import getLogger, logger_init
 # Device Name: bq40z50-R1
 # FW Version: ('4500010600240003850200', 17664, 262, 36, 0, 901, 2, 0)
 # Checksums as int/hex: (54677, '0xD595', 57997, '0xE28D', 27800, '0x6C98')
-# Checksums as hexlifyed bytes: ('95D5', '8DE2', '986C')
-# Checksums as hex comma separated: ('95,D5', '8D,E2', '98,6C')
+# Checksums as hexlifyed bytes: '95D5,8DE2,986C'
+# Checksums as hex comma separated: '95,D5,8D,E2,98,6C'
 #
 # PROGRAMMED RRC2040-2:
 # ---------------------
 # Device Name: RRC2040-2
 # FW Version: ('4500021100340004750200', 17664, 529, 52, 0, 1141, 2, 0)
 # Checksums as int/hex: (38388, '0x95F4', 54113, '0xD361', 26195, '0x6653')
-# Checksums as hexlifyed bytes: ('F495', '61D3', '5366')
-# Checksums as hex comma separated: ('F4,95', '61,D3', '53,66')
+# Checksums as hexlifyed bytes: 'F495,61D3,5366'
+# Checksums as hex comma separated: 'F4,95,61,D3,53,66'
 #
 
 #--------------------------------------------------------------------------------------------------
