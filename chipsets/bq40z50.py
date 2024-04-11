@@ -1083,26 +1083,32 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             self._read_ccadc_cal()
             return self._ccadc_cal[f"cell_voltage_{i}"]
 
-        t0 = monotonic_ns()  # common timout over the whole function
-        # make sure that calibration test is enabled
-        self._ms_toggle_helper("cal_test", True, 0x002d)
-        sleep(0.05)
-        # enable selected raw cell voltage output on ManufacturerData()
-        if shorted:
-            self.manufacturer_access = 0xf082  # output shorted CCADC Cal
-        else:
-            self.manufacturer_access = 0xf081  # output CCADC Cal
-        voltage: float = 0
-        #n = 8  # take 8 measurements, including the base
-        for _ in range(0, samples):
-            # wait the 8-bit counter changed by 2 -> overflow need to be respected!
-            self._wait_for_adc_update(2, timeout, t0_ns=t0)
-            # now get the ADCs from the last block read with corrected signs
-            voltage += _get_adc_reading(1)
-        # calc mean values
-        if (samples != 0): voltage = voltage/samples
-        else: voltage = 0
-        return float(voltage)
+        for _retry in range(5):
+            try:
+                t0 = monotonic_ns()  # common timout over the whole function
+                # make sure that calibration test is enabled
+                self._ms_toggle_helper("cal_test", True, 0x002d)
+                sleep(0.05)
+                # enable selected raw cell voltage output on ManufacturerData()
+                if shorted:
+                    self.manufacturer_access = 0xf082  # output shorted CCADC Cal
+                else:
+                    self.manufacturer_access = 0xf081  # output CCADC Cal
+                voltage: float = 0
+                #n = 8  # take 8 measurements, including the base
+                for _ in range(0, samples):
+                    # wait the 8-bit counter changed by 2 -> overflow need to be respected!
+                    self._wait_for_adc_update(2, timeout, t0_ns=t0)
+                    # now get the ADCs from the last block read with corrected signs
+                    voltage += _get_adc_reading(1)
+                # calc mean values
+                if (samples != 0): voltage = voltage/samples
+                else: voltage = 0
+                return float(voltage)
+            except Exception as ex:
+                sleep(0.020)
+                _last_exception = ex
+        raise Exception(f"CALIB ADC CELL VOLTAGE: {_last_exception}")  # pass throuhg the last exeption
 
 
     def wait_for_adc_update(self, num_of_changes: int = 2, timeout: float = 5.0) -> None:
