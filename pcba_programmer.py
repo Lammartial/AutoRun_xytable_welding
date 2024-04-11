@@ -43,7 +43,7 @@ from pebble import asynchronous, concurrent, sighandler
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
-DEBUG = 0   # set to 0 for production
+DEBUG = 1   # set to 0 for production
 from rrc.custom_logging import getLogger, logger_init
 
 logger_init(filename_base=None)
@@ -167,11 +167,31 @@ class MultiBQStudioFileFlasher(BQStudioFileFlasher):
                          color="black",   # should never been shown as firmware file is missing
                          firmware_file=None,  # we provide the firmware file later together with the progress bar
                          show_progressbar=False)  # we provide a different progress bar
-        self.simulate_programming = simulate_programming
-        self.socket = socket
-        self.count = 0
-        self.count_pass = 0
-        self.count_fail = 0
+        self.simulate_programming: bool = simulate_programming
+        self.socket: int = socket
+        self.count: int = 0
+        self.count_pass: int = 0
+        self.count_fail: int = 0
+        # internals
+        self._pcba_connected_counter: int = 0
+        self._PCBA_MAX_COUNTER = 50
+
+
+    def set_pcba_connected(self):
+        self._pcba_connected_counter = self._PCBA_MAX_COUNTER
+
+
+    def check_if_pcba_connected(self) -> bool:
+        
+        if self.battery.isReady():
+            self._pcba_connected_counter += 1
+            if self._pcba_connected_counter > self._PCBA_MAX_COUNTER:
+                self._pcba_connected_counter = self._PCBA_MAX_COUNTER
+        else:
+            self._pcba_connected_counter -= 1
+            if self._pcba_connected_counter < 0:
+                self._pcba_connected_counter = 0
+        return self._pcba_connected_counter > int(self._PCBA_MAX_COUNTER / 2)
 
 
     def set_firmware_file_and_widgets(self, _firmware_file: str | Path, progress_bar: EmbeddedProgressBar) -> None:
@@ -225,6 +245,13 @@ def task_done(future) -> None:
         else:
             v = win.var_label_count_fail[sock]
         v.set(v.get() + 1)
+        # signal that we are ready
+        b = win.var_button_text[sock]
+        b.set("REMOVE PCBA")
+        # wait for PCBA to be removed
+        f: MultiBQStudioFileFlasher = win.flasher[sock]
+        while f.check_if_pcba_connected():
+            pass   # wait
         # button
         win.var_button_text[sock].set("START")
         win.buttons[sock]["state"] = "normal"
@@ -247,6 +274,8 @@ class WindowUI(object):
         self._log = getLogger(__name__, DEBUG)
         self.q_cmd = command_queue
         row_itr = itertools.count()
+
+        self.selected_product: str = selected_product
 
         # Create the Tk root and mainframe.
         self.root = tk.Tk()
@@ -552,9 +581,10 @@ class WindowUI(object):
                     # check if the flasher is not yet active
                     if (sock not in self.futures) or (self.futures[sock] is None):
                         # prepare the flasher
+                        self.flasher[sock].set_pcba_connected()
                         self.flasher[sock].set_firmware_file_and_widgets(FIRMWARE_FP / fw, self.pg_bars[sock])
                         # activate the task to program with the flasher
-                        _future = self.task_programming(sock)
+                        _future: Future = self.task_programming(sock)
                         _future.add_done_callback(task_done)
                         self.futures[sock] = _future
                         # update ui
@@ -660,6 +690,24 @@ class WindowUI(object):
                 self.root.update()
             if _play_soundfile:
                 PlaySound(_play_soundfile, SND_FILENAME)
+        else:
+            pass
+            # no command to execute, we can do presence scanning
+            for sock, btn in enumerate(self.buttons):
+                if "normal" in str(btn["state"]):
+                    if (sock not in self.futures) or (self.futures[sock] is None):
+                        # we can scan for new PCBA
+                        f:MultiBQStudioFileFlasher = self.flasher[sock]
+                        if f and f.check_if_pcba_connected():
+                            # now we can activate the programming from here:
+                            btn.invoke()
+                            pass
+                    else:
+                        # flasher is in use - do not touch!
+                        pass
+                else:
+                    # either still flashing or waiting for PCBA removal
+                    pass
         self._id_after = self.mainframe.after(50, lambda: self.process_command_queue())
 
 
@@ -772,6 +820,7 @@ if __name__ == '__main__':
     SIMULATE_PROGRAMMING = args.simulate
     FIRMWARE_FP = args.filepath
     PRODUCTION_MODE = not args.development
+    
 
     p = None
     w = None
