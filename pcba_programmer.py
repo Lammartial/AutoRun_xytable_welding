@@ -36,8 +36,8 @@ from rrc.dbcon import get_protocol_db_connector
 
 # multi tasking
 import asyncio
-from concurrent.futures import Future
-from pebble import asynchronous, concurrent, sighandler, ProcessFuture
+from concurrent.futures import Future, TimeoutError
+#from pebble import asynchronous, concurrent, sighandler, ProcessFuture, ProcessPool
 
 
 # --------------------------------------------------------------------------- #
@@ -69,19 +69,21 @@ PRODUCT_LIST = {
         "name": "RRC2020B_PCBA",
         "chipset": "BQ40Z50R1",
         "firmware_file": "SCD_3412031-04_A_Rubin-B_RRC2020B.bq.fs",
+        "recovery_firmware_file": "SCD_3412031-04_A_Rubin-B_RRC2020B_Recovery.bq.fs",
         "checksum": None,
     },
     "411829": {
         "name": "RRC2040B_PCBA",
         "chipset": "BQ40Z50R1",
         "firmware_file": "SCD_3412036-02_B_Tansanit-B_RRC2040B.bq.fs",
+        "recovery_firmware_file": "SCD_3412036-02_B_Tansanit-B_RRC2040B_Recovery.bq.fs",
         "checksum": None,
     },
     "412101": {
         "name": "RRC2040-2S_PCBA",
         "chipset": "BQ40Z50R1",
         "firmware_file": "BQFS_3411842-05_B_Ametrie_RRC2040-2S.bq.fs",
-        #"firmware_file": "BQFS_3411842-05_B_Ametrie_RRC2040-2S_Recovery.bq.fs",
+        "recovery_firmware_file": "BQFS_3411842-05_B_Ametrie_RRC2040-2S_Recovery.bq.fs",
         "checksum": ("61D3", "5366"),   # as hexlify value
     },
 }
@@ -93,62 +95,49 @@ PRODUCT_CHOICES = [k for k in PRODUCT_LIST.keys()]  # this is the list of part n
 SIMULATE_PROGRAMMING: bool = False
 PRODUCTION_MODE: bool = True
 AUTOSTART_PROGRAMMING: bool = False
+USE_RECOVERY_FILE: bool = False
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 
 class EmbeddedProgressBar():
 
-    def __init__(self, ref_pg: ttk.Progressbar, root: tk.Tk) -> None:
-        self.root = root
-        self.progress = ref_pg
+    def __init__(self,  q_ui: mp.Queue, socket: int) -> None:
+        self.q_ui = q_ui
+        self.socket = socket
         self.hidden = 0
         self._value = None
+        self._last_sent = 0
 
     def hide(self) -> None:
-        #self.root.withdraw()  # hide window
         self.hidden = 1
-        pass
-
+       
     def show(self) -> None:
-        # if self.hidden > 0:
-        #     self.root.deiconify()
-        #     self.hidden -= 1
-        self.root.update()
-        #self.progress.update()
-        pass
+        self.hidden = 0
 
     def set_value_threshold(self, value: float, step_threshold: float = 5/100) -> None:
         if ((value - self._value) > step_threshold) or (value >= self._value) or (value == 0):
-            self._value = value
-            self.progress.config(value=value)
-            self.update()
-
+            self.set_value(value)
 
     def set_value(self, value: float) -> None:
         self._value = value
-        self.progress.config(value=value)
-        self.update()
-
+        if ((value - self._last_sent) >= 0.5) or (value >= 100.0):
+            self.q_ui.put({
+                "progress": value,
+                "socket": self.socket,
+                #"maximum": maximum,
+            })
+            self._last_sent = value
 
     def update(self) -> None:
-        self.root.update()
-        self.root.update_idletasks()
-        #self.update()
         pass
 
     def quit(self) -> None:
-        #self.root.quit()
-        #for widget in self.root.winfo_children():
-        #    widget.destroy()
         self.hide()
-        pass
 
     def close(self) -> None:
-        #self.root.destroy()
         self.hide()
-        pass
-
+  
 #--------------------------------------------------------------------------------------------------
 
 PG_COLOR_PROCESS = "blue"
@@ -171,10 +160,8 @@ class MultiBQStudioFileFlasher(BQStudioFileFlasher):
                          show_progressbar=False)  # we provide a different progress bar
         self.simulate_programming: bool = simulate_programming
         self.socket: int = socket
-        self.count: int = 0
-        self.count_pass: int = 0
-        self.count_fail: int = 0
         # internals
+        self._use_threading = False
         self._pcba_connected_counter: int = 0
         self._PCBA_MAX_COUNTER = 50
 
@@ -207,8 +194,6 @@ class MultiBQStudioFileFlasher(BQStudioFileFlasher):
         global DEBUG
 
         ok: bool = False
-        self.count += 1
-        self.w_progress_bar.progress.configure(style="PROCESS.ColorProgress.Horizontal.TProgressbar")
         self._progress = self.w_progress_bar  # has been deleted on every finish
         if self.simulate_programming:
             ok = self.validate_file()
@@ -219,75 +204,48 @@ class MultiBQStudioFileFlasher(BQStudioFileFlasher):
                 _log = getLogger(__name__, DEBUG)
                 _log.error(f"Socket #{self.socket}: {ex}")
                 ok = False
-                maximum = self.w_progress_bar.progress.cget("maximum")
-                value = self.w_progress_bar.progress.cget("value")
-                if (value is None) or (value < (maximum * 0.03)):
-                    self._print_progress_bar(maximum * 0.03, maximum)  # progress a bit to show the color
-        if ok:
-            self.count_pass += 1
-            self.w_progress_bar.progress.configure(style="PASS.ColorProgress.Horizontal.TProgressbar")
-        else:
-            self.count_fail += 1
-            self.w_progress_bar.progress.configure(style="FAIL.ColorProgress.Horizontal.TProgressbar")
         return ok
 
 
 #--------------------------------------------------------------------------------------------------
-
-
-def task_done(future) -> None:
-    global DEBUG, AUTOSTART_PROGRAMMING
-
-    _log = getLogger(__name__, DEBUG)
-    try:
-        result, sock, win = future.result()  # blocks until results are ready        
-        # update ui
-        if result:
-            v = win.var_label_count_pass[sock]
-        else:
-            v = win.var_label_count_fail[sock]
-        v.set(v.get() + 1)
-        # signal that we are ready
-        b = win.var_button_text[sock]
-        if AUTOSTART_PROGRAMMING:
-            b.set("REMOVE PCBA")
-            # wait for PCBA to be removed
-            f: MultiBQStudioFileFlasher = win.flasher[sock]
-            while f.check_if_pcba_connected():
-                pass   # wait
-        # button
-        b.set("START")
-        win.buttons[sock]["state"] = "normal"
-        win.futures[sock] = None  # clear to signal availability for mother task
-    except TimeoutError as error:
-        _log.error("Function task_done took longer than %d seconds" % error.args[1])
-    except Exception as error:
-        _log.error("Function task_done raised %s" % error)
-
-
 #--------------------------------------------------------------------------------------------------
 
 
-# run as process
-def programming_task(resource_str: str, chipset: str, socket: int, firmware_file: str | Path) -> Tuple[bool, int, Any]:
-    global DEBUG, SIMULATE_PROGRAMMING
+class ProgrammingWorker(mp.Process):
+    def __init__(self, socket: int, resource_str: str, chipset: str, firmware_file: str | Path, q_ui: mp.Queue, simulate_programming: bool = False) -> None:
+        super().__init__()
+        self.socket = socket
+        self.resource_str = resource_str
+        self.chipset = chipset
+        self.firmware_file = firmware_file
+        self.q_ui = q_ui
+        self.simulate_programming = simulate_programming
 
-    _log = getLogger(__name__, DEBUG)
-    try:
-        # create flasher
-        flasher = MultiBQStudioFileFlasher(
-            resource_str,
-            socket,
-            chipset=chipset,
-            simulate_programming=SIMULATE_PROGRAMMING,  # this allows to test without programmer
-        )
-        flasher.set_firmware_file(firmware_file)
-        _log.info("Starting flasher %s:" % str(flasher))
-        result = flasher.process_file()
-    except Exception as error:
-        _log.error("Process file raised %s" % error)
-        result = False
-    return result, sock, self
+    def run(self) -> None:
+        global DEBUG
+
+        _log = getLogger(__name__, DEBUG)
+        try:
+            # create a progress fowrwarder
+            progress_bar = EmbeddedProgressBar(self.q_ui, self.socket)
+            # create flasher
+            flasher = MultiBQStudioFileFlasher(
+                self.resource_str,
+                self.socket,
+                chipset=self.chipset,
+                simulate_programming=self.simulate_programming,  # this allows to test without programmer
+            )
+            flasher.set_firmware_file_and_widgets(self.firmware_file, progress_bar)
+            _log.info("Starting flasher %s:" % str(flasher))
+            result = flasher.process_file()        
+        except Exception as error:
+            _log.error("Process file raised %s" % error)
+            result = False
+        # send result by queue
+        self.q_ui.put({
+            "result": "pass" if result else "fail",
+            "socket": self.socket
+        })
 
 
 #--------------------------------------------------------------------------------------------------
@@ -303,13 +261,16 @@ class WindowUI(object):
         self.q_cmd = command_queue
         row_itr = itertools.count()
 
-        self.selected_product: str = selected_product
+        self.SELECTED_PRODUCT: str = selected_product
+        self.PRODUCT_NAME: str = PRODUCT_LIST[selected_product]["name"]
+        self.PRODUCT_CHIPSET: str = PRODUCT_LIST[selected_product]["chipset"]
+        self.PRODUCT_FIRMWARE_FILE: str = PRODUCT_LIST[selected_product]["firmware_file"]
 
         # Create the Tk root and mainframe.
         self.root = tk.Tk()
 
-        self.var_label_product = tk.StringVar(self.root, f'{selected_product} ({PRODUCT_LIST[selected_product]["name"]})')
-        self.var_label_firmware_file = tk.StringVar(self.root, PRODUCT_LIST[selected_product]["firmware_file"])
+        self.var_label_product = tk.StringVar(self.root, f'{selected_product} ({self.PRODUCT_NAME})')
+        self.var_label_firmware_file = tk.StringVar(self.root, self.PRODUCT_FIRMWARE_FILE)
         self.var_label_count: List[tk.IntVar] = [tk.IntVar(self.root) for _ in range(len(PROGRAMMERS))]
         self.var_label_count_pass: List[tk.IntVar] = [tk.IntVar(self.root) for _ in range(len(PROGRAMMERS))]
         self.var_label_count_fail: List[tk.IntVar] = [tk.IntVar(self.root) for _ in range(len(PROGRAMMERS))]
@@ -402,7 +363,8 @@ class WindowUI(object):
 
         # create progress bars and flashers
         self.futures = {}
-        self.pg_bars: List[EmbeddedProgressBar] = []
+        self.pg_bars = []
+        #self.pg_bars: List[EmbeddedProgressBar] = []
         #self.flasher: List[MultiBQStudioFileFlasher] = []
         self.buttons: List[ttk.Button] = []
 
@@ -418,7 +380,11 @@ class WindowUI(object):
             btn = ttk.Button(self.mainframe,
                 textvariable=self.var_button_text[index],
                 state="disabled",
-                command=lambda slot=index: self.q_cmd.put({"start": slot, "fw": PRODUCT_LIST[selected_product]["firmware_file"]})
+                command=lambda slot=index, res=resource_str: self.q_cmd.put({
+                    "start": slot, "resource": res,
+                    "fw": self.PRODUCT_FIRMWARE_FILE,
+                    "chipset": self.PRODUCT_CHIPSET, 
+                    })
             )
             btn.grid(row=_row, column=1, ipady=0, sticky=tk.NSEW)
             self.buttons.append(btn)
@@ -429,7 +395,9 @@ class WindowUI(object):
             )
             pg_bar.grid(row=_row, column=2, sticky=tk.NSEW, ipady=15,)
             # create a wrapper class instance of the progress bar, which can be passed to flasher
-            self.pg_bars.append(EmbeddedProgressBar(pg_bar, self.root))
+            #self.pg_bars.append(EmbeddedProgressBar(pg_bar, self.root))
+            self.pg_bars.append(pg_bar)
+
 
             ttk.Label(self.mainframe, textvariable=self.var_label_count[index], justify="center",
                     font=("-size", 12, "-weight", "bold")
@@ -483,9 +451,10 @@ class WindowUI(object):
     #         result = False
     #     return result, sock, self
 
-  
+    #------------------------------------------------------------------------------
+    
     def process_command_queue(self):
-        global FIRMWARE_FP, AUTOSTART_PROGRAMMING
+        global FIRMWARE_FP, AUTOSTART_PROGRAMMING, SIMULATE_PROGRAMMING
 
         if not self.q_cmd.empty():
             a = self.q_cmd.get()
@@ -494,20 +463,26 @@ class WindowUI(object):
             if a:
                 if "start" in a:
                     sock = int(a["start"])
+                    resource_str = str(a["resource"])
                     fw = str(a["fw"])
+                    chipset = str(a["chipset"])
                     # check if the flasher is not yet active
                     if (sock not in self.futures) or (self.futures[sock] is None):
-                        # prepare the flasher
-
-                        self.flasher[sock].set_pcba_connected()
-                        self.flasher[sock].set_firmware_file_and_widgets(FIRMWARE_FP / fw, self.pg_bars[sock])
+                        # # prepare the flasher
+                        # self.flasher[sock].set_pcba_connected()
+                        # self.flasher[sock].set_firmware_file_and_widgets(FIRMWARE_FP / fw, self.pg_bars[sock])
                         # activate the task to program with the flasher
-                        _future: Future = self.task_programming(sock)
-                        _future.add_done_callback(task_done)
+                        #_future: Future = self.task_programming(sock)
+                        #_future.add_done_callback(task_done)
+                        _future = ProgrammingWorker(sock, resource_str, chipset, FIRMWARE_FP / fw, self.q_cmd, simulate_programming=SIMULATE_PROGRAMMING)
+                        _future.start()
                         self.futures[sock] = _future
                         # update ui
-                        v = self.var_button_text[sock]
-                        v.set("...")
+                        p: ttk.Progressbar = self.pg_bars[sock]
+                        p.config(value=0)
+                        p.configure(style="PROCESS.ColorProgress.Horizontal.TProgressbar")
+                        self.var_label_count[sock].set(self.var_label_count[sock].get()+1)
+                        self.var_button_text[sock].set("...")
                         self.buttons[sock]["state"] = "disabled"
                         v = self.var_label_count[sock]
                         v.set(v.get() + 1)
@@ -515,6 +490,35 @@ class WindowUI(object):
                     else:
                         self._log.info(f"Socket #{sock}: Ignore start.")
                     _do_update = True
+                elif "progress" in a:
+                    value = float(a["progress"])
+                    sock = int(a["socket"])
+                    #maximum = float(a["maximum"])
+                    progress: ttk.Progressbar = self.pg_bars[sock]
+                    progress.config(value=value)
+                    #progress.config(value=value, maximum=maximum)
+                    _do_update = True
+                elif "result" in a:
+                    result = a["result"]
+                    sock = int(a["socket"])
+                    progress: ttk.Progressbar = self.pg_bars[sock]
+                    if "pass" in  result:
+                        self.var_label_count_pass[sock].set(self.var_label_count_pass[sock].get()+1)
+                        progress.configure(style="PASS.ColorProgress.Horizontal.TProgressbar")
+                    else:
+                        # failed!
+                        progress.configure(style="FAIL.ColorProgress.Horizontal.TProgressbar")
+                        self.var_label_count_fail[sock].set(self.var_label_count_fail[sock].get()+1)
+                        maximum = progress.cget("maximum")
+                        value = progress.cget("value")
+                        if (value is None) or (value < (maximum * 0.03)):
+                            progress.config(value=maximum * 0.03, maximum=maximum)  # progress a bit to show the color
+                    # signal that we are ready
+                    # button
+                    self.var_button_text[sock].set("START")
+                    self.buttons[sock]["state"] = "normal"
+                    self.futures[sock] = None  # clear to signal availability for mother task
+
 
             if _do_update:
                 self.root.update()
@@ -540,23 +544,6 @@ class WindowUI(object):
                         # either still flashing or waiting for PCBA removal
                         pass
         self._id_after = self.mainframe.after(50, lambda: self.process_command_queue())
-
-
-
-
-
-    def sim_programming(self) -> None:
-        global DEBUG, FIRMWARE_FP, PROGRAMMERS
-
-        fs_file = Path(FIRMWARE_FP) / "SCD_3412031-04_A_Rubin-B_RRC2020B.bq.fs"
-        for sock, _ in enumerate(PROGRAMMERS):
-            self.flasher[sock].set_firmware_file_and_widgets(fs_file, self.pg_bars[sock])
-            _future = self.task_programming(sock)
-            _future.add_done_callback(task_done)
-            self.futures.append(_future)
-
-        #for sock in range(1):
-        #    result = self.futures[sock].result()  # blocks until results are ready
 
 
     def run_mainloop(self) -> None:
@@ -646,16 +633,16 @@ if __name__ == '__main__':
     parser.add_argument("--development", action="store_true", help="Activate development mode.")
     parser.add_argument("--filepath", action="store", default=FIRMWARE_FP, help="Path and filename prefix for firmware files")
     parser.add_argument("--simulate", action="store_true", help="Programming is simulated.")
+    parser.add_argument("--recovery", action="store_true", help="Programming uses recovery file instead which can solve a PCBA stuck in bootloader.")
+    
     args = parser.parse_args()
 
     SIMULATE_PROGRAMMING = args.simulate
     FIRMWARE_FP = args.filepath
     PRODUCTION_MODE = not args.development
-    
+    USE_RECOVERY_FILE = args.recovery
 
-    p = None
     w = None
-    s = None
     try:
         # Establish communication queues
         #q_cmd = mp.JoinableQueue()
@@ -668,13 +655,14 @@ if __name__ == '__main__':
         # user stopped process
         pass
     finally:
+        pass
         #if s and s.is_alive():
         #    s.terminate()
         #    s.join(timeout=0.5)  # short process ...
-        if p and p.is_alive():
-            # Add a poison pill for SPS process
-            q_cmd.put(None)
-            # Wait for SPS process to finish smoothly
-            q_cmd.join()
+        # if p and p.is_alive():
+        #     # Add a poison pill for SPS process
+        #     q_cmd.put(None)
+        #     # Wait for SPS process to finish smoothly
+        #     q_cmd.join()
 
 # END OF FILE
