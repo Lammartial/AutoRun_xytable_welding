@@ -56,8 +56,8 @@ _log = getLogger(__name__, DEBUG)
 # each line is reflected to a line in the dialog
 PROGRAMMERS = [
     "172.25.101.7:2101",
-    #"172.25.101.8:2101",
-    #"172.25.101.9:2101",
+    "172.25.101.8:2101",
+    "172.25.101.9:2101",
     # ... add more if needed ...
 ]
 
