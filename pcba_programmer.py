@@ -37,7 +37,7 @@ from rrc.dbcon import get_protocol_db_connector
 # multi tasking
 import asyncio
 from concurrent.futures import Future
-from pebble import asynchronous, concurrent, sighandler
+from pebble import asynchronous, concurrent, sighandler, ProcessFuture
 
 
 # --------------------------------------------------------------------------- #
@@ -81,6 +81,7 @@ PRODUCT_LIST = {
         "name": "RRC2040-2S_PCBA",
         "chipset": "BQ40Z50R1",
         "firmware_file": "BQFS_3411842-05_B_Ametrie_RRC2040-2S.bq.fs",
+        #"firmware_file": "BQFS_3411842-05_B_Ametrie_RRC2040-2S_Recovery.bq.fs",
         "checksum": ("61D3", "5366"),   # as hexlify value
     },
 }
@@ -239,8 +240,7 @@ def task_done(future) -> None:
 
     _log = getLogger(__name__, DEBUG)
     try:
-        result, sock, win = future.result()  # blocks until results are ready
-        win.futures[sock] = None
+        result, sock, win = future.result()  # blocks until results are ready        
         # update ui
         if result:
             v = win.var_label_count_pass[sock]
@@ -258,13 +258,39 @@ def task_done(future) -> None:
         # button
         b.set("START")
         win.buttons[sock]["state"] = "normal"
+        win.futures[sock] = None  # clear to signal availability for mother task
     except TimeoutError as error:
         _log.error("Function task_done took longer than %d seconds" % error.args[1])
     except Exception as error:
         _log.error("Function task_done raised %s" % error)
 
 
+#--------------------------------------------------------------------------------------------------
 
+
+# run as process
+def programming_task(resource_str: str, chipset: str, socket: int, firmware_file: str | Path) -> Tuple[bool, int, Any]:
+    global DEBUG, SIMULATE_PROGRAMMING
+
+    _log = getLogger(__name__, DEBUG)
+    try:
+        # create flasher
+        flasher = MultiBQStudioFileFlasher(
+            resource_str,
+            socket,
+            chipset=chipset,
+            simulate_programming=SIMULATE_PROGRAMMING,  # this allows to test without programmer
+        )
+        flasher.set_firmware_file(firmware_file)
+        _log.info("Starting flasher %s:" % str(flasher))
+        result = flasher.process_file()
+    except Exception as error:
+        _log.error("Process file raised %s" % error)
+        result = False
+    return result, sock, self
+
+
+#--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 
 class WindowUI(object):
@@ -377,7 +403,7 @@ class WindowUI(object):
         # create progress bars and flashers
         self.futures = {}
         self.pg_bars: List[EmbeddedProgressBar] = []
-        self.flasher: List[MultiBQStudioFileFlasher] = []
+        #self.flasher: List[MultiBQStudioFileFlasher] = []
         self.buttons: List[ttk.Button] = []
 
         for index, resource_str in enumerate(PROGRAMMERS):
@@ -417,13 +443,13 @@ class WindowUI(object):
 
             try:
                 # now create also the flasher of that index
-                flasher = MultiBQStudioFileFlasher(
-                    resource_str,
-                    index,
-                    chipset=PRODUCT_LIST[selected_product]["chipset"],
-                    simulate_programming=SIMULATE_PROGRAMMING,  # this allows to test without programmer
-                )
-                self.flasher.append(flasher)
+                # flasher = MultiBQStudioFileFlasher(
+                #     resource_str,
+                #     index,
+                #     chipset=PRODUCT_LIST[selected_product]["chipset"],
+                #     simulate_programming=SIMULATE_PROGRAMMING,  # this allows to test without programmer
+                # )
+                # self.flasher.append(flasher)
                 btn["state"] = "normal"
                 if not SIMULATE_PROGRAMMING:
                     self._log.info(f"Flasher OK at socket #{index} ({resource_str}).")
@@ -433,122 +459,6 @@ class WindowUI(object):
                 # flasher not available
                 self._log.info(f"Flasher NOT FOUND at socket #{index} ({resource_str}).")
                 btn.configure(style="UNAVAILABLE.TButton")
-
-
-
-
-        # #_row = next(row_itr)
-        # label_1 = ttk.Label(self.mainframe,text="PART NUMBER",justify="center", font=("-size", 10))
-        # label_1.grid(row=next(row_itr), column=0, columnspan=_colspan , ipady=5)
-        # label_2 = ttk.Label(self.mainframe,
-        #                     textvariable=self.var_label_part_number,
-        #                     justify="center", font=("-size", 16, "-weight", "bold"))
-        # label_2.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
-        # # label_s = ttk.Label(self.mainframe,
-        # #                     textvariable=self.var_label_sequence,
-        # #                     justify="center", font=("-size", 10, "-weight", "bold"))
-        # # label_s.grid(row=next(row_itr), column=0, columnspan=2, ipadx=10, ipady=10)
-        # if PRODUCTION_MODE:
-        #     self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center",
-        #                                font=("-size", 14, "-weight", "bold"), background="gray", foreground="black")
-        #     self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=50, sticky="ew")
-        # else:
-        #     self.label_udi = ttk.Label(self.mainframe, textvariable=self.var_label_udi, anchor = "center", font=("-size", 12))
-        #     self.label_udi.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5, sticky="ew")
-
-        # #_row = next(row_itr)
-        # label3 = ttk.Label(self.mainframe,text="SEQUENCE POS",justify="center", font=("-size", 10))
-        # label3.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
-        # label4 = ttk.Label(self.mainframe,
-        #                     textvariable=self.var_label_position,
-        #                     justify="center", font=("-size", 20, "-weight", "bold"))
-        # label4.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=5)
-
-        # label5 = ttk.Label(self.mainframe,text="PROGRAM",justify="center",font=("-size", 18))
-        # label5.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
-        # label6 = ttk.Label(self.mainframe,
-        #     textvariable=self.var_label_program,
-        #     justify="center", font=("-size", 32, "-weight", "bold"))
-        # label6.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
-
-        # #print("BUTTON-LAYOUT:", style.layout('TButton'))
-        # #print("BUTTON-MAP:",    style.map("TButton"))
-        # #print("BUTTON-LOOKUP:", style.lookup("TButton", "background", state=['pressed']))
-        # if PRODUCTION_MODE:
-        #     _row = next(row_itr)
-        #     #
-        #     # 'alt' style TButton map = {'highlightcolor': [('alternate', 'black')], 'relief': [('pressed', '!disabled', 'sunken'), ('active', '!disabled', 'raised')]}
-        #     # NOTE: sv-style cannot change background of button, thus we fall back to "alt"
-        #     #
-        #     style.configure('ValWelding.TButton', foreground='blue')
-        #     style.map('ValWelding.TButton', background=[ ("pressed", "lightblue")])
-        #     style.configure('SkipPosition.TButton', background='blue', foreground='white', justify="center")  # "justify" is to center text of button in both lines
-        #     style.map('SkipPosition.TButton', background=[("active","!pressed","steel blue"),('pressed', 'lightblue')])
-
-        #     self.validation_welding_button = None
-        #     self.skip_position_button = None
-        #     self.is_validation_welding_mode = True
-
-        #     self.skip_position_button = ttk.Button(self.mainframe, text="VALIDATION WELDING\nNEXT POSITION",  style="SkipPosition.TButton",
-        #         command=lambda: self.q_cmd.put({"move_counter": +1}))
-        #     self.skip_position_button.grid(row=_row, column=0, columnspan=2, ipady=50, ipadx=5, sticky=tk.NSEW)
-        #     self.skip_position_button.grid_remove()
-
-        #     #print(self.skip_position_button.config())
-
-        #     self.validation_welding_button = ttk.Button(self.mainframe, text="ACTIVATE VALIDATION WELDING",  style="ValWelding.TButton",
-        #         command=lambda: self.q_cmd.put({"validation_welding": True}))
-        #     self.validation_welding_button.grid(row=_row, column=0, columnspan=2, ipady=50, ipadx=20, sticky=tk.NSEW)
-
-        # else:
-        #     # Buttons
-        #     _row = next(row_itr)
-        #     #
-        #     # 'alt' style TButton map = {'highlightcolor': [('alternate', 'black')], 'relief': [('pressed', '!disabled', 'sunken'), ('active', '!disabled', 'raised')]}
-        #     #
-        #     style.configure('Forward.TButton', foreground="green")  #, borderwidth=4, focusthickness=3,)
-        #     style.map('SForward.TButton', background=[("active","!pressed","white"), ("pressed", "lightblue")])
-        #     style.configure('SBackward.TButton', foreground="red")
-        #     style.map('SBackward.TButton', background=[("active","!pressed","white"), ("pressed", "lightblue")])
-        #     style.configure('SReset.TButton', foreground="blue", )
-        #     style.map('SReset.TButton', background=[("active","!pressed","white"), ("pressed","lightblue")])
-
-        #     #print("RESET-BUTTON-LAYOUT:", style.layout('SReset.TButton'))
-        #     #print("RESET-BUTTON-MAP:",    style.map("SReset.TButton"))
-        #     #print("RESET-BUTTON-LOOKUP:", style.lookup("SReset.TButton", "background", state=['pressed']))
-
-        #     step_back_button = ttk.Button(self.mainframe, text="STEP BACK",  style="SBackward.TButton",
-        #         command=lambda: self.q_cmd.put({"move_counter": -1}))
-        #     step_back_button.grid(row=_row, column=0, ipady=50, ipadx=20, sticky=tk.NSEW)
-
-        #     step_forward_button = ttk.Button(self.mainframe, text="STEP FORWARD",  style="SForward.TButton",
-        #         command=lambda: self.q_cmd.put({"move_counter": +1}))
-        #     step_forward_button.grid(row=_row, column=1, ipady=50, ipadx=5, sticky=tk.NSEW)
-
-        #     reset_seq_button = ttk.Button(self.mainframe, text="RESET SEQUENCE", style="SReset.TButton",
-        #         command=lambda: self.q_cmd.put({"reset_counter": 0}))
-        #     reset_seq_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, sticky=tk.NSEW)
-
-
-        # # Some more information labels
-        # _row = next(row_itr)
-        # #label_10 = ttk.Label(self.mainframe, textvariable=self.var_label_sequence, font=("-size", 8))
-        # #label_10.grid(row=_row, column=0,  ipady=10)
-        # label_10 = ttk.Label(self.mainframe, anchor=tk.CENTER, textvariable=self.var_label_sequence_length, font=("-size", 8))
-        # label_10.grid(row=_row, column=0,  ipady=10, sticky="ew")
-        # label_11 = ttk.Label(self.mainframe, anchor=tk.CENTER, textvariable=self.var_label_sequence_revision, font=("-size", 8))
-        # label_11.grid(row=_row, column=1, ipady=10, sticky="ew")
-
-        # label_12 = ttk.Label(self.mainframe, textvariable=self.var_label_resource_str, font=("-size", 8))
-        # label_12.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
-
-        # Sizegrip
-        #sizegrip = ttk.Sizegrip(self.root)
-        #sizegrip.grid(row=100, column=100, padx=(0, 5), pady=(0, 5))
-
-        ## Add an information widget.
-        #label = ttk.Label(mainframe, text=f'\nWelcome to hello_world*4.py.\n')
-        #label.grid(column=0, row=next(row_itr), sticky='w')
 
         # schedule queue processing callback
         #self.executor = ThreadPool()
@@ -563,16 +473,17 @@ class WindowUI(object):
         #reset_seq_button.focus_set()
 
 
-    @concurrent.thread
-    def task_programming(self, sock: int) -> Tuple[bool, int, Any]:
-        try:
-            result = self.flasher[sock].process_file()
-        except Exception as error:
-            _log.error("Process file raised %s" % error)
-            result = False
-        return result, sock, self
+    # @concurrent.thread
+    # def task_programming(self, sock: int) -> Tuple[bool, int, Any]:
+    #     try:
+    #         _log.info("Starting flasher %s:" % str(self.flasher[sock]))
+    #         result = self.flasher[sock].process_file()
+    #     except Exception as error:
+    #         _log.error("Process file raised %s" % error)
+    #         result = False
+    #     return result, sock, self
 
-
+  
     def process_command_queue(self):
         global FIRMWARE_FP, AUTOSTART_PROGRAMMING
 
@@ -587,6 +498,7 @@ class WindowUI(object):
                     # check if the flasher is not yet active
                     if (sock not in self.futures) or (self.futures[sock] is None):
                         # prepare the flasher
+
                         self.flasher[sock].set_pcba_connected()
                         self.flasher[sock].set_firmware_file_and_widgets(FIRMWARE_FP / fw, self.pg_bars[sock])
                         # activate the task to program with the flasher
@@ -604,94 +516,6 @@ class WindowUI(object):
                         self._log.info(f"Socket #{sock}: Ignore start.")
                     _do_update = True
 
-                # if "revision" in a:
-                #     self.var_label_sequence_revision.set(f'Rev.: {a["revision"]}')
-                #     #print("UI:UPDATE REVISION")
-                #     _do_update = True
-                # if "part_number" in a:
-                #     self.var_label_part_number.set(a["part_number"])
-                #     #print("UI:UPDATE PART NUMBER")
-                #     _do_update = True
-                # if "sequence" in a:
-                #     self.var_label_sequence.set(a["sequence"])
-                #     self.var_label_sequence_length.set(f'Seq. length: {len(a["sequence"])}')
-                #     #print("UI:UPDATE SEQUENCE")
-                #     _do_update = True
-                # if "position" in a:
-                #     _txt = a["position"]
-                #     # !!!
-                #     # WE show Postion 1-based (!ROBERT)
-                #     # !!!
-                #     self.var_label_position.set((_txt + 1) if _txt != -1 else "")
-                #     #print("UI:UPDATE COUNTER")
-                #     _do_update = True
-                # if "program" in a:
-                #     _txt = a["program"]
-                #     self.var_label_program.set(_txt if _txt != -1 else "")
-                #     #print("UI:UPDATE PROGRAM")
-                #     _do_update = True
-                # if "udi" in a:
-                #     if a["udi"] is None:
-                #         self.label_udi.config(background="gray", foreground="black")
-                #         self.var_label_udi.set("PLEASE SCAN UDI")
-                #         print("UI:RESET UDI")
-                #     else:
-                #         self.label_udi.config(background="blue", foreground="white")
-                #         self.var_label_udi.set(a["udi"])
-                #     #self.validation_welding_mode(False)
-                #     _do_update = True
-                # if "udi_scanned" in a:
-                #     self.label_udi.config(background="lightblue", foreground="black")
-                #     self.var_label_udi.set(a["udi_scanned"])
-                #     print("UI:UPDATE UDI")
-                #     _do_update = True
-                # if "udi_rejected" in a:
-                #     self.label_udi.config(background="orange", foreground="black")
-                #     self.var_label_udi.set("UDI REJECTED")
-                #     _play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz")
-                #     print("UI:REJECTED UDI")
-                #     _do_update = True
-                #     pass
-                # if "udi_not_confirmed" in a:
-                #     self.label_udi.config(background="orange", foreground="red")
-                #     self.var_label_udi.set(a["udi_not_confirmed"])
-                #     print("UI:BLACKLISTED UDI")
-                #     _do_update = True
-                #     pass
-                # if "welding_check" in a:
-                #     # position of welding
-                #     _fgcolor = "white"
-                #     if "passed" in a["welding_check"]:
-                #         self.label_udi.config(background="LimeGreen", foreground=_fgcolor)
-                #     else:
-                #         self.label_udi.config(background="OrangeRed", foreground=_fgcolor)
-                #         _play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz-hard")
-                #     self.var_label_udi.set(a["udi"])
-                #     print("UI:RESULT")
-                #     _do_update = True
-                # if "validation_welding" in a:
-                #     _vw_enabled = a["validation_welding"]
-                #     self.validation_welding_mode(_vw_enabled)
-                # if "result" in a:
-                #     # result overall
-                #     #self.validation_welding_mode(False)
-                #     if self.is_validation_welding_mode:
-                #         self.validation_done()
-                #     #_fgcolor = "black" if "\n" in a["udi"] else "white"
-                #     _fgcolor = "black"
-                #     if "passed" in a["result"]:
-                #         _bgcolor = "green"
-                #         if self.is_validation_welding_mode:
-                #             _bgcolor = "dark slate gray"
-                #     else:
-                #         _bgcolor = "red"
-                #         if self.is_validation_welding_mode:
-                #             _bgcolor = "violet red"
-                #     self.label_udi.config(background=_bgcolor, foreground=_fgcolor)
-                #         #_play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz")
-                #     self.var_label_udi.set(a["udi"])
-                #     print("UI:RESULT")
-                #     _do_update = True
             if _do_update:
                 self.root.update()
             if _play_soundfile:
