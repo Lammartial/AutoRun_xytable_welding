@@ -91,6 +91,7 @@ FIRMWARE_FP = Path(__file__).parent / "../.." / "Battery-PCBA-Test/filestore"  #
 PRODUCT_CHOICES = [k for k in PRODUCT_LIST.keys()]  # this is the list of part numbers to select by command line
 SIMULATE_PROGRAMMING: bool = False
 PRODUCTION_MODE: bool = True
+AUTOSTART_PROGRAMMING: bool = False
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
@@ -233,7 +234,7 @@ class MultiBQStudioFileFlasher(BQStudioFileFlasher):
 #--------------------------------------------------------------------------------------------------
 
 def task_done(future) -> None:
-    global DEBUG
+    global DEBUG, AUTOSTART_PROGRAMMING
 
     _log = getLogger(__name__, DEBUG)
     try:
@@ -247,14 +248,15 @@ def task_done(future) -> None:
         v.set(v.get() + 1)
         # signal that we are ready
         b = win.var_button_text[sock]
-        b.set("REMOVE PCBA")
-        # wait for PCBA to be removed
-        f: MultiBQStudioFileFlasher = win.flasher[sock]
-        while f.check_if_pcba_connected():
-            pass   # wait
+        if AUTOSTART_PROGRAMMING:
+            b.set("REMOVE PCBA")
+            # wait for PCBA to be removed
+            f: MultiBQStudioFileFlasher = win.flasher[sock]
+            while f.check_if_pcba_connected():
+                pass   # wait
         # button
-        win.var_button_text[sock].set("START")
-        win.buttons[sock]["state"] = "normal"
+        b.set("START")
+        b["state"] = "normal"
 
     except TimeoutError as error:
         _log.error("Function took longer than %d seconds" % error.args[1])
@@ -568,7 +570,7 @@ class WindowUI(object):
 
 
     def process_command_queue(self):
-        global FIRMWARE_FP
+        global FIRMWARE_FP, AUTOSTART_PROGRAMMING
 
         if not self.q_cmd.empty():
             a = self.q_cmd.get()
@@ -692,22 +694,23 @@ class WindowUI(object):
                 PlaySound(_play_soundfile, SND_FILENAME)
         else:
             pass
-            # no command to execute, we can do presence scanning
-            for sock, btn in enumerate(self.buttons):
-                if "normal" in str(btn["state"]):
-                    if (sock not in self.futures) or (self.futures[sock] is None):
-                        # we can scan for new PCBA
-                        f:MultiBQStudioFileFlasher = self.flasher[sock]
-                        if f and f.check_if_pcba_connected():
-                            # now we can activate the programming from here:
-                            btn.invoke()
+            if AUTOSTART_PROGRAMMING:
+                # no command to execute, we can do presence scanning
+                for sock, btn in enumerate(self.buttons):
+                    if "normal" in str(btn["state"]):
+                        if (sock not in self.futures) or (self.futures[sock] is None):
+                            # we can scan for new PCBA
+                            f:MultiBQStudioFileFlasher = self.flasher[sock]
+                            if f and f.check_if_pcba_connected():
+                                # now we can activate the programming from here:
+                                btn.invoke()
+                                pass
+                        else:
+                            # flasher is in use - do not touch!
                             pass
                     else:
-                        # flasher is in use - do not touch!
+                        # either still flashing or waiting for PCBA removal
                         pass
-                else:
-                    # either still flashing or waiting for PCBA removal
-                    pass
         self._id_after = self.mainframe.after(50, lambda: self.process_command_queue())
 
 
