@@ -241,6 +241,9 @@ class ProgrammingWorker(mp.Process):
         except Exception as error:
             _log.error("Process file raised %s" % error)
             result = False
+        finally:
+            #flasher.battery.bus.i2c.close()
+            pass
         # send result by queue
         self.q_ui.put({
             "result": "pass" if result else "fail",
