@@ -27,8 +27,7 @@ class BusmasterVerificationError(BusmasterError):
 
 #--------------------------------------------------------------------------------------------------
 class BusMaster:
-    i2c = None
-
+    
     def __init__(self, i2c: I2CBase, retry_limit: int = 1, verify_rounds: int = 3, pause_us: int = 50) -> None:
         """Class providing the SMBus master protocols.
 
