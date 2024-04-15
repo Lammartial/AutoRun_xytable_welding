@@ -233,6 +233,7 @@ class MultiBQStudioFileFlasher(BQStudioFileFlasher):
 
 #--------------------------------------------------------------------------------------------------
 
+
 def task_done(future) -> None:
     global DEBUG, AUTOSTART_PROGRAMMING
 
@@ -256,13 +257,12 @@ def task_done(future) -> None:
                 pass   # wait
         # button
         b.set("START")
-        b["state"] = "normal"
-
+        win.buttons[sock]["state"] = "normal"
     except TimeoutError as error:
-        _log.error("Function took longer than %d seconds" % error.args[1])
+        _log.error("Function task_done took longer than %d seconds" % error.args[1])
     except Exception as error:
-        _log.error("Function raised %s" % error)
-        _log.error(error.traceback)  # traceback of the function
+        _log.error("Function task_done raised %s" % error)
+
 
 
 #--------------------------------------------------------------------------------------------------
@@ -565,7 +565,11 @@ class WindowUI(object):
 
     @concurrent.thread
     def task_programming(self, sock: int) -> Tuple[bool, int, Any]:
-        result = self.flasher[sock].process_file()
+        try:
+            result = self.flasher[sock].process_file()
+        except Exception as error:
+            _log.error("Process file raised %s" % error)
+            result = False
         return result, sock, self
 
 
