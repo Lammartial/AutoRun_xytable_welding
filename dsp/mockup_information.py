@@ -165,12 +165,12 @@ PART_INFORMATION = {
         "CELL_TEST": {
             # Cell Test (Teststand):
             "test_program_id": ("CW-SQ_SPINEL", "110282S_SPINEL_Cell-Test_A"),
-            "part_number": ("CW-PN_SPINEL", "110282S-02"),
+            "part_number": ("CW-PN_SPINEL", "110282S-03"),
         },
         "CELL_WELDING": {
             # Cell Welding PRT IDs:
             "test_program_id": ("CW-SQ_SPINEL", "A"),
-            "part_number": ("CW-PN_SPINEL", "110282S-02"),
+            "part_number": ("CW-PN_SPINEL", "110282B-03"),
         },
         #"LEANPACK_TEST": {
         #     # EOL Test with Corepack hardware (Teststand)
@@ -179,8 +179,8 @@ PART_INFORMATION = {
         #},
         "LEANPACK_TEST": {
             # EOL Test with Corepack hardware (Teststand)
-            "test_program_id": ("CP-SQ_SPINEL", "110282S_SPINEL_Imbalance-Test"),
-            "part_number": ("CP-PN_SPINEL", "110282S-00"),
+            "test_program_id": ("CP-SQ_SPINEL", "110282B_SPINEL_Leanpack-Test_A"),
+            "part_number": ("CP-PN_SPINEL", "110282B-03"),
         }
     },
     #
