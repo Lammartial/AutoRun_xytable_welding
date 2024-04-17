@@ -20,13 +20,21 @@ _log = getLogger(__name__, DEBUG)
 # --------------------------------------------------------------------------- #
 
 
+MACHINE_BINS = 10  # 1 of them is always being used for scrap, so one less available for sorting
+
 ACCESSDB_FILEPATH = Path("C:/Projekte/Cellsorter/MG1T.accdb")
 ACCESSDB_FILEPATH_DEVELOPMENT = Path("C:/Projekte/V-Kong/Teststand-Deployment/Python_Libs/rrc/sampledata/MG1T.accdb")
+
+OUTPUT_PATH = Path(".")
 
 DB_COLUMN_NAMES = ["Cellsn", "Bin_Number", "Ir", "Ocv", "TestTime", "Batchid", "TestResult"]
 
 
 #--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+
+class RawDescriptionArgumentDefaultsHelpFormatter(RawDescriptionHelpFormatter, ArgumentDefaultsHelpFormatter): pass
+
 #--------------------------------------------------------------------------------------------------
 
 #
@@ -77,7 +85,7 @@ def read_from_access_databasefile(fp : Path, selected_table: int | str = -1) -> 
 #--------------------------------------------------------------------------------------------------
 
 
-def do_the_bango(df :pd.DataFrame, center: str, buckets_ocv: str, buckets_ir: str) -> list:
+def do_the_bango(df :pd.DataFrame, bins: int, center: str, buckets_ocv: str, buckets_ir: str) -> list:
 
     print("Bin numbers used:", sorted(df["Bin_Number"].unique()))
     range_ocv = df["Ocv"].max() - df["Ocv"].min()
@@ -154,15 +162,37 @@ def do_the_bango(df :pd.DataFrame, center: str, buckets_ocv: str, buckets_ir: st
         print(f"[{previous}..{current}]")
 
     # create a 2d array in numpy
-    #slots = list(zip(ir_ranges, ocv_ranges))
-    #slots = list(filter(lambda i: i is not None, chain.from_iterable(zip(ocv_ranges, ir_ranges))))
     slots = []
     for n in ocv_ranges:
         for m in ir_ranges:
             slots.append((n,m))
-    if len(slots) > 10:
-        raise ValueError(f"Buckts array may have up to 10 elements but has {len(slots)}")
+    if len(slots) > bins:
+        raise ValueError(f"Buckts array may have up to {bins} elements but has {len(slots)}")
+
+    # show the bins and their limits:
+    print("Slot arrangement:")
+    for slot_no, (ocv, ir) in enumerate(slots):
+        print(f"Slot #{slot_no}: {ocv[0]}..{ocv[1]} V with {ir[0]}..{ir[1]} mOhms")
+    print(f"Slot #{bins + 1}: Scrap")
+
     return slots
+
+
+#--------------------------------------------------------------------------------------------------
+
+
+def write_cellsorter_config_file(slots, fp):
+    idx = 0
+    ar = [0.0 for _ in range(20*4)]
+    for n, (ocv, ir) in enumerate(slots):
+        ar[20*0 + idx] = ocv[0]
+        ar[20*1 + idx] = ocv[1]
+        ar[20*2 + idx] = ir[0]
+        ar[20*3 + idx] = ir[1]
+        idx += 1
+    with open(fp, "wt") as file:
+        for n in ar:
+            file.write(f"{n:0.6}\n")
 
 
 #--------------------------------------------------------------------------------------------------
@@ -174,31 +204,36 @@ if __name__ == '__main__':
 
     _default_accessdb = ACCESSDB_FILEPATH_DEVELOPMENT if ACCESSDB_FILEPATH_DEVELOPMENT.exists() else ACCESSDB_FILEPATH
 
-    parser = ArgumentParser(description="""
+    parser = ArgumentParser(description=f"""
         The Cellsorter Bucket Generator creates a set of range buckets for Ocv and Ir sorting of
         cells based on a given input data set and a method to generate.
-        The Ocv and Ir are forming a 2D array which has to have less than or up to 10 elements,
-        as the cellsorter has a maximum of 10 bucket ranges available only.
+        The Ocv and Ir are forming a 2D array which has to have less than or up to {MACHINE_BINS-1} elements,
+        as the cellsorter has a maximum of {MACHINE_BINS} bucket ranges available only,
+        one of them is need for scrap.
 
         In the default setup this tool takes the last table from the default access database file
         and creates a set of 4x Ocv and 2x Ix ranges, resulting in use of 8 buckets altogether.
         """,
-        formatter_class=RawDescriptionHelpFormatter,
-        #formatter_class=ArgumentDefaultsHelpFormatter,
+        formatter_class=RawDescriptionArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("center", choices=["mean", "median", "modus"], help="The way to select the center value of the sample set read from DB.")
-    parser.add_argument("--filepath", action="store", default=_default_accessdb.absolute(), help="Path and filename prefix for Access DB file.")
+    #parser.add_argument("center", choices=["mean", "median", "modus"], help="The way to select the center value of the sample set read from DB.")
+    parser.add_argument("--dbfilepath", action="store", default=_default_accessdb.absolute(), help="Path and filename prefix for Access DB file.")
+    parser.add_argument("--outfilepath", action="store", default=OUTPUT_PATH.absolute(), help="Path to write .rvf output files into.")
     parser.add_argument("--table", default=-1, help="Index (0=first, -1=last) or name of table to read data from.")
-    #parser.add_argument("--center", choices=["mean","median", "modus"], default="median", help="The way to select the center value of the sample set read from DB.")
+    parser.add_argument("--bins", type=int, default=int(9), help="Maximum number of bins available to sort ranges into. Depending on the machine type.")
+    parser.add_argument("--center", choices=["mean","median", "modus"], default="median", help="The way to select the center value of the sample set read from DB.")
     parser.add_argument("--buckets_ocv", default="-4s,-2s,2s,4s", help="Comma separated list of buckets for the ranges of Ocv either as sigma, if 's' is appended, or as value steps in volts (not millivolts!).")
     parser.add_argument("--buckets_ir", default="-2s,2s", help="Comma separated list of buckets for the ranges of Ir either as sigma, if 's' is appended, or as value steps in ohms (not milliohms!).")
     args = parser.parse_args()
 
-    df = read_from_access_databasefile(args.filepath, args.table)
-    #print(df)
-    #print(df.describe())
-    slots = do_the_bango(df, args.center, args.buckets_ocv, args.buckets_ir)
-    print("\n\n", len(slots), slots)
+    # the data
+    df = read_from_access_databasefile(args.dbfilepath, args.table)
+
+    # the doing
+    slots = do_the_bango(df, args.bins,  args.center, args.buckets_ocv, args.buckets_ir)
+
+    # the output file to configure cellsorter
+    write_cellsorter_config_file(slots, Path(args.outfilepath) / "test-xxx.rvf" )
 
     print("\nDONE.")
 
