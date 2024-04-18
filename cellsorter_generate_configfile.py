@@ -22,11 +22,11 @@ _log = getLogger(__name__, DEBUG)
 
 MACHINE_BINS = 10  # 1 of them is always being used for scrap, so one less available for sorting
 
-ACCESSDB_FILEPATH = Path("C:/Cellsorter/MG1T.accdb")
-ACCESSDB_FILEPATH_DEVELOPMENT = Path("C:/Projekte/V-Kong/Teststand-Deployment/Python_Libs/rrc/sampledata/MG1T.accdb")
+ACCESSDB_FILEPATH = "C:/Cellsorter/MG1T.accdb"
+ACCESSDB_FILEPATH_DEVELOPMENT = "C:/Projekte/V-Kong/Teststand-Deployment/Python_Libs/rrc/sampledata/MG1T.accdb"
 
-OUTPUT_PATH = Path("C:/Cellsorter")
-OUTPUT_PATH_DEVELOPMENT = Path("C:/Projekte/V-Kong/Teststand-Deployment/Python_Libs/rrc/sampledata/")
+OUTPUT_PATH = "C:/Cellsorter"
+OUTPUT_PATH_DEVELOPMENT = "C:/Projekte/V-Kong/Teststand-Deployment/Python_Libs/rrc/sampledata/"
 
 DB_COLUMN_NAMES = ["Cellsn", "Bin_Number", "Ir", "Ocv", "TestTime", "Batchid", "TestResult"]
 
@@ -173,7 +173,7 @@ def do_the_bango(df :pd.DataFrame, bins: int, center: str, buckets_ocv: str, buc
     # show the bins and their limits:
     print("Slot arrangement:")
     for slot_no, (ocv, ir) in enumerate(slots):
-        print(f"Slot #{slot_no}: {ocv[0]}..{ocv[1]} V with {ir[0]}..{ir[1]} mOhms")
+        print(f"Slot #{slot_no+1}: {ocv[0]}..{ocv[1]} V with {ir[0]}..{ir[1]} mOhms")
     print(f"Slot #{bins + 1}: Scrap")
 
     return slots
@@ -212,8 +212,8 @@ if __name__ == '__main__':
 
     print("=== Cellsorter Bin/Slot Ranges Configuration File Generator ===")
 
-    _default_accessdb = ACCESSDB_FILEPATH_DEVELOPMENT if ACCESSDB_FILEPATH_DEVELOPMENT.exists() else ACCESSDB_FILEPATH
-    _default_output = OUTPUT_PATH_DEVELOPMENT if OUTPUT_PATH_DEVELOPMENT.exists() else OUTPUT_PATH 
+    _default_accessdb = ACCESSDB_FILEPATH_DEVELOPMENT if Path(ACCESSDB_FILEPATH_DEVELOPMENT).exists() else ACCESSDB_FILEPATH
+    _default_output = OUTPUT_PATH_DEVELOPMENT if Path(OUTPUT_PATH_DEVELOPMENT).exists() else OUTPUT_PATH 
 
     parser = ArgumentParser(description=f"""
         This tool creates a set of range buckets for Ocv and Ir sorting of cells based on a
@@ -231,8 +231,8 @@ if __name__ == '__main__':
     parser.add_argument("--cell_name", type=str, default=None, help="Cell part number for filename creation. If None, the user gets requested for.")
     parser.add_argument("--batch_id", type=str, default=None, help="Batch ID for filename creation. If None, the user gets requested for.")
     #parser.add_argument("center", choices=["mean", "median", "modus"], help="The way to select the center value of the sample set read from DB.")
-    parser.add_argument("--dbfilepath", action="store", default=_default_accessdb.absolute(), help="Path and filename prefix for Access DB file.")
-    parser.add_argument("--outfilepath", action="store", default=OUTPUT_PATH.absolute(), help="Path to write .rvf output files into.")
+    parser.add_argument("--dbfilepath", action="store", default=Path(_default_accessdb).absolute(), help="Path and filename prefix for Access DB file.")
+    parser.add_argument("--outfilepath", action="store", default=Path(_default_output).absolute(), help="Path to write .rvf output files into.")
     parser.add_argument("--table", default=-1, help="Index (0=first, -1=last) or name of table to read data from.")
     parser.add_argument("--bins", type=int, default=int(9), help="Maximum number of bins available to sort ranges into. Depending on the machine type.")
     parser.add_argument("--center", choices=["mean","median", "modus"], default="median", help="The way to select the center value of the sample set read from DB.")
@@ -250,7 +250,7 @@ if __name__ == '__main__':
         args.batch_id = input("Please enter batch ID: ")
 
     # the data
-    df = read_from_access_databasefile(args.dbfilepath, args.table)
+    df = read_from_access_databasefile(Path(args.dbfilepath), args.table)
 
     # the doing
     slots = do_the_bango(df, args.bins,  args.center, args.buckets_ocv, args.buckets_ir)
