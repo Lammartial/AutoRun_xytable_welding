@@ -15,7 +15,7 @@ from hashlib import md5
 from base64 import b64decode, b64encode
 from time import sleep, perf_counter
 from pathlib import Path
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter
 from datetime import timezone, datetime
 from winsound import PlaySound, SND_FILENAME
 
@@ -26,6 +26,7 @@ from rrc.chipsets.bq import ChipsetTexasInstruments
 from rrc.chipsets.bq40z50 import BQ40Z50R1, BQ40Z50R2
 
 from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
+from rrc.dsp.interface import DspInterface, DspInterface_SIMULATION, DSPInterfaceError
 from rrc.ui.progress_bar import center as center_of_window
 from rrc.chipsets.bq_flasher import BQStudioFileFlasher
 
@@ -99,6 +100,11 @@ USE_RECOVERY_FILE: bool = False
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
+
+class RawDescriptionArgumentDefaultsHelpFormatter(RawDescriptionHelpFormatter, ArgumentDefaultsHelpFormatter): pass
+
+#--------------------------------------------------------------------------------------------------
+
 
 class EmbeddedProgressBar():
 
@@ -554,6 +560,61 @@ class WindowUI(object):
 
 
 #--------------------------------------------------------------------------------------------------
+
+
+def create_interfaces(simulation: None | str = None) -> Tuple[StationConfiguration, DspInterface]:
+    """Creates the interfaces for configuration and DSP.
+
+    Note: this is called from process context,
+            do NOT call it from anywhere else except you want to test this function only!
+
+    Returns:
+        Tuple[StationConfiguration, DspInterface]: _description_
+    """
+    global DEBUG
+    _log = getLogger(__name__, DEBUG)
+
+    # 1. we need the station config
+    try:
+        cfg = StationConfiguration("PCBA_TEST")
+    except FileNotFoundError:
+        # comfort for testing: using the development configuration
+        cfg = StationConfiguration("PCBA_TEST", filename=CONF_FILENAME_DEV)
+        _log.info(f"USING DEVELOPMENT CONFIGURATION {CONF_FILENAME_DEV}")
+    _, __, _dsp_api_base_url, _, _ = cfg.get_station_configuration()
+    # 2. we can create the DSP interface
+    if simulation:
+        _log.info(f"Use simulation for DSP interface configured {simulation}")
+        dsp = DspInterface_SIMULATION(simulation, None)
+    else:
+        dsp = DspInterface(_dsp_api_base_url, None)
+    return cfg, dsp
+
+
+#--------------------------------------------------------------------------------------------------
+
+
+def collect_parameters(cfg: StationConfiguration, dsp: DspInterface) -> Tuple[str, str, str]:
+    """ Read configuration from DSP
+
+    Note: this is called from process context,
+          do NOT call it from anywhere else except you want to test this function only!
+
+    """
+
+    # 1. we need the station config
+    _, _station_id, _dsp_api_base_url, _line_id, _ = cfg.get_station_configuration()
+    # 2. with station config we can request the part number from DSP
+    print("Fetching part number from DSP...")
+    _dsp_info = dsp.get_parameter_for_testrun("PCBA_TEST", _station_id, _line_id, "0")
+    #_dsp_info = dsp.get_parameter_for_welding(_station_id, _line_id)
+    _part_number = _dsp_info["part_number"]
+    _sequence_revision = _dsp_info["test_program_id"]
+    print(f"PART NUMBER: {_part_number}")
+    return _part_number, _line_id, _station_id
+
+
+#--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 
@@ -628,16 +689,19 @@ def _create_interfaces(simulation: None | str = None) -> StationConfiguration:
 
 if __name__ == '__main__':
     # need to initialize logger on load
-
+    
     print("=== PCBA Programming Dialog ===")
 
-    parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-    parser.add_argument("product", choices=PRODUCT_CHOICES, action="store", help="Set a product for firmware file selection.")
+    parser = ArgumentParser(description="""
+                The PCBA programming tool can be used in-line using the line configuration or 
+                override the product to be programmed by optional parameter. It uses a built-in configuration dictionary
+                which defines the filenames for regular firmware and recovery firmware.
+                """, formatter_class=RawDescriptionArgumentDefaultsHelpFormatter)
+    parser.add_argument("--product", choices=PRODUCT_CHOICES, action="store", default=None, help="Set a product for firmware file selection. If None given, the line DSP is requested for this parameter.")
     parser.add_argument("--development", action="store_true", help="Activate development mode.")
     parser.add_argument("--filepath", action="store", default=FIRMWARE_FP, help="Path and filename prefix for firmware files")
     parser.add_argument("--simulate", action="store_true", help="Programming is simulated.")
     parser.add_argument("--recovery", action="store_true", help="Programming uses recovery file instead which can solve a PCBA stuck in bootloader.")
-    
     args = parser.parse_args()
 
     SIMULATE_PROGRAMMING = args.simulate
@@ -645,13 +709,21 @@ if __name__ == '__main__':
     PRODUCTION_MODE = not args.development
     USE_RECOVERY_FILE = args.recovery
 
+    # get the configuration from DSP if we do not have a product by command line
+    if args.product:
+        part_number = args.product
+    else:
+        cfg, dsp, = create_interfaces(args.simulate)
+        _pn, line_id, station_id = collect_parameters(cfg, dsp)
+        part_number = _pn.split("-")[0]
+
     w = None
     try:
         # Establish communication queues
         #q_cmd = mp.JoinableQueue()
         q_cmd = mp.Queue()
         # start UI in this process waiting for user input
-        w = WindowUI(q_cmd, args.product)
+        w = WindowUI(q_cmd, part_number)
         w.run_mainloop()
 
     except KeyboardInterrupt as kx:
