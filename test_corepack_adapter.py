@@ -274,8 +274,8 @@ if __name__ == "__main__":
     #LINE_NETWORK = "172.25.102"  # VN line 2    
     #LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
-    #i2cbus = I2CPort(f"{LINE_NETWORK}.40:2101") # socket 0
-    i2cbus = I2CPort(f"{LINE_NETWORK}.42:2101") # socket 1
+    i2cbus = I2CPort(f"{LINE_NETWORK}.40:2101") # socket 0
+    #i2cbus = I2CPort(f"{LINE_NETWORK}.42:2101") # socket 1
 
     mux = BusMux(i2cbus, address=0x77)
     for i in range(8):
