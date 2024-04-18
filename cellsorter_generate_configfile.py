@@ -22,10 +22,11 @@ _log = getLogger(__name__, DEBUG)
 
 MACHINE_BINS = 10  # 1 of them is always being used for scrap, so one less available for sorting
 
-ACCESSDB_FILEPATH = Path("C:/Projekte/Cellsorter/MG1T.accdb")
+ACCESSDB_FILEPATH = Path("C:/Cellsorter/MG1T.accdb")
 ACCESSDB_FILEPATH_DEVELOPMENT = Path("C:/Projekte/V-Kong/Teststand-Deployment/Python_Libs/rrc/sampledata/MG1T.accdb")
 
-OUTPUT_PATH = Path(".")
+OUTPUT_PATH = Path("C:/Cellsorter")
+OUTPUT_PATH_DEVELOPMENT = Path("C:/Projekte/V-Kong/Teststand-Deployment/Python_Libs/rrc/sampledata/")
 
 DB_COLUMN_NAMES = ["Cellsn", "Bin_Number", "Ir", "Ocv", "TestTime", "Batchid", "TestResult"]
 
@@ -212,6 +213,7 @@ if __name__ == '__main__':
     print("=== Cellsorter Bin/Slot Ranges Configuration File Generator ===")
 
     _default_accessdb = ACCESSDB_FILEPATH_DEVELOPMENT if ACCESSDB_FILEPATH_DEVELOPMENT.exists() else ACCESSDB_FILEPATH
+    _default_output = OUTPUT_PATH_DEVELOPMENT if OUTPUT_PATH_DEVELOPMENT.exists() else OUTPUT_PATH 
 
     parser = ArgumentParser(description=f"""
         This tool creates a set of range buckets for Ocv and Ir sorting of cells based on a
