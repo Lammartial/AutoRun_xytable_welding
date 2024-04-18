@@ -270,12 +270,12 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    #LINE_NETWORK = "172.25.101"  # VN line 1
-    LINE_NETWORK = "172.25.102"  # VN line 2    
+    LINE_NETWORK = "172.25.101"  # VN line 1
+    #LINE_NETWORK = "172.25.102"  # VN line 2    
     #LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
-    i2cbus = I2CPort(f"{LINE_NETWORK}.40:2101") # socket 0
-    #i2cbus = I2CPort(f"{LINE_NETWORK}.42:2101") # socket 1
+    #i2cbus = I2CPort(f"{LINE_NETWORK}.40:2101") # socket 0
+    i2cbus = I2CPort(f"{LINE_NETWORK}.42:2101") # socket 1
 
     mux = BusMux(i2cbus, address=0x77)
     for i in range(8):
@@ -287,6 +287,8 @@ if __name__ == "__main__":
     gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
     gpio.switch_to_psu_measurement()
     sleep(0.5)
+
+    exit()
     #psu = M3900(f"TCPIP0::{LINE_NETWORK}.46::inst0::INSTR")  # visa socket 0
     #psu = M3900(f"TCPIP0::{LINE_NETWORK}.47::inst0::INSTR")  # visa socket 1
     psu = M3900(f"{LINE_NETWORK}.47:30000")  # socket 0

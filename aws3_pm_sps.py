@@ -243,6 +243,10 @@ class WindowUI(object):
             self.validation_welding_button.grid(row=_row, column=0, columnspan=2, ipady=50, ipadx=20, sticky=tk.NSEW)
 
         else:
+            self.validation_welding_button = None
+            self.skip_position_button = None
+            self.is_validation_welding_mode = False
+
             # Buttons
             _row = next(row_itr)
             #
@@ -440,12 +444,12 @@ class WindowUI(object):
 class SPSStates(Enum):
     START = 0
     INIT = 2
-    SYNC_ON_MACHINE_COUNTER = 3
+    SYNC_ON_MACHINE_COUNTER = 3  # unused
     SYNC_ON_TOGGLE_BIT = 4
-    WAIT_MACHINE_READY = 5
+    WAIT_MACHINE_READY = 5  # unused
     SHOW_PROGRAM_STEP = 6
     FETCH_NEXT_PROGRAM = 7
-    WAIT_READY_TO_SET_PROGRAM = 8
+    WAIT_READY_TO_SET_PROGRAM = 8  # unused
     SET_PROGRAM_ON_MACHINE = 9
     SEQUENCE_DONE = 10
     CHECK_WELDING_RESULT = 11
@@ -585,13 +589,17 @@ class SPSStateMachineRotating(SPSStateMachineBase):
         self.next_program_no = self.program_sequence[self.sequence_pos]
         print(f"Move program step to {self.sequence_pos} with program no {self.next_program_no}")
         self.last_counter_ax1 = self.counter_ax1
-        return SPSStates.WAIT_READY_TO_SET_PROGRAM
+        #return SPSStates.WAIT_READY_TO_SET_PROGRAM
+        return SPSStates.SET_PROGRAM_ON_MACHINE
+
 
     def reset_seqence(self) -> None:
         self.sequence_pos = 0
         self.is_sequence_done = False
         self.next_program_no = self.program_sequence[self.sequence_pos]
-        self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
+        #self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
+        self.set_state(SPSStates.SET_PROGRAM_ON_MACHINE)
+
 
     # --- Rotating loop ---
     def do_one_loop(self):
@@ -600,14 +608,11 @@ class SPSStateMachineRotating(SPSStateMachineBase):
 
                 case SPSStates.START:
                     self.unlock_machine()
-                    if self.dev.is_machine_ready():
-                        self.set_state(SPSStates.INIT)
-                    else:
-                        sleep(self._throttle_pause)  # throttle polling
+                    self.set_state(SPSStates.INIT)
 
                 case SPSStates.INIT:
-                    self.counter_base_ax1 = self.dev.read_axis_counter(1)
                     self._machine_locked = self.dev.read_machine_lock_status()
+                    self.counter_base_ax1 = self.dev.read_axis_counter(1)
                     self.program_no = self.dev.read_program_no()
                     self.counter_ax1 = self.counter_base_ax1
                     self.last_counter_ax1 = self.counter_ax1
@@ -617,35 +622,31 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                     print(f"Next program on sequence on {self.sequence_pos}: {self.next_program_no}")
                     if self.next_program_no != self.program_no:
                         self.program_no = self.next_program_no  # to avoid blitting a -1 on UI
-                    self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
-                    #else:
-                    #    self.set_state(SPSStates.SHOW_PROGRAM_STEP)
+                    #self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
+                    self.set_state(SPSStates.SET_PROGRAM_ON_MACHINE)
 
                 case SPSStates.SHOW_PROGRAM_STEP:
                     print(f"Program step: {self.sequence_pos} of {len(self.program_sequence)}")
                     print(f"Program set {self.program_no}")
-                    self.set_state(SPSStates.SYNC_ON_MACHINE_COUNTER)
+                    self.set_state(SPSStates.SYNC_ON_TOGGLE_BIT)
 
-                case SPSStates.SYNC_ON_MACHINE_COUNTER:
+                case SPSStates.SYNC_ON_TOGGLE_BIT:
                     _do_pause = True
-                    _machine_ready, _status = self.dev.is_machine_ready()
-                    if self._machine_locked or _machine_ready:
+                    if self._machine_locked:
+                        self.unlock_machine()  # make sure we are not locked here
+                    if self.dev.is_toggle_bit_changed():
+                        #self.set_state(SPSStates.WAIT_MACHINE_READY)
+                        _machine_ready, _status = self.dev.is_machine_ready()
+                        self.lock_machine() # lock machine to have control for read measurements
+                        self.welding_status = _status  # store result
                         self.counter_ax1 = self.dev.read_axis_counter(1)
-                        #  Check if welding is done and read the result,
-                        #  then proceed to check if pass or failed.
-                        diffcount = self.counter_ax1 - self.last_counter_ax1
-                        #if diffcount > 0 or self._debug_trigger_: # DEBUG
-                        #    self._debug_trigger_ = False  # DEBUG
-                        if diffcount > 0:
-                            # welding completed
-                            #self.lock_machine() # lock machine to have control for read measurements
-                            self.last_counter_ax1 = self.counter_ax1
-                            print(f"Counters: Ax1={self.counter_ax1}")
-                            self.welding_status = _status  # store result
-                            self.set_state(SPSStates.CHECK_WELDING_RESULT)
-                            _do_pause = False
+                        self.last_counter_ax1 = self.counter_ax1
+                        print(f"Counters: Ax1={self.counter_ax1}")
+                        self.set_state(SPSStates.CHECK_WELDING_RESULT)
+                        _do_pause = False
                     if _do_pause:
                         sleep(self._throttle_pause)  # throttle polling
+
 
                 case SPSStates.CHECK_WELDING_RESULT:
                     # We do this task here to have quick feedback on UI before the
@@ -697,14 +698,11 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                     self.set_state(SPSStates.FETCH_NEXT_PROGRAM)
 
                 case SPSStates.FETCH_NEXT_PROGRAM:
-                    # yes we have finished a cycle -> move to next program step WAIT_READY_TO_SET_PROGRAM
+                    # yes we have finished a cycle -> move to next program step SET_PROGRAM_ON_MACHINE
                     self.set_state(self.move_seqence_step(+1))
 
-                case SPSStates.WAIT_READY_TO_SET_PROGRAM:
-                    if self.dev.is_machine_ready():
-                        self.set_state(SPSStates.SET_PROGRAM_ON_MACHINE)
-                    else:
-                        sleep(self._throttle_pause)  # throttle polling
+                #case SPSStates.WAIT_READY_TO_SET_PROGRAM:
+                #    self.set_state(SPSStates.SET_PROGRAM_ON_MACHINE)
 
                 case SPSStates.SET_PROGRAM_ON_MACHINE:
                     #t0 = perf_counter()
@@ -811,13 +809,15 @@ class SPSStateMachine(SPSStateMachineBase):
             print(f"Move program step to {self.sequence_pos} with program no {self.next_program_no}")
             self.last_counter_ax1 = self.counter_ax1
             # next welding to be prepared
-            return SPSStates.WAIT_READY_TO_SET_PROGRAM
+            #return SPSStates.WAIT_READY_TO_SET_PROGRAM
+            return SPSStates.SET_PROGRAM_ON_MACHINE
 
 
     def reset_seqence(self) -> None:
         self.sequence_pos = 0
         self.next_program_no = self.program_sequence[self.sequence_pos]
-        self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
+        #self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
+        self.set_state(SPSStates.SET_PROGRAM_ON_MACHINE)
 
 
     # --- locked production loop ---
@@ -826,14 +826,11 @@ class SPSStateMachine(SPSStateMachineBase):
             match self.state:
 
                 case SPSStates.START: # locked
-                    if self.dev.is_machine_ready():
-                        self.unlock_machine()
-                        self._machine_locked = self.dev.read_machine_lock_status()
-                        self.set_state(SPSStates.INIT)
-                    else:
-                        sleep(self._throttle_pause)  # throttle polling
+                    self.lock_machine()
+                    self.set_state(SPSStates.INIT)
 
                 case SPSStates.INIT:
+                    self._machine_locked = self.dev.read_machine_lock_status()
                     self.counter_base_ax1 = self.dev.read_axis_counter(1)
                     self.program_no = self.dev.read_program_no()
                     self.counter_ax1 = self.counter_base_ax1
@@ -844,9 +841,8 @@ class SPSStateMachine(SPSStateMachineBase):
                     print(f"Next program on sequence on {self.sequence_pos}: {self.next_program_no}")
                     if self.next_program_no != self.program_no:
                         self.program_no = self.next_program_no  # to avoid blitting a -1 on UI
-                    self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
-                    #else:
-                    #    self.set_state(SPSStates.SHOW_PROGRAM_STEP)
+                    #self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
+                    self.set_state(SPSStates.SET_PROGRAM_ON_MACHINE)
 
                 case SPSStates.SHOW_PROGRAM_STEP:
                     print(f"Program step: {self.sequence_pos} of {len(self.program_sequence)}")
@@ -856,12 +852,22 @@ class SPSStateMachine(SPSStateMachineBase):
 
                 case SPSStates.SYNC_ON_TOGGLE_BIT:
                     _do_pause = True
+                    if self._machine_locked:
+                        self.unlock_machine()  # make sure we are not locked here
                     if self.dev.is_toggle_bit_changed():
-                        self.set_state(SPSStates.WAIT_MACHINE_READY)
+                        #self.set_state(SPSStates.WAIT_MACHINE_READY)
+                        _machine_ready, _status = self.dev.is_machine_ready()
+                        self.lock_machine() # lock machine to have control for read measurements
+                        self.welding_status = _status  # store result
+                        self.counter_ax1 = self.dev.read_axis_counter(1)
+                        self.last_counter_ax1 = self.counter_ax1
+                        print(f"Counters: Ax1={self.counter_ax1}")
+                        self.set_state(SPSStates.CHECK_WELDING_RESULT)
                         _do_pause = False
                     if _do_pause:
                         sleep(self._throttle_pause)  # throttle polling
 
+                # UNUSED !!!
                 case SPSStates.WAIT_MACHINE_READY:
                     _do_pause = True
                     _machine_ready, _status = self.dev.is_machine_ready()
@@ -876,26 +882,6 @@ class SPSStateMachine(SPSStateMachineBase):
                     if _do_pause:
                         sleep(self._throttle_pause)  # throttle polling
 
-                # !!! UNUSED !!!
-                case SPSStates.SYNC_ON_MACHINE_COUNTER:  # changed from counter to toggle bits
-                    _do_pause = True
-                    _machine_ready, _status = self.dev.is_machine_ready()
-                    if _machine_ready:
-                        #  Check if welding is done and read the result,
-                        #  then proceed to check if pass or failed.
-                        diffcount = self.counter_ax1 - self.last_counter_ax1
-                        if diffcount > 0:
-                            # welding completed
-                            self.lock_machine() # lock machine to have control for read measurements
-                            self.last_counter_ax1 = self.counter_ax1
-                            print(f"Counters: Ax1={self.counter_ax1}")
-                            ## read status again AFTER the counter has changed
-                            #_, _status = self.dev.is_machine_ready()
-                            self.welding_status = _status  # store result
-                            self.set_state(SPSStates.CHECK_WELDING_RESULT)
-                            _do_pause = False
-                    if _do_pause:
-                        sleep(self._throttle_pause)  # throttle polling
 
                 case SPSStates.CHECK_WELDING_RESULT:
                     # We do this task here to have quick feedback on UI before the
@@ -947,17 +933,14 @@ class SPSStateMachine(SPSStateMachineBase):
                 case SPSStates.FETCH_NEXT_PROGRAM:
                     # yes we have finished a cycle -> move to next program step
                     self.set_state(self.move_seqence_step(+1))
-                    # next is either PASSED or WAIT_READY_TO_SET_PROGRAM
+                    # next is either PASSED or SET_PROGRAM_ON_MACHINE
 
                 case SPSStates.PASSED:
                     print(f"Sequence PASSED")
                     self.set_state(SPSStates.STOP)
 
-                case SPSStates.WAIT_READY_TO_SET_PROGRAM:
-                    if self.dev.is_machine_ready():
-                        self.set_state(SPSStates.SET_PROGRAM_ON_MACHINE)
-                    else:
-                        sleep(self._throttle_pause)  # throttle polling
+                #case SPSStates.WAIT_READY_TO_SET_PROGRAM:
+                #    self.set_state(SPSStates.SET_PROGRAM_ON_MACHINE)
 
                 case SPSStates.SET_PROGRAM_ON_MACHINE:
                     #self.lock_machine()

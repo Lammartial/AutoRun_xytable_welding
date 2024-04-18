@@ -371,11 +371,15 @@ class BQStudioFileFlasher:
         """
 
         _log = getLogger(__name__, DEBUG)
+        _log.info(f"Flasher: {str(self)}")
         if self.firmware_file is not None:
-            if not self.battery.enable_full_access():
-                _log.error("Could not set battery to full access mode.")
-                raise CantUnsealBatteryError(self)
-            _log.info(f"Battery name: {self.battery.device_name()[0]} is unsealed and in full access mode.")
+            if "RECOVERY" not in (self.firmware_file.name.upper()):
+                if not self.battery.enable_full_access():
+                    _log.error("Could not set battery to full access mode.")
+                    raise CantUnsealBatteryError(self)
+                _log.info(f"Battery name: {self.battery.device_name()[0]} is unsealed and in full access mode.")
+            else:
+                _log.info(f"Battery recovery mode, do not check full access mode.")
             result = self.__process_file(is_file_validation=False)
             return result
         else:
