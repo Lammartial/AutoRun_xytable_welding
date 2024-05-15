@@ -177,7 +177,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
 
     def read_firmware_checksum(self, hexi: bool | str | None = None) -> Tuple[int | str, int | str, int | str]:
-        """Read the InstructionFlashSignature(), StaticDFSignature() and StaticChemDFSignature with 
+        """Read the InstructionFlashSignature(), StaticDFSignature() and StaticChemDFSignature with
         BlockAccess() which should be the unique checksum over all of our firmware and configuration.
 
         Args:
@@ -186,7 +186,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 Defaults to None.
 
         Returns:
-            Tuple[int | str, int | str]: checksum as integer (only 16bits used), or as hexifyed string 
+            Tuple[int | str, int | str]: checksum as integer (only 16bits used), or as hexifyed string
                 as the bytes come over the bus.
         """
 
@@ -1749,6 +1749,36 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         #return self.read_flash_block(0x4052, 14).decode()
         return self.read_flash_block_verified(0x4051, 14).decode()
         #return self._maybe_hexlify(self.read_flash_block_verified(0x4041, 32), True)  # verify with hex code
+
+
+    def write_device_name_block(self, device_name: str) -> bool:
+        """
+        Writes device name into Manufacturer info block.
+        Addresses:(0x04085 .. 0x4099 (21 bytes)
+
+        Args:
+            device_name (str): serial number (20 characters)
+
+        Returns:
+            bool: True - success, False - failed
+        """
+        assert(len(device_name) <= 20), ValueError('Device name length more then 20 characters.')
+        buffer = bytes(len(device_name)) + bytes(device_name, encoding="utf-8")
+        if len(buffer) < 21:
+            buffer += bytes(21-len(buffer))  # append \x00 bytes if less than 21
+        return self.write_flash_block(0x4085, buffer)
+
+
+    def read_device_name_block(self) -> str:
+        """
+        Reads device name from the Manufacturer info block (FLASH) to compare against write function above.
+        Addresses: A17-A30 (0x4085..0x4099)
+
+        Returns:
+            str: device name
+        """
+        return self.read_flash_block_verified(0x4085, 21).decode()
+
 
 
     def write_internal_use_indexing(self, index_byte: str) -> bool:
