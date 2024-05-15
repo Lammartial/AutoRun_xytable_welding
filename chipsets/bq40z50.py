@@ -1763,7 +1763,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             bool: True - success, False - failed
         """
         assert(len(device_name) <= 20), ValueError('Device name length more then 20 characters.')
-        buffer = bytes(len(device_name)) + bytes(device_name, encoding="utf-8")
+        buffer = pack("<b", len(device_name)) + bytes(device_name, encoding="utf-8")
         if len(buffer) < 21:
             buffer += bytes(21-len(buffer))  # append \x00 bytes if less than 21
         return self.write_flash_block(0x4085, buffer)
@@ -1778,7 +1778,6 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             str: device name
         """
         return self.read_flash_block_verified(0x4085, 21).decode()
-
 
 
     def write_internal_use_indexing(self, index_byte: str) -> bool:

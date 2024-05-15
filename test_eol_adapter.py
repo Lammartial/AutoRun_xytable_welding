@@ -105,6 +105,17 @@ def test_sha1_key_change(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3400):
     print(bat.change_authentication_key_cipher("CPPFqb90MIiM8T2FjVdV/w9kXEE8tIdPr0UCTGu+XHq5qwfV7V8W4Te5iLajWcIGUZXmyvr+IV+PAKc5sLDMHAvo4+FqD0ClJtKzN0ZTPPg=", 4))  # new key
     
 
+#--------------------------------------------------------------------------------------------------
+
+
+def test_change_device_name(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3400):
+    #psu.configure_supply(10.8, 0.1, 50, set_output=1)
+    print(bat.read_device_name_block()) # original
+    print(bat._maybe_hexlify(bat.read_flash_block_verified(0x4085, 21), True))  # original hex code
+    bat.write_device_name_block("RRC2020B-HLM")
+    print(bat.read_device_name_block())
+    print(bat._maybe_hexlify(bat.read_flash_block_verified(0x4085, 21), True))  # hex code
+    print("Check DeviceName():", bat.device_name())
 
 #--------------------------------------------------------------------------------------------------
 
@@ -159,7 +170,7 @@ if __name__ == "__main__":
     psu = M3400(f"{LINE_NETWORK}.51:30000")
 
     #psu_test(bat, gpio, psu)
-    test_sha1_key_change(bat, gpio, psu)
-
+    #test_sha1_key_change(bat, gpio, psu)
+    test_change_device_name(bat, gpio, psu)
 
 # END OF FILE
