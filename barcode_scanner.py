@@ -43,6 +43,7 @@ def create_barcode_scanner(resource_string: str) -> Eth2SerialDevice | SerialCom
     """
 
     if "SIMULATION" in resource_string:
+        # this is our production scan UDI simulation
         dev = Eth2SerialSimulationDevice(None,
             simulated_incomming=[
                 (3000, None),   # Pause
