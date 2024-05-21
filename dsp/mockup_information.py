@@ -24,7 +24,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2020B", "411828_RRC2020B_PCBA-Test_B"),
+            "test_program_id": ("PT-SQ_2020B", "411828_RRC2020B_PCBA-Test_C"),
             "part_number": ("PT-PN_2020B", "411828-05"),  # using the pcba part number PN
         },
         "COREPACK_TEST": {
@@ -54,7 +54,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2040B", "411829_RRC2040B_PCBA-Test_B"),
+            "test_program_id": ("PT-SQ_2040B", "411829_RRC2040B_PCBA-Test_C"),
             "part_number": ("PT-PN_2040B", "411829-05"),
         },
         "COREPACK_TEST": {
@@ -114,7 +114,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2040-2S", "412101_RRC2040-2S_PCBA-Test_B"),
+            "test_program_id": ("PT-SQ_2040-2S", "412101_RRC2040-2S_PCBA-Test_C"),
             "part_number": ("PT-PN_2040-2S", "412101-01"),
         },
         "COREPACK_TEST": {
@@ -144,7 +144,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2054-2S", "412099_RRC2054-2S_PCBA-Test_B"),
+            "test_program_id": ("PT-SQ_2054-2S", "412099_RRC2054-2S_PCBA-Test_C"),
             "part_number": ("PT-PN_2054-2S", "412099-01"),
         },
         "COREPACK_TEST": {
@@ -199,7 +199,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2020B", "411828_RRC2020B_PCBA-Test_B"),
+            "test_program_id": ("PT-SQ_2020B", "411828_RRC2020B_PCBA-Test_C"),
             "part_number": ("PT-PN_2020B", "411828-05"),  # using the pcba part number PN
         },
         "COREPACK_TEST": {
@@ -229,7 +229,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2054-2S", "412099_RRC2054-2S_PCBA-Test_B"),
+            "test_program_id": ("PT-SQ_2054-2S", "412099_RRC2054-2S_PCBA-Test_C"),
             "part_number": ("PT-PN_2054-2S", "412099-01"),
         },
         "COREPACK_TEST": {
@@ -241,6 +241,36 @@ PART_INFORMATION = {
             # Hard Pack (End-Of-Line) Test PRT IDs:
             "test_program_id": ("HP-SQ_2054-2-HM", "110325S_RRC2054-2-HM_EOL-Test_A"),
             "part_number": ("HP-PN_2054-2-HM", "110325S-01"),
+        }
+    },
+    #
+    # RRC2054-2-LM
+    #
+    "RRC2054-2-LM": {
+        "CELL_TEST": {
+            # Cell Test PRT IDs
+            "test_program_id": ("CT-SQ_2054-2S", "412080_RRC2054-2S_Cell-Test_B"),
+            "part_number": ("CT-PN_2054-2S", "412080-02"),
+        },
+        "CELL_WELDING": {
+            # Cell Welding PRT IDs:
+            "test_program_id": ("CW-SQ_2054-2S", "A"),
+            "part_number": ("CW-PN_2054-2S", "412080-02"),
+        },
+        "PCBA_TEST": {
+            # PCBA Test PRT IDs:
+            "test_program_id": ("PT-SQ_2054-2S", "412099_RRC2054-2S_PCBA-Test_C"),
+            "part_number": ("PT-PN_2054-2S", "412099-01"),
+        },
+        "COREPACK_TEST": {
+            # Core Pack Test PRT IDs:
+            "test_program_id": ("CP-SQ_2054-2S", "412080_RRC2054-2S_Corepack-Test_B"),
+            "part_number": ("CP-PN_2054-2S", "412080-02"),
+        },
+        "EOL_TEST": {
+            # Hard Pack (End-Of-Line) Test PRT IDs:
+            "test_program_id": ("HP-SQ_2054-2-LM", "110186S_RRC2054-2-LM_EOL-Test_A"),
+            "part_number": ("HP-PN_2054-2-LM", "110186S-04"),
         }
     },
     #
