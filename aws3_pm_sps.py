@@ -471,7 +471,7 @@ class SPSStateMachineBase(object):
         self.counter_base_ax1 = None
         self.counter_ax1 = None
         self.last_counter_ax1 = -1
-        self._throttle_pause = 0.125  # need to be negotiated with DSP
+        self._throttle_pause = 0.020  # need to be >=20ms according to AWS3 spec
         # Option to read measurements - need to be implemented in the derived classes as needed
         # e.g. the Rotating version does write files, the Production version writes to DB
         self.have_read_measurements = have_read_measurements
