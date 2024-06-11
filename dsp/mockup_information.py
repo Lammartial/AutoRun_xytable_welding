@@ -1,8 +1,8 @@
 #
 # Mockup Data for mockup_server and DSP SIMULATION interface
 #
- 
- 
+
+
 #
 # Parameters in the form key:value -> key:payload
 #  (z.B. “CT-SQ_2020B” mit dann der maximal 40-stelligen Payload in der PRT Description)
@@ -24,7 +24,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2020B", "411828_RRC2020B_PCBA-Test_B"),
+            "test_program_id": ("PT-SQ_2020B", "411828_RRC2020B_PCBA-Test_C"),
             "part_number": ("PT-PN_2020B", "411828-05"),  # using the pcba part number PN
         },
         "COREPACK_TEST": {
@@ -54,7 +54,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2040B", "411829_RRC2040B_PCBA-Test_B"),
+            "test_program_id": ("PT-SQ_2040B", "411829_RRC2040B_PCBA-Test_C"),
             "part_number": ("PT-PN_2040B", "411829-05"),
         },
         "COREPACK_TEST": {
@@ -114,7 +114,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2040-2S", "412101_RRC2040-2S_PCBA-Test_B"),
+            "test_program_id": ("PT-SQ_2040-2S", "412101_RRC2040-2S_PCBA-Test_C"),
             "part_number": ("PT-PN_2040-2S", "412101-01"),
         },
         "COREPACK_TEST": {
@@ -144,7 +144,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2054-2S", "412099_RRC2054-2S_PCBA-Test_B"),
+            "test_program_id": ("PT-SQ_2054-2S", "412099_RRC2054-2S_PCBA-Test_C"),
             "part_number": ("PT-PN_2054-2S", "412099-01"),
         },
         "COREPACK_TEST": {
@@ -199,7 +199,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2020B", "411828_RRC2020B_PCBA-Test_B"),
+            "test_program_id": ("PT-SQ_2020B", "411828_RRC2020B_PCBA-Test_C"),
             "part_number": ("PT-PN_2020B", "411828-05"),  # using the pcba part number PN
         },
         "COREPACK_TEST": {
@@ -229,7 +229,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2054-2S", "412099_RRC2054-2S_PCBA-Test_B"),
+            "test_program_id": ("PT-SQ_2054-2S", "412099_RRC2054-2S_PCBA-Test_C"),
             "part_number": ("PT-PN_2054-2S", "412099-01"),
         },
         "COREPACK_TEST": {
@@ -241,6 +241,36 @@ PART_INFORMATION = {
             # Hard Pack (End-Of-Line) Test PRT IDs:
             "test_program_id": ("HP-SQ_2054-2-HM", "110325S_RRC2054-2-HM_EOL-Test_A"),
             "part_number": ("HP-PN_2054-2-HM", "110325S-01"),
+        }
+    },
+    #
+    # RRC2054-2-LM
+    #
+    "RRC2054-2-LM": {
+        "CELL_TEST": {
+            # Cell Test PRT IDs
+            "test_program_id": ("CT-SQ_2054-2S", "412080_RRC2054-2S_Cell-Test_B"),
+            "part_number": ("CT-PN_2054-2S", "412080-02"),
+        },
+        "CELL_WELDING": {
+            # Cell Welding PRT IDs:
+            "test_program_id": ("CW-SQ_2054-2S", "A"),
+            "part_number": ("CW-PN_2054-2S", "412080-02"),
+        },
+        "PCBA_TEST": {
+            # PCBA Test PRT IDs:
+            "test_program_id": ("PT-SQ_2054-2S", "412099_RRC2054-2S_PCBA-Test_C"),
+            "part_number": ("PT-PN_2054-2S", "412099-01"),
+        },
+        "COREPACK_TEST": {
+            # Core Pack Test PRT IDs:
+            "test_program_id": ("CP-SQ_2054-2S", "412080_RRC2054-2S_Corepack-Test_B"),
+            "part_number": ("CP-PN_2054-2S", "412080-02"),
+        },
+        "EOL_TEST": {
+            # Hard Pack (End-Of-Line) Test PRT IDs:
+            "test_program_id": ("HP-SQ_2054-2-LM", "110186S_RRC2054-2-LM_EOL-Test_A"),
+            "part_number": ("HP-PN_2054-2-LM", "110186S-04"),
         }
     },
     #
@@ -274,5 +304,37 @@ PART_INFORMATION = {
         }
     },
 }
- 
+
+
+#--------------------------------------------------------------------------------------------------
+#
+#  To enable product label printing while bypassing the MES
+#
+#--------------------------------------------------------------------------------------------------
+#
+# NOTE: all column names come from MES -> Bartender interface
+#
+LABEL_PRINTING = {
+    #
+    # RRC2040B
+    #
+    "RRC2040B": {
+        "enable": True,  # set to True to trigger a label print file (.dat) written into unc path
+        #"unc_path": "//sv-vn-bartender.rrcpowersolutions.com/bartender-input/batterylabel/",  # slashes / will be transformed by Path() into backslashes on use
+        "unc_path": "./",  # DEBUG
+        "file_content": [  # list of possible label file row entries - at least one
+            {
+                "include_this": True,  # set to True if this set is to be included into label file as a row
+                "PRINTERNAME": "PRN-2000-1_A05-SINGLEBOX",  # hardcoded
+                "LABELFILE": "SINGLEBOXLABEL.BTW", # hardcoded
+                "MATNR": None,       # replaced by part number
+                "MATNAME": None,
+
+            },
+        ]
+    },
+    # ...
+
+}
+
 # END OF FILE
