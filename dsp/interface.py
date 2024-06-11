@@ -9,7 +9,7 @@ from typing import Tuple, List
 import json
 import requests
 import ast
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from time import sleep
 from random import random
@@ -170,7 +170,7 @@ class DspInterface:
             _log.debug(f"Result to send: {result}")
             response = requests.post(f"{self.API_BASE_URL}/REPORT_TEST_RESULT", json=result)
             _log.debug(response)
-            
+
             if response.status_code not in [200, 202]:
                 _log.warning(ast.literal_eval(response.content))
                 #_log.debug(response.content.encode("latin-1", "backslashreplace").decode("unicode-escape"))
@@ -258,7 +258,7 @@ class DspInterface:
         self.api["start_datetime"] = start_datetime
         self.api["execution_time"] = float(execution_time)
         self.api["udi"] = udi  # do not translate to None
-        self.api["serial_number"] = serial_number if (serial_number != "") else None  # meed to translate to None for DSP
+        self.api["serial_number"] = serial_number if (serial_number != "") else None  # need to translate to None for DSP
         result_list = self.load_result_list_from_json()
         result_list.append(self.api)
         remaining_list = self.send_result_of_testrun(result_list)
@@ -367,7 +367,7 @@ def test_interface(dsp: DspInterface):
     dsp.save_result_list_to_json(remaining_list)
 
 
-def test_teststand_line_interfaces(dsp: DspInterface, test_type: str, udi: str, line_id: int = 1, station_id: str = "PDPC1302", socket: int = 0):
+def _old_test_teststand_line_interfaces(dsp: DspInterface, test_type: str, udi: str, line_id: int = 1, station_id: str = "PDPC1302", socket: int = 0):
     ts_test_run = dsp.ts_get_parameter_for_testrun(test_type, station_id, line_id, socket)
     _log.info(f"TESTRUN: {ts_test_run}")
     if test_type == "EOL_TEST":
@@ -464,7 +464,7 @@ def test_teststand_line_interfaces(
 
     #----------------------
     # Leanpack TEST
-    if 1:
+    if 0:
         _test_run_3 = dsp_lean.ts_get_parameter_for_testrun("LEANPACK_TEST", "DUMMY_4", line_id, 0)
         _log.info(f"TESTRUN: {_test_run_3}")
 
@@ -489,8 +489,7 @@ def test_teststand_line_interfaces(
             _log.info(f"SERIAL: {serial}")
         # simulate test
         sleep(1)
-
-        # # send result to DSP (EOL like, so the serial has to be NONE ZERO!)
+         # # send result to DSP (EOL like, so the serial has to be NONE ZERO!)
         # #dsp_lean_res.api = dsp_lean_par.api.copy()
         # dsp_lean.ts_send_result_for_testrun(
         #     test_result,
@@ -499,6 +498,30 @@ def test_teststand_line_interfaces(
         #     _udi_to_send,
         #     serial
         # )
+
+    #----------------------
+    # EOL TEST
+    if 1:
+        _test_run_4 = dsp_eol.ts_get_parameter_for_testrun("EOL_TEST", "DUMMY_5", line_id, 0)
+        _log.info(f"TESTRUN: {_test_run_4}")
+
+        # ... more sockets ?
+        if 1:
+            _udi_to_send = ",".join([udi_cell, udi_pcba])
+            ok, serial = dsp_eol.ts_get_serial_number_for_udi(_udi_to_send)
+            _log.info(f"SERIAL from cell,pcba udi: {serial}")
+
+        # simulate test
+        sleep(1)
+        # # send result to DSP (EOL like, so the serial has to be NONE ZERO!)
+        # #dsp_lean_res.api = dsp_lean_par.api.copy()
+        dsp_eol.ts_send_result_for_testrun(
+            test_result,
+            datetime.now(UTC).isoformat(),
+            (2 + random()*3),  # simulate execution time
+            _udi_to_send,
+            serial
+        )
 
     # ...
 
@@ -544,39 +567,45 @@ if __name__ == "__main__":
 
     # define the JSON file for storage until data sent to MPI
     LOCAL_RESULT_FILE = Path(".") / ".." / "filestore" / "unsent_results.json"
+    print(LOCAL_RESULT_FILE.absolute())
 
     # define the route
-    #API_URL = "http://127.0.0.1:8000"  # our mockup-server
+    API_URL = "http://127.0.0.1:8000"  # our mockup-server
     #API_URL = "http://172.22.2.40"     # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
     #API_URL = "http://mes-dsp-de.rrc"  # Orbis DSP REST API @RRC
-    API_URL = "http://172.25.100.9"   # ports 9925..9929 Orbis DSP REST API @RRCVN
+    #API_URL = "http://172.25.100.9"   # ports 9925..9929 Orbis DSP REST API @RRCVN
 
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
-    #test_interface(dsp)
-    #test_teststand_line_interfaces(API_URL, udi_cell="1CELL000000020E2", udi_pcba="", test_result="P", line_id=2)    
-    #test_teststand_line_interfaces(API_URL, udi_cell="1CELL000000020F0", udi_pcba="", test_result="P", line_id=2)
-    test_teststand_line_interfaces(API_URL, udi_cell="1CELL0000001CD67", udi_pcba="", test_result="P", line_id=2)
-    #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000254", udi_pcba="1PCBA00000000254")
-    #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000255", udi_pcba="1PCBA00000000255", test_result="P")
-    #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000256", udi_pcba="1PCBA00000000256")
-    #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000257", udi_pcba="1PCBA00000000257")
 
-    # dsp_ws102 = DspInterface(f"{API_URL}:9925", None)
-    # dsp_ws103 = DspInterface(f"{API_URL}:9926", None)
-    # dsp_ws111 = DspInterface(f"{API_URL}:9927", None)
-    # dsp_ws113 = DspInterface(f"{API_URL}:9928", None)
-    # dsp_sps   = DspInterface(f"{API_URL}:9929", None)
+    for loops in range(10):
 
-    #test_teststand_interface(dsp_ws102, "CELL_TEST", "1CELL000000005A2")
+        #test_interface(dsp)
+        #test_teststand_line_interfaces(API_URL, udi_cell="1CELL000000020E2", udi_pcba="", test_result="P", line_id=2)
+        #test_teststand_line_interfaces(API_URL, udi_cell="1CELL000000020F0", udi_pcba="", test_result="P", line_id=2)
+        test_teststand_line_interfaces(API_URL, udi_cell="0CELL9000001CD67", udi_pcba="0PCBA9000001CD67", test_result="P", line_id=2)
+        #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000254", udi_pcba="1PCBA00000000254")
+        #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000255", udi_pcba="1PCBA00000000255", test_result="P")
+        #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000256", udi_pcba="1PCBA00000000256")
+        #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000257", udi_pcba="1PCBA00000000257")
 
-    #test_teststand_interface(dsp_ws102, "CELL_TEST", "1CELL163512635")
-    #test_teststand_interface(dsp_ws103, "PCBA_TEST", "1PCBA163512635")
-    #test_teststand_interface(dsp_ws111, "COREPACK_TEST", "1CELL163512635,1PCBA163512635")
-    # test_teststand_interface(dsp_ws111, "COREPACK_TEST", "1CELL0000000059F,1PCBA0000000058C")
-    #test_teststand_interface(dsp_ws113, "EOL_TEST", "7")
+        # dsp_ws102 = DspInterface(f"{API_URL}:9925", None)
+        # dsp_ws103 = DspInterface(f"{API_URL}:9926", None)
+        # dsp_ws111 = DspInterface(f"{API_URL}:9927", None)
+        # dsp_ws113 = DspInterface(f"{API_URL}:9928", None)
+        # dsp_sps   = DspInterface(f"{API_URL}:9929", None)
 
-    #test_welder_interface(dsp_sps, "1CELL0000000050F")  # blacklist
-    #test_welder_interface(dsp_sps, "1CELL000000005A2")  # pass
+        #test_teststand_interface(dsp_ws102, "CELL_TEST", "1CELL000000005A2")
 
-    #test_welder_interface(dsp_sps, "1CELL163512635")
+        #test_teststand_interface(dsp_ws102, "CELL_TEST", "1CELL163512635")
+        #test_teststand_interface(dsp_ws103, "PCBA_TEST", "1PCBA163512635")
+        #test_teststand_interface(dsp_ws111, "COREPACK_TEST", "1CELL163512635,1PCBA163512635")
+        # test_teststand_interface(dsp_ws111, "COREPACK_TEST", "1CELL0000000059F,1PCBA0000000058C")
+        #test_teststand_interface(dsp_ws113, "EOL_TEST", "7")
+
+        #test_welder_interface(dsp_sps, "1CELL0000000050F")  # blacklist
+        #test_welder_interface(dsp_sps, "1CELL000000005A2")  # pass
+
+        #test_welder_interface(dsp_sps, "1CELL163512635")
+
+
 # END OF FILE

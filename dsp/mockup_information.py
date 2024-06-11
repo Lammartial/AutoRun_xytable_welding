@@ -318,22 +318,40 @@ LABEL_PRINTING = {
     #
     # RRC2040B
     #
-    "RRC2040B": {
-        "enable": True,  # set to True to trigger a label print file (.dat) written into unc path
+    "100498-18": {
+        "enabled": True,  # set to True to trigger a label print file (.dat) written into unc path
         #"unc_path": "//sv-vn-bartender.rrcpowersolutions.com/bartender-input/batterylabel/",  # slashes / will be transformed by Path() into backslashes on use
-        "unc_path": "./",  # DEBUG
+        "unc_path": "./dsp/",  # DEBUG
         "file_content": [  # list of possible label file row entries - at least one
             {
                 "include_this": True,  # set to True if this set is to be included into label file as a row
                 "PRINTERNAME": "PRN-2000-1_A05-SINGLEBOX",  # hardcoded
                 "LABELFILE": "SINGLEBOXLABEL.BTW", # hardcoded
-                "MATNR": None,       # replaced by part number
-                "MATNAME": None,
-
+                "MATNR": None,       # will be replaced by the KEY above
+                "MATNAME": "RRC2040B",
+                "DATECODE": None,
+                "SERIAL": "99ZZ 01 9Z {01} {02}",  # {01}=00 {02}=S/N
+                "QUANTITY": int(1),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}'
+            },
+            {
+                "include_this": True,
+                "PRINTERNAME": "PRN-2000-1_A05-OUTERBOX",
+                "LABELFILE": "OUTERBOXLABEL.BTW", # hardcoded
+                "MATNR": None,
+                "MATNAME": "RRC2040B",
+                "DATECODE": None,
+                "SERIAL": "99ZZ 01 9Z {01} {02}",  # {01}=00 {02}=S/N
+                "QUANTITY": int(47),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}'
             },
         ]
     },
     # ...
+
+    # filename template: 99ZZ 01 9Z 00 0089 0050568936F31EEEB8D5BAD85F3A82C0 20240315092436.dat
+    #                    {product_serial  } { GUID                         } { datetime_str}.dat
+    #
 
 }
 

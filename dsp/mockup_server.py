@@ -19,7 +19,10 @@ import random
 import asyncio
 from fastapi import FastAPI, Response, Path, status
 from pydantic import BaseModel
+from pathlib import Path
 from datetime import datetime
+import uuid
+import pandas as pd
 from rrc.custom_logging import getLogger
 
 app = FastAPI()
@@ -172,7 +175,51 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
 
 @app.post("/REPORT_TEST_RESULT", response_model=Item, status_code=status.HTTP_202_ACCEPTED)
 async def report_test_result(item: Item):
+    global LABEL_PRINTING
+
     getLogger(__name__, 2).debug(f"Accepted item: {item}")
+
+    if "EOL_TEST" in item.test_type:
+        # check option to trigger print of product labels
+        #_pn_no_revision = item.part_number.split("-", maxsplit=1)[0]
+        _pn = item.part_number
+        if _pn in LABEL_PRINTING:
+            _lblprn = LABEL_PRINTING[_pn]
+            getLogger(__name__, 2).debug(f"Label printing: {_lblprn}")
+            if _lblprn["enabled"]:
+                # generally enabled, now create the rows for the trigger .dat file
+                _rows_for_datfile = []
+                _ts = datetime.now()  # local time !
+                _serial = None
+                for _ct in _lblprn["file_content"]:
+                    if not _ct["include_this"]:
+                        continue
+                    if _ct["MATNR"] is None:
+                        _ct["MATNR"] = _pn  # update the _pn
+                    _ct["DATECODE"] = _ts.strftime("%y%U")
+                    _serial = f"000000{str(item.serial_number)}"[-6:]  # expand with 0s and get right 6 chars
+                    _serial = _ct["SERIAL"].replace("{01}", _serial[:2])\
+                                                .replace("{02}", _serial[2:])
+                    _ct["SERIAL"] = _serial
+                    _da: str = _ct["CODEDATA"]
+                    _da = _da.replace("{01}", _ct["MATNR"])\
+                                .replace("{02}", _ct["MATNAME"])\
+                                .replace("{03}", _ct["DATECODE"])\
+                                .replace("{04}", _ct["SERIAL"].replace(" ",""))
+                    _ct["CODEDATA"] = _da
+                    # update back
+                    _rows_for_datfile.append(_ct)
+                # create the trigger file
+                df = pd.DataFrame(_rows_for_datfile).drop(columns=["include_this"])
+                if _serial:
+                    _fp = Path(_lblprn["unc_path"])
+                    if _fp.exists() and _fp.is_dir():
+                        _datfilename = _fp / f'{_serial.replace(" ", "_")}_{str(uuid.uuid1()).replace("-","").upper()}_{_ts.strftime("%Y%m%d%H%M%S")}.csv'
+                        #_datfilename = _fp / "test.csv"  # DEBUG
+                        print(_datfilename.absolute())
+                        df.to_csv(_datfilename, index=False, sep="\t")
+        else:
+            pass  # printing NOT enabled at all
     return item
 
 
