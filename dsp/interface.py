@@ -9,7 +9,7 @@ from typing import Tuple, List
 import json
 import requests
 import ast
-from datetime import datetime, UTC
+from datetime import datetime
 from pathlib import Path
 from time import sleep
 from random import random
@@ -517,7 +517,8 @@ def test_teststand_line_interfaces(
         # #dsp_lean_res.api = dsp_lean_par.api.copy()
         dsp_eol.ts_send_result_for_testrun(
             test_result,
-            datetime.now(UTC).isoformat(),
+            #datetime.now(UTC).isoformat(),  # only Python 3.11 and newer
+            datetime.utcnow().isoformat(),  # for Python 3.10
             (2 + random()*3),  # simulate execution time
             _udi_to_send,
             serial
