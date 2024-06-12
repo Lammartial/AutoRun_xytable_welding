@@ -18,6 +18,7 @@ from typing import List, Tuple
 import random
 import asyncio
 from fastapi import FastAPI, Response, Path, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from pathlib import Path
 from datetime import datetime
@@ -60,9 +61,19 @@ class UdiItem(BaseModel):
 from rrc.dsp.mockup_information import PART_INFORMATION, LABEL_PRINTING
 
 
+#--------------------------------------------------------------------------------------------------
+#  TEST
+#--------------------------------------------------------------------------------------------------
+
+
 @app.get("/")
 async def root():
     return {"message": "Hallo Welt!"}
+
+
+#--------------------------------------------------------------------------------------------------
+#  SERIAL NUMBER FETCHING
+#--------------------------------------------------------------------------------------------------
 
 
 @app.get("/GET_SERIAL_NUMBER_FOR_UDI", status_code=status.HTTP_200_OK)
@@ -88,6 +99,11 @@ async def get_serial(test_type, station_id, line_id, test_socket, udi, response:
     }
 
 
+#--------------------------------------------------------------------------------------------------
+#  SEND UDI
+#--------------------------------------------------------------------------------------------------
+
+
 @app.post("/SEND_UDI", status_code=status.HTTP_202_ACCEPTED)
 async def send_udi(item: UdiItem, response: Response):
     getLogger(__name__, 2).debug(f"Accepted UDI: {item}")
@@ -95,6 +111,12 @@ async def send_udi(item: UdiItem, response: Response):
         response.status_code = status.HTTP_406_NOT_ACCEPTABLE
         return { "error": "UDI blacklisted", "code": 8,
                  "udi": item.udi, "part_number": item.part_number }
+
+
+#--------------------------------------------------------------------------------------------------
+#  PARAMETER FETCHING
+#--------------------------------------------------------------------------------------------------
+
 
 # @app.get("/GET_PARAMETER_FOR_WELDING", status_code=status.HTTP_200_OK)
 # async def get_parameter_for_test_run(station_id, line_id):
@@ -173,6 +195,12 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
         #"serial_number": "",
     }
 
+
+#--------------------------------------------------------------------------------------------------
+#  RESULT REPORTING
+#--------------------------------------------------------------------------------------------------
+
+
 @app.post("/REPORT_TEST_RESULT", response_model=Item, status_code=status.HTTP_202_ACCEPTED)
 async def report_test_result(item: Item):
     global LABEL_PRINTING
@@ -187,16 +215,32 @@ async def report_test_result(item: Item):
             _lblprn = LABEL_PRINTING[_pn]
             getLogger(__name__, 2).debug(f"Label printing: {_lblprn}")
             if _lblprn["enabled"]:
-                # generally enabled, now create the rows for the trigger .dat file
+                # generally enabled
+
+                # # check if we have a manufacturer date lookup file
+                # _fp_lookup = Path(_lblprn["mdate_lookup_path"])
+                # if _fp_lookup.exists() and _fp_lookup.is_file():
+                #     _lookup_df = pd.read_csv(_fp_lookup)
+                # else:
+                #     _txt = f"Cannot open manufacturer date lookup file: '{_fp_lookup}'"
+                #     getLogger(__name__, 2).error(_txt)
+                #     return JSONResponse(
+                #         { "error": _txt, "code": 11},
+                #         status_code=status.HTTP_406_NOT_ACCEPTABLE
+                #         )
+
+                # now create the rows for the trigger .dat file
                 _rows_for_datfile = []
                 _ts = datetime.now()  # local time !
                 _serial = None
                 for _ct in _lblprn["file_content"]:
-                    if not _ct["include_this"]:
-                        continue
                     if _ct["MATNR"] is None:
                         _ct["MATNR"] = _pn  # update the _pn
-                    _ct["DATECODE"] = _ts.strftime("%y%U")
+                    _manufacture_date = datetime.now()  # DUMMY
+                    _ct["MANUFACTURE_DATE"] = _manufacture_date.strftime("%Y%m%d")
+                    _ct["WEEKDAY"] = "UMTWRFS"[int(_manufacture_date.strftime("%w"))]  # we use our own definition of weekday letters 0=sunday, ... , 6=saturday
+                    _ct["DATECODE"] = _manufacture_date.strftime("%y%U")
+
                     _serial = f"000000{str(item.serial_number)}"[-6:]  # expand with 0s and get right 6 chars
                     _serial = _ct["SERIAL"].replace("{01}", _serial[:2])\
                                                 .replace("{02}", _serial[2:])
@@ -207,10 +251,11 @@ async def report_test_result(item: Item):
                                 .replace("{03}", _ct["DATECODE"])\
                                 .replace("{04}", _ct["SERIAL"].replace(" ",""))
                     _ct["CODEDATA"] = _da
+                    _ct["CODEDATABIG"] = None
                     # update back
                     _rows_for_datfile.append(_ct)
                 # create the trigger file
-                df = pd.DataFrame(_rows_for_datfile).drop(columns=["include_this"])
+                df = pd.DataFrame(_rows_for_datfile)  #.drop(columns=["include_this"])
                 if _serial:
                     _fp = Path(_lblprn["unc_path"])
                     if _fp.exists() and _fp.is_dir():
@@ -233,5 +278,6 @@ async def report_test_result(item: Item):
 #     if item:
 #         results.update({"item": item})
 #     return results
+
 
 # END OF FILE

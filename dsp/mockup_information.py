@@ -320,11 +320,11 @@ LABEL_PRINTING = {
     #
     "100498-18": {
         "enabled": True,  # set to True to trigger a label print file (.dat) written into unc path
+        "mdate_lookup_path": "dummy.csv",  # lookup .csv/.tsv file for manufacturer dates
         #"unc_path": "//sv-vn-bartender.rrcpowersolutions.com/bartender-input/batterylabel/",  # slashes / will be transformed by Path() into backslashes on use
         "unc_path": "./dsp/",  # DEBUG
         "file_content": [  # list of possible label file row entries - at least one
             {
-                "include_this": True,  # set to True if this set is to be included into label file as a row
                 "PRINTERNAME": "PRN-2000-1_A05-SINGLEBOX",  # hardcoded
                 "LABELFILE": "SINGLEBOXLABEL.BTW", # hardcoded
                 "MATNR": None,       # will be replaced by the KEY above
@@ -332,19 +332,25 @@ LABEL_PRINTING = {
                 "DATECODE": None,
                 "SERIAL": "99ZZ 01 9Z {01} {02}",  # {01}=00 {02}=S/N
                 "QUANTITY": int(1),
-                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}'
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}',
+                "CODEDATABIG": None,  # stays empty
+                "MANUFACTURE_DATE": None, 	# will be set to the current date as we do not have access to DB here
+                "WEEKDAY": None,   # day of week of MANUFACTURE_DATE
             },
             {
-                "include_this": True,
                 "PRINTERNAME": "PRN-2000-1_A05-OUTERBOX",
-                "LABELFILE": "OUTERBOXLABEL.BTW", # hardcoded
+                "LABELFILE": "OUTERBOXLABEL.BTW",
                 "MATNR": None,
                 "MATNAME": "RRC2040B",
                 "DATECODE": None,
-                "SERIAL": "99ZZ 01 9Z {01} {02}",  # {01}=00 {02}=S/N
-                "QUANTITY": int(47),
-                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}'
+                "SERIAL": "99ZZ 01 9Z {01} {02}",
+                "QUANTITY": int(1),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}',
+                "CODEDATABIG": None,
+                "MANUFACTURE_DATE": None,
+                "WEEKDAY": None,
             },
+            # ...
         ]
     },
     # ...
