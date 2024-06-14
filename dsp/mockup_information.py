@@ -315,6 +315,46 @@ PART_INFORMATION = {
 # NOTE: all column names come from MES -> Bartender interface
 #
 LABEL_PRINTING = {
+
+    #
+    # RRC2054-2S
+    #
+    "110064S-08": {
+        "enabled": True,  # set to True to trigger a label print file (.dat) written into unc path
+        "mdate_lookup_path": "dummy.csv",  # lookup .csv/.tsv file for manufacturer dates
+        #"unc_path": "//sv-vn-bartender.rrcpowersolutions.com/bartender-input/batterylabel/",  # slashes / will be transformed by Path() into backslashes on use
+        "unc_path": "C:/bartender-out/",  # DEBUG
+        "file_content": [  # list of possible label file row entries - at least one
+            {
+                "PRINTERNAME": "PRN-2000-1_A11-HARDPACK",  # hardcoded
+                "LABELFILE": "HPLABEL.BTW", # hardcoded
+                "MATNR": None,       # will be replaced by the KEY above
+                "MATNAME": "RRC2054-2S",
+                "DATECODE": None,
+                "SERIAL": "542S 02 R2 {01} {02}",  # {01}=00 {02}=S/N
+                "QUANTITY": int(1),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}',
+                "CODEDATABIG": None,  # stays empty
+                "MANUFACTURE_DATE": None, 	# will be set to the current date as we do not have access to DB here
+                "WEEKDAY": None,   # day of week of MANUFACTURE_DATE
+            },
+            {
+                "PRINTERNAME": "PRN-2000-1_A12-SINGLEBOX",
+                "LABELFILE": "SBLABEL.BTW",
+                "MATNR": None,
+                "MATNAME": "RRC2054-2S",
+                "DATECODE": None,
+                "SERIAL": "542S 02 R2 {01} {02}",  # {01}=00 {02}=S/N
+                "QUANTITY": int(1),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}',
+                "CODEDATABIG": None,
+                "MANUFACTURE_DATE": None,
+                "WEEKDAY": None,
+            },
+            # ...
+        ]
+    },
+
     #
     # RRC2040B
     #
@@ -322,7 +362,7 @@ LABEL_PRINTING = {
         "enabled": True,  # set to True to trigger a label print file (.dat) written into unc path
         "mdate_lookup_path": "dummy.csv",  # lookup .csv/.tsv file for manufacturer dates
         #"unc_path": "//sv-vn-bartender.rrcpowersolutions.com/bartender-input/batterylabel/",  # slashes / will be transformed by Path() into backslashes on use
-        "unc_path": "./dsp/",  # DEBUG
+        "unc_path": "C:/bartender-out/",  # DEBUG
         "file_content": [  # list of possible label file row entries - at least one
             {
                 "PRINTERNAME": "PRN-2000-1_A05-SINGLEBOX",  # hardcoded
