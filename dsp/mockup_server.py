@@ -142,11 +142,11 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
     # set the product to test for mockup: "RRC2040B" or "RRC2020B"
     #_product_name = "RRC2020B"
     #_product_name = "RRC2020-DR"
-    _product_name = "RRC2040B"
+    #_product_name = "RRC2040B"
     #_product_name = "RRC2054S"
     #_product_name = "SPINEL"
     #_product_name = "RRC2040-2S"
-    #_product_name = "RRC2054-2S"
+    _product_name = "RRC2054-2S"
     #_product_name = "RRC2054-2-HM"
     #_product_name = "RRC2054-2-LM"
     #_product_name = "RRC2020B_SDNWAKEUP"
@@ -239,11 +239,10 @@ async def report_test_result(item: Item):
                     _manufacture_date = datetime.now()  # DUMMY
                     _ct["MANUFACTURE_DATE"] = _manufacture_date.strftime("%Y%m%d")
                     _ct["WEEKDAY"] = "UMTWRFS"[int(_manufacture_date.strftime("%w"))]  # we use our own definition of weekday letters 0=sunday, ... , 6=saturday
-                    _ct["DATECODE"] = _manufacture_date.strftime("%y%U")
-
+                    #_ct["DATECODE"] = _manufacture_date.strftime("%y%U")  # caldendarweek, first week begins with first sunday
+                    _ct["DATECODE"] = _manufacture_date.strftime("%y%W")  # caldendarweek, first week begins with first monday
                     _serial = f"000000{str(item.serial_number)}"[-6:]  # expand with 0s and get right 6 chars
-                    _serial = _ct["SERIAL"].replace("{01}", _serial[:2])\
-                                                .replace("{02}", _serial[2:])
+                    _serial = _ct["SERIAL"].replace("{01}", _serial[:2]).replace("{02}", _serial[2:])
                     _ct["SERIAL"] = _serial
                     _da: str = _ct["CODEDATA"]
                     _da = _da.replace("{01}", _ct["MATNR"])\
