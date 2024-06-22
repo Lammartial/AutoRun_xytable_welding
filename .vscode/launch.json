@@ -6,22 +6,37 @@
     "configurations": [
         {
             "name": "Python: Current File",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": true
         },
         {
-            "name": "Python: FastAPI",
-            "type": "python",
+            "name": "Python: Client (Interface)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "dsp/interface.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Python: Server (MockUp/FastAPI)",
+            "type": "debugpy",
             "request": "launch",
             "module": "uvicorn",
             "args": [
                 "rrc.dsp.mockup_server:app"
             ],
             "jinja": true,
-            "justMyCode": true
+            "justMyCode": true,
+        }
+    ],
+    "compounds": [
+        {
+        "name": "Mockup(Server)/Interface(Client)",
+        "configurations": ["Python: Server (MockUp/FastAPI)", "Python: Client (Interface)"],
+        "stopAll": true
         }
     ]
 }

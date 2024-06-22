@@ -14,6 +14,7 @@ from ipywidgets import widgets, interactive, jslink, link, Layout, Accordion, Te
 
 # our libs
 import rrc.manufacturing.db as mndb
+from rrc.manufacturing.db.query_welding import query_welding_measurements, normalize_json_records
 from rrc.manufacturing.db.query_teststand import query_measurements, query_uut_results
 from rrc.manufacturing.toolbox import find_measurement_steps, generate_steps_selection_list, \
         get_datarows_strings, generate_selection_accordion, get_datarows_based_on_selection, \
@@ -64,13 +65,16 @@ def process_measurements(meas_df: pd.DataFrame, title: str):
     print(len(_lst))
     print(_lst)
 
+
 #--------------------------------------------------------------------------------------------------
 
 
-if __name__ == "__main__":
+def test_teststand_queries() -> None:
+    global tsdb_engine, tsdb_engine_vn, tr2db_engine
+
     tsdb_engine, tsdb_session_maker = mndb.create_connection_teststand(server_host="172.22.2.42")   # RRC DE
     #tsdb_engine_vn, tsdb_session_maker = mndb.create_connection_teststand(server_host="172.25.100.42")   # RRC VN
-    #tr2db_engine, tr2db_session_maker = mndb.create_connection_trackr2(server_host="172.23.129.1")  # EMI/CN
+    tr2db_engine, tr2db_session_maker = mndb.create_connection_trackr2(server_host="172.23.129.1")  # EMI/CN
 
     _df_DE = query_measurements(tsdb_engine, date.fromisoformat("2023-06-01"), date.fromisoformat("2023-07-01"),
                 seqfile_pattern="%_Leanpack-Test%", part_number="110282S-02", limit=5000)
@@ -79,10 +83,39 @@ if __name__ == "__main__":
     #print(heinz[["INTRINSIC_VALUE", "STEP_ORDER", "UUT_SERIAL_NUMBER"]].head(10))
     process_measurements(_df_DE, "DE")
 
+    _df_EMI = query_measurements(tr2db_engine, date.fromisoformat("2022-09-20"), date.fromisoformat("2022-09-23"),
+                seqfile_pattern="%411826-02_A.seq", part_number="411826-02", limit=None)
 
-    #_df_EMI = query_measurements(tr2db_engine, date.fromisoformat("2022-09-20"), date.fromisoformat("2022-09-23"),
-    #            seqfile_pattern="%411826-02_A.seq", part_number="411826-02", limit=None)
+    process_measurements(_df_EMI, "EMI")
 
-    #process_measurements(_df_EMI, "EMI")
+
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+
+
+def process_welding_extraction(df):
+    df_M, df_wave = normalize_json_records(df, show_performance=True)
+
+
+def test_welding_queries():
+    global welddb_engine
+
+    welddb_engine, _ = mndb.create_connection_welding(server_host="172.22.2.42")  # DE Production
+    #welddb_engine, _ = mndb.create_connection_welding(server_host="172.25.100.42")  # VN Production
+
+    _start_date = datetime.combine(date.fromisoformat("2023-06-20"), datetime.min.time())
+    _end_date = datetime.combine(date.fromisoformat("2023-06-21"), datetime.min.time())
+    df_mjson = query_welding_measurements(welddb_engine, _start_date, _end_date, part_number="110282S-02", show_performance=True)
+    process_welding_extraction(df_mjson)
+
+
+#--------------------------------------------------------------------------------------------------
+
+
+if __name__ == "__main__":
+    #test_teststand_queries()
+    test_welding_queries()
+
 
 # END OF FILE
