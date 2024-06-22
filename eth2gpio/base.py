@@ -6,6 +6,7 @@ import errno
 import asyncio
 import time
 
+
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
@@ -113,58 +114,27 @@ class Eth2GPIODevice(object):
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close_connection(force=True)
 
-
     #----------------------------------------------------------------------------------------------
 
-    def send(self, msg: str,
-             timeout: float = 3.0,
-             pause_after_write: int | None = None,
-             encoding: str | None = "utf-8",
-             retries: int = 1) -> None:
-        """_summary_
-
-        Args:
-            msg (str): message string to send. Line teminator will be added.
-            timeout (float, optional): _description_. Defaults to 1.0.
-            encoding (str, optional): will be passed to write() function.
-            retries (int, optional): Number of retries - NOT YET IMPLEMENTED - . Defaults to 1 (no retry).
-
-        Returns:
-            bool: _description_
-        """
-
-        try:
-            self.connect_socket(timeout=timeout)
-            self.socket.sendall(bytes(msg, encoding) + self._termination_as_bytes)
-            if pause_after_write:
-                time.sleep(pause_after_write/1000)
-        except TimeoutError as ex:
-            # do NOT log, we need this exception being quiet when polling
-            raise
-        # we have exception handler to log this install in custom_logging
-        # except Exception as ex:
-        #     _log.exception(ex)
-        #     raise
-        finally:
-            self.close_connection()
-
-    #----------------------------------------------------------------------------------------------
-
-    def request(self, msg: bytes | None,
+    def request(self, payload: bytes | str | None,
                 timeout: float | None = 3.0,
                 pause_after_write: int | None = None,
-                limit: int = 0,
-                encoding: str | None = "utf-8",
+                encoding: str | None = None,
                 retries: int = 1) -> str:
-        """_summary_
+        """Do a send & response cycle using a simple API.
+        
+        First it is wrapping the message "msg" as a payload then send it to the bridge.
+        Then it waits until it receives a respinse or it does break with timeout or an exception.
+        
+        [0xAA],[length (n)],[data 1], ... ,[data n],[checksum]
 
         Args:
             msg (str): _description_
             timeout (float, optional): _description_. Defaults to 5.0.
             pause_after_write (int, optional):  Pause after writing the command for a request in milliseconds,
                 before reading and waiting the result. None disables it. Defaults to None.
-            limit (int, optional): _description_. Defaults to 0.
-            encoding (str, optional): if given will be used to decode() result from bytes. If None, bytes will be returned. Defaults to utf-8.
+            limit_received (int, optional): _description_. Defaults to 0.
+            encoding (str, optional): if given will be used to decode() result from bytes. If None, bytes will be returned. Defaults to None.
             retries (int, optional): Number of retries - NOT YET IMPLEMENTED - . Defaults to 1 (no retry).
 
         Returns:
@@ -172,29 +142,46 @@ class Eth2GPIODevice(object):
         """
         global DEBUG
 
+        API_HEADER_BYTE: int = 0xAA
+
         _log = getLogger(__name__, DEBUG)
+
+        _payload: bytes = bytes(payload) if isinstance(payload, (bytes, bytearray)) else (payload.encode(encoding="utf-8") if isinstance(payload, str) else bytes([]))
+        msg: bytes = bytes([API_HEADER_BYTE, len(payload)]) + _payload
+
         try:
             self.connect_socket(timeout=timeout)
             if msg:
-                self.socket.sendall(msg + self._termination_as_bytes)
+                self.socket.sendall(msg + self.calculate_checksum(msg).to_bytes(1, "little"))
                 if pause_after_write:
                     time.sleep(pause_after_write/1000)
             # now read data until termination or timeout
+            limit: int = 3  # API byte 0xAA, length of payload, then payload and checksum
             rcvdata = b""
-            while True:
+            while len(rcvdata) < limit:
                 _chunk = self.socket.recv(1024)
                 if not _chunk:
                     break
                 rcvdata += _chunk
-                if (limit) and (len(rcvdata) > limit):
-                    rcvdata = rcvdata[:limit]  # slice the received data
-                    break
-                if (rcvdata.rfind(self._termination_as_bytes) >= 0):
-                    break
+                if (len(rcvdata) < 3):
+                    continue
+                # check if the payload is longer than 0
+                # we should have an API header and a payload length 
+                if rcvdata[0] != API_HEADER_BYTE:
+                    raise ValueError(f"Wrong API byte. Expexted {API_HEADER_BYTE} but got {rcvdata[0]}")
+                limit = 3 + int(rcvdata[1])  # add payload length (was assumed as 0 at first round)
+                if len(rcvdata) < limit:
+                    continue  # received data not yet complete
+                # slice the received data as it could be more appended
+                rcvdata = rcvdata[:limit]
+                break
+            _cs = self.calculate_checksum(rcvdata[:-1])
+            if rcvdata[-1] != _cs:
+                raise ValueError(f"Checksum Error. Expexted {_cs} but got {rcvdata[-1]}")
             if encoding:
-                result = rcvdata.decode(encoding=encoding)
+                result = rcvdata[2:-1].decode(encoding=encoding)
             else:
-                result = rcvdata
+                result = rcvdata[2:-1]  # slice the payload as result
             _log.debug(f"Received: {result!r}")
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling
@@ -211,7 +198,7 @@ class Eth2GPIODevice(object):
     #----------------------------------------------------------------------------------------------
 
     @staticmethod
-    def calculate_checksum(data: bytes):
+    def calculate_checksum(data: bytes) -> int:
         """Calculates the checksum for transmissions to the NCD serial-to-I2C
         adapter. (https://ncd.io/serial-to-i2c-conversion/)
         Checksum = Sum of all the bytes inside "data" and then limit to lower 8 bits.
@@ -225,7 +212,8 @@ class Eth2GPIODevice(object):
 
 if __name__ == "__main__":
     from time import perf_counter
-
+    from binascii import hexlify
+    
     ## Initialize the logging
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
@@ -233,13 +221,23 @@ if __name__ == "__main__":
     tic = perf_counter()
 
     _log.info("Test synchronus receive (10s timeout):")
-    c = Eth2GPIODevice("192.168.69.77:9002")
+    #c = Eth2GPIODevice("192.168.69.77:2000")
+    c = Eth2GPIODevice("192.168.69.77:9003")
 
-    r = c.request(bytes([0x57, 1, 0, 17]), timeout=5, encoding=False)
-
-    print("RESULT:", r.replace("\r", "\n"))
-    #_log.info(r)
-
+    r = c.request(b'W' + bytes([1]), timeout=5, encoding=False)  # OK TEST 1
+    print(f"RESULT: {r!r}, {hexlify(r).decode()}")
+    r = c.request(b'R', timeout=5, encoding=False)
+    print(f"RESULT: {r!r}, {hexlify(r).decode()}")    
+    r = c.request(b'W' + bytes([0]), timeout=5, encoding=False)  # OK TEST 0
+    print(f"RESULT: {r!r}, {hexlify(r).decode()}")
+    r = c.request(b'W', timeout=5, encoding=False)  # FAIL test
+    print(f"RESULT: {r!r}, {hexlify(r).decode()}")
+    #r = c.request(b'W' + bytes([1]), timeout=5, encoding="utf-8")
+    #print(f"RESULT: {r}")
+    
+    r = c.request(b'R', timeout=5, encoding=False)
+    print(f"RESULT: {r!r}, {hexlify(r).decode()}")
+    
     #_log.info("Test asynchronus receive (CRTL-C or scan to stop):")
     #asyncio.run(test_async_request())
 
