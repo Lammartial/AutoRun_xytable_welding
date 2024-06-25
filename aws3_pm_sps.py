@@ -22,7 +22,7 @@ from rrc.dsp.interface import DspInterface, DspInterface_SIMULATION, DSPInterfac
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from rrc.dbcon import get_protocol_db_connector
-from rrc.barcode_scanner import create_barcode_scanner
+from rrc.barcode_scanner import create_barcode_scanner, decode_rrc_udi_label
 from pymodbus.exceptions import ModbusException
 from pymodbus import version as modbus_version
 from rrc.modbus.aws3 import AWS3Modbus, AWS3Modbus_DUMMY
@@ -1354,7 +1354,7 @@ class ProcessSPS(mp.Process):
                         if (_udi is None) or (SM.sequence_pos == 0) or self.scan_udi_force_restart:
                             # forward the UDI to the UI
                             _verify_udi = cmd["udi_scanned"]
-                            if "CELL" in _verify_udi:
+                            if "CELL" in _verify_udi:  # this is double check as the scans are qualified in the scan process right now
                                 _udi = _verify_udi
                                 self.welding_for_process_validation = False  # VALIDATION is stopped on any UDI scan
                                 self.response_queue.put({"validation_welding": False})  # clear UI
@@ -1460,9 +1460,19 @@ class ProcessScanner(mp.Process):
                     #print(f"{proc_name}:End")
                     #return
                 if _udi:
-                    msg = {"udi_scanned": _udi}
-                    #self.ui_queue.put(msg)  # this goes to the UI process
-                    self.sps_queue.put(msg)   # this goes to the SPS process
+                    # add a precheck if the UDI is a correct one before we send to the SPS
+                    # as this is a separate process, the workload is removed from SPS
+                    res, raw = decode_rrc_udi_label(_udi, pcba_and_cell_udi_tuple=False)
+                    if "CELL" in res:
+                        msg = {"udi_scanned": _udi}
+                        #self.ui_queue.put(msg)  # this goes to the UI process
+                        self.sps_queue.put(msg)   # this goes to the SPS process
+                    else:
+                        # we got a scrap UDI
+                        print(f"Wrong UDI scanned {_udi}. UDI is being rejected.")
+                        # we can try to inject a UI update which is accompanied with a sound,
+                        # but this costs SPS process time in the UI update task...
+                        self.ui_queue.put({"udi_rejected": _udi})
         else:
             # ********** Simulation Profile *************
             #while True:
