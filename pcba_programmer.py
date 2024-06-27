@@ -21,6 +21,7 @@ from winsound import PlaySound, SND_FILENAME
 
 from rrc.eth2i2c import I2CPort
 from rrc.i2cbus import BusMux, I2CMuxedBus
+from rrc.eth2gpio import RemoteGPIO
 from rrc.smbus import BusMaster
 from rrc.chipsets.bq import ChipsetTexasInstruments
 from rrc.chipsets.bq40z50 import BQ40Z50R1, BQ40Z50R2
@@ -117,7 +118,7 @@ class EmbeddedProgressBar():
 
     def hide(self) -> None:
         self.hidden = 1
-       
+
     def show(self) -> None:
         self.hidden = 0
 
@@ -143,7 +144,7 @@ class EmbeddedProgressBar():
 
     def close(self) -> None:
         self.hide()
-  
+
 #--------------------------------------------------------------------------------------------------
 
 PG_COLOR_PROCESS = "blue"
@@ -177,7 +178,7 @@ class MultiBQStudioFileFlasher(BQStudioFileFlasher):
 
 
     def check_if_pcba_connected(self) -> bool:
-        
+
         if self.battery.isReady():
             self._pcba_connected_counter += 1
             if self._pcba_connected_counter > self._PCBA_MAX_COUNTER:
@@ -234,6 +235,11 @@ class ProgrammingWorker(mp.Process):
         try:
             # create a progress fowrwarder
             progress_bar = EmbeddedProgressBar(self.q_ui, self.socket)
+            # this port is hardcoded as it would be too much to introduce another resource
+            # into the config.yaml just for the GPIOs of dedicated PCBA progrmming station
+            #fet_ctrl = RemoteGPIO(self.resource_str, "9002")  # 9001=UART1 pins, 9002=UART2 pins, 9003=I2C pins
+            #fet_ctrl.set_output(1)  # with the help of this we can switch the PCBA on/off
+
             # create flasher
             flasher = MultiBQStudioFileFlasher(
                 self.resource_str,
@@ -243,7 +249,7 @@ class ProgrammingWorker(mp.Process):
             )
             flasher.set_firmware_file_and_widgets(self.firmware_file, progress_bar)
             _log.info("Starting flasher %s:" % str(flasher))
-            result = flasher.process_file()        
+            result = flasher.process_file()
         except Exception as error:
             _log.error("Process file raised %s" % error)
             result = False
@@ -392,7 +398,7 @@ class WindowUI(object):
                 command=lambda slot=index, res=resource_str: self.q_cmd.put({
                     "start": slot, "resource": res,
                     "fw": self.PRODUCT_FIRMWARE_FILE,
-                    "chipset": self.PRODUCT_CHIPSET, 
+                    "chipset": self.PRODUCT_CHIPSET,
                     })
             )
             btn.grid(row=_row, column=1, ipady=0, sticky=tk.NSEW)
@@ -461,7 +467,7 @@ class WindowUI(object):
     #     return result, sock, self
 
     #------------------------------------------------------------------------------
-    
+
     def process_command_queue(self):
         global FIRMWARE_FP, AUTOSTART_PROGRAMMING, SIMULATE_PROGRAMMING
 
@@ -689,11 +695,11 @@ def _create_interfaces(simulation: None | str = None) -> StationConfiguration:
 
 if __name__ == '__main__':
     # need to initialize logger on load
-    
+
     print("=== PCBA Programming Dialog ===")
 
     parser = ArgumentParser(description="""
-                The PCBA programming tool can be used in-line using the line configuration or 
+                The PCBA programming tool can be used in-line using the line configuration or
                 override the product to be programmed by optional parameter. It uses a built-in configuration dictionary
                 which defines the filenames for regular firmware and recovery firmware.
                 """, formatter_class=RawDescriptionArgumentDefaultsHelpFormatter)

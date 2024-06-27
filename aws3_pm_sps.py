@@ -22,7 +22,7 @@ from rrc.dsp.interface import DspInterface, DspInterface_SIMULATION, DSPInterfac
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from rrc.dbcon import get_protocol_db_connector
-from rrc.barcode_scanner import create_barcode_scanner
+from rrc.barcode_scanner import create_barcode_scanner, decode_rrc_udi_label
 from pymodbus.exceptions import ModbusException
 from pymodbus import version as modbus_version
 from rrc.modbus.aws3 import AWS3Modbus, AWS3Modbus_DUMMY
@@ -1351,32 +1351,38 @@ class ProcessSPS(mp.Process):
                     print(f"{proc_name}: {cmd}")
                     if "udi_scanned" in cmd:
                         # check if we are NOT in the middle of a sequence or at start position:
-                        if _udi is None or (SM.sequence_pos == 0) or self.scan_udi_force_restart:
+                        if (_udi is None) or (SM.sequence_pos == 0) or self.scan_udi_force_restart:
                             # forward the UDI to the UI
                             _verify_udi = cmd["udi_scanned"]
-                            if "CELL" in _verify_udi:
+                            if "CELL" in _verify_udi:  # this is double check as the scans are qualified in the scan process right now
                                 _udi = _verify_udi
+                                self.welding_for_process_validation = False  # VALIDATION is stopped on any UDI scan
+                                self.response_queue.put({"validation_welding": False})  # clear UI
                                 self.response_queue.put({"udi_scanned": _udi})
                                 ok, _response = _dsp.send_udi_upfront(_udi)
                                 if ok:
                                     # need to reset the sequence
-                                    SM.close()
-                                    SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
-                                    self.welding_for_process_validation = False
-                                    self.response_queue.put({"validation_welding": False})
                                     answer = "OK"
                                 else:
+                                    # udi is not accepted and we are at a situation to allow a restart -> clear _udi
                                     _udi = None
                                     self.response_queue.put({"udi_not_confirmed": "MES rejects UDI"})
                                     print(f"Response from MES: {_response}")
                                     answer = "NOT OK"
+                                # let the SM be reconstructed to catch a change in sequence and/or part number
+                                SM.close()
+                                SM = None
                             else:
                                 # false UDI -> popup ?
-                                _udi = None
                                 self.response_queue.put({"udi_rejected": _udi})
+                                if SM is None:
+                                    _udi = None  # the SM was not created, we keep _udi cleared
+                                else:
+                                    # do NOT modify the _udi as it could be a scrap scan after a good one
+                                    pass
                                 answer = "NOT OK"
                         else:
-                            # we are in the middle of a sequence
+                            # we are in the middle of a sequence -> do not accept a UDI scan
                             answer = "NOT OK"
                     if "move_counter" in cmd:
                         if self.enable_udi_scan:
@@ -1396,8 +1402,6 @@ class ProcessSPS(mp.Process):
                     if "validation_welding" in cmd:
                         self.welding_for_process_validation = cmd["validation_welding"]
                         self.response_queue.put(cmd) # forward to UI
-                        #SM.close()
-                        #SM = None  # let the SM be reconstructed to catch a change in sequence and/or part number
                         answer = "OK"
                     self.command_queue.task_done()
                     if not answer:
@@ -1456,9 +1460,19 @@ class ProcessScanner(mp.Process):
                     #print(f"{proc_name}:End")
                     #return
                 if _udi:
-                    msg = {"udi_scanned": _udi}
-                    #self.ui_queue.put(msg)  # this goes to the UI process
-                    self.sps_queue.put(msg)   # this goes to the SPS process
+                    # add a precheck if the UDI is a correct one before we send to the SPS
+                    # as this is a separate process, the workload is removed from SPS
+                    res, raw = decode_rrc_udi_label(_udi, pcba_and_cell_udi_tuple=False)
+                    if "CELL" in res:
+                        msg = {"udi_scanned": _udi}
+                        #self.ui_queue.put(msg)  # this goes to the UI process
+                        self.sps_queue.put(msg)   # this goes to the SPS process
+                    else:
+                        # we got a scrap UDI
+                        print(f"Wrong UDI scanned {_udi}. UDI is being rejected.")
+                        # we can try to inject a UI update which is accompanied with a sound,
+                        # but this costs SPS process time in the UI update task...
+                        self.ui_queue.put({"udi_rejected": _udi})
         else:
             # ********** Simulation Profile *************
             #while True:
@@ -1489,7 +1503,7 @@ if __name__ == '__main__':
     parser.add_argument("--store", action="store_true", help="Enable read and store of measurements. If development (no UDI), data is store to YAML files.")
     parser.add_argument("--filepath", action="store", default=_default_yaml_filepath_, help="Path and filename prefix for file stored measurements")
     parser.add_argument("--simulate_scan", action="store_true", help="Set a product for simulated UDI scan interface.")
-    parser.add_argument("--block_scan_udi", action="store_false", help="To block scan UDI in the middle of a sequence. If false scn UDI at any time resets sequence to start.")
+    parser.add_argument("--block_scan_udi", action="store_false", help="To block scan UDI in the middle of a sequence. If false scanning UDI at any time resets sequence to start.")
 
     args = parser.parse_args()
 
