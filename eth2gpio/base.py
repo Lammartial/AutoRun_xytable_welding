@@ -114,7 +114,17 @@ class Eth2GPIODevice(object):
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close_connection(force=True)
 
-    #----------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------
+
+    @staticmethod
+    def calculate_checksum(data: bytes) -> int:
+        """Calculates the checksum for transmissions to the NCD serial-to-I2C
+        adapter. (https://ncd.io/serial-to-i2c-conversion/)
+        Checksum = Sum of all the bytes inside "data" and then limit to lower 8 bits.
+        """
+        return sum(data) & 0xFF
+    
+#----------------------------------------------------------------------------------------------
 
     def request(self, payload: bytes | str | None,
                 timeout: float | None = 3.0,
@@ -197,13 +207,7 @@ class Eth2GPIODevice(object):
 
     #----------------------------------------------------------------------------------------------
 
-    @staticmethod
-    def calculate_checksum(data: bytes) -> int:
-        """Calculates the checksum for transmissions to the NCD serial-to-I2C
-        adapter. (https://ncd.io/serial-to-i2c-conversion/)
-        Checksum = Sum of all the bytes inside "data" and then limit to lower 8 bits.
-        """
-        return sum(data) & 0xFF
+  
 
 
 #--------------------------------------------------------------------------------------------------
