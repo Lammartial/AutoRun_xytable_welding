@@ -156,9 +156,9 @@ class MultiBQStudioFileFlasher(BQStudioFileFlasher):
     def __init__(self, resource_str: str, socket: int, chipset: str = "BQ40Z50R1",  simulate_programming: bool = False) -> None:
         bat = None
         if not simulate_programming:
-            # create the interface
-            i2cbus = I2CPort(resource_str)
-            smbus = BusMaster(i2cbus, retry_limit=1, verify_rounds=3, pause_us=50)
+            # create the interface (we keep it as it is more readable for GPIO than self.battery.bus.i2c.gpio_xxx())
+            self.i2cbus = I2CPort(resource_str)
+            smbus = BusMaster(self.i2cbus, retry_limit=1, verify_rounds=3, pause_us=50)
             if chipset == "BQ40Z50R1":
                 bat = BQ40Z50R1(smbus)
         super().__init__(bat,
@@ -235,11 +235,12 @@ class ProgrammingWorker(mp.Process):
         try:
             # create a progress fowrwarder
             progress_bar = EmbeddedProgressBar(self.q_ui, self.socket)
+            
             # this port is hardcoded as it would be too much to introduce another resource
             # into the config.yaml just for the GPIOs of dedicated PCBA progrmming station
             #fet_ctrl = RemoteGPIO(self.resource_str, "9002")  # 9001=UART1 pins, 9002=UART2 pins, 9003=I2C pins
             #fet_ctrl.set_output(1)  # with the help of this we can switch the PCBA on/off
-
+            
             # create flasher
             flasher = MultiBQStudioFileFlasher(
                 self.resource_str,
@@ -248,6 +249,10 @@ class ProgrammingWorker(mp.Process):
                 simulate_programming=self.simulate_programming,  # this allows to test without programmer
             )
             flasher.set_firmware_file_and_widgets(self.firmware_file, progress_bar)
+            
+            # FET_CTRL            
+            #if flasher.i2cbus: flasher.i2cbus.gpio_write_output(12, 1)  # use the correct GPIO pin here
+
             _log.info("Starting flasher %s:" % str(flasher))
             result = flasher.process_file()
         except Exception as error:

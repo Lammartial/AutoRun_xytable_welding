@@ -313,6 +313,52 @@ class I2CPort(I2CBase):
         return list(rx_payload)
 
 
+    def gpio_write_output(self, port_pin: int, value: int) -> bool:
+        """Allows to change a preconfigured, valid output pin's value.
+        
+        RRC API specific function only !
+
+        Args:
+            value (int): Set the output to 0 or 1.
+            
+        Returns:
+            bool: good or not
+        """
+
+        if not self.interface_is_rrc:
+            # just ignore it so that you could use this function with NCD 
+            # board or with ours using same code!
+            return False
+        
+        tx_payload = bytes([0xCF]) + b'W' \
+                        + int(port_pin).to_bytes(1, 'little') \
+                        + int(value & 0x01).to_bytes(1, 'little')  # only lowbyte
+        rx_payload = self.__data_exchange(tx_payload)
+        self.__check_for_errors(rx_payload)
+        return (rx_payload[0] == NCD_COMMAND_SUCCESSFULL)
+
+    def gpio_read_input(self, port_pin: int) -> bool:
+        """Allows to change a preconfigured, valid output pin's value.
+        
+        RRC API specific function only !
+
+        Args:
+            value (int): Set the output to 0 or 1.
+            
+        Returns:
+            bool: good or not
+        """
+
+        if not self.interface_is_rrc:
+            # just ignore it so that you could use this function with NCD 
+            # board or with ours using same code!
+            return False
+        
+        tx_payload = bytes([0xCF]) + b'R' + int(port_pin).to_bytes(1, 'little')
+        rx_payload = self.__data_exchange(tx_payload)
+        self.__check_for_errors(rx_payload)
+        return int(rx_payload[0])
+
     # -------------------------------------------------------------------------
     # internal functions
     # -------------------------------------------------------------------------
@@ -322,10 +368,7 @@ class I2CPort(I2CBase):
         if len(payload) == 4:  # Error messages are always 4 bytes long
             if payload[0] == NCD_ERROR_CODE_HEADER and payload[3] == NCD_ERROR_CODE_FOOTER:
                 self.__handle_error_message(payload[1])
-            else:
-                return payload
-        else:
-            return payload
+        return payload
 
     def __handle_error_message(self, error_code):
         #
@@ -486,10 +529,18 @@ def test_interface(resource_str: str) -> None:
         print("Change clock frequency and timeout - RRC: ", str(dev.i2c_change_clock_frequency(55000, timeout_ms = 33)))
         #print("Change clock frequency - NCD: ", str(dev.i2c_change_clock_frequency_ncd(38000)))
         #dev.writeto(0x77, bytearray([0x02]))
-        for c in range(1, 9):
-            mux.setChannel(c)
-            print(f"Channel {c}:", str(dev.i2c_bus_scan()))
-        mux.setChannel(1)
+        
+        # for c in range(1, 9):
+        #     mux.setChannel(c)
+        #     print(f"Channel {c}:", str(dev.i2c_bus_scan()))
+        # mux.setChannel(1)
+
+        # GPIO subfunctions
+        dev.gpio_write_output(12, 0)
+        dev.gpio_read_input(12)
+        dev.gpio_write_output(12, 1)
+        dev.gpio_read_input(12)
+
     else:
         print(str(dev.i2c_bus_scan()))
     if bat.isReady():
@@ -511,9 +562,9 @@ if __name__ == "__main__":
 
     tic = perf_counter()
 
-    I2C_BRIDGE_RESOURCE_STR = "172.21.101.30:2101"  # HOM
+    #I2C_BRIDGE_RESOURCE_STR = "172.21.101.30:2101"  # HOM
     #I2C_BRIDGE_RESOURCE_STR = "172.25.102.20:2101"  # VN
-    #I2C_BRIDGE_RESOURCE_STR = "192.168.69.77:2101"
+    I2C_BRIDGE_RESOURCE_STR = "192.168.69.77:2101"
 
     test_interface(I2C_BRIDGE_RESOURCE_STR)
 
