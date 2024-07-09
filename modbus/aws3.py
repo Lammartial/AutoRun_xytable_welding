@@ -703,7 +703,7 @@ class AWS3Modbus_DUMMY(object):
         pass
 
     def read_program_name(self, axis: int) -> str:
-        return "DUMMY"
+        return "DUMMYPROG012345"
 
     def read_name(self) -> str:
         pass

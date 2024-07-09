@@ -132,6 +132,7 @@ class WindowUI(object):
 
         self.var_label_position = tk.StringVar(self.root, "")
         self.var_label_program = tk.StringVar(self.root, "")
+        self.var_label_program_name = tk.StringVar(self.root, "")
         self.var_label_part_number = tk.StringVar(self.root, "")
         self.var_label_sequence = tk.StringVar(self.root, "")
         self.var_label_sequence_revision = tk.StringVar(self.root, "")
@@ -212,6 +213,10 @@ class WindowUI(object):
             textvariable=self.var_label_program,
             justify="center", font=("-size", 32, "-weight", "bold"))
         label6.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
+        label7 = ttk.Label(self.mainframe,
+            textvariable=self.var_label_program_name,
+            justify="center", font=("-size", 8, "-weight", "bold"))
+        label7.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
 
         #print("BUTTON-LAYOUT:", style.layout('TButton'))
         #print("BUTTON-MAP:",    style.map("TButton"))
@@ -364,6 +369,11 @@ class WindowUI(object):
                     self.var_label_program.set(_txt if _txt != -1 else "")
                     #print("UI:UPDATE PROGRAM")
                     _do_update = True
+                if "program_name" in a:
+                    _txt = a["program_name"]
+                    self.var_label_program_name.set(_txt if _txt != -1 else "")
+                    #print("UI:UPDATE PROGRAM_NAME")
+                    _do_update = True
                 if "udi" in a:
                     if a["udi"] is None:
                         self.label_udi.config(background="gray", foreground="black")
@@ -468,6 +478,7 @@ class SPSStateMachineBase(object):
         self.sequence_pos = 0
         self.program_no = -1
         self.next_program_no = -1
+        self.program_name = None  # this is for human verification purposes
         self.counter_base_ax1 = None
         self.counter_ax1 = None
         self.last_counter_ax1 = -1
@@ -520,6 +531,23 @@ class SPSStateMachineBase(object):
 
     def is_ready_for_commands(self) -> bool:
         return (self.state not in [SPSStates.START, SPSStates.INIT])
+
+
+    #----------------------------------------------------------------------------------------------
+
+    def fetch_program_name(self) -> str:
+
+        def _combine_program_name(ax1, ax2) -> str:
+            return f"{ax1} {ax2}"
+
+        if self.welding_parameters and "program_name" in self.welding_parameters:
+            # we can build the program name from the parameters read
+            self.program_name = _combine_program_name(self.welding_parameters["program_name"][1], self.welding_parameters["program_name"][2])
+        else:
+            # we need to read the program name from the machine
+            self.program_name = _combine_program_name(self.dev.read_program_name(1), self.dev.read_program_name(2))
+
+        return self.program_name
 
     #----------------------------------------------------------------------------------------------
 
@@ -627,7 +655,7 @@ class SPSStateMachineRotating(SPSStateMachineBase):
 
                 case SPSStates.SHOW_PROGRAM_STEP:
                     print(f"Program step: {self.sequence_pos} of {len(self.program_sequence)}")
-                    print(f"Program set {self.program_no}")
+                    print(f"Program set {self.program_no} {self.program_name}")
                     self.set_state(SPSStates.SYNC_ON_TOGGLE_BIT)
 
                 case SPSStates.SYNC_ON_TOGGLE_BIT:
@@ -723,13 +751,17 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                             raise _MyBreak(f"PRG_NO: {self.program_no} != {self.next_program_no}")
                     else:
                         print(f"Program {self.program_no} already set.")
-                    if self.have_read_measurements:
+                    if 1:
+                    #if self.have_read_measurements:
                         # read the parameters of the current program
                         # to be able to write them on "SHOW_PROGRAM" step
                         print("Read parameters")
                         t0 = perf_counter()
                         self.welding_parameters = self.dev.fetch_welding_parameters()
                         print("P1:", perf_counter()-t0)
+                    # this uses either the already read parameters or just reads
+                    # the program names of both axis while machine is locked:
+                    self.fetch_program_name()
                     if self._machine_locked:
                         self.unlock_machine()
                     #print("T3:", perf_counter()-t0)
@@ -846,7 +878,7 @@ class SPSStateMachine(SPSStateMachineBase):
 
                 case SPSStates.SHOW_PROGRAM_STEP:
                     print(f"Program step: {self.sequence_pos} of {len(self.program_sequence)}")
-                    print(f"Program set {self.program_no}")
+                    print(f"Program set {self.program_no} {self.program_name}")
                     #self.set_state(SPSStates.SYNC_ON_MACHINE_COUNTER)
                     self.set_state(SPSStates.SYNC_ON_TOGGLE_BIT)
 
@@ -959,11 +991,15 @@ class SPSStateMachine(SPSStateMachineBase):
                     else:
                         #self.welding_parameters = None  # signal not to store ths set again
                         print(f"Program {self.program_no} already set.")
-                    if self.have_read_measurements:
+                    if 1:
+                    #if self.have_read_measurements:
                         # read the parameters of the current program
                         # to be able to write them on "SHOW_PROGRAM" step
                         print("Read parameters")
                         self.welding_parameters = self.dev.fetch_welding_parameters()
+                    # this uses either the already read parameters or just reads
+                    # the program names of both axis while machine is locked:
+                    self.fetch_program_name()
                     if self._machine_locked:
                         self.unlock_machine()
                     sleep(self._throttle_pause)  # throttle polling
@@ -1324,9 +1360,9 @@ class ProcessSPS(mp.Process):
                             self.welding_for_process_validation = False  # need to reset validation welding after finished all positions
                             _udi = None  # finished
                         case SPSStates.SET_PROGRAM_ON_MACHINE:
-                            self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no})  # update UI
+                            self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no, "program_name": "---"})  # update UI
                         case SPSStates.SHOW_PROGRAM_STEP:
-                            self.response_queue.put({"position": SM.sequence_pos, "program": SM.program_no})  # update UI
+                            self.response_queue.put({"position": SM.sequence_pos, "program": SM.program_no, "program_name": SM.program_name})  # update UI
                             # Note: could also be used to store the parameter set to database
 
                     # execute the state-machine
