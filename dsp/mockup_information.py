@@ -124,7 +124,7 @@ PART_INFORMATION = {
         },
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
-            "test_program_id": ("HP-SQ_2040-2S", "100559S_RRC2040-2S_EOL-Test_B"),
+            "test_program_id": ("HP-SQ_2040-2S", "100559S_RRC2040-2_EOL-Test_A"),
             "part_number": ("HP-PN_2040-2S", "100559S-11"),
         }
     },
@@ -356,19 +356,19 @@ LABEL_PRINTING = {
     },
 
     #
-    # RRC2040B
+    # RRC2040-2S
     #
-    "100498-18": {
+    "100559S-11": {
         "enabled": True,  # set to True to trigger a label print file (.dat) written into unc path
         "mdate_lookup_path": "dummy.csv",  # lookup .csv/.tsv file for manufacturer dates
         #"unc_path": "//sv-vn-bartender.rrcpowersolutions.com/bartender-input/batterylabel/",  # slashes / will be transformed by Path() into backslashes on use
         "unc_path": "C:/bartender-out/",  # DEBUG
         "file_content": [  # list of possible label file row entries - at least one
             {
-                "PRINTERNAME": "PRN-2000-1_A05-SINGLEBOX",  # hardcoded
-                "LABELFILE": "SINGLEBOXLABEL.BTW", # hardcoded
+                "PRINTERNAME": "PRN-2000-1_A11-A11-HARDPACK",  # hardcoded
+                "LABELFILE": "HPLABEL.BTW", # hardcoded
                 "MATNR": None,       # will be replaced by the KEY above
-                "MATNAME": "RRC2040B",
+                "MATNAME": "RRC2040-2S",
                 "DATECODE": None,
                 "SERIAL": "99ZZ 01 9Z {01} {02}",  # {01}=00 {02}=S/N
                 "QUANTITY": int(1),
@@ -378,10 +378,10 @@ LABEL_PRINTING = {
                 "WEEKDAY": None,   # day of week of MANUFACTURE_DATE
             },
             {
-                "PRINTERNAME": "PRN-2000-1_A05-OUTERBOX",
-                "LABELFILE": "OUTERBOXLABEL.BTW",
+                "PRINTERNAME": "PRN-2000-1_A12-SINGLEBOX",
+                "LABELFILE": "SINGLEBOXLABEL.BTW",
                 "MATNR": None,
-                "MATNAME": "RRC2040B",
+                "MATNAME": "RRC2040-2S",
                 "DATECODE": None,
                 "SERIAL": "99ZZ 01 9Z {01} {02}",
                 "QUANTITY": int(1),

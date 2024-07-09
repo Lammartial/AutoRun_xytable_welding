@@ -145,11 +145,12 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
     #_product_name = "RRC2040B"
     #_product_name = "RRC2054S"
     #_product_name = "SPINEL"
-    #_product_name = "RRC2040-2S"
-    _product_name = "RRC2054-2S"
+    _product_name = "RRC2040-2S"
+    #_product_name = "RRC2054-2S"
     #_product_name = "RRC2054-2-HM"
     #_product_name = "RRC2054-2-LM"
     #_product_name = "RRC2020B_SDNWAKEUP"
+   
 
     _mock = PART_INFORMATION[_product_name]
 
@@ -237,7 +238,7 @@ async def report_test_result(item: Item):
                     if _ct["MATNR"] is None:
                         _ct["MATNR"] = _pn  # update the _pn
                     _manufacture_date = datetime.now()  # DUMMY
-                    _ct["MANUFACTURE_DATE"] = _manufacture_date.strftime("%Y%m%d")
+                    _ct["MANUFACTURE_DATE"] =  _manufacture_date.strftime("%Y%m%d")
                     _ct["WEEKDAY"] = "UMTWRFS"[int(_manufacture_date.strftime("%w"))]  # we use our own definition of weekday letters 0=sunday, ... , 6=saturday
                     #_ct["DATECODE"] = _manufacture_date.strftime("%y%U")  # caldendarweek, first week begins with first sunday
                     _ct["DATECODE"] = _manufacture_date.strftime("%y%W")  # caldendarweek, first week begins with first monday
