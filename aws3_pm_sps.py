@@ -1360,7 +1360,7 @@ class ProcessSPS(mp.Process):
                             self.welding_for_process_validation = False  # need to reset validation welding after finished all positions
                             _udi = None  # finished
                         case SPSStates.SET_PROGRAM_ON_MACHINE:
-                            self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no, "program_name": "---"})  # update UI
+                            self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no, "program_name": ""})  # update UI
                         case SPSStates.SHOW_PROGRAM_STEP:
                             self.response_queue.put({"position": SM.sequence_pos, "program": SM.program_no, "program_name": SM.program_name})  # update UI
                             # Note: could also be used to store the parameter set to database
