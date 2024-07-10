@@ -57,9 +57,10 @@ _log = getLogger(__name__, DEBUG)
 # define the programmer's resource strings including ports
 # each line is reflected to a line in the dialog
 PROGRAMMERS = [
-    "172.25.101.7:2101",
-    "172.25.101.8:2101",
-    "172.25.101.9:2101",
+    #"172.25.101.7:2101",
+    #"172.25.101.8:2101",
+    #"172.25.101.9:2101",
+    "172.21.101.50:2101",
     # ... add more if needed ...
 ]
 
@@ -88,6 +89,16 @@ PRODUCT_LIST = {
         "recovery_firmware_file": "BQFS_3411842-05_B_Ametrie_RRC2040-2S_Recovery.bq.fs",
         "checksum": ("61D3", "5366"),   # as hexlify value
     },
+    "412099": {
+        "name": "RRC2054-2S_PCBA",
+        "chipset": "BQ40Z50R1",
+        "firmware_file": "BQFS_3412080-01_Galena_S_RRC2054-2_1.00.bq.fs",
+        "recovery_firmware_file": "BQFS_3412080-01_Galena_S_RRC2054-2_1.00_Recovery.bq.fs",
+        "checksum": None,
+    },
+
+    
+
 }
 
 # --------------------------------------------------------------------------------------------------

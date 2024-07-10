@@ -45,6 +45,18 @@ if __name__ == "__main__":
     smbus = BusMaster(i2cbus, retry_limit=1, verify_rounds=3, pause_us=50)
     bat = BQ40Z50R1(smbus)
 
+    print("PIN 35", i2cbus.gpio_read_input(35))
+    print("PIN 39", i2cbus.gpio_read_input(39))
+    i2cbus.gpio_write_output(12, 0)  # LED
+    print("PIN 35", i2cbus.gpio_read_input(35))
+    print("PIN 39", i2cbus.gpio_read_input(39))
+    i2cbus.gpio_write_output(12, 1)
+    print("PIN 35", i2cbus.gpio_read_input(35))
+    print("PIN 39", i2cbus.gpio_read_input(39))
+    i2cbus.gpio_write_output(32, 0)  # Power Enable
+    print("PIN 35", i2cbus.gpio_read_input(35))
+    i2cbus.gpio_write_output(32, 1)
+
     print("Device Name:", bat.device_name()[0])
     print("FW Version:", bat.firmware_version(hexi=True))
     print("Checksums as int/hex:", bat.read_firmware_checksum())
