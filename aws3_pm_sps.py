@@ -1290,8 +1290,8 @@ class ProcessSPS(mp.Process):
                     if self.production_mode: # and (not self.welding_for_process_validation):
                         # production version must be started by UDI scan
                         # and can run only once
-                        SM = SPSStateMachine(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
                         self.have_read_measurements = True  # overrides the command line parameter
+                        SM = SPSStateMachine(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
                         _store_to_db = True  # overrides the command line parameter
                         #_store_to_file = self.have_read_measurements  # depending on the command line
                     else:
