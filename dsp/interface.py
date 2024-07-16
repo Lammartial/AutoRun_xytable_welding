@@ -84,7 +84,13 @@ class DspInterface:
             # No production order or such alike
             _log.warning(response.json())
             return False, response.json()  # -> bool, str
-        runparams = response.json()
+        try:            
+            runparams = response.json()
+        except Exception as ex:
+            _log.error(f"Cannot get valid parameters for testrun from DSP server, please check connection. {ex}")
+            return False, None
+            #raise
+
         _log.debug(f"/GET_PARAMETER_FOR_TEST_RUN: {runparams}")
         # pre check the JSON (can be optimized for production)
         if not all(k in runparams for k in ("test_type", "station_id", "test_socket", "test_program_id", "part_number")):
