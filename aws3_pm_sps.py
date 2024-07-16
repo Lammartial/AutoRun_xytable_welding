@@ -1280,7 +1280,7 @@ class ProcessSPS(mp.Process):
         _store_to_file = False
         try:
             while True:
-                if not SM:
+                if SM is None:
                     _start_datetime = datetime.utcnow().isoformat()
                     _execution_start = perf_counter()  # we use _execution_time as start timestamp
                     # need to create a new State Machine to work with
@@ -1314,58 +1314,59 @@ class ProcessSPS(mp.Process):
                         "program": SM.next_program_no,
                         "udi": _udi,
                     })
-                else:
-                    # execute the state-machine if configured                    
-                    SM.do_one_loop()
+                
+                # execute the state-machine if configured                    
+                SM.do_one_loop()
 
-                    if _udi is None and self.enable_udi_scan:
-                        SM.lock_machine()
-                        #SM.set_state(SPSStates.LOCK_MACHINE)
-                    # check actions depending on state
-                    match SM.state:
-                        case SPSStates.CHECK_WELDING_RESULT:
-                            # KNAUP!
-                            if SM.welding_status["reject"] > 0:
-                                # update UI (red) while read waveforms taking a lot of time
-                                self.response_queue.put({"welding_check": "failed", "udi": _udi})
-                            if SM.welding_status["ok"] > 0:
-                                # update UI (green) while read waveforms taking a lot of time
-                                self.response_queue.put({"welding_check": "passed", "udi": _udi})
-                        case SPSStates.FAILED:
-                            # complete sequence has failed
-                            self.response_queue.put({"result": "failed", "udi": f"{_udi}\nSCAN NEXT UDI"})  # update UI (red)
-                            if _udi:
-                                _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)
-                            if self.have_read_measurements:
-                                print("FAILED: Store measurements enabled.")
-                                if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
-                                if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
-                            self.welding_for_process_validation = False  # need to reset validation welding after finished all positions or having a failed position in between
-                            _udi = None  # finished
-                        case SPSStates.POSITION_PASSED:
-                            # only to store a passed welding position's measurement
-                            print("WELD POSITION PASSED: Store measurements enabled.")
-                            if self.have_read_measurements:
-                                if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
-                                if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
-                        case SPSStates.PASSED:
-                            self.response_queue.put({"result": "passed", "udi": f"{_udi}\nSCAN NEXT UDI" })  # update UI (green)
-                            if _udi:
-                                if not self.welding_for_process_validation:
-                                    # the validation welding mode disables the result to MES sending
-                                    # which avoids having this part counted as "scrap" in our statistics
-                                    _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
-                            if self.have_read_measurements:
-                                print("PASSED: Store measurements enabled.")
-                                #if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
-                                #if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
-                            self.welding_for_process_validation = False  # need to reset validation welding after finished all positions
-                            _udi = None  # finished
-                        case SPSStates.SET_PROGRAM_ON_MACHINE:
-                            self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no, "program_name": ""})  # update UI
-                        case SPSStates.SHOW_PROGRAM_STEP:
-                            self.response_queue.put({"position": SM.sequence_pos, "program": SM.program_no, "program_name": SM.program_name})  # update UI
-                            # Note: could also be used to store the parameter set to database
+                if _udi is None and self.enable_udi_scan:
+                    SM.lock_machine()
+                    #SM.set_state(SPSStates.LOCK_MACHINE)
+    
+                # check actions depending on state
+                match SM.state:
+                    case SPSStates.CHECK_WELDING_RESULT:
+                        # KNAUP!
+                        if SM.welding_status["reject"] > 0:
+                            # update UI (red) while read waveforms taking a lot of time
+                            self.response_queue.put({"welding_check": "failed", "udi": _udi})
+                        if SM.welding_status["ok"] > 0:
+                            # update UI (green) while read waveforms taking a lot of time
+                            self.response_queue.put({"welding_check": "passed", "udi": _udi})
+                    case SPSStates.FAILED:
+                        # complete sequence has failed
+                        self.response_queue.put({"result": "failed", "udi": f"{_udi}\nSCAN NEXT UDI"})  # update UI (red)
+                        if _udi:
+                            _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)
+                        if self.have_read_measurements:
+                            print("FAILED: Store measurements enabled.")
+                            if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                            if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
+                        self.welding_for_process_validation = False  # need to reset validation welding after finished all positions or having a failed position in between
+                        _udi = None  # finished
+                    case SPSStates.POSITION_PASSED:
+                        # only to store a passed welding position's measurement
+                        print("WELD POSITION PASSED: Store measurements enabled.")
+                        if self.have_read_measurements:
+                            if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                            if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
+                    case SPSStates.PASSED:
+                        self.response_queue.put({"result": "passed", "udi": f"{_udi}\nSCAN NEXT UDI" })  # update UI (green)
+                        if _udi:
+                            if not self.welding_for_process_validation:
+                                # the validation welding mode disables the result to MES sending
+                                # which avoids having this part counted as "scrap" in our statistics
+                                _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
+                        if self.have_read_measurements:
+                            print("PASSED: Store measurements enabled.")
+                            #if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                            #if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
+                        self.welding_for_process_validation = False  # need to reset validation welding after finished all positions
+                        _udi = None  # finished
+                    case SPSStates.SET_PROGRAM_ON_MACHINE:
+                        self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no, "program_name": ""})  # update UI
+                    case SPSStates.SHOW_PROGRAM_STEP:
+                        self.response_queue.put({"position": SM.sequence_pos, "program": SM.program_no, "program_name": SM.program_name})  # update UI
+                        # Note: could also be used to store the parameter set to database
 
                     # execute the state-machine
                     #SM.do_one_loop()
@@ -1384,7 +1385,7 @@ class ProcessSPS(mp.Process):
                             SM.close()
                             SM = None
                         self.command_queue.task_done()
-                        break
+                        break  # terminate this loop -> end task and show termination message
                     if not SM.is_ready_for_commands():
                         continue
                     print(f"{proc_name}: {cmd}")
