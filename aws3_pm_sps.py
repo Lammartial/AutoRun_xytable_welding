@@ -1315,7 +1315,9 @@ class ProcessSPS(mp.Process):
                         "udi": _udi,
                     })
                 else:
-                    # execute the state-machine if configured
+                    # execute the state-machine if configured                    
+                    SM.do_one_loop()
+
                     if _udi is None and self.enable_udi_scan:
                         SM.lock_machine()
                         #SM.set_state(SPSStates.LOCK_MACHINE)
@@ -1366,7 +1368,8 @@ class ProcessSPS(mp.Process):
                             # Note: could also be used to store the parameter set to database
 
                     # execute the state-machine
-                    SM.do_one_loop()
+                    #SM.do_one_loop()
+
                 # check for incomming commands
                 if not self.command_queue.empty():
                     answer = None
