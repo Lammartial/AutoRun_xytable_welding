@@ -63,5 +63,6 @@ if __name__ == "__main__":
     print("Checksums as hexlifyed bytes:", bat.read_firmware_checksum(hexi=True))
     print("Checksums as hex comma separated:", bat.read_firmware_checksum(hexi=","))
     
+    i2cbus.gpio_write_output(32, 1)
 
 # END OF FILE

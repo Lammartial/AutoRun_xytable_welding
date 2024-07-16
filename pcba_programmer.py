@@ -8,15 +8,9 @@ import multiprocessing as mp
 import itertools
 import tkinter as tk
 import tkinter.ttk as ttk
-import json
-from fastapi import background
-import yaml
-from hashlib import md5
-from base64 import b64decode, b64encode
 from time import sleep, perf_counter
 from pathlib import Path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter
-from datetime import timezone, datetime
 from winsound import PlaySound, SND_FILENAME
 
 from rrc.eth2i2c import I2CPort
@@ -30,11 +24,6 @@ from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
 from rrc.dsp.interface import DspInterface, DspInterface_SIMULATION, DSPInterfaceError
 from rrc.ui.progress_bar import center as center_of_window
 from rrc.chipsets.bq_flasher import BQStudioFileFlasher
-
-# import SQL managing modules
-from sqlalchemy import text
-from sqlalchemy.orm import Session
-from rrc.dbcon import get_protocol_db_connector
 
 # multi tasking
 import asyncio
@@ -168,8 +157,8 @@ class MultiBQStudioFileFlasher(BQStudioFileFlasher):
         bat = None
         if not simulate_programming:
             # create the interface (we keep it as it is more readable for GPIO than self.battery.bus.i2c.gpio_xxx())
-            self.i2cbus = I2CPort(resource_str)
-            smbus = BusMaster(self.i2cbus, retry_limit=1, verify_rounds=3, pause_us=50)
+            self.i2c_gw = I2CPort(resource_str)
+            smbus = BusMaster(self.i2c_gw, retry_limit=1, verify_rounds=3, pause_us=50)
             if chipset == "BQ40Z50R1":
                 bat = BQ40Z50R1(smbus)
         super().__init__(bat,
@@ -181,7 +170,25 @@ class MultiBQStudioFileFlasher(BQStudioFileFlasher):
         # internals
         self._use_threading = False
         self._pcba_connected_counter: int = 0
-        self._PCBA_MAX_COUNTER = 50
+        self._PCBA_MAX_COUNTER: int = 50
+        self._pcba_power: int = 0        
+
+
+    def switch_pcba_power(self, onoff: int | bool) -> bool:
+        """Our RRC Flasher with OLIMEX board has a feature to switch the PCBA power ON and OFF.
+
+        Args:
+            onoff (int | bool): _description_
+
+        Returns:
+            bool: _description_
+        """
+        _v: int = 0 if onoff else 1  # inverted switching
+        if self.i2c_gw.gpio_write_output(32, _v):
+            self._pcba_power = int(onoff)
+            return True
+        else:
+            return False
 
 
     def set_pcba_connected(self):
@@ -189,7 +196,7 @@ class MultiBQStudioFileFlasher(BQStudioFileFlasher):
 
 
     def check_if_pcba_connected(self) -> bool:
-
+        self.switch_pcba_power(1)
         if self.battery.isReady():
             self._pcba_connected_counter += 1
             if self._pcba_connected_counter > self._PCBA_MAX_COUNTER:
@@ -198,7 +205,10 @@ class MultiBQStudioFileFlasher(BQStudioFileFlasher):
             self._pcba_connected_counter -= 1
             if self._pcba_connected_counter < 0:
                 self._pcba_connected_counter = 0
-        return self._pcba_connected_counter > int(self._PCBA_MAX_COUNTER / 2)
+        _is_connected = self._pcba_connected_counter > int(self._PCBA_MAX_COUNTER / 2)
+        if not _is_connected:
+            self.switch_pcba_power(0)
+        return _is_connected
 
 
     def set_firmware_file_and_widgets(self, _firmware_file: str | Path, progress_bar: EmbeddedProgressBar) -> None:
@@ -246,12 +256,7 @@ class ProgrammingWorker(mp.Process):
         try:
             # create a progress fowrwarder
             progress_bar = EmbeddedProgressBar(self.q_ui, self.socket)
-            
-            # this port is hardcoded as it would be too much to introduce another resource
-            # into the config.yaml just for the GPIOs of dedicated PCBA progrmming station
-            #fet_ctrl = RemoteGPIO(self.resource_str, "9002")  # 9001=UART1 pins, 9002=UART2 pins, 9003=I2C pins
-            #fet_ctrl.set_output(1)  # with the help of this we can switch the PCBA on/off
-            
+                        
             # create flasher
             flasher = MultiBQStudioFileFlasher(
                 self.resource_str,
@@ -259,17 +264,19 @@ class ProgrammingWorker(mp.Process):
                 chipset=self.chipset,
                 simulate_programming=self.simulate_programming,  # this allows to test without programmer
             )
-            flasher.set_firmware_file_and_widgets(self.firmware_file, progress_bar)
-            
-            # FET_CTRL            
-            #if flasher.i2cbus: flasher.i2cbus.gpio_write_output(12, 1)  # use the correct GPIO pin here
-
-            _log.info("Starting flasher %s:" % str(flasher))
+            #tic = perf_counter()
+            if flasher.switch_pcba_power(1):
+                sleep(0.25)  # let the PCBA powering up itself
+            flasher.set_firmware_file_and_widgets(self.firmware_file, progress_bar)            
+            #toc = perf_counter()
+            #_log.info(f"Need {toc - tic:0.4f} seconds")
+            _log.info(f"Starting flasher {str(flasher)}:")
             result = flasher.process_file()
+            flasher.switch_pcba_power(0)  # always power off the PCBA
         except Exception as error:
-            _log.error("Process file raised %s" % error)
+            _log.error(f"Process file raised {error}")
             result = False
-        finally:
+        finally:            
             #flasher.battery.bus.i2c.close()
             pass
         # send result by queue
@@ -493,12 +500,13 @@ class WindowUI(object):
             _play_soundfile = None
             if a:
                 if "start" in a:
+                    #self._log.info(f"got START")  # DEBUG
                     sock = int(a["start"])
                     resource_str = str(a["resource"])
                     fw = str(a["fw"])
                     chipset = str(a["chipset"])
                     # check if the flasher is not yet active
-                    if (sock not in self.futures) or (self.futures[sock] is None):
+                    if (sock not in self.futures) or (self.futures[sock] is None):                        
                         # # prepare the flasher
                         # self.flasher[sock].set_pcba_connected()
                         # self.flasher[sock].set_firmware_file_and_widgets(FIRMWARE_FP / fw, self.pg_bars[sock])
