@@ -35,15 +35,16 @@ class AWS3Modbus(ModbusClient):
     def __init__(self, connection_str: str, group_by_gateway: bool = True) -> None:
         super().__init__(connection_str, group_by_gateway=group_by_gateway, unit_address=None,
                          byte_order=Endian.Big, word_order=Endian.Little)
-        self.machine_name = None
-        self._last_modbus_access = perf_counter()
+        self.machine_name: str = None
+        self._last_modbus_access:float = perf_counter()
         self._wait_after_read = 0.0001
-        self._wait_after_write = 0.0001
-        self._wait_threshold_s = 0  # we start without having to wait before next modbus
-        self._welding_waveforms = None
-        self._welding_measurements = None
-        self._welding_parameters = None
-        self._toggle_bits = None
+        self._wait_after_write: float = 0.0001
+        self._wait_threshold_s:float = 0  # we start without having to wait before next modbus
+        self._welding_waveforms: dict = None
+        self._welding_measurements: dict = None
+        self._welding_parameters: dict = None
+        self._toggle_bits: int = None
+        self._verification_weld_resultbits: tuple = None
 
     def __str__(self) -> str:
         return f"AWS3 Welder Modbus connection on {repr(self.client)}"
@@ -53,8 +54,10 @@ class AWS3Modbus(ModbusClient):
 
     #----------------------------------------------------------------------------------------------
 
+
     def get_identification_str(self) -> str:
         return f"{self.machine_name}@{self._connection_str}"
+
 
     def _sync_modbus_timing(self, next_wait_s: float = None):
         """To generate a defined wait between two modbus accesses.
@@ -73,10 +76,12 @@ class AWS3Modbus(ModbusClient):
         else:  # set the standard (minimum wait)
             self._wait_threshold_s = self._wait_after_read
 
+
     def setup_device(self):
         self.set_machine_byteorder()  # switch byte order to default
         self.machine_name = self.read_name().strip()
         self._toggle_bits = self._read_toggle_bits()
+
 
     def set_machine_byteorder(self, bo: int = 3) -> None:
         """
@@ -92,9 +97,35 @@ class AWS3Modbus(ModbusClient):
         self.write_register(9999-1, bo, unit_address=3) # 3=default, 1=big
 
 
+    def verification_support_force_weld(self, result: str) -> None:
+        """This is a one shot verfictation helping function to simulate
+        a weld process for SPS verification purposes
+
+        after issuing this function, the toggle bit is changed once and
+        the result read is permanently overwritten. A new SPS instance
+        need to be created afterwards.
+
+        Args:
+            result (str): single letter P=pass, F=fail, anything else: abort.
+        """
+        self._verification_weld_resultbits = (
+            1,  # b0: ready
+            0,  # b1: operational_mode (0=auto, 1=step)
+            1 if result == "F" else 0,  # b2: reject ax1
+            0,  # b3: unused
+            1 if result == "F" else 0,  # b4: reject ax2
+            0,  # b5: hfi_device_fault
+            1 if result == "P" else 0,  # b6: ok
+            1 if result == "P" else 0,  # b7: ok
+        )
+        self._toggle_bits ^= 0x03  # flip the lower bits to trigger a toggle
+
+
     def is_machine_ready(self) -> tuple:
         self._sync_modbus_timing()
-        bits = self.read_coils(97-1, 8, unit_address=3)
+        # following includes a verification helper to simulate a weld process with
+        # a real machinge but without really doing the welding process (saves material and time)
+        bits = self.read_coils(97-1, 8, unit_address=3) if not self._verification_weld_resultbits else self._verification_weld_resultbits
         d = {
             "ready": 1 if bits[0] else 0,
             "operational_mode": 1 if bits[1] else 0,  # 0=auto, 1=step
@@ -626,6 +657,13 @@ class AWS3Modbus_DUMMY(object):
         self.axis_counter = -1
         self.program_no = -1
         self.toggle_bit_changed = False
+        self._verification_weld_resultbits: tuple = (
+            1,  # ready
+            0,  # operational_mode (0=auto, 1=step)
+            0,  # reject
+            0,  # hfi_device_fault
+            1,  # ok
+        )
         self.locked = False
 
     def __enter__(self):
@@ -651,12 +689,34 @@ class AWS3Modbus_DUMMY(object):
         self.toggle_bit_changed = False  # this is one-time trigger!
         return ret
 
+    def verification_support_force_weld(self, result: str) -> None:
+        self._verification_weld_resultbits = (
+            1,  # b0: ready
+            0,  # b1: operational_mode (0=auto, 1=step)
+            1 if result == "F" else 0,  # b2: reject ax1
+            0,  # b3: unused
+            1 if result == "F" else 0,  # b4: reject ax2
+            0,  # b5: hfi_device_fault
+            1 if result == "P" else 0,  # b6: ok
+            1 if result == "P" else 0,  # b7: ok
+        )
+        self.simulate_welding_process()
+
+
     def simulate_welding_process(self) -> None:
         self.toggle_bit_changed = True
         self.axis_counter += 1
 
     def is_machine_ready(self) -> tuple:
-        return True, {"ready": 1, "ok": 1, "reject": 0}
+        bits = self._verification_weld_resultbits
+        d = {
+            "ready": 1 if bits[0] else 0,
+            "operational_mode": 1 if bits[1] else 0,  # 0=auto, 1=step
+            "reject": 1 if (bits[2] or bits[4]) else 0,  # combine both axes: either one fails
+            "hfi_device_fault": 1 if bits[5] else 0,
+            "ok": 1 if (bits[6] and bits[7]) else 0  # combine both axes: both need to be good
+        }
+        return bits[0], d
 
     def read_machine_lock_status(self) -> tuple:
         return self.locked
@@ -696,7 +756,7 @@ class AWS3Modbus_DUMMY(object):
     def read_process_parameters(self, axis: int) -> dict:
         return {}
 
-    def read_waveform_data(self, axis: int) -> dict:
+    def read_waveform_data(self, axis: int, selection: tuple = ("I","U","P","s3","F","p")) -> dict:
         return {}
 
     def read_ext_measurement_status(self, axis: int) -> dict:
