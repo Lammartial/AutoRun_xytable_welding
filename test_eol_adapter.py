@@ -110,6 +110,10 @@ def test_sha1_key_change(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3400):
 
 def test_change_device_name(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3400):
     #psu.configure_supply(10.8, 0.1, 50, set_output=1)
+    #psu.configure_cc_mode(-0.5,2.0,10.8,0,-50,1)
+    psu.configure_cc_mode(+0.5,2.0,10.8,0,50,1) 
+    print(bat.is_sealed())
+    bat.enable_full_access()
     print(bat.read_device_name_block()) # original
     print(bat._maybe_hexlify(bat.read_flash_block_verified(0x4085, 21), True))  # original hex code
     bat.write_device_name_block("RRC2020B-HLM")
@@ -125,8 +129,8 @@ if __name__ == "__main__":
     _log = getLogger(__name__, DEBUG)
 
     #LINE_NETWORK = "172.25.101"  # VN line 1
-    #LINE_NETWORK = "172.25.102"  # VN line 2
-    LINE_NETWORK = "172.21.101"  # HOM Warehouse
+    LINE_NETWORK = "172.25.102"  # VN line 2
+    #LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
 
     #_old = decrypt("Tl9SBaHNYtJim7U4mx9UxWoMuZK0tXgLzNhg/GaY+giMH5nykWOFeuU9gkMNli0GMNWa8rS42IA9iXZUoNCI7yOT+YoDzIaURHVgpA9ShXU=", 7)
@@ -156,6 +160,11 @@ if __name__ == "__main__":
 
     # print("switch SENSE")
     gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
+    gpio.switch_to_psu_measurement()
+    print("INP2", gpio.read_input(2))
+    print(bat.isReady())
+    #gpio.switch_to_battery_tester_measurement()
+    #print(bat.isReady())
 
     # for i in range(50):
     #     gpio.switch_to_battery_tester_measurement()
