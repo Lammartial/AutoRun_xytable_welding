@@ -6,6 +6,7 @@ import itertools
 import tkinter as tk
 import tkinter.ttk as ttk
 import json
+import uuid
 from fastapi import background
 import yaml
 from hashlib import md5
@@ -54,6 +55,7 @@ PRODUCTION_MODE: int = None # is being overwritten by argument
 ENABLE_UDI_SCAN: int = None  # is being overwritten by argument
 SIMULATED_DSP_PRODUCT: str = None # is being overwritten by argument
 STORE_MEASUREMENTS: str = None # is being overwritten by argument
+VERIFICATION_SUPPORT: int = False  # is being overwritten by argument
 
 
 #--------------------------------------------------------------------------------------------------
@@ -121,7 +123,7 @@ def show_options(wg):
 class WindowUI(object):
 
     def __init__(self, command_queue: mp.JoinableQueue, response_queue: mp.Queue, title: str = "POOR MAN'S SPS"):
-        global DEBUG, PRODUCTION_MODE
+        global DEBUG, PRODUCTION_MODE, VERIFICATION_SUPPORT
 
         self._log = getLogger(__name__, DEBUG)
         self.q_cmd = command_queue
@@ -281,6 +283,30 @@ class WindowUI(object):
                 command=lambda: self.q_cmd.put({"reset_counter": 0}))
             reset_seq_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, sticky=tk.NSEW)
 
+        # add verification helper BUTTONS
+        if VERIFICATION_SUPPORT:
+            _row = next(row_itr)
+
+            style.configure('VForceScanUdi.TButton', foreground="blue")  #, borderwidth=4, focusthickness=3,)
+            style.map('VForceScanUdi.TButton', background=[("active","!pressed","white"), ("pressed", "lightblue")])
+            style.configure('VForcePass.TButton', foreground="green")  #, borderwidth=4, focusthickness=3,)
+            style.map('VForcePass.TButton', background=[("active","!pressed","white"), ("pressed", "lightblue")])
+            style.configure('VForceFail.TButton', foreground="red")
+            style.map('VForceFail.TButton', background=[("active","!pressed","white"), ("pressed", "lightblue")])
+
+            vforce_scan_udi_button = ttk.Button(self.mainframe, text="SIM SCAN UDI",  style="VForceScanUdi.TButton",
+                command=lambda: self.q_cmd.put({"udi_scanned": self.create_udi_for_scan_simulation()}))
+            vforce_scan_udi_button.grid(row=_row, column=0, columnspan=2, ipady=25, ipadx=5, sticky=tk.NSEW)
+
+            _row = next(row_itr)
+
+            vforce_pass_button = ttk.Button(self.mainframe, text="FORCE PASS WELD",  style="VForcePass.TButton",
+                command=lambda: self.q_cmd.put({"verification_force_weld": "P"}))
+            vforce_pass_button.grid(row=_row, column=0, ipady=25, ipadx=5, sticky=tk.NSEW)
+
+            vforce_fail_button = ttk.Button(self.mainframe, text="FORCE FAIL WELD",  style="VForceFail.TButton",
+                command=lambda: self.q_cmd.put({"verification_force_weld": "F"}))
+            vforce_fail_button.grid(row=_row, column=1, ipady=25, ipadx=5, sticky=tk.NSEW)
 
         # Some more information labels
         _row = next(row_itr)
@@ -313,6 +339,12 @@ class WindowUI(object):
             reset_seq_button.focus_set()
 
 
+    def create_udi_for_scan_simulation(self) -> str:
+        import string
+        import random
+        return "0CELLFFF" + ''.join(random.choices(string.digits, k=8))  #''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+
+
     def validation_welding_mode(self, enabled: bool) -> None:
         global PRODUCTION_MODE
 
@@ -327,11 +359,13 @@ class WindowUI(object):
                 #self.validation_welding_button.config(state="enabled")
                 self.validation_welding_button.grid()
 
+
     def validation_done(self) -> None:
         if PRODUCTION_MODE:
             self.skip_position_button.config(state="disabled")
             #self.validation_welding_button.config(state="disabled")
             self.root.focus_set()  # removes the focus from the button
+
 
     def process_command_queue(self):
         if not self.q_res.empty():
@@ -585,6 +619,7 @@ class SPSStateMachineBase(object):
         except ModbusException as ex:
             print(f"SPS-unlock: {ex}")
             pass  # ignore
+
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
@@ -1114,7 +1149,7 @@ class ProcessSPS(mp.Process):
 
     def __init__(self, command_queue: mp.JoinableQueue, response_queue: mp.Queue) -> None:
         mp.Process.__init__(self)
-        global DEBUG, ENABLE_UDI_SCAN, PRODUCTION_MODE, SIMULATED_DSP_PRODUCT, STORE_MEASUREMENTS, SCAN_UDI_FORCE_RESTART
+        global DEBUG, ENABLE_UDI_SCAN, PRODUCTION_MODE, SIMULATED_DSP_PRODUCT, STORE_MEASUREMENTS, SCAN_UDI_FORCE_RESTART, VERIFICATION_SUPPORT
 
         self._log = getLogger(__name__, DEBUG)
         self.command_queue = command_queue
@@ -1126,7 +1161,7 @@ class ProcessSPS(mp.Process):
         self.production_mode = PRODUCTION_MODE
         self.scan_udi_force_restart = SCAN_UDI_FORCE_RESTART
         self.welding_for_process_validation = False  # setting this to True hinders the SPS to transmit the result to MES service
-
+        self.verification_support = VERIFICATION_SUPPORT
 
     def collect_parameters(self, cfg: StationConfiguration, dsp: DspInterface) -> Tuple[List[int], str, str, str]:
         """ Read configuration from DSP + DB connection
@@ -1304,16 +1339,26 @@ class ProcessSPS(mp.Process):
                     # get configuration from DSP + DB connection
                     program_sequence, sequence_revision, resource_str, part_number, db_session_maker, line_id, station_id = self.collect_parameters(_cfg, _dsp)
                     print("Create new SPS state machine")
+                    if self.verification_support:
+                        print("VERIFICATION SUPPORT ENABLED!")
                     if self.production_mode: # and (not self.welding_for_process_validation):
                         # production version must be started by UDI scan
                         # and can run only once
                         self.have_read_measurements = True  # overrides the command line parameter
-                        SM = SPSStateMachine(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
+                        SM = SPSStateMachine(
+                            resource_str,
+                            program_sequence,
+                            have_read_measurements=self.have_read_measurements,
+                        )
                         _store_to_db = True  # overrides the command line parameter
                         #_store_to_file = self.have_read_measurements  # depending on the command line
                     else:
                         # we use a development state-machine here
-                        SM = SPSStateMachineRotating(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
+                        SM = SPSStateMachineRotating(
+                            resource_str,
+                            program_sequence,
+                            have_read_measurements=self.have_read_measurements,
+                        )
                         #_store_to_db = True  # DEBUG
                         _store_to_db = self.welding_for_process_validation
                         _store_to_file = self.have_read_measurements  # depending on the command line
@@ -1375,7 +1420,7 @@ class ProcessSPS(mp.Process):
                                 _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
                         if self.have_read_measurements:
                             print("PASSED: Store measurements enabled.")
-                            if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                            #if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
                             if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
                         self.response_queue.put({"result": "passed", "udi": f"{_udi}\nSCAN NEXT UDI" })  # update UI (green)
                         self.welding_for_process_validation = False  # need to reset validation welding after finished all positions
@@ -1461,6 +1506,12 @@ class ProcessSPS(mp.Process):
                         self.welding_for_process_validation = cmd["validation_welding"]
                         self.response_queue.put(cmd) # forward to UI
                         answer = "OK"
+                    if "verification_force_weld" in cmd:
+                        _forced_result = cmd["verification_force_weld"]
+                        if _udi:
+                            SM.dev.verification_support_force_weld(_forced_result)
+                        answer = "OK"
+
                     self.command_queue.task_done()
                     if not answer:
                         answer = f"NOT OK: UNKNOWN MESSAGE"
@@ -1562,15 +1613,19 @@ if __name__ == '__main__':
     parser.add_argument("--filepath", action="store", default=_default_yaml_filepath_, help="Path and filename prefix for file stored measurements")
     parser.add_argument("--simulate_scan", action="store_true", help="Set a product for simulated UDI scan interface.")
     parser.add_argument("--block_scan_udi", action="store_false", help="To block scan UDI in the middle of a sequence. If false scanning UDI at any time resets sequence to start.")
+    parser.add_argument("--verification", action="store_true", help="To support verification of SPS by providing buttons to force a PASS or FAIL weld.")
+
 
     args = parser.parse_args()
 
+    VERIFICATION_SUPPORT = 1 if args.verification else 0
     PRODUCTION_MODE = not args.development
-    ENABLE_UDI_SCAN = (PRODUCTION_MODE or args.simulate_scan)
+    ENABLE_UDI_SCAN = (PRODUCTION_MODE or args.simulate_scan) and not VERIFICATION_SUPPORT
     SIMULATE_UDI_SCAN = args.simulate_scan
     SIMULATED_DSP_PRODUCT = args.product
     STORE_MEASUREMENTS = args.filepath if args.store else None
     SCAN_UDI_FORCE_RESTART = not args.block_scan_udi
+
 
     p = None
     w = None
