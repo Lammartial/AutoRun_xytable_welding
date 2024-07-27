@@ -294,17 +294,17 @@ class WindowUI(object):
             style.configure('VForceFail.TButton', foreground="red")
             style.map('VForceFail.TButton', background=[("active","!pressed","white"), ("pressed", "lightblue")])
 
-            vforce_scan_udi_button = ttk.Button(self.mainframe, text="SIM SCAN UDI",  style="VForceScanUdi.TButton",
+            vforce_scan_udi_button = ttk.Button(self.mainframe, text="VERIFICATION\nSIM SCAN UDI",  style="VForceScanUdi.TButton",
                 command=lambda: self.q_cmd.put({"udi_scanned": self.create_udi_for_scan_simulation()}))
             vforce_scan_udi_button.grid(row=_row, column=0, columnspan=2, ipady=25, ipadx=5, sticky=tk.NSEW)
 
             _row = next(row_itr)
 
-            vforce_pass_button = ttk.Button(self.mainframe, text="FORCE PASS WELD",  style="VForcePass.TButton",
+            vforce_pass_button = ttk.Button(self.mainframe, text="VERIFICATION\nFORCE PASS WELD",  style="VForcePass.TButton",
                 command=lambda: self.q_cmd.put({"verification_force_weld": "P"}))
             vforce_pass_button.grid(row=_row, column=0, ipady=25, ipadx=5, sticky=tk.NSEW)
 
-            vforce_fail_button = ttk.Button(self.mainframe, text="FORCE FAIL WELD",  style="VForceFail.TButton",
+            vforce_fail_button = ttk.Button(self.mainframe, text="VERIFICATION\nFORCE FAIL WELD",  style="VForceFail.TButton",
                 command=lambda: self.q_cmd.put({"verification_force_weld": "F"}))
             vforce_fail_button.grid(row=_row, column=1, ipady=25, ipadx=5, sticky=tk.NSEW)
 
@@ -472,9 +472,11 @@ class WindowUI(object):
                     print("UI:RESULT")
                     _do_update = True
                 if "database_error" in a:
-                    _er = a["database_error"]
+                    _er = a["database_error"]["text"]
+                    _code = a["database_error"]["code"]  # this is an API-Error code that can be tracked back into the SQLAlchemy code
                     _play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz-hard")
-                    print(f"UI:DATABASE_ERROR {_er}")
+                    self.var_label_udi.set(f"Database Error\n Code: '{_code}'")
+                    print(f"UI:DATABASE_ERROR '{_code}' {_er}")
                     _do_update = True
             if _do_update:
                 self.root.update()
@@ -1265,11 +1267,14 @@ class ProcessSPS(mp.Process):
                         _sql = text(f"INSERT INTO `welding_measurements` SET {_vstr}")
                         response = session.execute(_sql)
                         session.commit()
+                        print("Measurements stored successfully.")
                         break  # DONE
                 except DatabaseError as dex:
-                    self.response_queue.put({"database_error": f"{dex}"})
+                    self.response_queue.put({"database_error": { "text": str(dex), "code": dex.code } })
                     print(f"Database Error: {dex}.")
                     print(f"Retries left: {__db_retries__}.")
+                    sleep(0.5)  # so we can wait in sum to the next second to generate an unique key in measurements 
+                                # if this was the root cause of the error (see error code in display)
                     continue  # try again
 
 
