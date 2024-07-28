@@ -45,11 +45,13 @@ _log = getLogger(__name__, DEBUG)
 
 # define the programmer's resource strings including ports
 # each line is reflected to a line in the dialog
+# Note: these IP numbers gets transformed according to the line setting in 
+#       station_config.yaml using key "PCBA_TEST", socket 0, resource 0
 PROGRAMMERS = [
-    #"172.25.101.7:2101",
-    #"172.25.101.8:2101",
-    #"172.25.101.9:2101",
-    "172.21.101.50:2101",
+    "172.21.101.7:2101",
+    "172.21.101.8:2101",
+    "172.21.101.9:2101",
+    #"172.21.101.50:2101",
     # ... add more if needed ...
 ]
 
@@ -740,12 +742,16 @@ if __name__ == '__main__':
     USE_RECOVERY_FILE = args.recovery
 
     # get the configuration from DSP if we do not have a product by command line
+    # also the IP addresses gets adjusted accoring to the configuration file if
+    # no part_number was given. Otherwise we assume development use.
     if args.product:
         part_number = args.product
     else:
         cfg, dsp, = create_interfaces(args.simulate)
         _pn, line_id, station_id = collect_parameters(cfg, dsp)
         part_number = _pn.split("-")[0]
+        _res_pattern = cfg.get_resource_strings_for_socket(0)[0]  # so we get the correct IP tuple
+        PROGRAMMERS = [f"{'.'.join(_res_pattern.split('.')[:3])}.{n.split('.')[-1]}" for n in PROGRAMMERS]
 
     w = None
     try:
