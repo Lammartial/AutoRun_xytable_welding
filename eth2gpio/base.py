@@ -18,6 +18,8 @@ from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
 
+API_HEADER_BYTE: int = 0xAA
+API_ERROR_BYTE: int = 0xEE
 
 
 
@@ -114,7 +116,17 @@ class Eth2GPIODevice(object):
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close_connection(force=True)
 
-    #----------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------
+
+    @staticmethod
+    def calculate_checksum(data: bytes) -> int:
+        """Calculates the checksum for transmissions to the NCD serial-to-I2C
+        adapter. (https://ncd.io/serial-to-i2c-conversion/)
+        Checksum = Sum of all the bytes inside "data" and then limit to lower 8 bits.
+        """
+        return sum(data) & 0xFF
+    
+#----------------------------------------------------------------------------------------------
 
     def request(self, payload: bytes | str | None,
                 timeout: float | None = 3.0,
@@ -122,10 +134,10 @@ class Eth2GPIODevice(object):
                 encoding: str | None = None,
                 retries: int = 1) -> str:
         """Do a send & response cycle using a simple API.
-        
+
         First it is wrapping the message "msg" as a payload then send it to the bridge.
         Then it waits until it receives a respinse or it does break with timeout or an exception.
-        
+
         [0xAA],[length (n)],[data 1], ... ,[data n],[checksum]
 
         Args:
@@ -140,9 +152,8 @@ class Eth2GPIODevice(object):
         Returns:
             str: _description_
         """
-        global DEBUG
+        global DEBUG, API_HEADER_BYTE, API_ERROR_BYTE
 
-        API_HEADER_BYTE: int = 0xAA
 
         _log = getLogger(__name__, DEBUG)
 
@@ -166,7 +177,7 @@ class Eth2GPIODevice(object):
                 if (len(rcvdata) < 3):
                     continue
                 # check if the payload is longer than 0
-                # we should have an API header and a payload length 
+                # we should have an API header and a payload length
                 if rcvdata[0] != API_HEADER_BYTE:
                     raise ValueError(f"Wrong API byte. Expexted {API_HEADER_BYTE} but got {rcvdata[0]}")
                 limit = 3 + int(rcvdata[1])  # add payload length (was assumed as 0 at first round)
@@ -197,13 +208,7 @@ class Eth2GPIODevice(object):
 
     #----------------------------------------------------------------------------------------------
 
-    @staticmethod
-    def calculate_checksum(data: bytes) -> int:
-        """Calculates the checksum for transmissions to the NCD serial-to-I2C
-        adapter. (https://ncd.io/serial-to-i2c-conversion/)
-        Checksum = Sum of all the bytes inside "data" and then limit to lower 8 bits.
-        """
-        return sum(data) & 0xFF
+  
 
 
 #--------------------------------------------------------------------------------------------------
@@ -213,7 +218,7 @@ class Eth2GPIODevice(object):
 if __name__ == "__main__":
     from time import perf_counter
     from binascii import hexlify
-    
+
     ## Initialize the logging
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
@@ -227,17 +232,17 @@ if __name__ == "__main__":
     r = c.request(b'W' + bytes([1]), timeout=5, encoding=False)  # OK TEST 1
     print(f"RESULT: {r!r}, {hexlify(r).decode()}")
     r = c.request(b'R', timeout=5, encoding=False)
-    print(f"RESULT: {r!r}, {hexlify(r).decode()}")    
+    print(f"RESULT: {r!r}, {hexlify(r).decode()}")
     r = c.request(b'W' + bytes([0]), timeout=5, encoding=False)  # OK TEST 0
     print(f"RESULT: {r!r}, {hexlify(r).decode()}")
     r = c.request(b'W', timeout=5, encoding=False)  # FAIL test
     print(f"RESULT: {r!r}, {hexlify(r).decode()}")
     #r = c.request(b'W' + bytes([1]), timeout=5, encoding="utf-8")
     #print(f"RESULT: {r}")
-    
+
     r = c.request(b'R', timeout=5, encoding=False)
     print(f"RESULT: {r!r}, {hexlify(r).decode()}")
-    
+
     #_log.info("Test asynchronus receive (CRTL-C or scan to stop):")
     #asyncio.run(test_async_request())
 
