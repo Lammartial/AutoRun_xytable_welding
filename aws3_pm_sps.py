@@ -6,6 +6,7 @@ import itertools
 import tkinter as tk
 import tkinter.ttk as ttk
 import json
+import uuid
 from fastapi import background
 import yaml
 from hashlib import md5
@@ -21,8 +22,9 @@ from rrc.dsp.interface import DspInterface, DspInterface_SIMULATION, DSPInterfac
 # import SQL managing modules
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import DatabaseError
 from rrc.dbcon import get_protocol_db_connector
-from rrc.barcode_scanner import create_barcode_scanner
+from rrc.barcode_scanner import create_barcode_scanner, decode_rrc_udi_label
 from pymodbus.exceptions import ModbusException
 from pymodbus import version as modbus_version
 from rrc.modbus.aws3 import AWS3Modbus, AWS3Modbus_DUMMY
@@ -53,6 +55,7 @@ PRODUCTION_MODE: int = None # is being overwritten by argument
 ENABLE_UDI_SCAN: int = None  # is being overwritten by argument
 SIMULATED_DSP_PRODUCT: str = None # is being overwritten by argument
 STORE_MEASUREMENTS: str = None # is being overwritten by argument
+VERIFICATION_SUPPORT: int = False  # is being overwritten by argument
 
 
 #--------------------------------------------------------------------------------------------------
@@ -120,7 +123,7 @@ def show_options(wg):
 class WindowUI(object):
 
     def __init__(self, command_queue: mp.JoinableQueue, response_queue: mp.Queue, title: str = "POOR MAN'S SPS"):
-        global DEBUG, PRODUCTION_MODE
+        global DEBUG, PRODUCTION_MODE, VERIFICATION_SUPPORT
 
         self._log = getLogger(__name__, DEBUG)
         self.q_cmd = command_queue
@@ -132,6 +135,7 @@ class WindowUI(object):
 
         self.var_label_position = tk.StringVar(self.root, "")
         self.var_label_program = tk.StringVar(self.root, "")
+        self.var_label_program_name = tk.StringVar(self.root, "")
         self.var_label_part_number = tk.StringVar(self.root, "")
         self.var_label_sequence = tk.StringVar(self.root, "")
         self.var_label_sequence_revision = tk.StringVar(self.root, "")
@@ -212,6 +216,10 @@ class WindowUI(object):
             textvariable=self.var_label_program,
             justify="center", font=("-size", 32, "-weight", "bold"))
         label6.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
+        label7 = ttk.Label(self.mainframe,
+            textvariable=self.var_label_program_name,
+            justify="center", font=("-size", 8, "-weight", "bold"))
+        label7.grid(row=next(row_itr), column=0, columnspan=_colspan, ipady=10)
 
         #print("BUTTON-LAYOUT:", style.layout('TButton'))
         #print("BUTTON-MAP:",    style.map("TButton"))
@@ -275,6 +283,30 @@ class WindowUI(object):
                 command=lambda: self.q_cmd.put({"reset_counter": 0}))
             reset_seq_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, sticky=tk.NSEW)
 
+        # add verification helper BUTTONS
+        if VERIFICATION_SUPPORT:
+            _row = next(row_itr)
+
+            style.configure('VForceScanUdi.TButton', foreground="blue")  #, borderwidth=4, focusthickness=3,)
+            style.map('VForceScanUdi.TButton', background=[("active","!pressed","white"), ("pressed", "lightblue")])
+            style.configure('VForcePass.TButton', foreground="green")  #, borderwidth=4, focusthickness=3,)
+            style.map('VForcePass.TButton', background=[("active","!pressed","white"), ("pressed", "lightblue")])
+            style.configure('VForceFail.TButton', foreground="red")
+            style.map('VForceFail.TButton', background=[("active","!pressed","white"), ("pressed", "lightblue")])
+
+            vforce_scan_udi_button = ttk.Button(self.mainframe, text="VERIFICATION\nSIM SCAN UDI",  style="VForceScanUdi.TButton",
+                command=lambda: self.q_cmd.put({"udi_scanned": self.create_udi_for_scan_simulation()}))
+            vforce_scan_udi_button.grid(row=_row, column=0, columnspan=2, ipady=25, ipadx=5, sticky=tk.NSEW)
+
+            _row = next(row_itr)
+
+            vforce_pass_button = ttk.Button(self.mainframe, text="VERIFICATION\nFORCE PASS WELD",  style="VForcePass.TButton",
+                command=lambda: self.q_cmd.put({"verification_force_weld": "P"}))
+            vforce_pass_button.grid(row=_row, column=0, ipady=25, ipadx=5, sticky=tk.NSEW)
+
+            vforce_fail_button = ttk.Button(self.mainframe, text="VERIFICATION\nFORCE FAIL WELD",  style="VForceFail.TButton",
+                command=lambda: self.q_cmd.put({"verification_force_weld": "F"}))
+            vforce_fail_button.grid(row=_row, column=1, ipady=25, ipadx=5, sticky=tk.NSEW)
 
         # Some more information labels
         _row = next(row_itr)
@@ -307,6 +339,12 @@ class WindowUI(object):
             reset_seq_button.focus_set()
 
 
+    def create_udi_for_scan_simulation(self) -> str:
+        import string
+        import random
+        return "0CELLFFF" + ''.join(random.choices(string.digits, k=8))  #''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+
+
     def validation_welding_mode(self, enabled: bool) -> None:
         global PRODUCTION_MODE
 
@@ -321,11 +359,13 @@ class WindowUI(object):
                 #self.validation_welding_button.config(state="enabled")
                 self.validation_welding_button.grid()
 
+
     def validation_done(self) -> None:
         if PRODUCTION_MODE:
             self.skip_position_button.config(state="disabled")
             #self.validation_welding_button.config(state="disabled")
             self.root.focus_set()  # removes the focus from the button
+
 
     def process_command_queue(self):
         if not self.q_res.empty():
@@ -363,6 +403,11 @@ class WindowUI(object):
                     _txt = a["program"]
                     self.var_label_program.set(_txt if _txt != -1 else "")
                     #print("UI:UPDATE PROGRAM")
+                    _do_update = True
+                if "program_name" in a:
+                    _txt = a["program_name"]
+                    self.var_label_program_name.set(_txt if _txt != -1 else "")
+                    #print("UI:UPDATE PROGRAM_NAME")
                     _do_update = True
                 if "udi" in a:
                     if a["udi"] is None:
@@ -426,6 +471,13 @@ class WindowUI(object):
                     self.var_label_udi.set(a["udi"])
                     print("UI:RESULT")
                     _do_update = True
+                if "database_error" in a:
+                    _er = a["database_error"]["text"]
+                    _code = a["database_error"]["code"]  # this is an API-Error code that can be tracked back into the SQLAlchemy code
+                    _play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz-hard")
+                    self.var_label_udi.set(f"Database Error\n Code: '{_code}'")
+                    print(f"UI:DATABASE_ERROR '{_code}'")
+                    _do_update = True
             if _do_update:
                 self.root.update()
             if _play_soundfile:
@@ -468,6 +520,7 @@ class SPSStateMachineBase(object):
         self.sequence_pos = 0
         self.program_no = -1
         self.next_program_no = -1
+        self.program_name = None  # this is for human verification purposes
         self.counter_base_ax1 = None
         self.counter_ax1 = None
         self.last_counter_ax1 = -1
@@ -521,6 +574,23 @@ class SPSStateMachineBase(object):
     def is_ready_for_commands(self) -> bool:
         return (self.state not in [SPSStates.START, SPSStates.INIT])
 
+
+    #----------------------------------------------------------------------------------------------
+
+    def fetch_program_name(self) -> str:
+
+        def _combine_program_name(ax1, ax2) -> str:
+            return f"{ax1} {ax2}"
+
+        if self.welding_parameters and "program_name" in self.welding_parameters:
+            # we can build the program name from the parameters read
+            self.program_name = _combine_program_name(self.welding_parameters["program_name"][1], self.welding_parameters["program_name"][2])
+        else:
+            # we need to read the program name from the machine
+            self.program_name = _combine_program_name(self.dev.read_program_name(1), self.dev.read_program_name(2))
+
+        return self.program_name
+
     #----------------------------------------------------------------------------------------------
 
 
@@ -551,6 +621,7 @@ class SPSStateMachineBase(object):
         except ModbusException as ex:
             print(f"SPS-unlock: {ex}")
             pass  # ignore
+
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
@@ -627,7 +698,7 @@ class SPSStateMachineRotating(SPSStateMachineBase):
 
                 case SPSStates.SHOW_PROGRAM_STEP:
                     print(f"Program step: {self.sequence_pos} of {len(self.program_sequence)}")
-                    print(f"Program set {self.program_no}")
+                    print(f"Program set {self.program_no} {self.program_name}")
                     self.set_state(SPSStates.SYNC_ON_TOGGLE_BIT)
 
                 case SPSStates.SYNC_ON_TOGGLE_BIT:
@@ -723,13 +794,17 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                             raise _MyBreak(f"PRG_NO: {self.program_no} != {self.next_program_no}")
                     else:
                         print(f"Program {self.program_no} already set.")
-                    if self.have_read_measurements:
+                    if 1:
+                    #if self.have_read_measurements:
                         # read the parameters of the current program
                         # to be able to write them on "SHOW_PROGRAM" step
                         print("Read parameters")
                         t0 = perf_counter()
                         self.welding_parameters = self.dev.fetch_welding_parameters()
                         print("P1:", perf_counter()-t0)
+                    # this uses either the already read parameters or just reads
+                    # the program names of both axis while machine is locked:
+                    self.fetch_program_name()
                     if self._machine_locked:
                         self.unlock_machine()
                     #print("T3:", perf_counter()-t0)
@@ -846,7 +921,7 @@ class SPSStateMachine(SPSStateMachineBase):
 
                 case SPSStates.SHOW_PROGRAM_STEP:
                     print(f"Program step: {self.sequence_pos} of {len(self.program_sequence)}")
-                    print(f"Program set {self.program_no}")
+                    print(f"Program set {self.program_no} {self.program_name}")
                     #self.set_state(SPSStates.SYNC_ON_MACHINE_COUNTER)
                     self.set_state(SPSStates.SYNC_ON_TOGGLE_BIT)
 
@@ -959,11 +1034,15 @@ class SPSStateMachine(SPSStateMachineBase):
                     else:
                         #self.welding_parameters = None  # signal not to store ths set again
                         print(f"Program {self.program_no} already set.")
-                    if self.have_read_measurements:
+                    if 1:
+                    #if self.have_read_measurements:
                         # read the parameters of the current program
                         # to be able to write them on "SHOW_PROGRAM" step
                         print("Read parameters")
                         self.welding_parameters = self.dev.fetch_welding_parameters()
+                    # this uses either the already read parameters or just reads
+                    # the program names of both axis while machine is locked:
+                    self.fetch_program_name()
                     if self._machine_locked:
                         self.unlock_machine()
                     sleep(self._throttle_pause)  # throttle polling
@@ -1072,7 +1151,7 @@ class ProcessSPS(mp.Process):
 
     def __init__(self, command_queue: mp.JoinableQueue, response_queue: mp.Queue) -> None:
         mp.Process.__init__(self)
-        global DEBUG, ENABLE_UDI_SCAN, PRODUCTION_MODE, SIMULATED_DSP_PRODUCT, STORE_MEASUREMENTS, SCAN_UDI_FORCE_RESTART
+        global DEBUG, ENABLE_UDI_SCAN, PRODUCTION_MODE, SIMULATED_DSP_PRODUCT, STORE_MEASUREMENTS, SCAN_UDI_FORCE_RESTART, VERIFICATION_SUPPORT
 
         self._log = getLogger(__name__, DEBUG)
         self.command_queue = command_queue
@@ -1084,7 +1163,7 @@ class ProcessSPS(mp.Process):
         self.production_mode = PRODUCTION_MODE
         self.scan_udi_force_restart = SCAN_UDI_FORCE_RESTART
         self.welding_for_process_validation = False  # setting this to True hinders the SPS to transmit the result to MES service
-
+        self.verification_support = VERIFICATION_SUPPORT
 
     def collect_parameters(self, cfg: StationConfiguration, dsp: DspInterface) -> Tuple[List[int], str, str, str]:
         """ Read configuration from DSP + DB connection
@@ -1143,47 +1222,61 @@ class ProcessSPS(mp.Process):
 
         #------------------------------------------------------------------------------------------
 
-        def store_db(udi: str, part_number: str, line_id: int, station_id: str, SM: SPSStateMachine, db_session_maker: Session):
+        def store_db(udi: str, part_number: str, line_id: int, station_id: str, SM: SPSStateMachine, db_session_maker: Session) -> None:
 
             print("STORE DB")
             _result = "P" if SM.welding_status["ok"]>0 else ("F" if SM.welding_status["reject"]>0 else "A")  # Pass, Fail, Abort
             _counter = SM.counter_ax1
             _udi = udi if udi else "undefined"  # database uses UDI as prim key -> not null
-            with db_session_maker() as session:
-                if SM.welding_parameters:
-                    # store a new parameter-set; linked by a hash over the set which keeps it unique
-                    #_device_name = SM.welding_parameters["name"]
-                    _device_name = SM.dev.get_identification_str()
-                    _wp_str = json.dumps({
-                        "device_name": _device_name,
-                        # we include the device name consisting of IP name@address into the hash calculation to
-                        #  a) distinct between different machines
-                        #  b) have reference to the execting machine in data
-                        **SM.welding_parameters}, sort_keys=True, ensure_ascii=True)  # create a JSON to store in db and generate a HASH
-                    _hash_params = get_hash(_wp_str).decode(encoding="utf-8", errors="strict")
-                    _program_no = SM.welding_parameters["parameters"]["ProgramNumber"]
-                    _attr = (("hash",_hash_params), ("device_name",_device_name), ("program_no",_program_no), ("parameters",_wp_str))
-                    _vstr = esc_values(_attr)
-                    _updstr = esc_values(_attr[1:])
-                    _sql = text(f"INSERT INTO `welding_parameters` SET {_vstr} ON DUPLICATE KEY UPDATE {_updstr}")
-                    response = session.execute(_sql)
-                else:
-                    _hash_params = None
-                if SM.welding_waveforms:
-                    # Store waveforms. linked by (udi,counter) index to "measurements" table
-                    _ww_str = json.dumps(SM.welding_waveforms)
-                    _vstr = esc_values((("udi", _udi), ("counter", _counter), ("waveforms", _ww_str)))
-                    _sql = text(f"INSERT INTO `welding_waveforms` SET {_vstr}")
-                    response = session.execute(_sql)
-                # always store the measurement data; (udi,counter) is primary key
-                _seq_pos = SM.sequence_pos
-                _wm_str = json.dumps(SM.welding_measurements)
-                _vstr = esc_values((("udi", _udi), ("counter", _counter), ("position", _seq_pos), ("part_number", part_number),
-                                   ("line_id", line_id), ("station_id", station_id), ("result", _result),
-                                   ("ref_parameter", _hash_params), ("measurements", _wm_str)))
-                _sql = text(f"INSERT INTO `welding_measurements` SET {_vstr}")
-                response = session.execute(_sql)
-                session.commit()
+            __retries_db__ = 3
+            while __retries_db__ > 0:
+                __retries_db__ -= 1
+                try:
+                    with db_session_maker() as session:
+                        if SM.welding_parameters:
+                            # store a new parameter-set; linked by a hash over the set which keeps it unique
+                            #_device_name = SM.welding_parameters["name"]
+                            _device_name = SM.dev.get_identification_str()
+                            _wp_str = json.dumps({
+                                "device_name": _device_name,
+                                # we include the device name consisting of IP name@address into the hash calculation to
+                                #  a) distinct between different machines
+                                #  b) have reference to the execting machine in data
+                                **SM.welding_parameters}, sort_keys=True, ensure_ascii=True)  # create a JSON to store in db and generate a HASH
+                            _hash_params = get_hash(_wp_str).decode(encoding="utf-8", errors="strict")
+                            _program_no = SM.welding_parameters["parameters"]["ProgramNumber"]
+                            _attr = (("hash",_hash_params), ("device_name",_device_name), ("program_no",_program_no), ("parameters",_wp_str))
+                            _vstr = esc_values(_attr)
+                            _updstr = esc_values(_attr[1:])
+                            _sql = text(f"INSERT INTO `welding_parameters` SET {_vstr} ON DUPLICATE KEY UPDATE {_updstr}")
+                            response = session.execute(_sql)
+                        else:
+                            _hash_params = None
+                        if SM.welding_waveforms:
+                            # Store waveforms. linked by (udi,counter) index to "measurements" table
+                            _ww_str = json.dumps(SM.welding_waveforms)
+                            _vstr = esc_values((("udi", _udi), ("counter", _counter), ("waveforms", _ww_str)))
+                            _sql = text(f"INSERT INTO `welding_waveforms` SET {_vstr}")
+                            response = session.execute(_sql)
+                        # always store the measurement data; (udi,counter) is primary key
+                        _seq_pos = SM.sequence_pos
+                        _wm_str = json.dumps(SM.welding_measurements)
+                        _vstr = esc_values((("udi", _udi), ("counter", _counter), ("position", _seq_pos), ("part_number", part_number),
+                                        ("line_id", line_id), ("station_id", station_id), ("result", _result),
+                                        ("ref_parameter", _hash_params), ("measurements", _wm_str)))
+                        _sql = text(f"INSERT INTO `welding_measurements` SET {_vstr}")
+                        response = session.execute(_sql)
+                        session.commit()
+                        print("Measurements stored successfully.")
+                        break  # DONE
+                except DatabaseError as dex:
+                    self.response_queue.put({"database_error": { "text": str(dex), "code": dex.code } })
+                    print(f"Database Error: {dex}.")                    
+                    sleep(1.05)  # so we can wait in sum to the next second to generate a new and unique key in 
+                                 # measurements, if this was the root cause of the error (see error code in display)
+                    print(f"Retries left: {__retries_db__}.")
+                    continue  # try again
+
 
         #------------------------------------------------------------------------------------------
 
@@ -1244,23 +1337,33 @@ class ProcessSPS(mp.Process):
         _store_to_file = False
         try:
             while True:
-                if not SM:
+                if SM is None:
                     _start_datetime = datetime.utcnow().isoformat()
                     _execution_start = perf_counter()  # we use _execution_time as start timestamp
                     # need to create a new State Machine to work with
                     # get configuration from DSP + DB connection
                     program_sequence, sequence_revision, resource_str, part_number, db_session_maker, line_id, station_id = self.collect_parameters(_cfg, _dsp)
                     print("Create new SPS state machine")
+                    if self.verification_support:
+                        print("VERIFICATION SUPPORT ENABLED!")
                     if self.production_mode: # and (not self.welding_for_process_validation):
                         # production version must be started by UDI scan
                         # and can run only once
-                        SM = SPSStateMachine(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
                         self.have_read_measurements = True  # overrides the command line parameter
+                        SM = SPSStateMachine(
+                            resource_str,
+                            program_sequence,
+                            have_read_measurements=self.have_read_measurements,
+                        )
                         _store_to_db = True  # overrides the command line parameter
                         #_store_to_file = self.have_read_measurements  # depending on the command line
                     else:
                         # we use a development state-machine here
-                        SM = SPSStateMachineRotating(resource_str, program_sequence, have_read_measurements=self.have_read_measurements)
+                        SM = SPSStateMachineRotating(
+                            resource_str,
+                            program_sequence,
+                            have_read_measurements=self.have_read_measurements,
+                        )
                         #_store_to_db = True  # DEBUG
                         _store_to_db = self.welding_for_process_validation
                         _store_to_file = self.have_read_measurements  # depending on the command line
@@ -1278,59 +1381,80 @@ class ProcessSPS(mp.Process):
                         "program": SM.next_program_no,
                         "udi": _udi,
                     })
-                else:
-                    # execute the state-machine if configured
-                    if _udi is None and self.enable_udi_scan:
-                        SM.lock_machine()
-                        #SM.set_state(SPSStates.LOCK_MACHINE)
-                    # check actions depending on state
-                    match SM.state:
-                        case SPSStates.CHECK_WELDING_RESULT:
-                            # KNAUP!
-                            if SM.welding_status["reject"] > 0:
-                                # update UI (red) while read waveforms taking a lot of time
-                                self.response_queue.put({"welding_check": "failed", "udi": _udi})
-                            if SM.welding_status["ok"] > 0:
-                                # update UI (green) while read waveforms taking a lot of time
-                                self.response_queue.put({"welding_check": "passed", "udi": _udi})
-                        case SPSStates.FAILED:
-                            # complete sequence has failed
-                            self.response_queue.put({"result": "failed", "udi": f"{_udi}\nSCAN NEXT UDI"})  # update UI (red)
-                            if _udi:
+
+                # execute the state-machine if configured
+                SM.do_one_loop()
+
+                if _udi is None and self.enable_udi_scan:
+                    SM.lock_machine()
+                    #SM.set_state(SPSStates.LOCK_MACHINE)
+
+                # check actions depending on state
+                match SM.state:
+                    case SPSStates.CHECK_WELDING_RESULT:
+                        # KNAUP!
+                        if SM.welding_status["reject"] > 0:
+                            # update UI (red) while read waveforms taking a lot of time
+                            self.response_queue.put({"welding_check": "failed", "udi": _udi})
+                        if SM.welding_status["ok"] > 0:
+                            # update UI (green) while read waveforms taking a lot of time
+                            self.response_queue.put({"welding_check": "passed", "udi": _udi})
+                    case SPSStates.FAILED:
+                        # complete sequence has failed
+                        if _udi:
+                            if not self.welding_for_process_validation:
+                                print("Sending FAILED result to MES")
                                 _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)
-                            if self.have_read_measurements:
-                                print("FAILED: Store measurements enabled.")
-                                if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
-                                if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
-                            self.welding_for_process_validation = False  # need to reset validation welding after finished all positions or having a failed position in between
-                            _udi = None  # finished
-                        case SPSStates.POSITION_PASSED:
-                            # only to store a passed welding position's measurement
-                            print("WELD POSITION PASSED: Store measurements enabled.")
-                            if self.have_read_measurements:
-                                if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
-                                if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
-                        case SPSStates.PASSED:
-                            self.response_queue.put({"result": "passed", "udi": f"{_udi}\nSCAN NEXT UDI" })  # update UI (green)
-                            if _udi:
-                                if not self.welding_for_process_validation:
-                                    # the validation welding mode disables the result to MES sending
-                                    # which avoids having this part counted as "scrap" in our statistics
-                                    _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
-                            if self.have_read_measurements:
-                                print("PASSED: Store measurements enabled.")
-                                #if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
-                                #if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
-                            self.welding_for_process_validation = False  # need to reset validation welding after finished all positions
-                            _udi = None  # finished
-                        case SPSStates.SET_PROGRAM_ON_MACHINE:
-                            self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no})  # update UI
-                        case SPSStates.SHOW_PROGRAM_STEP:
-                            self.response_queue.put({"position": SM.sequence_pos, "program": SM.program_no})  # update UI
-                            # Note: could also be used to store the parameter set to database
+                            else:
+                                print("Validation mode enabled: do NOT send FAIL result to MES.")
+                        else:
+                            print("WARNING: UDI is None and we will update the DB now.")
+                        print("POSITION (PART) FAILED:")
+                        if _store_to_db:
+                            print("Store measurements into DB.")
+                            store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                        if _store_to_file:
+                            print("Store measurements to file.")
+                            store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
+                        self.response_queue.put({"result": "failed", "udi": f"{_udi}\nSCAN NEXT UDI"})  # update UI (red)
+                        self.welding_for_process_validation = False  # need to reset validation welding after finished all positions or having a failed position in between
+                        _udi = None  # finished
+                    case SPSStates.POSITION_PASSED:
+                        # only to store a passed welding position's measurement
+                        print("WELD POSITION PASSED:")
+                        if _store_to_db:
+                            store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                        if _store_to_file: 
+                            store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
+                    case SPSStates.PASSED:
+                        if _udi:
+                            if not self.welding_for_process_validation:
+                                # the validation welding mode disables the result to MES sending
+                                # which avoids having this part counted as "scrap" in our statistics
+                                print("Sending FAILED result to MES")
+                                _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
+                            else:
+                                print("Validation mode enabled: do NOT send PASS result to MES.")
+                        else:
+                            print("WARNING: UDI is None and we will update the DB now.")
+                        print("PART PASSED:")
+                        #if _store_to_db: 
+                        #    store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                        if _store_to_file:
+                            store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
+                        print("Done.")
+                        self.response_queue.put({"result": "passed", "udi": f"{_udi}\nSCAN NEXT UDI" })  # update UI (green)
+                        self.welding_for_process_validation = False  # need to reset validation welding after finished all positions
+                        _udi = None  # finished
+                    case SPSStates.SET_PROGRAM_ON_MACHINE:
+                        self.response_queue.put({"position": SM.sequence_pos, "program": SM.next_program_no, "program_name": ""})  # update UI
+                    case SPSStates.SHOW_PROGRAM_STEP:
+                        self.response_queue.put({"position": SM.sequence_pos, "program": SM.program_no, "program_name": SM.program_name})  # update UI
+                        # Note: could also be used to store the parameter set to database
 
                     # execute the state-machine
-                    SM.do_one_loop()
+                    #SM.do_one_loop()
+
                 # check for incomming commands
                 if not self.command_queue.empty():
                     answer = None
@@ -1345,7 +1469,7 @@ class ProcessSPS(mp.Process):
                             SM.close()
                             SM = None
                         self.command_queue.task_done()
-                        break
+                        break  # terminate this loop -> end task and show termination message
                     if not SM.is_ready_for_commands():
                         continue
                     print(f"{proc_name}: {cmd}")
@@ -1354,7 +1478,7 @@ class ProcessSPS(mp.Process):
                         if (_udi is None) or (SM.sequence_pos == 0) or self.scan_udi_force_restart:
                             # forward the UDI to the UI
                             _verify_udi = cmd["udi_scanned"]
-                            if "CELL" in _verify_udi:
+                            if "CELL" in _verify_udi:  # this is double check as the scans are qualified in the scan process right now
                                 _udi = _verify_udi
                                 self.welding_for_process_validation = False  # VALIDATION is stopped on any UDI scan
                                 self.response_queue.put({"validation_welding": False})  # clear UI
@@ -1403,6 +1527,12 @@ class ProcessSPS(mp.Process):
                         self.welding_for_process_validation = cmd["validation_welding"]
                         self.response_queue.put(cmd) # forward to UI
                         answer = "OK"
+                    if "verification_force_weld" in cmd:
+                        _forced_result = cmd["verification_force_weld"]
+                        if _udi:
+                            SM.dev.verification_support_force_weld(_forced_result)
+                        answer = "OK"
+
                     self.command_queue.task_done()
                     if not answer:
                         answer = f"NOT OK: UNKNOWN MESSAGE"
@@ -1460,9 +1590,19 @@ class ProcessScanner(mp.Process):
                     #print(f"{proc_name}:End")
                     #return
                 if _udi:
-                    msg = {"udi_scanned": _udi}
-                    #self.ui_queue.put(msg)  # this goes to the UI process
-                    self.sps_queue.put(msg)   # this goes to the SPS process
+                    # add a precheck if the UDI is a correct one before we send to the SPS
+                    # as this is a separate process, the workload is removed from SPS
+                    res, raw = decode_rrc_udi_label(_udi, pcba_and_cell_udi_tuple=False)
+                    if "CELL" in res:
+                        msg = {"udi_scanned": _udi}
+                        #self.ui_queue.put(msg)  # this goes to the UI process
+                        self.sps_queue.put(msg)   # this goes to the SPS process
+                    else:
+                        # we got a scrap UDI
+                        print(f"Wrong UDI scanned {_udi}. UDI is being rejected.")
+                        # we can try to inject a UI update which is accompanied with a sound,
+                        # but this costs SPS process time in the UI update task...
+                        self.ui_queue.put({"udi_rejected": _udi})
         else:
             # ********** Simulation Profile *************
             #while True:
@@ -1494,15 +1634,19 @@ if __name__ == '__main__':
     parser.add_argument("--filepath", action="store", default=_default_yaml_filepath_, help="Path and filename prefix for file stored measurements")
     parser.add_argument("--simulate_scan", action="store_true", help="Set a product for simulated UDI scan interface.")
     parser.add_argument("--block_scan_udi", action="store_false", help="To block scan UDI in the middle of a sequence. If false scanning UDI at any time resets sequence to start.")
+    parser.add_argument("--verification", action="store_true", help="To support verification of SPS by providing buttons to force a PASS or FAIL weld.")
+
 
     args = parser.parse_args()
 
+    VERIFICATION_SUPPORT = 1 if args.verification else 0
     PRODUCTION_MODE = not args.development
-    ENABLE_UDI_SCAN = (PRODUCTION_MODE or args.simulate_scan)
+    ENABLE_UDI_SCAN = (PRODUCTION_MODE or args.simulate_scan) and not VERIFICATION_SUPPORT
     SIMULATE_UDI_SCAN = args.simulate_scan
     SIMULATED_DSP_PRODUCT = args.product
     STORE_MEASUREMENTS = args.filepath if args.store else None
     SCAN_UDI_FORCE_RESTART = not args.block_scan_udi
+
 
     p = None
     w = None

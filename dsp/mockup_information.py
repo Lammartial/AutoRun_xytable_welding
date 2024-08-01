@@ -124,7 +124,7 @@ PART_INFORMATION = {
         },
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
-            "test_program_id": ("HP-SQ_2040-2S", "100559S_RRC2040-2S_EOL-Test_B"),
+            "test_program_id": ("HP-SQ_2040-2S", "100559S_RRC2040-2_EOL-Test_A"),
             "part_number": ("HP-PN_2040-2S", "100559S-11"),
         }
     },
@@ -303,6 +303,126 @@ PART_INFORMATION = {
             "part_number": ("HP-PN_2020B", "100496-18"),  # using the product number PN
         }
     },
+    #
+    # QSB2040B
+    #
+    "QSB2040B": {
+        "CELL_TEST": {
+            # Cell Test PRT IDs
+            "test_program_id": ("CT-SQ_2040B", "412083_RRC2040B_Cell-Test_C"),
+            "part_number": ("CT-PN_2040B", "412083-01"),
+        },
+        "CELL_WELDING": {
+            # Cell Welding PRT IDs:
+            "test_program_id": ("CW-SQ_2040B", "A"),
+            "part_number": ("CW-PN_2040B", "412083-01"),
+        },
+        "PCBA_TEST": {
+            # PCBA Test PRT IDs:
+            "test_program_id": ("PT-SQ_2040B", "411829_RRC2040B_PCBA-Test_C"),
+            "part_number": ("PT-PN_2040B", "411829-05"),
+        },
+        "COREPACK_TEST": {
+            # Core Pack Test PRT IDs:
+            "test_program_id": ("CP-SQ_2040B", "412083_RRC2040B_Corepack-Test_C"),
+            "part_number": ("CP-PN_2040B", "412083-01"),
+        },
+        "EOL_TEST": {
+            # Hard Pack (End-Of-Line) Test PRT IDs:
+            "test_program_id": ("HP-SQ_2040B", "100498_RRC2040B_EOL-Test_B"),
+            "part_number": ("HP-PN_2040B", "100498-18"),
+        }
+    },
+    #
+    # QSB2054B
+    #
+    "QSB2054B": {
+        "CELL_TEST": {
+            # Cell Test PRT IDs
+            "test_program_id": ("CT-SQ_Q2054B", "412185_QSB2054B_Cell-Test_A"),
+            "part_number": ("CT-PN_Q2054B", "412185-01"),
+        },
+        "CELL_WELDING": {
+            # Cell Welding PRT IDs:
+            "test_program_id": ("CW-SQ_Q2054B", "A"),
+            "part_number": ("CW-PN_Q2054B", "412185-01"),
+        },
+        "PCBA_TEST": {
+            # PCBA Test PRT IDs:
+            "test_program_id": ("PT-SQ_Q2054B", "412100_QSB2054B_PCBA-Test_A"),
+            "part_number": ("PT-PN_Q2054B", "412100-01"),
+        },
+        "COREPACK_TEST": {
+            # Core Pack Test PRT IDs:
+            "test_program_id": ("CP-SQ_Q2054B", "412185_QSB2054B_Corepack-Test_A"),
+            "part_number": ("CP-PN_Q2054B", "412185-01"),
+        },
+        "EOL_TEST": {
+            # Hard Pack (End-Of-Line) Test PRT IDs:
+            "test_program_id": ("HP-SQ_Q2054B", "150001B_QSB2054_EOL-Test_A"),
+            "part_number": ("HP-PN_Q2054B", "150001B-01"),
+        }
+    },
+    #
+    # QSB2040-2B
+    #
+    "QSB2040-2B": {
+        "CELL_TEST": {
+            # Cell Test PRT IDs
+            "test_program_id": ("CT-SQ_Q2040-2B", "412160_QSB2040-2B_Cell-Test_A"),
+            "part_number": ("CT-PN_Q2040-2B", "412160-01"),
+        },
+        "CELL_WELDING": {
+            # Cell Welding PRT IDs:
+            "test_program_id": ("CW-SQ_Q2040-2B", "A"),
+            "part_number": ("CW-PN_Q2040-2B", "412160-01"),
+        },
+        "PCBA_TEST": {
+            # PCBA Test PRT IDs:
+            "test_program_id": ("PT-SQ_Q2040-2B", "412101_QSB2040-2B_PCBA-Test_A"),
+            "part_number": ("PT-PN_Q2040-2B", "412101-01"),
+        },
+        "COREPACK_TEST": {
+            # Core Pack Test PRT IDs:
+            "test_program_id": ("CP-SQ_Q2040-2B", "412160_QSB2040-2B_Corepack-Test_A"),
+            "part_number": ("CP-PN_Q2040-2B", "412160-01"),
+        },
+        "EOL_TEST": {
+            # Hard Pack (End-Of-Line) Test PRT IDs:
+            "test_program_id": ("HP-SQ_Q2040-2B", "150004B_QSB2040-2_EOL-Test_A"),
+            "part_number": ("HP-PN_Q2040-2B", "150004B-01"),
+        }
+    },
+    #
+    # QSB2054-2B
+    #
+    "QSB2054-2B": {
+        "CELL_TEST": {
+            # Cell Test PRT IDs
+            "test_program_id": ("CT-SQ_Q2054-2B", "412159_QSB2054-2B_Cell-Test_A"),
+            "part_number": ("CT-PN_Q2054-2B", "412159-01"),
+        },
+        "CELL_WELDING": {
+            # Cell Welding PRT IDs:
+            "test_program_id": ("CW-SQ_Q2054-2B", "A"),
+            "part_number": ("CW-PN_Q2054-2B", "412159-01"),
+        },
+        "PCBA_TEST": {
+            # PCBA Test PRT IDs:
+            "test_program_id": ("PT-SQ_Q2054-2B", "412099_QSB2054-2B_PCBA-Test_A"),
+            "part_number": ("PT-PN_Q2054-2B", "412099-01"),
+        },
+        "COREPACK_TEST": {
+            # Core Pack Test PRT IDs:
+            "test_program_id": ("CP-SQ_Q2054-2B", "412159_QSB2054-2B_Corepack-Test_A"),
+            "part_number": ("CP-PN_Q2054-2B", "412159-01"),
+        },
+        "EOL_TEST": {
+            # Hard Pack (End-Of-Line) Test PRT IDs:
+            "test_program_id": ("HP-SQ_Q2054-2B", "150002B_QSB2054-2_EOL-Test_A"),
+            "part_number": ("HP-PN_Q2054-2B", "150002B-01"),
+        }
+    },
 }
 
 
@@ -356,19 +476,19 @@ LABEL_PRINTING = {
     },
 
     #
-    # RRC2040B
+    # RRC2040-2S
     #
-    "100498-18": {
+    "100559S-11": {
         "enabled": True,  # set to True to trigger a label print file (.dat) written into unc path
         "mdate_lookup_path": "dummy.csv",  # lookup .csv/.tsv file for manufacturer dates
         #"unc_path": "//sv-vn-bartender.rrcpowersolutions.com/bartender-input/batterylabel/",  # slashes / will be transformed by Path() into backslashes on use
         "unc_path": "C:/bartender-out/",  # DEBUG
         "file_content": [  # list of possible label file row entries - at least one
             {
-                "PRINTERNAME": "PRN-2000-1_A05-SINGLEBOX",  # hardcoded
-                "LABELFILE": "SINGLEBOXLABEL.BTW", # hardcoded
+                "PRINTERNAME": "PRN-2000-1_A11-A11-HARDPACK",  # hardcoded
+                "LABELFILE": "HPLABEL.BTW", # hardcoded
                 "MATNR": None,       # will be replaced by the KEY above
-                "MATNAME": "RRC2040B",
+                "MATNAME": "RRC2040-2S",
                 "DATECODE": None,
                 "SERIAL": "99ZZ 01 9Z {01} {02}",  # {01}=00 {02}=S/N
                 "QUANTITY": int(1),
@@ -378,10 +498,10 @@ LABEL_PRINTING = {
                 "WEEKDAY": None,   # day of week of MANUFACTURE_DATE
             },
             {
-                "PRINTERNAME": "PRN-2000-1_A05-OUTERBOX",
-                "LABELFILE": "OUTERBOXLABEL.BTW",
+                "PRINTERNAME": "PRN-2000-1_A12-SINGLEBOX",
+                "LABELFILE": "SINGLEBOXLABEL.BTW",
                 "MATNR": None,
-                "MATNAME": "RRC2040B",
+                "MATNAME": "RRC2040-2S",
                 "DATECODE": None,
                 "SERIAL": "99ZZ 01 9Z {01} {02}",
                 "QUANTITY": int(1),

@@ -97,26 +97,17 @@ def decode_rrc_udi_label(raw: str, pcba_and_cell_udi_tuple: bool = False) -> Tup
     _log.debug(m)
     result = {}
     if len(m) == 1 and (len(m[0]) == 3):
-        result = {
-            **result,
-            **_records_to_result((m[0][1], m[0][2], m[0][0]))  # type, serial, plant
-        }
+        result = _records_to_result((m[0][1], m[0][2], m[0][0]))  # type, serial, plant
     elif len(m) == 1 and (len(m[0]) == 6):
         # 1st hit
-        result = {
-            **result,
-            **_records_to_result((m[0][1], m[0][2], m[0][0]))  # type, serial, plant
-        }
+        result = _records_to_result((m[0][1], m[0][2], m[0][0]))  # type, serial, plant
         # 2nd hit
         result = {
             **result,
             **_records_to_result((m[0][1+3], m[0][2+3], m[0][0+3]))  # type, serial, plant
         }
     else:
-        result = {
-            **result,
-            **_records_to_result(("UNKNOWN", "", raw))
-        }
+        result = _records_to_result(("UNKNOWN", "", raw))
     return result, raw
 
 #--------------------------------------------------------------------------------------------------
@@ -237,8 +228,9 @@ if __name__ == "__main__":
 
     #test_udi_decoder()
     #test_general(RESOURCE_STR)
-    test_rrc_serial_label(RESOURCE_STR)
+    #test_rrc_serial_label(RESOURCE_STR)
     #test_rrc_udi_label(RESOURCE_STR)
+    test_udi_decoder()
 
     toc = perf_counter()
     _log.info(f"Need {toc - tic:0.4f} seconds")
