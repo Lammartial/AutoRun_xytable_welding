@@ -99,6 +99,36 @@ PART_INFORMATION = {
         }
     },
     #
+    # RRC2054-SO
+    #
+    "RRC2054-SO": {
+        "CELL_TEST": {
+            # Cell Test PRT IDs
+            "test_program_id": ("CT-SQ_2054S", "412085_RRC2054S_Cell-Test_B"),
+            "part_number": ("CT-PN_2054S", "412085-01"),
+        },
+        "CELL_WELDING": {
+            # Cell Welding PRT IDs:
+            "test_program_id": ("CW-SQ_2054S", "A"),
+            "part_number": ("CW-PN_2054S", "412085-01"),
+        },
+        "PCBA_TEST": {
+            # PCBA Test PRT IDs:
+            "test_program_id": ("PT-SQ_2054S", "412100_RRC2054S_PCBA-Test_B"),
+            "part_number": ("PT-PN_2054S", "412100-01"),
+        },
+        "COREPACK_TEST": {
+            # Core Pack Test PRT IDs:
+            "test_program_id": ("CP-SQ_2054S", "412085_RRC2054S_Corepack-Test_B"),
+            "part_number": ("CP-PN_2054S", "412085-01"),
+        },
+        "EOL_TEST": {
+            # Hard Pack (End-Of-Line) Test PRT IDs:
+            "test_program_id": ("HP-SQ_2054S", "110062S_RRC2054-SO_EOL-Test_A.seq"),
+            "part_number": ("HP-PN_2054S", "110062S-08"),
+        }
+    },
+    #
     # RRC2040-2S
     #
     "RRC2040-2S": {
@@ -423,38 +453,9 @@ PART_INFORMATION = {
             "part_number": ("HP-PN_Q2054-2B", "150002B-01"),
         }
     },
-
- # RRC2054-SO
-    #
-    "RRC2054-SO": {
-        "CELL_TEST": {
-            # Cell Test PRT IDs
-            "test_program_id": ("CT-SQ_2054S", "412085_RRC2054S_Cell-Test_B"),
-            "part_number": ("CT-PN_2054S", "412085-01"),
-        },
-        "CELL_WELDING": {
-            # Cell Welding PRT IDs:
-            "test_program_id": ("CW-SQ_2054S", "A"),
-            "part_number": ("CW-PN_2054S", "412085-01"),
-        },
-        "PCBA_TEST": {
-            # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2054S", "412100_RRC2054S_PCBA-Test_B"),
-            "part_number": ("PT-PN_2054S", "412100-01"),
-        },
-        "COREPACK_TEST": {
-            # Core Pack Test PRT IDs:
-            "test_program_id": ("CP-SQ_2054S", "412085_RRC2054S_Corepack-Test_B"),
-            "part_number": ("CP-PN_2054S", "412085-01"),
-        },
-        "EOL_TEST": {
-            # Hard Pack (End-Of-Line) Test PRT IDs:
-            "test_program_id": ("HP-SQ_2054S", "110062S_RRC2054-SO_EOL-Test_A.seq"),
-            "part_number": ("HP-PN_2054S", "110062S-08"),
-        }
-    },
-    #
 }
+
+
 #--------------------------------------------------------------------------------------------------
 #
 #  To enable product label printing while bypassing the MES
