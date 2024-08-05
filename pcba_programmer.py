@@ -87,7 +87,13 @@ PRODUCT_LIST = {
         "recovery_firmware_file": "BQFS_3412080-01_Galena_S_RRC2054-2_1.00_Recovery.bq.fs",
         "checksum": None,
     },
-
+    "412100": {
+        "name": "QSB2054B_PCBA",
+        "chipset": "BQ40Z50R1",
+        "firmware_file": "BQFS_3412158-01_A_QSB2054_1.00.bq.fs",
+        "recovery_firmware_file": "BQFS_3412158-01_A_QSB2054_1.00_Recovery.bq.fs",
+        "checksum": None,
+    },
     
 
 }
