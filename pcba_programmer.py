@@ -8,6 +8,7 @@ import multiprocessing as mp
 import itertools
 import tkinter as tk
 import tkinter.ttk as ttk
+import yaml
 from time import sleep, perf_counter
 from pathlib import Path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter
@@ -43,6 +44,7 @@ _log = getLogger(__name__, DEBUG)
 # --------------------------------------------------------------------------- #
 # --------------------------------------------------------------------------- #
 
+
 # define the programmer's resource strings including ports
 # each line is reflected to a line in the dialog
 # Note: these IP numbers gets transformed according to the line setting in 
@@ -55,62 +57,25 @@ PROGRAMMERS = [
     # ... add more if needed ...
 ]
 
+
 # --------------------------------------------------------------------------- #
 
-# define our products and the correct flash filename
-PRODUCT_LIST = {
-    "411828": {
-        "name": "RRC2020B_PCBA",
-        "chipset": "BQ40Z50R1",
-        "firmware_file": "SCD_3412031-04_A_Rubin-B_RRC2020B.bq.fs",
-        "recovery_firmware_file": "SCD_3412031-04_A_Rubin-B_RRC2020B_Recovery.bq.fs",
-        "checksum": None,
-    },
-    "411829": {
-        "name": "RRC2040B_PCBA",
-        "chipset": "BQ40Z50R1",
-        "firmware_file": "SCD_3412036-02_B_Tansanit-B_RRC2040B.bq.fs",
-        "recovery_firmware_file": "SCD_3412036-02_B_Tansanit-B_RRC2040B_Recovery.bq.fs",
-        "checksum": None,
-    },
-    "412101": {
-        "name": "RRC2040-2S_PCBA",
-        "chipset": "BQ40Z50R1",
-        "firmware_file": "BQFS_3411842-05_B_Ametrie_RRC2040-2S.bq.fs",
-        "recovery_firmware_file": "BQFS_3411842-05_B_Ametrie_RRC2040-2S_Recovery.bq.fs",
-        "checksum": ("61D3", "5366"),   # as hexlify value
-    },
-    "412099": {
-        "name": "RRC2054-2S_PCBA",
-        "chipset": "BQ40Z50R1",
-        "firmware_file": "BQFS_3412080-01_Galena_S_RRC2054-2_1.00.bq.fs",
-        "recovery_firmware_file": "BQFS_3412080-01_Galena_S_RRC2054-2_1.00_Recovery.bq.fs",
-        "checksum": None,
-    },
-    "412100": {
-        "name": "QSB2054B_PCBA",
-        "chipset": "BQ40Z50R1",
-        "firmware_file": "BQFS_3412158-01_A_QSB2054_1.00.bq.fs",
-        "recovery_firmware_file": "BQFS_3412158-01_A_QSB2054_1.00_Recovery.bq.fs",
-        "checksum": None,
-    },
-    
-
-}
-
-# --------------------------------------------------------------------------------------------------
 
 FIRMWARE_FP = Path(__file__).parent / "../.." / "Battery-PCBA-Test/filestore"  # path of firmware files
+PRODUCT_LIST: dict = yaml.safe_load((FIRMWARE_FP / "pcba_programmer_config.yaml").read_text())
 PRODUCT_CHOICES = [k for k in PRODUCT_LIST.keys()]  # this is the list of part numbers to select by command line
 SIMULATE_PROGRAMMING: bool = False
 PRODUCTION_MODE: bool = True
 AUTOSTART_PROGRAMMING: bool = False
 USE_RECOVERY_FILE: bool = False
 
+
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 
+
 class RawDescriptionArgumentDefaultsHelpFormatter(RawDescriptionHelpFormatter, ArgumentDefaultsHelpFormatter): pass
+
 
 #--------------------------------------------------------------------------------------------------
 
@@ -725,11 +690,12 @@ def _create_interfaces(simulation: None | str = None) -> StationConfiguration:
 
 #--------------------------------------------------------------------------------------------------
 
+
 if __name__ == '__main__':
     # need to initialize logger on load
 
     print("=== PCBA Programming Dialog ===")
-
+    
     parser = ArgumentParser(description="""
                 The PCBA programming tool can be used in-line using the line configuration or
                 override the product to be programmed by optional parameter. It uses a built-in configuration dictionary
