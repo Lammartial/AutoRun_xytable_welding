@@ -2,7 +2,6 @@ from re import I
 from pathlib import Path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter
 from datetime import timezone, datetime
-import pyodbc
 import pandas as pd
 import numpy as np
 
@@ -38,25 +37,35 @@ class RawDescriptionArgumentDefaultsHelpFormatter(RawDescriptionHelpFormatter, A
 
 #--------------------------------------------------------------------------------------------------
 
-#
-# You need to install the 64bit ODBC Microsoft Access Driver 2016
-# Download the file from Microsoft as "AccessDatabaseEngine_x64".
-#
-# How to install 64-bit Microsoft Access database engine alongside 32-bit Microsoft Office?
-# it may throw an error that alongside the 32bit version its not possible to install.
-# Then:
-#   run "AccessDatabaseEngine_x64.exe /quiet"
-#
-# then with regedit as admin,
-#
-#   delete or rename the mso.dll registry value in the following registry key:
-#     HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Office\14.0\Common\FilesPaths
-#     HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Office\16.0\Common\FilesPaths
-#
-# (from https://www.autodesk.com/support/technical/article/caas/sfdcarticles/sfdcarticles/How-to-install-64-bit-Microsoft-Database-Drivers-alongside-32-bit-Microsoft-Office.html)
-#
+
 
 def read_from_access_databasefile(fp : Path, selected_table: int | str = -1) -> pd.DataFrame:
+    r"""
+    You need to install the 64bit ODBC Microsoft Access Driver 2016
+    Download the file from Microsoft as "AccessDatabaseEngine_x64".
+
+    How to install 64-bit Microsoft Access database engine alongside 32-bit Microsoft Office?
+    it may throw an error that alongside the 32bit version its not possible to install.
+    Then:
+        run "AccessDatabaseEngine_x64.exe /quiet"
+
+    then with regedit as admin,
+
+    delete or rename the mso.dll registry value in the following registry key:
+        HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Office\14.0\Common\FilesPaths
+        HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Office\16.0\Common\FilesPaths
+
+    (from https://www.autodesk.com/support/technical/article/caas/sfdcarticles/sfdcarticles/How-to-install-64-bit-Microsoft-Database-Drivers-alongside-32-bit-Microsoft-Office.html)
+
+
+    Args:
+        fp (Path): _description_
+        selected_table (int | str, optional): _description_. Defaults to -1.
+
+    Returns:
+        pd.DataFrame: _description_
+    """
+    import pyodbc
     global DEBUG, DB_COLUMN_NAMES
 
     pyodbc.lowercase = False
@@ -77,6 +86,51 @@ def read_from_access_databasefile(fp : Path, selected_table: int | str = -1) -> 
 
     df = pd.DataFrame.from_records(data, columns=cols)
     #df.replace(-10000.0, np.nan, inplace=True)
+    df = df.astype({"Bin_Number": "int64", "Ir": "float64", "Ocv": "float64",})
+    df = df.loc[~((df["Ir"] == -10000) | (df["Ocv"] == -10000))]
+    print(f"Found {len(df)} valid records.")
+    return df
+
+
+
+def read_from_access_databasefile_plainpy(fp : Path, selected_table: int | str = -1) -> pd.DataFrame:
+    """This uses plain Python importer code module "access-parser" for MS-Access files.
+
+    No need to install any MSAccess bullshit!
+
+    Args:
+        fp (Path): _description_
+        selected_table (int | str, optional): _description_. Defaults to -1.
+
+    Returns:
+        pd.DataFrame: _description_
+    """
+    from access_parser import AccessParser
+    import re
+
+    global DEBUG, DB_COLUMN_NAMES
+
+
+    system_table_filter = re.compile(r"^(f_([\d|ABCDEF]*)_Data)$|^(MSys\S*)$")  # this to eliminate non-user tables/objects from the catalog
+
+    db = AccessParser(fp.absolute())
+
+    tables = []
+    for table_name in db.catalog.keys():
+        m = system_table_filter.match(table_name)
+        if not m:
+            # user table found
+            tables.append(table_name)
+
+    print("Tables found:", tables)
+    if isinstance(selected_table, str):
+        if not any(selected_table in t for t in tables):
+            raise Exception(f"Error in parameter: table name '{selected_table}' not found in DB file with tables {tables}.")
+        name = selected_table  # take it as a string
+    else:
+        name = tables[selected_table]  # must be integer
+    table = db.parse_table(name)
+    df = pd.DataFrame.from_dict(table)[DB_COLUMN_NAMES]  # filter our desired column names
     df = df.astype({"Bin_Number": "int64", "Ir": "float64", "Ocv": "float64",})
     df = df.loc[~((df["Ir"] == -10000) | (df["Ocv"] == -10000))]
     print(f"Found {len(df)} valid records.")
@@ -213,7 +267,7 @@ if __name__ == '__main__':
     print("=== Cellsorter Bin/Slot Ranges Configuration File Generator ===")
 
     _default_accessdb = ACCESSDB_FILEPATH_DEVELOPMENT if Path(ACCESSDB_FILEPATH_DEVELOPMENT).exists() else ACCESSDB_FILEPATH
-    _default_output = OUTPUT_PATH_DEVELOPMENT if Path(OUTPUT_PATH_DEVELOPMENT).exists() else OUTPUT_PATH 
+    _default_output = OUTPUT_PATH_DEVELOPMENT if Path(OUTPUT_PATH_DEVELOPMENT).exists() else OUTPUT_PATH
 
     parser = ArgumentParser(description=f"""
         This tool creates a set of range buckets for Ocv and Ir sorting of cells based on a
@@ -233,7 +287,7 @@ if __name__ == '__main__':
     #parser.add_argument("center", choices=["mean", "median", "modus"], help="The way to select the center value of the sample set read from DB.")
     parser.add_argument("--dbfilepath", action="store", default=Path(_default_accessdb).absolute(), help="Path and filename prefix for Access DB file.")
     parser.add_argument("--outfilepath", action="store", default=Path(_default_output).absolute(), help="Path to write .rvf output files into.")
-    parser.add_argument("--table", default=-1, help="Index (0=first, -1=last) or name of table to read data from.")
+    parser.add_argument("--table", default=int(-1), help="Index (0=first, -1=last) or name of table to read data from.")
     parser.add_argument("--bins", type=int, default=int(9), help="Maximum number of bins available to sort ranges into. Depending on the machine type.")
     parser.add_argument("--center", choices=["mean","median", "modus"], default="median", help="The way to select the center value of the sample set read from DB.")
     parser.add_argument("--buckets_ocv", default="-4s,-2s,2s,4s", help="Comma separated list of buckets for the ranges of Ocv either as sigma, if 's' is appended, or as value steps in volts (not millivolts!).")
@@ -250,7 +304,8 @@ if __name__ == '__main__':
         args.batch_id = input("Please enter batch ID: ")
 
     # the data
-    df = read_from_access_databasefile(Path(args.dbfilepath), args.table)
+    #df = read_from_access_databasefile(Path(args.dbfilepath), args.table)
+    df = read_from_access_databasefile_plainpy(Path(args.dbfilepath), args.table)
 
     # the doing
     slots = do_the_bango(df, args.bins,  args.center, args.buckets_ocv, args.buckets_ir)
