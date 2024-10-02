@@ -93,6 +93,11 @@ class DAQ970A(Eth2SerialDevice):
         """
         super().__init__(resource_str, termination="\n", open_connection=False)  # The hioki expects to have connect/disconnect for each command
         self.change_card_slot(card_slot)  # also sets the self.card_slot
+        # initializes the route delay map with 3ms globally
+        # this value can be adjusted by the set_route_delay_preset function later on
+        self._route_delay_map = {}
+        for c in range(1, 23):  # 22 std channels on the MUX card
+            self.set_route_delay_preset(c, delay_in_s=0.003)
 
     def __str__(self) -> str:
         return f"DAQ970A device on {super().__str__()}"
@@ -104,13 +109,14 @@ class DAQ970A(Eth2SerialDevice):
     # insert the channel to message strings for this device
 
     def send(self, msg: str, timeout: int = 3000) -> None:
-        super().send(msg, timeout=timeout, pause_after_write=10, retries=3)
+        super().send(msg, timeout=timeout/1000, pause_after_write=10, retries=3)
 
     def request(self, msg: str, timeout: int = 5000) -> str:
-        return super().request(msg, timeout=timeout, pause_after_write=80, retries=5).strip()
+        return super().request(msg, timeout=timeout/1000, pause_after_write=80, retries=5).strip()
 
     
-    #----------------------------------------------------------------------------------------------
+    #----------------------------------------------------------------------------------------------     
+
     def selftest(self) -> int:
         """
         Returns device self-test results, takes ~ 2 sec.
@@ -172,6 +178,17 @@ class DAQ970A(Eth2SerialDevice):
         assert (int(new_slot) > 0 and int(new_slot) < 4), ValueError(f"Error, 'card_slot' must be in 1..3 but was {int(new_slot)}")        
         self.card_slot = int(new_slot)
 
+    #----------------------------------------------------------------------------------------------
+
+    def set_route_delay_preset(self, channel: int, delay_in_s: str | float = "AUTO") -> None:
+        """
+        Sets the route delay preset internally for the channel either to this value if > 0 and <= 60.0 or AUTO otherwise.
+        The delay will than later be used if the channel is being measured for voltage.        
+        """
+        channel = self._meas_chan(0, int(channel))
+        self._route_delay_map[channel] = delay_in_s
+        
+        
     #----------------------------------------------------------------------------------------------
     
     def get_resistance_rounded(self, channel: int, ndigits: int = 3, scale: str | float = "AUTO", resolution: str | float = "DEF") -> float:
@@ -270,9 +287,18 @@ class DAQ970A(Eth2SerialDevice):
         channel = int(channel)
         assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VDC: Allowed channel range is 1 .. 20.')
         try:
-            cmd = "MEAS:VOLT:DC? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
-            #return abs(float(self.request(cmd)))  # we need to clear the sign as some adapters have swapped +/- senses
-            return float(self.request(cmd))
+            # self.send(f"ROUT:CHAN:DEL 0.005,(@{self._meas_chan(0, channel)})")
+            # cmd = "MEAS:VOLT:DC? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
+            # #return abs(float(self.request(cmd)))  # we need to clear the sign as some adapters have swapped +/- senses
+            # return float(self.request(cmd))            
+            _ch = self._meas_chan(0, channel)
+            self.send(f"CONF:VOLT:DC AUTO,DEF,(@{_ch})")  # this command automatically set the trigger source to IMMediate.
+            if _ch in self._route_delay_map:
+                self.send(f"ROUT:CHAN:DEL {self._route_delay_map[_ch]},(@{_ch})")  # our delay will be respected now ...
+            #self.send(f"ROUT:CLOS (@{_ch})")            
+            #self.send(f"ROUT:MON (@{_ch})")
+            #self.send("ROUT:MON:STAT ON")
+            return float(self.request("READ?"))
         except Exception as ex:
             #_log.exception(ex)
             raise
