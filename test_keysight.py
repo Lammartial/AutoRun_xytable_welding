@@ -10,6 +10,12 @@ def do_tests(daq970a: DAQ970A) -> None:
 
     #print(daq970a.selftest())    
 
+    daq970a.setup_channel_delay_preset(1, "AUTO")
+    daq970a.setup_channel_delay_preset("2,3,4,6,7,8,11", 0.005)
+
+    daq970a.setup_voltage_range_and_resolution_preset(1, scale="AUTO", resolution="DEF")
+    daq970a.setup_voltage_range_and_resolution_preset("2,3,4,6,7,8,11", scale="10 V", resolution="DEF")
+
     #res = daq970a.get_resistance(5)
     #print(res)
 
@@ -26,7 +32,7 @@ def do_tests(daq970a: DAQ970A) -> None:
 
     # #print(daq970a.get_temp(1, 1, "DEF", 0, 0, "B"))
 
-    daq970a.send("*RST")
+    #daq970a.send("*RST")
 
 
 def test_set_all_channel_delays():
@@ -53,8 +59,9 @@ if __name__ == "__main__":
     # 1. Create an instance of DAQ970A class
     chn = 1  # = socket index + 1
     dev = DAQ970A(RESOURCE_STR, chn)
-    # 2. Get configuration info
-    for r in [
+    # 2. Reset device and get configuration info
+    dev.send("*RST")
+    for r in [        
         "*IDN?",
         "*ESR?",
         "CALibration:DATE?",
