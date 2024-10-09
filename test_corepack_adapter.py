@@ -270,9 +270,9 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    LINE_NETWORK = "172.25.101"  # VN line 1
+    #LINE_NETWORK = "172.25.101"  # VN line 1
     #LINE_NETWORK = "172.25.102"  # VN line 2    
-    #LINE_NETWORK = "172.21.101"  # HOM Warehouse
+    LINE_NETWORK = "172.21.101"  # HOM Warehouse
 
     i2cbus = I2CPort(f"{LINE_NETWORK}.40:2101") # socket 0
     #i2cbus = I2CPort(f"{LINE_NETWORK}.42:2101") # socket 1
@@ -285,21 +285,24 @@ if __name__ == "__main__":
     smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 1), retry_limit=7, verify_rounds=3, pause_us=50)
     bat = BQ40Z50R1(smbus)
     gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
-    gpio.switch_to_psu_measurement()
+    #gpio.switch_to_psu_measurement()
     sleep(0.5)
 
-    exit()
+    #exit()
     #psu = M3900(f"TCPIP0::{LINE_NETWORK}.46::inst0::INSTR")  # visa socket 0
     #psu = M3900(f"TCPIP0::{LINE_NETWORK}.47::inst0::INSTR")  # visa socket 1
     psu = M3900(f"{LINE_NETWORK}.47:30000")  # socket 0
     psu2 = M3900(f"{LINE_NETWORK}.46:30000")  # socket 1
 
-    psu.set_output_state(0)
+    #psu.set_output_state(0)
+    gpio.switch_to_battery_tester_measurement()
+    sleep(0.5)
+
     print("INIT Hioki")
     bt = Hioki_BT3561A(f"{LINE_NETWORK}.44:23", termination="\r\n")  # socket 0
     #bt = Hioki_BT3561A(f"{LINE_NETWORK}.45:23", termination="\r\n")  # socket 1
     bt.init()
-
+    print(bt.measure())
     #relay_test(20, gpio, psu, bt)
     psu_test(bat, gpio, psu, psu2)
     #rack_test(bat, gpio, psu, bt)

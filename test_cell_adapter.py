@@ -35,7 +35,8 @@ if __name__ == "__main__":
 
     i2cbus = I2CPort(f"{LINE_NETWORK}.20:2101") # socket 0
 
-    mux = BusMux(i2cbus, address=0x77)
+    #mux = BusMux(i2cbus, address=0x77)
+    #mux.setChannelMask(0xff)
     print(i2cbus.i2c_bus_scan())
 
     # smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 1), retry_limit=7, verify_rounds=3, pause_us=50)
