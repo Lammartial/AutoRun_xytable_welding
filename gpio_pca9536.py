@@ -1,3 +1,4 @@
+from time import sleep
 from rrc.i2cbus import I2CBase
 
 
@@ -56,6 +57,8 @@ class PCA9536:
         """
         self.i2c = i2c
         self.i2c_address_7bit = int(i2c_address_7bit)
+        self.retry_limit = 10
+        self.pause_us = 5000        
         # prepare shadow registers
         self._shadow_regs = [
             None,
@@ -181,12 +184,49 @@ class PCA9536:
             raise ValueError(f"Invalid output register value for {self}. Must be between 0 and 15."
                              f"You sent {value}")
 
+
         data = bytearray([register, value])
-        if len(data) == self.i2c.writeto(self.i2c_address_7bit, data):
-            self._shadow_regs[register] = value
-            return True
-        else:
-            return False
+        # if len(data) == self.i2c.writeto(self.i2c_address_7bit, data):
+        #     self._shadow_regs[register] = value
+        #     return True
+        # else:
+        #     return False
+        for n in range(0, self.retry_limit):
+            try:
+                wlen = self.i2c.writeto(self.i2c_address_7bit, data)
+                ok: bool = len(data) == wlen
+                if ok:
+                    # we can store the value
+                    self._shadow_regs[register] = value
+                return ok
+            except OSError:
+                if n == self.retry_limit - 1:
+                    raise
+            except Exception:
+                raise
+            sleep(self.pause_us / 1000000)
+        # may never get here!
+        raise Exception("Programming Error")
+
+
+    def _read_helper(self, adr: int, data: bytearray) -> bytearray:
+        for n in range(0, self.retry_limit):
+            try:
+                value = self.i2c.readfrom_mem(adr, data, 1)  # does 3 retries with 1ms pause between
+                try:
+                    value = value[0]
+                except IndexError:
+                    raise IndexError(f"Didn't receive correct number of bytes from {self}.")
+                return value  # this is the good exit
+            except OSError as ex:
+                if n == self.retry_limit - 1:
+                    raise
+            except Exception:
+                raise
+            sleep(self.pause_us / 1000000)
+        # may never get here!
+        raise Exception("Programming Error")
+    
 
     def _read_input_register(self) -> int:
         """Read the input register.
@@ -198,14 +238,12 @@ class PCA9536:
             int: _description_
         """
         data = bytearray([PCA9536.REG_INPUT_PORT])
-        value = self.i2c.readfrom_mem(self.i2c_address_7bit, data, 1)
-        try:
-            value = value[0]
-        except IndexError:
-            raise IndexError(f"Didn't receive correct number of bytes from {self}.")
-        return value
+        return self._read_helper(self.i2c_address_7bit, data)
+
 
 #--------------------------------------------------------------------------------------------------
+
+
     def get_output_register(self) -> int:
         return self.__read_register(PCA9536.REG_OUTPUT)
 
@@ -216,8 +254,9 @@ class PCA9536:
         return self.__read_register(PCA9536.REG_CONFIGURATION)
 
     def __read_register(self, register: int):
-        value = self.i2c.readfrom_mem(self.i2c_address_7bit, bytearray([register]), 1)
-        return value[0]
+        return self._read_helper(self.i2c_address_7bit, bytearray([register]))
+
+
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
