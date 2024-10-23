@@ -8,6 +8,7 @@ import multiprocessing as mp
 import itertools
 import tkinter as tk
 import tkinter.ttk as ttk
+import yaml
 from time import sleep, perf_counter
 from pathlib import Path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter
@@ -43,66 +44,38 @@ _log = getLogger(__name__, DEBUG)
 # --------------------------------------------------------------------------- #
 # --------------------------------------------------------------------------- #
 
+
 # define the programmer's resource strings including ports
 # each line is reflected to a line in the dialog
+# Note: these IP numbers gets transformed according to the line setting in
+#       station_config.yaml using key "PCBA_TEST", socket 0, resource 0
 PROGRAMMERS = [
-    #"172.25.101.7:2101",
-    #"172.25.101.8:2101",
-    #"172.25.101.9:2101",
-    "172.21.101.50:2101",
+    "172.21.101.7:2101",
+    "172.21.101.8:2101",
+    "172.21.101.9:2101",
+    #"172.21.101.50:2101",
     # ... add more if needed ...
 ]
 
+
 # --------------------------------------------------------------------------- #
 
-# define our products and the correct flash filename
-PRODUCT_LIST = {
-    "411828": {
-        "name": "RRC2020B_PCBA",
-        "chipset": "BQ40Z50R1",
-        "firmware_file": "SCD_3412031-04_A_Rubin-B_RRC2020B.bq.fs",
-        "recovery_firmware_file": "SCD_3412031-04_A_Rubin-B_RRC2020B_Recovery.bq.fs",
-        "checksum": None,
-    },
-    "411829": {
-        "name": "RRC2040B_PCBA",
-        "chipset": "BQ40Z50R1",
-        "firmware_file": "SCD_3412036-02_B_Tansanit-B_RRC2040B.bq.fs",
-        "recovery_firmware_file": "SCD_3412036-02_B_Tansanit-B_RRC2040B_Recovery.bq.fs",
-        "checksum": None,
-    },
-    "412101": {
-        "name": "RRC2040-2S_PCBA",
-        "chipset": "BQ40Z50R1",
-        "firmware_file": "BQFS_3411842-05_B_Ametrie_RRC2040-2S.bq.fs",
-        "recovery_firmware_file": "BQFS_3411842-05_B_Ametrie_RRC2040-2S_Recovery.bq.fs",
-        "checksum": ("61D3", "5366"),   # as hexlify value
-    },
-    "412099": {
-        "name": "RRC2054-2S_PCBA",
-        "chipset": "BQ40Z50R1",
-        "firmware_file": "BQFS_3412080-01_Galena_S_RRC2054-2_1.00.bq.fs",
-        "recovery_firmware_file": "BQFS_3412080-01_Galena_S_RRC2054-2_1.00_Recovery.bq.fs",
-        "checksum": None,
-    },
-
-    
-
-}
-
-# --------------------------------------------------------------------------------------------------
 
 FIRMWARE_FP = Path(__file__).parent / "../.." / "Battery-PCBA-Test/filestore"  # path of firmware files
+PRODUCT_LIST: dict = yaml.safe_load((FIRMWARE_FP / "pcba_programmer_config.yaml").read_text())
 PRODUCT_CHOICES = [k for k in PRODUCT_LIST.keys()]  # this is the list of part numbers to select by command line
 SIMULATE_PROGRAMMING: bool = False
 PRODUCTION_MODE: bool = True
 AUTOSTART_PROGRAMMING: bool = False
 USE_RECOVERY_FILE: bool = False
 
+
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 
+
 class RawDescriptionArgumentDefaultsHelpFormatter(RawDescriptionHelpFormatter, ArgumentDefaultsHelpFormatter): pass
+
 
 #--------------------------------------------------------------------------------------------------
 
@@ -171,7 +144,7 @@ class MultiBQStudioFileFlasher(BQStudioFileFlasher):
         self._use_threading = False
         self._pcba_connected_counter: int = 0
         self._PCBA_MAX_COUNTER: int = 50
-        self._pcba_power: int = 0        
+        self._pcba_power: int = 0
 
 
     def switch_pcba_power(self, onoff: int | bool) -> bool:
@@ -256,7 +229,7 @@ class ProgrammingWorker(mp.Process):
         try:
             # create a progress fowrwarder
             progress_bar = EmbeddedProgressBar(self.q_ui, self.socket)
-                        
+
             # create flasher
             flasher = MultiBQStudioFileFlasher(
                 self.resource_str,
@@ -267,7 +240,7 @@ class ProgrammingWorker(mp.Process):
             #tic = perf_counter()
             if flasher.switch_pcba_power(1):
                 sleep(0.25)  # let the PCBA powering up itself
-            flasher.set_firmware_file_and_widgets(self.firmware_file, progress_bar)            
+            flasher.set_firmware_file_and_widgets(self.firmware_file, progress_bar)
             #toc = perf_counter()
             #_log.info(f"Need {toc - tic:0.4f} seconds")
             _log.info(f"Starting flasher {str(flasher)}:")
@@ -276,7 +249,7 @@ class ProgrammingWorker(mp.Process):
         except Exception as error:
             _log.error(f"Process file raised {error}")
             result = False
-        finally:            
+        finally:
             #flasher.battery.bus.i2c.close()
             pass
         # send result by queue
@@ -292,7 +265,7 @@ class ProgrammingWorker(mp.Process):
 class WindowUI(object):
 
     def __init__(self, command_queue: mp.Queue, selected_product: str, title: str = "PCBA PROGRAMMING"):
-        global DEBUG, PROGRAMMERS, PRODUCT_LIST
+        global DEBUG, PROGRAMMERS, PRODUCT_LIST, USE_RECOVERY_FILE
         global PG_COLOR_PROCESS, PG_COLOR_PASS, PG_COLOR_FAIL
 
         self._log = getLogger(__name__, DEBUG)
@@ -302,7 +275,7 @@ class WindowUI(object):
         self.SELECTED_PRODUCT: str = selected_product
         self.PRODUCT_NAME: str = PRODUCT_LIST[selected_product]["name"]
         self.PRODUCT_CHIPSET: str = PRODUCT_LIST[selected_product]["chipset"]
-        self.PRODUCT_FIRMWARE_FILE: str = PRODUCT_LIST[selected_product]["firmware_file"]
+        self.PRODUCT_FIRMWARE_FILE: str = PRODUCT_LIST[selected_product]["recovery_firmware_file"] if USE_RECOVERY_FILE else PRODUCT_LIST[selected_product]["firmware_file"]
 
         # Create the Tk root and mainframe.
         self.root = tk.Tk()
@@ -506,7 +479,7 @@ class WindowUI(object):
                     fw = str(a["fw"])
                     chipset = str(a["chipset"])
                     # check if the flasher is not yet active
-                    if (sock not in self.futures) or (self.futures[sock] is None):                        
+                    if (sock not in self.futures) or (self.futures[sock] is None):
                         # # prepare the flasher
                         # self.flasher[sock].set_pcba_connected()
                         # self.flasher[sock].set_firmware_file_and_widgets(FIRMWARE_FP / fw, self.pg_bars[sock])
@@ -717,6 +690,7 @@ def _create_interfaces(simulation: None | str = None) -> StationConfiguration:
 
 #--------------------------------------------------------------------------------------------------
 
+
 if __name__ == '__main__':
     # need to initialize logger on load
 
@@ -740,12 +714,16 @@ if __name__ == '__main__':
     USE_RECOVERY_FILE = args.recovery
 
     # get the configuration from DSP if we do not have a product by command line
+    # also the IP addresses gets adjusted accoring to the configuration file if
+    # no part_number was given. Otherwise we assume development use.
     if args.product:
         part_number = args.product
     else:
         cfg, dsp, = create_interfaces(args.simulate)
         _pn, line_id, station_id = collect_parameters(cfg, dsp)
         part_number = _pn.split("-")[0]
+        _res_pattern = cfg.get_resource_strings_for_socket(0)[0]  # so we get the correct IP tuple
+        PROGRAMMERS = [f"{'.'.join(_res_pattern.split('.')[:3])}.{n.split('.')[-1]}" for n in PROGRAMMERS]
 
     w = None
     try:

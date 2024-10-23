@@ -294,17 +294,17 @@ class WindowUI(object):
             style.configure('VForceFail.TButton', foreground="red")
             style.map('VForceFail.TButton', background=[("active","!pressed","white"), ("pressed", "lightblue")])
 
-            vforce_scan_udi_button = ttk.Button(self.mainframe, text="SIM SCAN UDI",  style="VForceScanUdi.TButton",
+            vforce_scan_udi_button = ttk.Button(self.mainframe, text="VERIFICATION\nSIM SCAN UDI",  style="VForceScanUdi.TButton",
                 command=lambda: self.q_cmd.put({"udi_scanned": self.create_udi_for_scan_simulation()}))
             vforce_scan_udi_button.grid(row=_row, column=0, columnspan=2, ipady=25, ipadx=5, sticky=tk.NSEW)
 
             _row = next(row_itr)
 
-            vforce_pass_button = ttk.Button(self.mainframe, text="FORCE PASS WELD",  style="VForcePass.TButton",
+            vforce_pass_button = ttk.Button(self.mainframe, text="VERIFICATION\nFORCE PASS WELD",  style="VForcePass.TButton",
                 command=lambda: self.q_cmd.put({"verification_force_weld": "P"}))
             vforce_pass_button.grid(row=_row, column=0, ipady=25, ipadx=5, sticky=tk.NSEW)
 
-            vforce_fail_button = ttk.Button(self.mainframe, text="FORCE FAIL WELD",  style="VForceFail.TButton",
+            vforce_fail_button = ttk.Button(self.mainframe, text="VERIFICATION\nFORCE FAIL WELD",  style="VForceFail.TButton",
                 command=lambda: self.q_cmd.put({"verification_force_weld": "F"}))
             vforce_fail_button.grid(row=_row, column=1, ipady=25, ipadx=5, sticky=tk.NSEW)
 
@@ -472,9 +472,11 @@ class WindowUI(object):
                     print("UI:RESULT")
                     _do_update = True
                 if "database_error" in a:
-                    _er = a["database_error"]
+                    _er = a["database_error"]["text"]
+                    _code = a["database_error"]["code"]  # this is an API-Error code that can be tracked back into the SQLAlchemy code
                     _play_soundfile = str(Path(__file__).parent / "./sounds/error-buzz-hard")
-                    print(f"UI:DATABASE_ERROR {_er}")
+                    self.var_label_udi.set(f"Database Error\n Code: '{_code}'")
+                    print(f"UI:DATABASE_ERROR '{_code}'")
                     _do_update = True
             if _do_update:
                 self.root.update()
@@ -1226,9 +1228,9 @@ class ProcessSPS(mp.Process):
             _result = "P" if SM.welding_status["ok"]>0 else ("F" if SM.welding_status["reject"]>0 else "A")  # Pass, Fail, Abort
             _counter = SM.counter_ax1
             _udi = udi if udi else "undefined"  # database uses UDI as prim key -> not null
-            __db_retries__ = 3
-            while __db_retries__ > 0:
-                __db_retries__ -= 1
+            __retries_db__ = 3
+            while __retries_db__ > 0:
+                __retries_db__ -= 1
                 try:
                     with db_session_maker() as session:
                         if SM.welding_parameters:
@@ -1265,11 +1267,14 @@ class ProcessSPS(mp.Process):
                         _sql = text(f"INSERT INTO `welding_measurements` SET {_vstr}")
                         response = session.execute(_sql)
                         session.commit()
+                        print("Measurements stored successfully.")
                         break  # DONE
                 except DatabaseError as dex:
-                    self.response_queue.put({"database_error": f"{dex}"})
-                    print(f"Database Error: {dex}.")
-                    print(f"Retries left: {__db_retries__}.")
+                    self.response_queue.put({"database_error": { "text": str(dex), "code": dex.code } })
+                    print(f"Database Error: {dex}.")                    
+                    sleep(1.05)  # so we can wait in sum to the next second to generate a new and unique key in 
+                                 # measurements, if this was the root cause of the error (see error code in display)
+                    print(f"Retries left: {__retries_db__}.")
                     continue  # try again
 
 
@@ -1397,31 +1402,47 @@ class ProcessSPS(mp.Process):
                     case SPSStates.FAILED:
                         # complete sequence has failed
                         if _udi:
-                            _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)
-                        #if self.have_read_measurements:
-                        #print("FAILED: Store measurements enabled.")
-                        print("FAILED: Store measurements.")
-                        if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
-                        if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
+                            if not self.welding_for_process_validation:
+                                print("Sending FAILED result to MES")
+                                _dsp.ts_send_result_for_testrun("failed", _start_datetime, perf_counter() - _execution_start, _udi, None)
+                            else:
+                                print("Validation mode enabled: do NOT send FAIL result to MES.")
+                        else:
+                            print("WARNING: UDI is None and we will update the DB now.")
+                        print("POSITION (PART) FAILED:")
+                        if _store_to_db:
+                            print("Store measurements into DB.")
+                            store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                        if _store_to_file:
+                            print("Store measurements to file.")
+                            store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
                         self.response_queue.put({"result": "failed", "udi": f"{_udi}\nSCAN NEXT UDI"})  # update UI (red)
                         self.welding_for_process_validation = False  # need to reset validation welding after finished all positions or having a failed position in between
                         _udi = None  # finished
                     case SPSStates.POSITION_PASSED:
                         # only to store a passed welding position's measurement
-                        if self.have_read_measurements:
-                            print("WELD POSITION PASSED: Store measurements enabled.")
-                            if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
-                            if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
+                        print("WELD POSITION PASSED:")
+                        if _store_to_db:
+                            store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                        if _store_to_file: 
+                            store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
                     case SPSStates.PASSED:
                         if _udi:
                             if not self.welding_for_process_validation:
                                 # the validation welding mode disables the result to MES sending
                                 # which avoids having this part counted as "scrap" in our statistics
+                                print("Sending FAILED result to MES")
                                 _dsp.ts_send_result_for_testrun("passed", _start_datetime, perf_counter() - _execution_start, _udi, None)
-                        if self.have_read_measurements:
-                            print("PASSED: Store measurements enabled.")
-                            #if _store_to_db: store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
-                            if _store_to_file: store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
+                            else:
+                                print("Validation mode enabled: do NOT send PASS result to MES.")
+                        else:
+                            print("WARNING: UDI is None and we will update the DB now.")
+                        print("PART PASSED:")
+                        #if _store_to_db: 
+                        #    store_db(_udi, part_number, line_id, station_id, SM, db_session_maker)
+                        if _store_to_file:
+                            store_file(None, part_number, line_id, station_id, SM, fp_pattern=self.measurements_filepath)
+                        print("Done.")
                         self.response_queue.put({"result": "passed", "udi": f"{_udi}\nSCAN NEXT UDI" })  # update UI (green)
                         self.welding_for_process_validation = False  # need to reset validation welding after finished all positions
                         _udi = None  # finished

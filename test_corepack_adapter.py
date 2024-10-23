@@ -45,7 +45,7 @@ def psu_print_error_queue(psu) -> None:
 def rack_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, bt: Hioki_BT3561A) -> None:
     psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
     psu.configure_current_rise_times(pos="DEF", neg="DEF")
-    
+
     gpio.switch_to_psu_measurement()
     sleep(0.5)
     psu.set_output_state(0)
@@ -61,21 +61,21 @@ def rack_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, bt: Hioki_BT
     print("Safety Status details:", bat._safety_status)
     print("PSU Output off")
     psu.set_output_state(0)
-    sleep(0.5) 
+    sleep(0.5)
     #print("RESET ERRORS", bat.reset_errors())
     print("Safety Status:", bat.get_safety_status())
     print("Safety Status details:", bat._safety_status)
     print("PSU - sense connected", psu.get_all_measurements())
-    
+
     bat.set_fet_control(True)
-    
-    
+
+
     print("Check HIOKI battery tester")
     gpio.switch_to_battery_tester_measurement()
-    
+
     sleep(1.3)
     print("PSU - sense on BT", psu.get_all_measurements())
-    
+
     # toggle Relay several times and check measurements
     for i in range(5):
         gpio.switch_to_battery_tester_measurement()
@@ -120,7 +120,7 @@ def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, psu2: M3900) 
     # check PSU charge mode
     print("PSU Output on")
     #psu.configure_supply(12.0, 0.080, 50, 1)
-   
+
     psu_print_error_queue(psu)
 
     #psu.send("VOLT 14.5")
@@ -158,7 +158,7 @@ def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, psu2: M3900) 
     #psu.send(f"CURRENT:LIM:POS 0.00")
     #psu.send(f"CURR 0.0")
     #psu.send(f"VOLT 0.0")
-    
+
     #psu.send(f"VOLTAGE:LIM:LOW 13.00")
     #psu.send(f"VOLTAGE:LIM:HIGH 13.00")
     psu.set_output_state(0)
@@ -206,19 +206,19 @@ def psu_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, psu2: M3900) 
     # #     print("Timeout!")
 
     # print("test psu:")
-   
+
 
     # #psu.configure_supply(12.55, 2.0, 50, set_output=1)
     # #sleep(1)
-    # #print("supply", psu.get_all_measurements())    
-    # #psu.set_output_state(0)    
+    # #print("supply", psu.get_all_measurements())
+    # #psu.set_output_state(0)
     # #sleep(1)
     # psu.configure_charge_mode(0.5, 12.55, 12.55, 50, True)
-    # #psu.configure_supply(12.55, 0.05, 50, set_output=True)   
+    # #psu.configure_supply(12.55, 0.05, 50, set_output=True)
     # sleep(1.0)
-    # print("chargemode", psu.get_all_measurements())    
-    # psu.set_output_state(0)    
-    
+    # print("chargemode", psu.get_all_measurements())
+    # psu.set_output_state(0)
+
 
     # # print("test Hioki bt:")
     # # bt = Hioki_BT3561A("172.25.101.44:23", termination="\r\n")
@@ -261,7 +261,19 @@ def spinel_test(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3900, bt: Hioki_
     print("PSU", psu.get_all_measurements())
     print("PSU Output off")
     psu.set_output_state(0)
-   
+
+
+
+def test_feasa_only(feasa: FEASA_CH9121):
+    print("Issue capture command...")
+    print(feasa.capture_pwm())
+    # "getRGBI##" command
+    print("getRGBI##0")
+    print(feasa.get_rgbi_num(0))
+    print("getRGBI##3")
+    print(feasa.get_rgbi_num(3))
+
+
 
 #--------------------------------------------------------------------------------------------------
 
@@ -270,17 +282,31 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    LINE_NETWORK = "172.25.101"  # VN line 1
-    #LINE_NETWORK = "172.25.102"  # VN line 2    
     #LINE_NETWORK = "172.21.101"  # HOM Warehouse
+    #LINE_NETWORK = "172.25.101"  # VN line 1
+    #LINE_NETWORK = "172.25.102"  # VN line 2
+    LINE_NETWORK = "172.25.103"  # VN line 3
 
-    i2cbus = I2CPort(f"{LINE_NETWORK}.40:2101") # socket 0
-    #i2cbus = I2CPort(f"{LINE_NETWORK}.42:2101") # socket 1
+    SOCKET = 0  # 0 or 1
+
+    if SOCKET == 0:
+        i2cbus = I2CPort(f"{LINE_NETWORK}.40:2101") # socket 0
+        scan = create_barcode_scanner(f"{LINE_NETWORK}.41:2000")
+        feasa = FEASA_CH9121(f"{LINE_NETWORK}.41:3000", termination="\n")
+    if SOCKET == 1:
+        i2cbus = I2CPort(f"{LINE_NETWORK}.42:2101") # socket 1
+        scan = create_barcode_scanner(f"{LINE_NETWORK}.43:2000")
+        feasa = FEASA_CH9121(f"{LINE_NETWORK}.43:3000", termination="\n")
+
+    test_feasa_only(feasa)
 
     mux = BusMux(i2cbus, address=0x77)
     for i in range(8):
         mux.setChannel(i + 1)
         print("CH:", i, i2cbus.i2c_bus_scan())
+
+    temp = STS21(I2CMuxedBus(i2cbus, mux, 3), i2c_address_7bit="0x4A,64")  # hidden change from STS21 to SHT25 changed i2c address from 0x4A to 0x40
+    print(temp.start_measurement_no_hold())
 
     smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 1), retry_limit=7, verify_rounds=3, pause_us=50)
     bat = BQ40Z50R1(smbus)
@@ -288,28 +314,35 @@ if __name__ == "__main__":
     gpio.switch_to_psu_measurement()
     sleep(0.5)
 
-    exit()
-    #psu = M3900(f"TCPIP0::{LINE_NETWORK}.46::inst0::INSTR")  # visa socket 0
-    #psu = M3900(f"TCPIP0::{LINE_NETWORK}.47::inst0::INSTR")  # visa socket 1
-    psu = M3900(f"{LINE_NETWORK}.47:30000")  # socket 0
-    psu2 = M3900(f"{LINE_NETWORK}.46:30000")  # socket 1
 
-    psu.set_output_state(0)
+    if SOCKET == 0:
+        psu = M3900(f"{LINE_NETWORK}.47:30000")  # socket 0
+        psu2 = M3900(f"{LINE_NETWORK}.46:30000")  # socket 1 for PSU test function
+    if SOCKET == 1:
+        psu = M3900(f"{LINE_NETWORK}.46:30000")  # socket 1
+
+    #psu.set_output_state(0)
+    #gpio.switch_to_battery_tester_measurement()
+    #sleep(0.5)
+
     print("INIT Hioki")
-    bt = Hioki_BT3561A(f"{LINE_NETWORK}.44:23", termination="\r\n")  # socket 0
-    #bt = Hioki_BT3561A(f"{LINE_NETWORK}.45:23", termination="\r\n")  # socket 1
+    if SOCKET == 0:
+        bt = Hioki_BT3561A(f"{LINE_NETWORK}.44:23", termination="\r\n")  # socket 0
+    if SOCKET == 1:
+        bt = Hioki_BT3561A(f"{LINE_NETWORK}.45:23", termination="\r\n")  # socket 1
     bt.init()
+    print(bt.measure())
+
 
     #relay_test(20, gpio, psu, bt)
-    psu_test(bat, gpio, psu, psu2)
+    #psu_test(bat, gpio, psu, psu2)
     #rack_test(bat, gpio, psu, bt)
     #spinel_test(bat, gpio, psu, bt)
-    pass
-    # scan = create_barcode_scanner("172.21.101.41:2000")
-    # _udi = scan.request(None, timeout=10, encoding="ascii")
-    # print(_udi)
-    # records = [s.split("\x1d") for s in _udi.split("\x04")[0].split("\x1e")]
-    # print(records)
+
+    _udi = scan.request(None, timeout=10, encoding="ascii")
+    print(_udi)
+    records = [s.split("\x1d") for s in _udi.split("\x04")[0].split("\x1e")]
+    print(records)
 
     #Received: '[)>\x1e06\x1d\\0000261P110282-01\x1d30PSPINEL\x1d10D2305\x1dSSPIN01R1000063\x1e\x04\r\n'
     #[)>▲06↔\0000261P110282-01↔30PSPINEL↔10D2305↔SSPIN01R1000063▲♦
