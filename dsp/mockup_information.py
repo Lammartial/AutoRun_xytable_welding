@@ -154,7 +154,7 @@ PART_INFORMATION = {
         },
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
-            "test_program_id": ("HP-SQ_2040-2S", "100559S_RRC2040-2_EOL-Test_A"),
+            "test_program_id": ("HP-SQ_2040-2S", "100559S_RRC2040-2S_EOL-Test_B"),
             "part_number": ("HP-PN_2040-2S", "100559S-11"),
         }
     },
