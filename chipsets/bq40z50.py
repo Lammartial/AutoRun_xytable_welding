@@ -1160,10 +1160,11 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.write_flash_block(0x4000, block)
         # 4. Return calibrated cell_voltages
         self._ms_toggle_helper("cal_test", False, 0x002d)
-        sleep(0.1)
+        sleep(0.3)
         dasstat = self.manufacturing_dastatus1()
         res = [dasstat[1 + i] for i in range(n_cell)]
         return np.array(res), cell_gain
+
 
     def calib_read_adc_bat_voltage(self,  samples: int = 4, shorted: bool = False,  timeout: float = 5.0) -> float:
         """Enables the calibration mode of the battery if not set already, then
@@ -1200,6 +1201,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         else: adc_bat_voltage = 0
         return float(adc_bat_voltage)
 
+
     def calib_write_bat_voltage_gain(self, bat_voltage: float, shorted: bool = False) -> Tuple[float, int]:
         """
         Battery Voltage Calibration.
@@ -1231,9 +1233,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.write_flash_block(0x4000, block)
         # 4. Return calibrated cell_voltages
         self._ms_toggle_helper("cal_test", False, 0x002d)
-        sleep(0.1)
+        sleep(0.3)
         dasstat = self.manufacturing_dastatus1()
         return float(dasstat[5]), bat_gain
+
 
     def calib_read_adc_pack_voltage(self,  samples: int = 4, shorted: bool = False,  timeout: float = 5.0) -> float:
         """Enables the calibration mode of the battery if not set already, then
@@ -1270,6 +1273,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         else: adc_pack_voltage = 0
         return float(adc_pack_voltage)
 
+
     def calib_write_pack_voltage_gain(self, pack_voltage: float, shorted: bool = False) -> Tuple[float, int]:
         """
         Package Voltage Calibration.
@@ -1300,9 +1304,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.write_flash_block(0x4000, block)
         # 4. Return calibrated cell_voltages
         self._ms_toggle_helper("cal_test", False, 0x002d)
-        sleep(0.1)
+        sleep(0.3)
         dasstat = self.manufacturing_dastatus1()
         return float(dasstat[6]), pack_gain
+
 
     def calib_read_adc_current(self,  samples: int = 4, shorted: bool = False,  timeout: float = 5.0) -> float:
         """
@@ -1341,6 +1346,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         else:
             adc_curr = 0
         return adc_curr
+
 
     def calib_write_current_gain(self, current: float, shorted: bool = False) -> Tuple[float,float,float,float,float]:
         """
