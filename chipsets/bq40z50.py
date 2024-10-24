@@ -1386,7 +1386,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.write_flash_block(0x4000, block)
         # 4. Return calibrated current
         self._ms_toggle_helper("cal_test", False, 0x002d)
-        sleep(0.27)
+        sleep(0.3)
         ## wait the 8-bit counter changed by 2 -> overflow need to be respected!
         ## timeout = 1s
         #self.wait_for_adc_update(2, 1.0)
