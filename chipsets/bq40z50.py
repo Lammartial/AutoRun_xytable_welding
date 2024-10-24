@@ -1947,13 +1947,6 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return str(buf)
 
 
-    def safety_status(self, hexi: bool | str | None = None) -> tuple:
-        self.manufacturer_access = 0x0053
-        buf = self.manufacturer_data
-        self._pf_status = self._decode_safety_status(buf, hexi=hexi)
-        return _od2t(self._pf_status)  # Teststand interface
-
-
     def _decode_pf_status(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:
         os = unpack("<L", buf)[0]
         return OrderedDict({
@@ -1994,10 +1987,17 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         })
 
 
+    def pf_status(self, hexi: bool | str | None = None) -> tuple:
+        self.manufacturer_access = 0x0053
+        buf = self.manufacturer_data
+        self._pf_status = self._decode_pf_status(buf, hexi=hexi)
+        return _od2t(self._pf_status)  # Teststand interface
+
+
     def get_pf_status(self) -> str:
         """
         Returns PF status register to log it.
-        Legacy, please use safety_status instead.
+        Legacy, please use pf_status instead.
 
         Returns:
             str: PF status register
