@@ -1892,7 +1892,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
-            "RSVD": ((os>>30) & 0x3),  # Reserved. Do not use.
+            "RSVD4": ((os>>30) & 0x3),  # Reserved. Do not use.
             "OCDL":  ((os>>29) & 1),  # Overcurrent in Discharge
             "COVL": ((os>>28) & 1),  #  Cell Overvoltage Latch
             "UTD": ((os>>27) & 1),  #  Undertemperature During Discharge
@@ -1901,13 +1901,13 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "CHGV": ((os>>24) & 1),  #  Overcharging Voltage
             "CHGC": ((os>>23) & 1),  #  Overcharging Current
             "OC": ((os>>22) & 1),  #  Overcharge
-            "RSVD": ((os>>21) & 1),  #  Reserved. Do not use.
+            "RSVD3": ((os>>21) & 1),  #  Reserved. Do not use.
             "CTO": ((os>>20) & 1),  #  Charge Timeout
-            "RSVD": ((os>>19) & 1),  #  Reserved. Do not use.
+            "RSVD2": ((os>>19) & 1),  #  Reserved. Do not use.
             "PTO": ((os>>18) & 1),  #  Precharge Timeout
-            "RSVD": ((os>>17) & 1),  #  Reserved. Do not use.
+            "RSVD1": ((os>>17) & 1),  #  Reserved. Do not use.
             "OTF": ((os>>16) & 1),  #  Overtemperature FET
-            "RSVD": ((os>>15) & 1),  #  Reserved. Do not use.
+            "RSVD0": ((os>>15) & 1),  #  Reserved. Do not use.
             "CUVC": ((os>>14) & 1),  #  Cell Undervoltage Compensated
             "OTD": ((os>>13) & 1),  #  Overtemperature During Discharge
             "OTC": ((os>>12) & 1),  #  Overtemperature During Charge
@@ -1947,6 +1947,13 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return str(buf)
 
 
+    def safety_status(self, hexi: bool | str | None = None) -> tuple:
+        self.manufacturer_access = 0x0053
+        buf = self.manufacturer_data
+        self._pf_status = self._decode_safety_status(buf, hexi=hexi)
+        return _od2t(self._pf_status)  # Teststand interface
+
+
     def _decode_pf_status(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:
         os = unpack("<L", buf)[0]
         return OrderedDict({
@@ -1956,9 +1963,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "TS3": ((os>>30) & 1),  #  Open Thermistor–TS3 Failure
             "TS2": ((os>>29) & 1),  #  Open Thermistor–TS2 Failure
             "TS1": ((os>>28) & 1),  #  Open Thermistor–TS1 Failure
-            "RSVD": ((os>>27) & 1),  #  Reserved. Do not use.
+            "RSVD1": ((os>>27) & 1),  #  Reserved. Do not use.
             "DFW": ((os>>26) & 1),  #  Data Flash Wearout Failure
-            "RSVD": ((os>>25) & 1),  #  Reserved. Do not use.
+            "RSVD0": ((os>>25) & 1),  #  Reserved. Do not use.
             "IFC": ((os>>24) & 1),  #  Instruction Flash Checksum Failure
             "PTC": ((os>>23) & 1),  #  PTC Failure
             "2LVL": ((os>>22) & 1),  #  Second Level Protector Failure
@@ -1987,17 +1994,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         })
 
 
-    def safety_status(self, hexi: bool | str | None = None) -> tuple:
-        self.manufacturer_access = 0x0053
-        buf = self.manufacturer_data
-        self._pf_status = self._decode_safety_status(buf, hexi=hexi)
-        return _od2t(self._pf_status)  # Teststand interface
-
-
     def get_pf_status(self) -> str:
         """
         Returns PF status register to log it.
-        Legacy, please use ps_status instead.
+        Legacy, please use safety_status instead.
 
         Returns:
             str: PF status register

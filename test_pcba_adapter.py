@@ -178,7 +178,7 @@ def rack_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO,
     vsim.enable_all_cell_channels()
     vsim.set_cell_n_voltage(1, 3.6)
     vsim.set_cell_n_voltage(2, 3.6)
-    vsim.set_cell_n_voltage(3, 3.6)
+    #vsim.set_cell_n_voltage(3, 3.6)
     #vsim.set_cell_n_voltage(4, 3.6)
 
     #psu1.configure_supply(10.8, 0.080, 50, 1)
@@ -202,6 +202,11 @@ def rack_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO,
     print("Test LEDs ON")
     print(bat.set_led_onoff(1))
     print(bat.set_led_display(1))
+
+
+    _ss = bat.safety_status(hexi=True)
+    print(_ss)
+
 
     print("Issue capture command...")
     print(feasa.capture_pwm())
