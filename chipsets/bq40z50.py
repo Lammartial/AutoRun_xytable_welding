@@ -1853,11 +1853,13 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
 
         CMD_MANUFACTURER_DATE = 0x1B
-        val = self.readWordVerified(cmd=CMD_MANUFACTURER_DATE)
+        val, ok = self.readWordVerified(cmd=CMD_MANUFACTURER_DATE)
+        if not ok:
+            raise Exception(f"Cound not read 'ManufacturerDate'.")
         day = ((val >> 0) & 0x1f)
         month = ((val >> 5) & 0x0f)
         year = (1980 + ((val >> 9) & 0x7f))
-        res = "{:d}-{:02d}-{:02d}".format(year, month, day)
+        res = f"{year:d}-{month:02d}-{day:02d}"
         return res
 
 
