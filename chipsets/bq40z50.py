@@ -1836,14 +1836,30 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             bool: True - success, False - failed
         """
-        try:
-            now = datetime.now()
-            bq_date = int(now.day + 32*now.month + (now.year - 1980)*512)
-            cmd_manufacturer_date = 0x1B
-            res = self.writeWordVerified(cmd= cmd_manufacturer_date, w= bq_date)
-        except Exception:
-            raise
+
+        CMD_MANUFACTURER_DATE = 0x1B
+        now = datetime.now()
+        bq_date = int(now.day + 32*now.month + (now.year - 1980)*512)
+        res = self.writeWordVerified(cmd=CMD_MANUFACTURER_DATE, w=bq_date)
         return bool(res)
+
+
+    def read_manufacturer_date(self) -> str:
+        """
+        Read manufacturer date from the register 0x1B ManufacturerDate()
+
+        Returns:
+            str: manufacturing date as "YYYY-MM-DD"
+        """
+
+        CMD_MANUFACTURER_DATE = 0x1B
+        val = self.readWordVerified(cmd=CMD_MANUFACTURER_DATE)
+        day = ((val >> 0) & 0x1f)
+        month = ((val >> 5) & 0x0f)
+        year = (1980 + ((val >> 9) & 0x7f))
+        res = "{:d}-{:02d}-{:02d}".format(year, month, day)
+        return res
+
 
     def set_pack_sn(self, sn: str) -> bool:
         """

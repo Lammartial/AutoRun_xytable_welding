@@ -84,7 +84,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2054S", "412100_RRC2054S_PCBA-Test_B"),
+            "test_program_id": ("PT-SQ_2054S", "412100_RRC2054S_PCBA-Test_C"),
             "part_number": ("PT-PN_2054S", "412100-01"),
         },
         "COREPACK_TEST": {
