@@ -152,13 +152,14 @@ if __name__ == "__main__":
 
     temp = STS21(I2CMuxedBus(i2cbus, mux, 3), i2c_address_7bit="0x4A,0x40")  # hidden change from STS21 to SHT25 changed i2c address from 0x4A to 0x40
     print(temp.start_measurement_no_hold())
-
-    print("nothing")
+    
     for i in range(1):
         print(bat.isReady())
         sleep(0.5)
         #print(bat.battery_status())
         #print(bat.device_name())
+
+    print(bat.read_manufacturer_date())
 
     # print("switch SENSE")
     gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
@@ -182,6 +183,6 @@ if __name__ == "__main__":
 
     #psu_test(bat, gpio, psu)
     #test_sha1_key_change(bat, gpio, psu)
-    test_change_device_name(bat, gpio, psu)
+    #test_change_device_name(bat, gpio, psu)
 
 # END OF FILE
