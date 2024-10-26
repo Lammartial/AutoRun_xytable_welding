@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from pathlib import Path
 from datetime import datetime
+from copy import deepcopy
 import uuid
 import pandas as pd
 from rrc.custom_logging import getLogger
@@ -143,10 +144,10 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
     #_product_name = "RRC2020B"
     #_product_name = "RRC2020-DR"
     #_product_name = "RRC2040B"
-    #_product_name = "RRC2054S"
+    _product_name = "RRC2054S"
     #_product_name = "RRC2054-SO"
     #_product_name = "SPINEL"
-    _product_name = "RRC2040-2S"
+    #_product_name = "RRC2040-2S"
     #_product_name = "RRC2054-2S"
     #_product_name = "RRC2054-2-HM"
     #_product_name = "RRC2054-2-LM"
@@ -227,7 +228,8 @@ async def report_test_result(item: Item):
                     _rows_for_datfile = []
                     _ts = datetime.now()  # local time !
                     _serial = None
-                    for _ct in _lblprn["file_content"]:
+                    for _content in _lblprn["file_content"]:
+                        _ct = deepcopy(_content)  # this is IMPORTANT! otherwise the webserver uses always old data after first execution
                         if _ct["MATNR"] is None:
                             _ct["MATNR"] = _pn  # update the _pn
                         _sn_parts = str(item.serial_number).split(",")
@@ -235,7 +237,7 @@ async def report_test_result(item: Item):
                             # we got a correct rework result to process
                             _prn = str(_ct['PRINTERNAME'])
                             _plant = "2000"
-                            item.line_id = 1  # DEBUG ONLY
+                            #item.line_id = 1  # DEBUG ONLY
                             _ct['PRINTERNAME'] = _prn.replace("{01}", _plant).replace("{02}", str(item.line_id))
                             _manufacture_date = datetime.strptime(_sn_parts[1], "%Y-%m-%d")  # we need to convert into datetime object to get the day of week later on
                             _ct["MANUFACTURE_DATE"] =  _manufacture_date.strftime("%Y%m%d")
