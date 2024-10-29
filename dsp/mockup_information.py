@@ -114,7 +114,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2054S", "412100_RRC2054S_PCBA-Test_B"),
+            "test_program_id": ("PT-SQ_2054S", "412100_RRC2054S_PCBA-Test_C"),
             "part_number": ("PT-PN_2054S", "412100-01"),
         },
         "COREPACK_TEST": {
@@ -302,37 +302,7 @@ PART_INFORMATION = {
             "test_program_id": ("HP-SQ_2054-2-LM", "110186S_RRC2054-2-LM_EOL-Test_A"),
             "part_number": ("HP-PN_2054-2-LM", "110186S-04"),
         }
-    },
-    #
-    # RRC2020B_SDNWAKEUP
-    #
-    "RRC2020B_SDNWAKEUP": {
-        "CELL_TEST": {
-            # Cell Test PRT IDs
-            "test_program_id": ("CT-SQ_2020B", "412081_RRC2020B_Cell-Test_C"),
-            "part_number": ("CT-PN_2020B", "412081-01"),  # using the pre-assembly PN
-        },
-        "CELL_WELDING": {
-            # Cell Welding PRT IDs:
-            "test_program_id": ("CW-SQ_2020B", "A"),
-            "part_number": ("CW-PN_2020B", "412081-01"),  # using the pre-assembly PN
-        },
-        "PCBA_TEST": {
-            # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2020B", "411828_RRC2020B_PCBA-Test_B"),
-            "part_number": ("PT-PN_2020B", "411828-05"),  # using the pcba part number PN
-        },
-        "COREPACK_TEST": {
-            # Core Pack Test PRT IDs:
-            "test_program_id": ("CP-SQ_2020B", "412081_RRC2020B_Corepack-Test_B"),
-            "part_number": ("CP-PN_2020B", "412081-01"),  # using the pre-assembly PN
-        },
-        "EOL_TEST": {
-            # Hard Pack (End-Of-Line) Test PRT IDs:
-            "test_program_id": ("HP-SQ_2020B", "100496_RRC2020_Re-Program_from_DR_EOL-Test_A"),
-            "part_number": ("HP-PN_2020B", "100496-18"),  # using the product number PN
-        }
-    },
+    },   
     #
     # QSB2040B
     #
