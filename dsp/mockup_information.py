@@ -470,7 +470,7 @@ LABEL_PRINTING = {
     # RRC2054-2S
     #
     "110064S-08": {
-        "enabled": False,  # set to True to trigger a label print file (.dat) written into unc path
+        "enabled": True,  # set to True to trigger a label print file (.dat) written into unc path
         "unc_path": "//sv-vn-bartender.rrcpowersolutions.com/batterylabel/",  # slashes / will be transformed by Path() into backslashes on use
         #"unc_path": "C:/bartender-out/",  # DEBUG
         "file_content": [  # list of possible label file row entries - at least one
