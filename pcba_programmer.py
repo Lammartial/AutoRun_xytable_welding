@@ -50,9 +50,9 @@ _log = getLogger(__name__, DEBUG)
 # Note: these IP numbers gets transformed according to the line setting in
 #       station_config.yaml using key "PCBA_TEST", socket 0, resource 0
 PROGRAMMERS = [
-    "172.21.101.7:2101",
-    "172.21.101.8:2101",
-    "172.21.101.9:2101",
+    "172.25.102.7:2101",
+    "172.25.102.9:2101",
+    "172.25.102.10:2101",
     #"172.21.101.50:2101",
     # ... add more if needed ...
 ]
