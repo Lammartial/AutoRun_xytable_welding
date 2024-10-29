@@ -144,14 +144,13 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
     #_product_name = "RRC2020B"
     #_product_name = "RRC2020-DR"
     #_product_name = "RRC2040B"
-    _product_name = "RRC2054S"
+    #_product_name = "RRC2054S"
     #_product_name = "RRC2054-SO"
     #_product_name = "SPINEL"
     #_product_name = "RRC2040-2S"
-    #_product_name = "RRC2054-2S"
+    _product_name = "RRC2054-2S"
     #_product_name = "RRC2054-2-HM"
     #_product_name = "RRC2054-2-LM"
-    #_product_name = "RRC2020B_SDNWAKEUP"
     #_product_name = "QSB2040B"
     #_product_name = "QSB2054B"
     #_product_name = "QSB2040-2B"
@@ -212,7 +211,8 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
 async def report_test_result(item: Item):
     global LABEL_PRINTING
 
-    getLogger(__name__, 2).debug(f"Accepted item: {item}")
+    _log = getLogger(__name__, 2)
+    _log.debug(f"Accepted item: {item}")
 
     if "EOL_TEST" in item.test_type:
         # check option to trigger print of product labels
@@ -221,58 +221,62 @@ async def report_test_result(item: Item):
         if _pn in LABEL_PRINTING:
             try:
                 _lblprn = LABEL_PRINTING[_pn]
-                getLogger(__name__, 2).debug(f"Label printing: {_lblprn}")
                 if _lblprn["enabled"]:
                     # generally enabled
-                    # now create the rows for the trigger .dat file
-                    _rows_for_datfile = []
-                    _ts = datetime.now()  # local time !
-                    _serial = None
-                    for _content in _lblprn["file_content"]:
-                        _ct = deepcopy(_content)  # this is IMPORTANT! otherwise the webserver uses always old data after first execution
-                        if _ct["MATNR"] is None:
-                            _ct["MATNR"] = _pn  # update the _pn
-                        _sn_parts = str(item.serial_number).split(",")
-                        if len(_sn_parts) == 2:
-                            # we got a correct rework result to process
-                            _prn = str(_ct['PRINTERNAME'])
-                            _plant = "2000"
-                            #item.line_id = 1  # DEBUG ONLY
-                            _ct['PRINTERNAME'] = _prn.replace("{01}", _plant).replace("{02}", str(item.line_id))
-                            _manufacture_date = datetime.strptime(_sn_parts[1], "%Y-%m-%d")  # we need to convert into datetime object to get the day of week later on
-                            _ct["MANUFACTURE_DATE"] =  _manufacture_date.strftime("%Y%m%d")
-                            _ct["WEEKDAY"] = "UMTWRFS"[int(_manufacture_date.strftime("%w"))]  # we use our own definition of weekday letters 0=sunday, ... , 6=saturday
-                            #_ct["DATECODE"] = _manufacture_date.strftime("%y%U")  # caldendarweek, first week begins with first sunday
-                            _ct["DATECODE"] = _manufacture_date.strftime("%y%W")  # caldendarweek, first week begins with first monday
-                            
-                            # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
-                            #_serial = f"000000{_sn_parts[0]}"[-6:]  # DEVELOP: expand with 0s and get right 6 chars
-                            #_serial = _ct["SERIAL"].replace("{01}", _serial[:2]).replace("{02}", _serial[2:])
-                            _serial = _sn_parts[0]
-                            _ct["SERIAL"] = f"{_serial[:4]} {_serial[4:6]} {_serial[6:8]} {_serial[8:10]} {_serial[10:14]}" 
+                    if item.result.upper() == "P":                
+                        _log.info(f"Label printing: {_lblprn}")
+                        # now create the rows for the trigger .dat file
+                        _rows_for_datfile = []
+                        _ts = datetime.now()  # local time !
+                        _serial = None
+                        for _content in _lblprn["file_content"]:
+                            _ct = deepcopy(_content)  # this is IMPORTANT! otherwise the webserver uses always old data after first execution
+                            if _ct["MATNR"] is None:
+                                _ct["MATNR"] = _pn  # update the _pn
+                            _sn_parts = str(item.serial_number).split(",")
+                            if len(_sn_parts) == 2:
+                                # we got a correct rework result to process
+                                _prn = str(_ct['PRINTERNAME'])
+                                _plant = "2000"
+                                #item.line_id = 1  # DEBUG ONLY
+                                _ct['PRINTERNAME'] = _prn.replace("{01}", _plant).replace("{02}", str(item.line_id))
+                                _manufacture_date = datetime.strptime(_sn_parts[1], "%Y-%m-%d")  # we need to convert into datetime object to get the day of week later on
+                                _ct["MANUFACTURE_DATE"] =  _manufacture_date.strftime("%Y%m%d")
+                                _ct["WEEKDAY"] = "UMTWRFS"[int(_manufacture_date.strftime("%w"))]  # we use our own definition of weekday letters 0=sunday, ... , 6=saturday
+                                #_ct["DATECODE"] = _manufacture_date.strftime("%y%U")  # caldendarweek, first week begins with first sunday
+                                _ct["DATECODE"] = _manufacture_date.strftime("%y%W")  # caldendarweek, first week begins with first monday
+                                
+                                # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
+                                #_serial = f"000000{_sn_parts[0]}"[-6:]  # DEVELOP: expand with 0s and get right 6 chars
+                                #_serial = _ct["SERIAL"].replace("{01}", _serial[:2]).replace("{02}", _serial[2:])
+                                _serial = _sn_parts[0]
+                                _ct["SERIAL"] = f"{_serial[:4]} {_serial[4:6]} {_serial[6:8]} {_serial[8:10]} {_serial[10:14]}" 
 
-                            # now combine the code for the printer
-                            _da: str = _ct["CODEDATA"]
-                            _da = _da.replace("{01}", _ct["MATNR"])\
-                                        .replace("{02}", _ct["MATNAME"])\
-                                        .replace("{03}", _ct["DATECODE"])\
-                                        .replace("{04}", _ct["SERIAL"].replace(" ",""))
-                            _ct["CODEDATA"] = _da
-                            _ct["CODEDATABIG"] = None
-                            # update back
-                            _rows_for_datfile.append(_ct)
-                    # create the trigger file
-                    df = pd.DataFrame(_rows_for_datfile)  #.drop(columns=["include_this"])
-                    if _serial:
-                        _fp = Path(_lblprn["unc_path"])
-                        if _fp.exists() and _fp.is_dir():
-                            _datfilename = _fp / f'{_serial.replace(" ", "_")}_{str(uuid.uuid1()).replace("-","").upper()}_{_ts.strftime("%Y%m%d%H%M%S")}.dat'
-                            #_datfilename = _fp / "test.csv"  # DEBUG
-                            print(_datfilename.absolute())  # DEBUG
-                            df.to_csv(_datfilename, index=False, sep="\t")
+                                # now combine the code for the printer
+                                _da: str = _ct["CODEDATA"]
+                                _da = _da.replace("{01}", _ct["MATNR"])\
+                                            .replace("{02}", _ct["MATNAME"])\
+                                            .replace("{03}", _ct["DATECODE"])\
+                                            .replace("{04}", _ct["SERIAL"].replace(" ",""))
+                                _ct["CODEDATA"] = _da
+                                _ct["CODEDATABIG"] = None
+                                # update back
+                                _rows_for_datfile.append(_ct)
+                        # create the trigger file
+                        df = pd.DataFrame(_rows_for_datfile)  #.drop(columns=["include_this"])
+                        if _serial:
+                            _fp = Path(_lblprn["unc_path"])
+                            if _fp.exists() and _fp.is_dir():
+                                _datfilename = _fp / f'{_serial.replace(" ", "_")}_{str(uuid.uuid1()).replace("-","").upper()}_{_ts.strftime("%Y%m%d%H%M%S")}.dat'
+                                #_datfilename = _fp / "test.csv"  # DEBUG
+                                _log.info(f"Created label file: {_datfilename.absolute()}")
+                                df.to_csv(_datfilename, index=False, sep="\t")
+                    else:
+                        # result is not passed -> don't create printfile
+                        _log.info(f"Result not pass, cannot print")
             except Exception as ex:
-                print(f"Something wrong in label file preparation: {ex}")
-                print("EXCEPTION IGNORED.")
+                _log.error(f"Something wrong in label file preparation: {ex}")
+                _log.error("EXCEPTION IGNORED.")
         else:
             pass  # printing NOT enabled at all
     return item
