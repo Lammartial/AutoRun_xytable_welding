@@ -103,7 +103,7 @@ def test_sha1_key_change(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3400):
 
     #print(bat.change_authentication_key_cipher("Tl9SBaHNYtJim7U4mx9UxWoMuZK0tXgLzNhg/GaY+giMH5nykWOFeuU9gkMNli0GMNWa8rS42IA9iXZUoNCI7yOT+YoDzIaURHVgpA9ShXU=", 7))  # standard RRC
     print(bat.change_authentication_key_cipher("CPPFqb90MIiM8T2FjVdV/w9kXEE8tIdPr0UCTGu+XHq5qwfV7V8W4Te5iLajWcIGUZXmyvr+IV+PAKc5sLDMHAvo4+FqD0ClJtKzN0ZTPPg=", 4))  # new key
-    
+
 
 #--------------------------------------------------------------------------------------------------
 
@@ -111,7 +111,7 @@ def test_sha1_key_change(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3400):
 def test_change_device_name(bat: BQ40Z50R1, gpio: CorePackRelayBoard, psu: M3400):
     #psu.configure_supply(10.8, 0.1, 50, set_output=1)
     #psu.configure_cc_mode(-0.5,2.0,10.8,0,-50,1)
-    psu.configure_cc_mode(+0.5,2.0,10.8,0,50,1) 
+    psu.configure_cc_mode(+0.5,2.0,10.8,0,50,1)
     print(bat.is_sealed())
     bat.enable_full_access()
     print(bat.read_device_name_block()) # original
@@ -128,9 +128,10 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    #LINE_NETWORK = "172.25.101"  # VN line 1
-    LINE_NETWORK = "172.25.102"  # VN line 2
     #LINE_NETWORK = "172.21.101"  # HOM Warehouse
+    #LINE_NETWORK = "172.25.101"  # VN line 1
+    #LINE_NETWORK = "172.25.102"  # VN line 2
+    LINE_NETWORK = "172.25.103"  # VN line 3
 
 
     #_old = decrypt("Tl9SBaHNYtJim7U4mx9UxWoMuZK0tXgLzNhg/GaY+giMH5nykWOFeuU9gkMNli0GMNWa8rS42IA9iXZUoNCI7yOT+YoDzIaURHVgpA9ShXU=", 7)
@@ -139,6 +140,7 @@ if __name__ == "__main__":
     #exit()
 
     i2cbus = I2CPort(f"{LINE_NETWORK}.50:2101") # socket 0
+    #print("CH:", i2cbus.i2c_bus_scan())
 
     mux = BusMux(i2cbus, address=0x77)
     for i in range(8):
@@ -148,15 +150,16 @@ if __name__ == "__main__":
     smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 1), retry_limit=7, verify_rounds=3, pause_us=50)
     bat = BQ40Z50R1(smbus, pec=False)
 
-    temp = STS21(I2CMuxedBus(i2cbus, mux, 3))
+    temp = STS21(I2CMuxedBus(i2cbus, mux, 3), i2c_address_7bit="0x4A,0x40")  # hidden change from STS21 to SHT25 changed i2c address from 0x4A to 0x40
     print(temp.start_measurement_no_hold())
-
-    print("nothing")
+    
     for i in range(1):
         print(bat.isReady())
         sleep(0.5)
         #print(bat.battery_status())
         #print(bat.device_name())
+
+    print(bat.read_manufacturer_date())
 
     # print("switch SENSE")
     gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
@@ -180,6 +183,6 @@ if __name__ == "__main__":
 
     #psu_test(bat, gpio, psu)
     #test_sha1_key_change(bat, gpio, psu)
-    test_change_device_name(bat, gpio, psu)
+    #test_change_device_name(bat, gpio, psu)
 
 # END OF FILE

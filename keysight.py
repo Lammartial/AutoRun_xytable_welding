@@ -92,7 +92,10 @@ class DAQ970A(Eth2SerialDevice):
 
         """
         super().__init__(resource_str, termination="\n", open_connection=False)  # The hioki expects to have connect/disconnect for each command
-        self.change_card_slot(card_slot)  # also sets the self.card_slot
+        self.change_card_slot(card_slot)  # also sets the self.card_slot        
+        self._channel_delay_map = {}  # this map's values can be adjusted by the setup_channel_delay_preset() function later on
+        self._voltage_range_map = {}  # this map's values can be adjusted by the setup_voltage_range_and_resolution_preset() function later on
+        self._voltage_resolution_map = {}  # this map's values can be adjusted by the setup_voltage_range_and_resolution_preset() function later on
 
     def __str__(self) -> str:
         return f"DAQ970A device on {super().__str__()}"
@@ -104,13 +107,14 @@ class DAQ970A(Eth2SerialDevice):
     # insert the channel to message strings for this device
 
     def send(self, msg: str, timeout: int = 3000) -> None:
-        super().send(msg, timeout=timeout, pause_after_write=10, retries=3)
+        super().send(msg, timeout=timeout/1000, pause_after_write=10, retries=3)
 
     def request(self, msg: str, timeout: int = 5000) -> str:
-        return super().request(msg, timeout=timeout, pause_after_write=80, retries=5).strip()
+        return super().request(msg, timeout=timeout/1000, pause_after_write=80, retries=5).strip()
 
     
-    #----------------------------------------------------------------------------------------------
+    #----------------------------------------------------------------------------------------------     
+
     def selftest(self) -> int:
         """
         Returns device self-test results, takes ~ 2 sec.
@@ -171,6 +175,67 @@ class DAQ970A(Eth2SerialDevice):
         """
         assert (int(new_slot) > 0 and int(new_slot) < 4), ValueError(f"Error, 'card_slot' must be in 1..3 but was {int(new_slot)}")        
         self.card_slot = int(new_slot)
+
+    #----------------------------------------------------------------------------------------------
+
+    def setup_channel_delay_preset(self, channel: int | str, delay_in_s: str | float = "AUTO") -> None:
+        """
+        Sets the route delay preset internally for the channel either to this value if > 0 and <= 60.0 or AUTO otherwise.
+        The delay will than later be used if the channel is being measured for voltage.        
+
+        Args:
+            channel (str | int): either single channel number as integer or a comma separated list of channels in a string.
+            delay_in_s (str | float): either "AUTO" or a positive float 0 > value <= 60.0 in seconds. Defaults to "AUTO".
+        
+        """
+
+        assert((isinstance(delay_in_s, float) and (delay_in_s > 0) and (delay_in_s <= 60.0)) or (isinstance(delay_in_s, str) and (delay_in_s == "AUTO"))), \
+            ValueError('Invalid delay. Check the available delay values in the function description.')
+        assert(isinstance(channel, (int, float, str))), \
+            ValueError('Invalid channel. Check the available channel values in the function description.')
+                   
+        if isinstance(channel, (float, int)):
+            _ch = self._meas_chan(0, int(channel))
+            self._channel_delay_map[_ch] = delay_in_s
+        else:
+            # need to be a string -> process a list of channels         
+            _list_of_channels = str(channel).split(",")
+            for c in _list_of_channels:
+                _ch = self._meas_chan(0, int(c))
+                self._channel_delay_map[_ch] = delay_in_s
+    
+
+    def setup_voltage_range_and_resolution_preset(self, channel: int | str, scale: str | float = "AUTO", resolution: str | float = "DEF") -> None:
+        """_summary_
+
+        Args:
+            channel (int): _description_
+            scale (str | float, optional): _description_. Defaults to "AUTO".
+            resolution (str | float, optional): _description_. Defaults to "DEF".
+        """
+
+        scale_str_list = ("AUTO", "MIN", "MAX", "DEF", "100 mV" ,"1 V", "10 V", "100 V", "300 V")
+        resolution_str_list = ("MIN", "MAX", "DEF")
+        assert(isinstance(scale, float) or (isinstance(scale, str) and scale in scale_str_list)), \
+            ValueError('Invalid scale. Check the available scale values in the function description.')
+        assert(isinstance(resolution, float) or (isinstance(resolution, str) and resolution in resolution_str_list)), \
+            ValueError('Invalid resolution. Check the available resolution values in the function description.')
+        assert(isinstance(channel, (int, float, str))), \
+            ValueError('Invalid channel. Check the available channel values in the function description.')        
+        
+        if isinstance(channel, (float, int)):
+            _ch = self._meas_chan(0, int(channel))
+            self._voltage_range_map[_ch] = scale
+            self._voltage_resolution_map[_ch] = resolution
+        else:
+            # need to be a string -> process a list of channels         
+            _list_of_channels = str(channel).split(",")
+            for c in _list_of_channels:
+                _ch = self._meas_chan(0, int(c))
+                self._voltage_range_map[_ch] = scale
+                self._voltage_resolution_map[_ch] = resolution
+        
+
 
     #----------------------------------------------------------------------------------------------
     
@@ -270,9 +335,16 @@ class DAQ970A(Eth2SerialDevice):
         channel = int(channel)
         assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VDC: Allowed channel range is 1 .. 20.')
         try:
-            cmd = "MEAS:VOLT:DC? AUTO,DEF,(@" + self._meas_chan(0, channel) + ")"
-            #return abs(float(self.request(cmd)))  # we need to clear the sign as some adapters have swapped +/- senses
-            return float(self.request(cmd))
+            _ch = self._meas_chan(0, channel)
+            _scale = self._voltage_range_map[_ch] if _ch in self._voltage_range_map else "AUTO"
+            _resolution = self._voltage_resolution_map[_ch] if _ch in self._voltage_resolution_map else "DEF"
+            cmd = f"CONF:VOLT:DC {_scale},{_resolution},(@{_ch})"
+            self.send(cmd)  # this command automatically set the trigger source to IMMediate and RESETS all other measurement settings to DEFAULT (also the delays)
+            if _ch in self._channel_delay_map:
+                cmd = f"ROUT:CHAN:DEL {self._channel_delay_map[_ch]},(@{_ch})"
+                # we have a delay setting which needs to be send to the device as it will be reset by the config above
+                self.send(cmd)
+            return float(self.request("READ?"))
         except Exception as ex:
             #_log.exception(ex)
             raise
@@ -334,6 +406,7 @@ class DAQ970A(Eth2SerialDevice):
             #_log.exception(ex)
             raise
 
+
     def get_temp_rounded(self, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str, ndigits: int = 3) -> float:
         return round(self.get_temp(int(channel), tran_type, int(rtd_resist), int(fth_type), tc_type), ndigits=int(ndigits))
     
@@ -355,7 +428,7 @@ class DAQ970A(Eth2SerialDevice):
         Returns:
             float: Temperature
         """
-        # trick to use function in NI Teststand
+        
         channel = int(channel)
         rtd_resist = int(rtd_resist)
         fth_type = int(fth_type)
@@ -380,20 +453,7 @@ class DAQ970A(Eth2SerialDevice):
             #_log.exception(ex)
             raise
 
-    #def disconnect(self):
-    #    """Closes the connection (session) and the device.
-    #
-    #    Returns:
-    #        _type_: exception
-    #    """
-    #    # Last operation completed successfully -> Connection is OK
-    #    if (self.rm.last_status == 0):
-    #        try:
-    #            self.session.close()
-    #            self.rm.close()
-    #        except Exception as ex:
-    #            _log.exception(ex)
-    #            raise
+
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":

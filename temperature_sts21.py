@@ -14,15 +14,39 @@ class STS21:
     cmd_trigger_meas_no_hold = 0xF3
     measurement_resolution = {11: 0x81, 12: 0x01, 13: 0x80, 14: 0x00}
 
-    def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x4A):
+    def __init__(self, i2c: I2CBase, i2c_address_7bit: int | str = 0x4A):
         """Initialize the object with an I2CPort object and the 7-bit I2C address.
+        The initially used board of NCD.io' STS21 had a temperature sensor which came with fixed slave address 0x4A.
+        After a while they delivered this board with a different IC of type SHT25, which came with a different slave
+        address of 0x40 being not compatible with the original one. Thus a means to auto-detect which is on the bus
+        has been added.
 
         Args:
             i2c_port: The I2CPort instance this sensor is connected to
-            i2c_address_7bit: The sensor's 7-bit I2C address
+            i2c_address_7bit: The sensor's 7-bit I2C address if positive int else if provided a string
+                it is expected to be a comma separated list of integers to autodetection of the address by bus scan
+                from this list if found any of the members.
         """
+
+        def _convert( s: str ) -> int:
+            if s.lower().startswith("0x"):
+                return int(s, 16)
+            elif s.startswith("0"):
+                return int(s, 8)
+            else:
+                return int(s)
+
         self.i2c = i2c
-        self.i2c_address_7bit = int(i2c_address_7bit)
+        if isinstance(i2c_address_7bit, str):
+            _list_of_addresses = [_convert(n) for n in i2c_address_7bit.split(",")]
+            _found_addresses = i2c.i2c_bus_scan()  # NOTE: this is doing a bus access here!
+            _result = [i for i in _list_of_addresses if i in _found_addresses]
+            self.i2c_address_7bit = _result[0] if len(_result) else None
+            if not self.i2c_address_7bit:
+                raise ValueError(f"Slave address of any '{_list_of_addresses}' not found.")
+        else:
+            # slave address is given as integer
+            self.i2c_address_7bit = int(i2c_address_7bit)
 
     def __str__(self) -> str:
         return f"STS21 temperature sensor device with address {self.i2c_address_7bit:02x} on {self.i2c}"

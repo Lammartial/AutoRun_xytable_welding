@@ -37,9 +37,9 @@ dev = Hioki_SW1001(SW_default_resource_string)
 # now set the new IP
 print(f"Changing Network address on HIOKI SW1001 device at {args.address}:")
 print(f"Set Address={args.ipv4}, Port={args.port}, Mask={args.mask}, Gateway={args.gateway}")
-dev.open_socket()
+#dev.open_socket()
 dev.set_new_ip_address(args.ipv4, new_port=args.port, new_subnet_mask=args.mask, new_default_gateway=args.gateway)
-dev.close_socket()
+#dev.close_socket()
 print("DONE.")
 
 # END OF FILE

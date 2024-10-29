@@ -364,13 +364,24 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     #---UNSEALED HELPER FOR PRODUCTION-------------------------------------------------------------
 
-    # ...
 
     def enable_full_access(self) -> bool:
         #
         # no encrypted keys here!
         #
         return self.unseal(0x8D21FAC3, 0x63DB2CE4)  # low-word goes first to battery
+
+
+    def enable_full_access_qsb(self) -> bool:
+        """Uses unseal key for QSB battery series.
+
+        Returns:
+            bool: _description_
+        """
+        #
+        # no encrypted keys here!
+        #
+        return self.unseal(0xAF3CD812, 0xC24E36BD)  # low-word goes first to battery
 
 
     def wait_for_operation_status_flag(self, os_key: str, state: bool, retries: int = 20, pause_on_retry: float = 0.1) -> bool:
@@ -1160,10 +1171,11 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.write_flash_block(0x4000, block)
         # 4. Return calibrated cell_voltages
         self._ms_toggle_helper("cal_test", False, 0x002d)
-        sleep(0.1)
+        sleep(0.3)
         dasstat = self.manufacturing_dastatus1()
         res = [dasstat[1 + i] for i in range(n_cell)]
         return np.array(res), cell_gain
+
 
     def calib_read_adc_bat_voltage(self,  samples: int = 4, shorted: bool = False,  timeout: float = 5.0) -> float:
         """Enables the calibration mode of the battery if not set already, then
@@ -1200,6 +1212,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         else: adc_bat_voltage = 0
         return float(adc_bat_voltage)
 
+
     def calib_write_bat_voltage_gain(self, bat_voltage: float, shorted: bool = False) -> Tuple[float, int]:
         """
         Battery Voltage Calibration.
@@ -1231,9 +1244,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.write_flash_block(0x4000, block)
         # 4. Return calibrated cell_voltages
         self._ms_toggle_helper("cal_test", False, 0x002d)
-        sleep(0.1)
+        sleep(0.3)
         dasstat = self.manufacturing_dastatus1()
         return float(dasstat[5]), bat_gain
+
 
     def calib_read_adc_pack_voltage(self,  samples: int = 4, shorted: bool = False,  timeout: float = 5.0) -> float:
         """Enables the calibration mode of the battery if not set already, then
@@ -1270,6 +1284,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         else: adc_pack_voltage = 0
         return float(adc_pack_voltage)
 
+
     def calib_write_pack_voltage_gain(self, pack_voltage: float, shorted: bool = False) -> Tuple[float, int]:
         """
         Package Voltage Calibration.
@@ -1300,9 +1315,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.write_flash_block(0x4000, block)
         # 4. Return calibrated cell_voltages
         self._ms_toggle_helper("cal_test", False, 0x002d)
-        sleep(0.1)
+        sleep(0.3)
         dasstat = self.manufacturing_dastatus1()
         return float(dasstat[6]), pack_gain
+
 
     def calib_read_adc_current(self,  samples: int = 4, shorted: bool = False,  timeout: float = 5.0) -> float:
         """
@@ -1341,6 +1357,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         else:
             adc_curr = 0
         return adc_curr
+
 
     def calib_write_current_gain(self, current: float, shorted: bool = False) -> Tuple[float,float,float,float,float]:
         """
@@ -1386,7 +1403,10 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.write_flash_block(0x4000, block)
         # 4. Return calibrated current
         self._ms_toggle_helper("cal_test", False, 0x002d)
-        sleep(0.1)
+        sleep(0.3)
+        ## wait the 8-bit counter changed by 2 -> overflow need to be respected!
+        ## timeout = 1s
+        #self.wait_for_adc_update(2, 1.0)
         # do a measurement to provide verification
         _current_meas = self.get_current()
         # use BQ Studio scale factor
@@ -1827,14 +1847,32 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             bool: True - success, False - failed
         """
-        try:
-            now = datetime.now()
-            bq_date = int(now.day + 32*now.month + (now.year - 1980)*512)
-            cmd_manufacturer_date = 0x1B
-            res = self.writeWordVerified(cmd= cmd_manufacturer_date, w= bq_date)
-        except Exception:
-            raise
+
+        CMD_MANUFACTURER_DATE = 0x1B
+        now = datetime.now()
+        bq_date = int(now.day + 32*now.month + (now.year - 1980)*512)
+        res = self.writeWordVerified(cmd=CMD_MANUFACTURER_DATE, w=bq_date)
         return bool(res)
+
+
+    def read_manufacturer_date(self) -> str:
+        """
+        Read manufacturer date from the register 0x1B ManufacturerDate()
+
+        Returns:
+            str: manufacturing date as "YYYY-MM-DD"
+        """
+
+        CMD_MANUFACTURER_DATE = 0x1B
+        val, ok = self.readWordVerified(cmd=CMD_MANUFACTURER_DATE)
+        if not ok:
+            raise Exception(f"Cound not read 'ManufacturerDate'.")
+        day = ((val >> 0) & 0x1f)
+        month = ((val >> 5) & 0x0f)
+        year = (1980 + ((val >> 9) & 0x7f))
+        res = f"{year:d}-{month:02d}-{day:02d}"
+        return res
+
 
     def set_pack_sn(self, sn: str) -> bool:
         """
@@ -1889,7 +1927,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
-            "RSVD": ((os>>30) & 0x3),  # Reserved. Do not use.
+            "RSVD4": ((os>>30) & 0x3),  # Reserved. Do not use.
             "OCDL":  ((os>>29) & 1),  # Overcurrent in Discharge
             "COVL": ((os>>28) & 1),  #  Cell Overvoltage Latch
             "UTD": ((os>>27) & 1),  #  Undertemperature During Discharge
@@ -1898,13 +1936,13 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "CHGV": ((os>>24) & 1),  #  Overcharging Voltage
             "CHGC": ((os>>23) & 1),  #  Overcharging Current
             "OC": ((os>>22) & 1),  #  Overcharge
-            "RSVD": ((os>>21) & 1),  #  Reserved. Do not use.
+            "RSVD3": ((os>>21) & 1),  #  Reserved. Do not use.
             "CTO": ((os>>20) & 1),  #  Charge Timeout
-            "RSVD": ((os>>19) & 1),  #  Reserved. Do not use.
+            "RSVD2": ((os>>19) & 1),  #  Reserved. Do not use.
             "PTO": ((os>>18) & 1),  #  Precharge Timeout
-            "RSVD": ((os>>17) & 1),  #  Reserved. Do not use.
+            "RSVD1": ((os>>17) & 1),  #  Reserved. Do not use.
             "OTF": ((os>>16) & 1),  #  Overtemperature FET
-            "RSVD": ((os>>15) & 1),  #  Reserved. Do not use.
+            "RSVD0": ((os>>15) & 1),  #  Reserved. Do not use.
             "CUVC": ((os>>14) & 1),  #  Cell Undervoltage Compensated
             "OTD": ((os>>13) & 1),  #  Overtemperature During Discharge
             "OTC": ((os>>12) & 1),  #  Overtemperature During Charge
@@ -1953,9 +1991,9 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             "TS3": ((os>>30) & 1),  #  Open Thermistor–TS3 Failure
             "TS2": ((os>>29) & 1),  #  Open Thermistor–TS2 Failure
             "TS1": ((os>>28) & 1),  #  Open Thermistor–TS1 Failure
-            "RSVD": ((os>>27) & 1),  #  Reserved. Do not use.
+            "RSVD1": ((os>>27) & 1),  #  Reserved. Do not use.
             "DFW": ((os>>26) & 1),  #  Data Flash Wearout Failure
-            "RSVD": ((os>>25) & 1),  #  Reserved. Do not use.
+            "RSVD0": ((os>>25) & 1),  #  Reserved. Do not use.
             "IFC": ((os>>24) & 1),  #  Instruction Flash Checksum Failure
             "PTC": ((os>>23) & 1),  #  PTC Failure
             "2LVL": ((os>>22) & 1),  #  Second Level Protector Failure
@@ -1984,17 +2022,17 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         })
 
 
-    def safety_status(self, hexi: bool | str | None = None) -> tuple:
+    def pf_status(self, hexi: bool | str | None = None) -> tuple:
         self.manufacturer_access = 0x0053
         buf = self.manufacturer_data
-        self._pf_status = self._decode_safety_status(buf, hexi=hexi)
+        self._pf_status = self._decode_pf_status(buf, hexi=hexi)
         return _od2t(self._pf_status)  # Teststand interface
 
 
     def get_pf_status(self) -> str:
         """
         Returns PF status register to log it.
-        Legacy, please use ps_status instead.
+        Legacy, please use pf_status instead.
 
         Returns:
             str: PF status register

@@ -47,12 +47,12 @@ _log = getLogger(__name__, DEBUG)
 
 # define the programmer's resource strings including ports
 # each line is reflected to a line in the dialog
-# Note: these IP numbers gets transformed according to the line setting in 
+# Note: these IP numbers gets transformed according to the line setting in
 #       station_config.yaml using key "PCBA_TEST", socket 0, resource 0
 PROGRAMMERS = [
-    "172.21.101.7:2101",
-    "172.21.101.8:2101",
-    "172.21.101.9:2101",
+    "172.25.102.7:2101",
+    "172.25.102.9:2101",
+    "172.25.102.10:2101",
     #"172.21.101.50:2101",
     # ... add more if needed ...
 ]
@@ -144,7 +144,7 @@ class MultiBQStudioFileFlasher(BQStudioFileFlasher):
         self._use_threading = False
         self._pcba_connected_counter: int = 0
         self._PCBA_MAX_COUNTER: int = 50
-        self._pcba_power: int = 0        
+        self._pcba_power: int = 0
 
 
     def switch_pcba_power(self, onoff: int | bool) -> bool:
@@ -229,7 +229,7 @@ class ProgrammingWorker(mp.Process):
         try:
             # create a progress fowrwarder
             progress_bar = EmbeddedProgressBar(self.q_ui, self.socket)
-                        
+
             # create flasher
             flasher = MultiBQStudioFileFlasher(
                 self.resource_str,
@@ -240,7 +240,7 @@ class ProgrammingWorker(mp.Process):
             #tic = perf_counter()
             if flasher.switch_pcba_power(1):
                 sleep(0.25)  # let the PCBA powering up itself
-            flasher.set_firmware_file_and_widgets(self.firmware_file, progress_bar)            
+            flasher.set_firmware_file_and_widgets(self.firmware_file, progress_bar)
             #toc = perf_counter()
             #_log.info(f"Need {toc - tic:0.4f} seconds")
             _log.info(f"Starting flasher {str(flasher)}:")
@@ -249,7 +249,7 @@ class ProgrammingWorker(mp.Process):
         except Exception as error:
             _log.error(f"Process file raised {error}")
             result = False
-        finally:            
+        finally:
             #flasher.battery.bus.i2c.close()
             pass
         # send result by queue
@@ -265,7 +265,7 @@ class ProgrammingWorker(mp.Process):
 class WindowUI(object):
 
     def __init__(self, command_queue: mp.Queue, selected_product: str, title: str = "PCBA PROGRAMMING"):
-        global DEBUG, PROGRAMMERS, PRODUCT_LIST
+        global DEBUG, PROGRAMMERS, PRODUCT_LIST, USE_RECOVERY_FILE
         global PG_COLOR_PROCESS, PG_COLOR_PASS, PG_COLOR_FAIL
 
         self._log = getLogger(__name__, DEBUG)
@@ -275,7 +275,7 @@ class WindowUI(object):
         self.SELECTED_PRODUCT: str = selected_product
         self.PRODUCT_NAME: str = PRODUCT_LIST[selected_product]["name"]
         self.PRODUCT_CHIPSET: str = PRODUCT_LIST[selected_product]["chipset"]
-        self.PRODUCT_FIRMWARE_FILE: str = PRODUCT_LIST[selected_product]["firmware_file"]
+        self.PRODUCT_FIRMWARE_FILE: str = PRODUCT_LIST[selected_product]["recovery_firmware_file"] if USE_RECOVERY_FILE else PRODUCT_LIST[selected_product]["firmware_file"]
 
         # Create the Tk root and mainframe.
         self.root = tk.Tk()
@@ -479,7 +479,7 @@ class WindowUI(object):
                     fw = str(a["fw"])
                     chipset = str(a["chipset"])
                     # check if the flasher is not yet active
-                    if (sock not in self.futures) or (self.futures[sock] is None):                        
+                    if (sock not in self.futures) or (self.futures[sock] is None):
                         # # prepare the flasher
                         # self.flasher[sock].set_pcba_connected()
                         # self.flasher[sock].set_firmware_file_and_widgets(FIRMWARE_FP / fw, self.pg_bars[sock])
@@ -695,7 +695,7 @@ if __name__ == '__main__':
     # need to initialize logger on load
 
     print("=== PCBA Programming Dialog ===")
-    
+
     parser = ArgumentParser(description="""
                 The PCBA programming tool can be used in-line using the line configuration or
                 override the product to be programmed by optional parameter. It uses a built-in configuration dictionary

@@ -178,7 +178,7 @@ def rack_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO,
     vsim.enable_all_cell_channels()
     vsim.set_cell_n_voltage(1, 3.6)
     vsim.set_cell_n_voltage(2, 3.6)
-    vsim.set_cell_n_voltage(3, 3.6)
+    #vsim.set_cell_n_voltage(3, 3.6)
     #vsim.set_cell_n_voltage(4, 3.6)
 
     #psu1.configure_supply(10.8, 0.080, 50, 1)
@@ -202,6 +202,11 @@ def rack_test(bat: BQ40Z50R1, gpio: RelayBoard4Relay4GPIO,
     print("Test LEDs ON")
     print(bat.set_led_onoff(1))
     print(bat.set_led_display(1))
+
+
+    _ss = bat.safety_status(hexi=True)
+    print(_ss)
+
 
     print("Issue capture command...")
     print(feasa.capture_pwm())
@@ -304,7 +309,7 @@ def bat_flash_test(bat: BQ40Z50R1, psu1: M3400, psu2: M3400) -> None:
     flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "DFFS_3411842-05_A_Ametrie_RRC2040-2S.df.fs", show_progressbar=True, test_socket=0)
     # Need 13.0589 seconds @100kHz with OLIMEX
     # Need 13.1763 seconds @100kHz with NCD.io
-    
+
     #flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "SCD_3411863-05_A_Jade_RRC2054_BMS_Files.df.fs", show_progressbar=True, test_socket=0)
     #flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "SCD_3411863-05_A_Jade_RRC2054_BMS_Files.bq.fs", show_progressbar=True, test_socket=0)
 
@@ -558,23 +563,29 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    LINE_NETWORK = "172.25.101"  # VN line 1
-    #LINE_NETWORK = "172.25.102"  # VN line 2
     #LINE_NETWORK = "172.21.101"  # HOM Warehouse
+    #LINE_NETWORK = "172.25.101"  # VN line 1
+    #LINE_NETWORK = "172.25.102"  # VN line 2
+    LINE_NETWORK = "172.25.103"  # VN line 3
 
-    #feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:3000", termination="\n")  # PCBA test, socket 0
-    #feasa = FEASA_CH9121(f"{LINE_NETWORK}.33:3000")  # PCBA test, socket 1
-    feasa = FEASA_CH9121(f"{LINE_NETWORK}.35:3000")  # PCBA test, socket 2
+    SOCKET = 0  # 0, 1 or 2
+
+    if SOCKET == 0:
+        feasa = FEASA_CH9121(f"{LINE_NETWORK}.31:3000", termination="\n")  # PCBA test, socket 0
+        i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101") # socket 0
+        #i2cbus = I2CPort("192.168.69.77:2101") # HOMEGROW
+    if SOCKET == 1:
+        feasa = FEASA_CH9121(f"{LINE_NETWORK}.33:3000")  # PCBA test, socket 1
+        i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101") # socket 1
+    if SOCKET == 2:
+        feasa = FEASA_CH9121(f"{LINE_NETWORK}.35:3000")  # PCBA test, socket 2
+        i2cbus = I2CPort(f"{LINE_NETWORK}.34:2101") # socket 2
 
     #test_feasa_only(feasa)
     #exit()
 
-    #i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101") # socket 0
-    #i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101") # socket 1
-    i2cbus = I2CPort(f"{LINE_NETWORK}.34:2101") # socket 2
-    #i2cbus = I2CPort("192.168.69.77:2101") # HOMEGROW
-    print("Change clock frequency and timeout - RRC: ", 
-          str(i2cbus.i2c_change_clock_frequency(150000, timeout_ms=50)))
+    #print("Change clock frequency and timeout - RRC: ",
+    #      str(i2cbus.i2c_change_clock_frequency(50000, timeout_ms=50)))
 
     mux = BusMux(i2cbus, address=0x77)
     for c in range(1,9):
@@ -582,6 +593,7 @@ if __name__ == "__main__":
         print("CH:", c, i2cbus.i2c_bus_scan())
 
     calib = CalibrationStorage(I2CMuxedBus(i2cbus, mux, 1))
+    print("Inventory:", calib.load_inventory_number())
     smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 2), retry_limit=7, verify_rounds=3, pause_us=50)
     bat = BQ40Z50R1(smbus)
 
@@ -593,18 +605,24 @@ if __name__ == "__main__":
     vsim.initialize()
 
     #sleep(0.5)
-    #psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=1)  # socket 0 / share
-    #psu2 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=2)  # socket 0 / share
-    #psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=3)  # socket 1 / share
-    #psu2 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=4)  # socket 1 / share
-    psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=5)  # socket 2 / share
-    psu2 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=6)  # socket 2 / share
+    if SOCKET == 0:
+        psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=1)  # socket 0 / share
+        psu2 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=2)  # socket 0 / share
+    if SOCKET == 1:
+        psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=3)  # socket 1 / share
+        psu2 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=4)  # socket 1 / share
+    if SOCKET == 2:
+        psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=5)  # socket 2 / share
+        psu2 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=6)  # socket 2 / share
     psu1.set_output_state(0)
     psu2.set_output_state(0)
 
-    #daq = DAQ970A(f"{LINE_NETWORK}.36:5025", card_slot=1)  # socket 0
-    #daq = DAQ970A(f"{LINE_NETWORK}.36:5025", card_slot=2)  # socket 1
-    daq = DAQ970A(f"{LINE_NETWORK}.36:5025", card_slot=3)  # socket 2
+    if SOCKET == 0:
+        daq = DAQ970A(f"{LINE_NETWORK}.36:5025", card_slot=1)  # socket 0
+    if SOCKET == 1:
+        daq = DAQ970A(f"{LINE_NETWORK}.36:5025", card_slot=2)  # socket 1
+    if SOCKET == 2:
+        daq = DAQ970A(f"{LINE_NETWORK}.36:5025", card_slot=3)  # socket 2
 
     #psu_test(bat, gpio, psu2)
     #psu_test(bat, gpio, psu1)
