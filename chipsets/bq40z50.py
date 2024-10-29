@@ -364,13 +364,24 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
     #---UNSEALED HELPER FOR PRODUCTION-------------------------------------------------------------
 
-    # ...
 
     def enable_full_access(self) -> bool:
         #
         # no encrypted keys here!
         #
         return self.unseal(0x8D21FAC3, 0x63DB2CE4)  # low-word goes first to battery
+
+
+    def enable_full_access_qsb(self) -> bool:
+        """Uses unseal key for QSB battery series.
+
+        Returns:
+            bool: _description_
+        """
+        #
+        # no encrypted keys here!
+        #
+        return self.unseal(0xAF3CD812, 0xC24E36BD)  # low-word goes first to battery
 
 
     def wait_for_operation_status_flag(self, os_key: str, state: bool, retries: int = 20, pause_on_retry: float = 0.1) -> bool:
