@@ -9,6 +9,23 @@
 #
 PART_INFORMATION = {
     #
+    # BQ40Z50_RECALIBRATION
+    #
+    "RRC2020B_RECALIBRATION": {       
+        "EOL_TEST": {
+            # Hard Pack (End-Of-Line) Test PRT IDs:
+            "test_program_id": ("HP-SQ_2020B", "BQ40Z50_Recalibration_EOL-Test_A"),
+            "part_number": ("HP-PN_2020B", "100496-18"),
+        }
+    },
+    "RRC2020-DR_RECALIBRATION": {       
+        "EOL_TEST": {
+            # Hard Pack (End-Of-Line) Test PRT IDs:
+            "test_program_id": ("HP-SQ_2020B", "BQ40Z50_Recalibration_EOL-Test_A"),
+            "part_number": ("HP-PN_2020B", "110102-14"),
+        }
+    },
+    #
     # RRC2020B
     #
     "RRC2020B": {
