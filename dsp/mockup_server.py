@@ -155,10 +155,10 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
     #_product_name = "RRC2054-2-HM"
     #_product_name = "RRC2054-2-LM"
     #_product_name = "QSB2040B"
-    #_product_name = "QSB2054B"
+    _product_name = "QSB2054B"
     #_product_name = "QSB2040-2B"
     #_product_name = "QSB2054-2B"
-   
+
 
     _mock = PART_INFORMATION[_product_name]
 
