@@ -51,7 +51,7 @@ PART_INFORMATION = {
         },
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
-            "test_program_id": ("HP-SQ_2020B", "100496_RRC2020B_EOL-Test_B"),
+            "test_program_id": ("HP-SQ_2020B", "100496_RRC2020B_EOL-Test_C"),
             "part_number": ("HP-PN_2020B", "100496-18"),  # using the product number PN
         }
     },
@@ -101,7 +101,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2054S", "412100_RRC2054S_PCBA-Test_C"),
+            "test_program_id": ("PT-SQ_2054S", "412100_RRC2054S_PCBA-Test_B"),
             "part_number": ("PT-PN_2054S", "412100-01"),
         },
         "COREPACK_TEST": {
@@ -217,7 +217,7 @@ PART_INFORMATION = {
         "CELL_WELDING": {
             # Cell Welding PRT IDs:
             "test_program_id": ("CW-SQ_SPINEL", "A"),
-            "part_number": ("CW-PN_SPINEL", "110282B-03"),
+            "part_number": ("CW-PN_SPINEL", "110282S-03"),
         },
         #"LEANPACK_TEST": {
         #     # EOL Test with Corepack hardware (Teststand)
@@ -362,7 +362,7 @@ PART_INFORMATION = {
         "CELL_WELDING": {
             # Cell Welding PRT IDs:
             "test_program_id": ("CW-SQ_Q2054B", "A"),
-            "part_number": ("CW-PN_Q2054B", "412185-01"),
+            "part_number": ("CW-PN_Q2054B", "412158-02"),
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
