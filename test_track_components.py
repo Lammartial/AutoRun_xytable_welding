@@ -24,11 +24,14 @@ if __name__ == "__main__":
     load = DC63600(cfg["dc_load"])
     print(load.ident())
 
+    load.set_load_mode("CCH")
+
     datalogger = DAQ970A(cfg["datalogger"], card_slot=1)
     print(datalogger.ident())
 
     cpu = CPU_Card(cfg["cpu_card"])
     print(cpu.ident())
-    print(cpu.help())
+    #print(cpu.ident_boot())
+    print(cpu.help().replace("\r","\n\r"))
 
 # END OF FILE

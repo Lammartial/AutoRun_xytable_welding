@@ -99,7 +99,8 @@ class CPU_Card:
         Returns:
             str: _description_
         """
-        return self.con.request("*HELp")  # Note: *IDN? returns string of 0xff, probably unflashed area
+        hlp = "\r".join([f"{q}:\n{self.con.request(q)}" for q in ("*HEL", "*HEL:IO", "*HEL:I2C", "*HEL:SMB", "*HEL:SPI", "*HEL:PRO", "*HEL:PRO:AVR", "*HEL:PRO:OBE")])
+        return hlp
 
 
     def Reset(self) -> str:

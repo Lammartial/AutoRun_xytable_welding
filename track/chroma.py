@@ -3,6 +3,7 @@ Driver for Chroma Load devices via Ethernet socket
 
 """
 
+from time import sleep
 from rrc.eth2serial import Eth2SerialDevice
 
 #--------------------------------------------------------------------------------------------------
@@ -137,14 +138,35 @@ class DC63600(Eth2SerialDevice):
 
     #----------------------------------------------------------------------------------------------
 
+    def initialize_device(self) -> None:
+        # preconfigure device
+        self.send(":LOAD OFF")
+        self.send(":ACT ON")
+        self.send(":CONF:VOLT:RANG 80")
+        self.send(":CURR:RANG 80")
+        #sleep(0.25)
 
 
+    def set_load_mode(self, modus: str) -> bool:
+        _MODES = ("CCL", "CCH", "CCDL", "CCDH", "CRL", "CRH", "CV")
+        assert(modus in _MODES), ValueError(f"Modus was '{modus}' but need to be one of {_MODES}.")
+        res = self.request(f":MODE {modus}")
+        print(res)
+        return True
+
+
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+
+
+class ACSource(Eth2SerialDevice):
+    pass
 
 
 
 
 #--------------------------------------------------------------------------------------------------
-
 if __name__ == "__main__":
     pass
 
