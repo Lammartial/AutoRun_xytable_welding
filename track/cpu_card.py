@@ -74,7 +74,7 @@ class CPU_Card:
         Returns:
             str: _description_
         """
-        return self.con.request("*IDN?")
+        return self.con.request("*IDN")  # Note: *IDN? returns string of 0xff, probably unflashed area
 
 
     def ident_boot(self) -> str:
@@ -86,7 +86,7 @@ class CPU_Card:
         """
         r1 = self.con.request("*BOO")
         sleep(0.050)  #  Give CPUcard time to start bootloader and re-init UART
-        res = self.con.request("*IDN?")
+        res = self.con.request("*IDN")  # Note: *IDN? returns string of 0xff, probably unflashed area
         r2 = self.con.request(f"*RES")
         sleep(0.050)  # Give CPUcard time to start application and re-init UART
         return res
