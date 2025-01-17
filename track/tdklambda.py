@@ -102,7 +102,7 @@ class DCZPlus(Eth2SerialDevice):
             bool: _description_
         """
 
-        super().send(f"{self.select_channel_prefix};{msg}", timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
+        super().send(f"{self._select_channel_prefix};{msg}", timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
 
 
     #----------------------------------------------------------------------------------------------
