@@ -93,6 +93,15 @@ class CPU_Card:
         return res
 
 
+    def help(self) -> str:
+        """Returns the identification string of the application.
+
+        Returns:
+            str: _description_
+        """
+        return self.con.request("*HELp")  # Note: *IDN? returns string of 0xff, probably unflashed area
+
+
     def Reset(self) -> str:
         return self.con.request(f"*RES")
 
