@@ -184,11 +184,15 @@ class DCZPlus(Eth2SerialDevice):
         return ret == "0"
 
 
+    def get_foldback(self) -> str:
+        return self.request("OUTP:PROT:FOLD?", pause_after_write=20)
 
 
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    pass
+    dev = DCZPlus("172.23.130.33:8003")
+    print(dev.ident())
+
 
 # END OF FILE
