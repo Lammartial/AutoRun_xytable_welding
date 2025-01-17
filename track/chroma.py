@@ -124,6 +124,19 @@ class DC63600(Eth2SerialDevice):
 
     #----------------------------------------------------------------------------------------------
 
+    def wait_response_ready(self) -> str:
+        return self.request("SYST:ERR?")  # this will automatically delay until the response is ready
+
+
+    def ident(self) -> str:
+        return self.request("*IDN?")
+
+
+    def reset(self) -> str:
+        return self.send("*RST")    # no return!
+
+    #----------------------------------------------------------------------------------------------
+
 
 
 

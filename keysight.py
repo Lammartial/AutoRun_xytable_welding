@@ -50,7 +50,7 @@ from rrc.custom_logging import getLogger, logger_init
 
 #         Args:
 #             resource_str (str): visa resource string
-#             card_slot (int, optional): Selects a measurement channel card on slot 1..3. Defaults to 1 
+#             card_slot (int, optional): Selects a measurement channel card on slot 1..3. Defaults to 1
 
 #         """
 #         super().__init__(resource_str, read_termination="\n", write_termination=None, pause_on_retry=10)  # configure the itech VISA device
@@ -80,7 +80,7 @@ class DAQ970A(Eth2SerialDevice):
     Args:
         SCPIRemoteDevice (_type_): _description_
     """
-  
+
     def __init__(self, resource_str: str, card_slot: int = 1):
         """
         Initialize the object with resource string (IP name:socket).
@@ -88,11 +88,11 @@ class DAQ970A(Eth2SerialDevice):
 
         Args:
             resource_str (str): resource string in the format IP[:SOCKET]
-            card_slot (int, optional): Selects a measurement channel card on slot 1..3. Defaults to 1 
+            card_slot (int, optional): Selects a measurement channel card on slot 1..3. Defaults to 1
 
         """
         super().__init__(resource_str, termination="\n", open_connection=False)  # The hioki expects to have connect/disconnect for each command
-        self.change_card_slot(card_slot)  # also sets the self.card_slot        
+        self.change_card_slot(card_slot)  # also sets the self.card_slot
         self._channel_delay_map = {}  # this map's values can be adjusted by the setup_channel_delay_preset() function later on
         self._voltage_range_map = {}  # this map's values can be adjusted by the setup_voltage_range_and_resolution_preset() function later on
         self._voltage_resolution_map = {}  # this map's values can be adjusted by the setup_voltage_range_and_resolution_preset() function later on
@@ -112,8 +112,13 @@ class DAQ970A(Eth2SerialDevice):
     def request(self, msg: str, timeout: int = 5000) -> str:
         return super().request(msg, timeout=timeout/1000, pause_after_write=80, retries=5).strip()
 
-    
-    #----------------------------------------------------------------------------------------------     
+
+    #----------------------------------------------------------------------------------------------
+
+    def ident(self) -> str:
+        return self.request("*IDN?")
+
+    #----------------------------------------------------------------------------------------------
 
     def selftest(self) -> int:
         """
@@ -146,7 +151,7 @@ class DAQ970A(Eth2SerialDevice):
             str: response
         """
         return self.request(str(cmd), timeout=2000)
-    
+
     def set_raw_command(self, cmd: str):
         """
         Sets raw SCPI command.
@@ -160,10 +165,10 @@ class DAQ970A(Eth2SerialDevice):
         return self.send(str(cmd), timeout=2000)
 
     #----------------------------------------------------------------------------------------------
-    
+
     def _meas_chan(self, slot: int, channel: int) -> str:
         return f"{slot if slot > 0 else self.card_slot}{channel:02d}"
-        
+
     #----------------------------------------------------------------------------------------------
 
     def change_card_slot(self, new_slot: int):
@@ -173,7 +178,7 @@ class DAQ970A(Eth2SerialDevice):
         Args:
             new_slot (int): slot number (1, 2, 3)
         """
-        assert (int(new_slot) > 0 and int(new_slot) < 4), ValueError(f"Error, 'card_slot' must be in 1..3 but was {int(new_slot)}")        
+        assert (int(new_slot) > 0 and int(new_slot) < 4), ValueError(f"Error, 'card_slot' must be in 1..3 but was {int(new_slot)}")
         self.card_slot = int(new_slot)
 
     #----------------------------------------------------------------------------------------------
@@ -181,29 +186,29 @@ class DAQ970A(Eth2SerialDevice):
     def setup_channel_delay_preset(self, channel: int | str, delay_in_s: str | float = "AUTO") -> None:
         """
         Sets the route delay preset internally for the channel either to this value if > 0 and <= 60.0 or AUTO otherwise.
-        The delay will than later be used if the channel is being measured for voltage.        
+        The delay will than later be used if the channel is being measured for voltage.
 
         Args:
             channel (str | int): either single channel number as integer or a comma separated list of channels in a string.
             delay_in_s (str | float): either "AUTO" or a positive float 0 > value <= 60.0 in seconds. Defaults to "AUTO".
-        
+
         """
 
         assert((isinstance(delay_in_s, float) and (delay_in_s > 0) and (delay_in_s <= 60.0)) or (isinstance(delay_in_s, str) and (delay_in_s == "AUTO"))), \
             ValueError('Invalid delay. Check the available delay values in the function description.')
         assert(isinstance(channel, (int, float, str))), \
             ValueError('Invalid channel. Check the available channel values in the function description.')
-                   
+
         if isinstance(channel, (float, int)):
             _ch = self._meas_chan(0, int(channel))
             self._channel_delay_map[_ch] = delay_in_s
         else:
-            # need to be a string -> process a list of channels         
+            # need to be a string -> process a list of channels
             _list_of_channels = str(channel).split(",")
             for c in _list_of_channels:
                 _ch = self._meas_chan(0, int(c))
                 self._channel_delay_map[_ch] = delay_in_s
-    
+
 
     def setup_voltage_range_and_resolution_preset(self, channel: int | str, scale: str | float = "AUTO", resolution: str | float = "DEF") -> None:
         """_summary_
@@ -221,45 +226,45 @@ class DAQ970A(Eth2SerialDevice):
         assert(isinstance(resolution, float) or (isinstance(resolution, str) and resolution in resolution_str_list)), \
             ValueError('Invalid resolution. Check the available resolution values in the function description.')
         assert(isinstance(channel, (int, float, str))), \
-            ValueError('Invalid channel. Check the available channel values in the function description.')        
-        
+            ValueError('Invalid channel. Check the available channel values in the function description.')
+
         if isinstance(channel, (float, int)):
             _ch = self._meas_chan(0, int(channel))
             self._voltage_range_map[_ch] = scale
             self._voltage_resolution_map[_ch] = resolution
         else:
-            # need to be a string -> process a list of channels         
+            # need to be a string -> process a list of channels
             _list_of_channels = str(channel).split(",")
             for c in _list_of_channels:
                 _ch = self._meas_chan(0, int(c))
                 self._voltage_range_map[_ch] = scale
                 self._voltage_resolution_map[_ch] = resolution
-        
+
 
 
     #----------------------------------------------------------------------------------------------
-    
+
     def get_resistance_rounded(self, channel: int, ndigits: int = 3, scale: str | float = "AUTO", resolution: str | float = "DEF") -> float:
         """See doc of get_resistance."""
         return round(self.get_resistance(int(channel)), ndigits=int(ndigits), scale=scale, resolution=resolution)
-    
+
     def get_resistance(self, channel: int, scale: str | float = "AUTO", resolution: str | float = "DEF") -> float:
         """Returns resistance measurement.
 
         Args:
             channel (int): channel number (1 ... 20)
-            scale (str | float, optional): Measurement range or scale. 
-                        Possible values: A string of "AUTO", "MIN", "MAX", "DEF", "100 Ω", "1 kΩ", "100 kΩ", "1 MΩ", "10 MΩ", "1 GΩ" 
+            scale (str | float, optional): Measurement range or scale.
+                        Possible values: A string of "AUTO", "MIN", "MAX", "DEF", "100 Ω", "1 kΩ", "100 kΩ", "1 MΩ", "10 MΩ", "1 GΩ"
                         or float value specifying the range in ohm.
                         Defaults to "AUTO".
-            resolution (str | float, optional): Measurement resolution. 
+            resolution (str | float, optional): Measurement resolution.
                         Possible values: A string of "MIN", "MAX", "DEF" or float value specifying the resolution in ohm.
                         <resolution> = 1 PLC (0.000003 x Range)
                         Defaults to "DEF".
-        
+
         Raises:
             ValueError: invalid argument
-        
+
         Returns:
             float: Resistance in ohms.
 
@@ -275,34 +280,34 @@ class DAQ970A(Eth2SerialDevice):
             ValueError('Invalid resolution. Check the available resolution values in the function description.')
         cmd = f"MEAS:RES? {scale},{resolution},(@{self._meas_chan(0, channel)})"
         return float(self.request(cmd))
-        
+
 
     def get_4w_resistance_rounded(self, channel: int, ndigits: int = 3, scale: str | float = "AUTO", resolution: str | float = "DEF") -> float:
         """See doc of get_4w_resistance."""
         return round(self.get_4w_resistance(int(channel)), ndigits=int(ndigits), scale=scale, resolution=resolution)
-    
+
     def get_4w_resistance(self, channel: int, scale: str | float = "AUTO", resolution: str | float = "DEF") -> float:
         """
         Returns 4-wire resistance measurement.
 
         Args:
             channel (int): channel number (1 ... 10)
-            scale (str | float, optional): Measurement range or scale. 
-                        Possible values: A string of "AUTO", "MIN", "MAX", "DEF", "100 Ω", "1 kΩ", "100 kΩ", "1 MΩ", "10 MΩ", "1 GΩ" 
+            scale (str | float, optional): Measurement range or scale.
+                        Possible values: A string of "AUTO", "MIN", "MAX", "DEF", "100 Ω", "1 kΩ", "100 kΩ", "1 MΩ", "10 MΩ", "1 GΩ"
                         or float value specifying the range in ohm.
                         Defaults to "AUTO".
-            resolution (str | float, optional): Measurement resolution. 
+            resolution (str | float, optional): Measurement resolution.
                         Possible values: A string of "MIN", "MAX", "DEF" or float value specifying the resolution in ohm.
                         <resolution> = 1 PLC (0.000003 x Range)
                         Defaults to "DEF".
-        
+
         Raises:
             ValueError: invalid argument
-        
+
         Returns:
             float: Resistance in ohms.
         """
-        
+
         channel = int(channel)
         scale_str_list = ("AUTO", "MIN", "MAX", "DEF", "100 Ω", "1 kΩ", "100 kΩ", "1 MΩ", "10 MΩ", "1 GΩ")
         resolution_str_list = ("MIN", "MAX", "DEF")
@@ -313,11 +318,11 @@ class DAQ970A(Eth2SerialDevice):
             ValueError('Invalid resolution. Check the available resolution values in the function description.')
         cmd = f"MEAS:FRES? {scale},{resolution},(@{self._meas_chan(0, channel)})"
         return float(self.request(cmd))
-       
-    
+
+
     def get_VDC_rounded(self, channel: int, ndigits: int = 3) -> float:
         return round(self.get_VDC(int(channel)), ndigits=int(ndigits))
-    
+
     def get_VDC(self, channel: int) -> float:
         """
         Returns DC voltage measurement.
@@ -348,10 +353,10 @@ class DAQ970A(Eth2SerialDevice):
         except Exception as ex:
             #_log.exception(ex)
             raise
-    
+
     def get_VAC_rounded(self, channel: int, ndigits: int = 3) -> float:
         return round(self.get_VAC(int(channel)), ndigits=int(ndigits))
-    
+
     def get_VAC(self, channel: int) -> float:
         """
         Returns AC voltage measurement.
@@ -378,7 +383,7 @@ class DAQ970A(Eth2SerialDevice):
 
     def get_ADC_rounded(self, channel: int, ndigits: int = 3) -> float:
         return round(self.get_ADC(int(channel)), ndigits=int(ndigits))
-    
+
     def get_ADC(self, channel: int, scale: str = "1 A") -> float:
         """
         Returns DC current measurement.
@@ -394,7 +399,7 @@ class DAQ970A(Eth2SerialDevice):
         Returns:
             float: ADC
         """
-        
+
         channel = int(channel)
         scale_str_list = ("AUTO", "1 uA", "10 uA", "100 uA", "1 mA", "10 mA", "100 mA", "1 A")
         assert ((channel == 21) or (channel == 22)), ValueError('Invalid channel. Only 21 or 22 allowed.')
@@ -409,7 +414,7 @@ class DAQ970A(Eth2SerialDevice):
 
     def get_temp_rounded(self, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str, ndigits: int = 3) -> float:
         return round(self.get_temp(int(channel), tran_type, int(rtd_resist), int(fth_type), tc_type), ndigits=int(ndigits))
-    
+
     def get_temp(self, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str) -> float:
         """
         Returns temperature measurement.
@@ -428,7 +433,7 @@ class DAQ970A(Eth2SerialDevice):
         Returns:
             float: Temperature
         """
-        
+
         channel = int(channel)
         rtd_resist = int(rtd_resist)
         fth_type = int(fth_type)
@@ -466,7 +471,7 @@ if __name__ == "__main__":
     # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     # TESTS have been moved out to module: test_keysight.py
     # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-   
+
     print("DONE.")
 
 # END OF FILE

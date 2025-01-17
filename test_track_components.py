@@ -1,14 +1,10 @@
-from calendar import c
-from rrc.eth2i2c import I2CPort
-from rrc.i2cbus import BusMux, I2CMuxedBus
-from rrc.smbus import BusMaster
 from rrc.track import CPU_Card, DC63600, DCZPlus
 from rrc.keysight import DAQ970A
 
 
 PRODUCTION_LINES_SETUP = {
     "toptek": {
-        "cpu_card":   "COM7,115200,8N1",
+        "cpu_card":   "COM8,115200,8N1",
         "datalogger": "172.23.130.31:5025",
         "dc_load":    "172.23.130.32:2101",
         "dc_supply":  "172.23.130.33:8003",
@@ -32,7 +28,7 @@ if __name__ == "__main__":
     print(datalogger.ident())
 
     cpu = CPU_Card(cfg["cpu_card"])
-    cpu.Ident()
+    print(cpu.ident())
 
 
 # END OF FILE

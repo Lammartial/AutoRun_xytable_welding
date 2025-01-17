@@ -68,7 +68,7 @@ class CPU_Card:
 
     # Standard SCPI commands
 
-    def Ident(self) -> str:
+    def ident(self) -> str:
         """Returns the identification string of the application.
 
         Returns:
@@ -77,7 +77,7 @@ class CPU_Card:
         return self.con.request("*IDN?")
 
 
-    def IdentBoot(self) -> str:
+    def ident_boot(self) -> str:
         """Reads the identification string of the bootloader by switching the CPU into bootloader
         then read IDN and after that return to the application.
 
