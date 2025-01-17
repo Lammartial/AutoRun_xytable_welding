@@ -17,13 +17,13 @@ from rrc.custom_logging import getLogger, logger_init
 
 class SerialComportDevice(object):
 
-    def __init__(self, resource_str: str, termination: str = "\r\n", trim_termination: bool = False, xonxff: bool = False) -> None:
+    def __init__(self, resource_str: str, termination: str = "\r\n", trim_termination: bool = True, xonxff: bool = False) -> None:
         """Serial line communication the object with IP address and port number given by URL style resource string.
 
         Args:
             resource_str (str): String of url form '{portname},{baudrate},{line settings in the form 8N1}'
             termination (str, optional): Defines the line termination. Defaults to '\r\n'
-            trim_termination (bool, ooptional): If True the termination chars on incomming responses will be trimmed, otherwise unchanged. Defaults to False.
+            trim_termination (bool, ooptional): If True the termination chars on incomming responses will be trimmed, otherwise unchanged. Defaults to True.
             xonxff (bool, optional): True enables Xon/Xoff handshake protocoll, False disables it. Defaults to False.
 
         """

@@ -66,13 +66,13 @@ def is_socket_closed(sock: socket.socket) -> bool:
 
 class Eth2SerialDevice(object):
 
-    def __init__(self, resource_str: str, termination: str = "\r\n", trim_termination: bool = False, open_connection: bool = True, pause_on_retry: int | None = 10):
+    def __init__(self, resource_str: str, termination: str = "\r\n", trim_termination: bool = True, open_connection: bool = True, pause_on_retry: int | None = 10):
         """Initialize the object with IP address and port number given by URL style resource string.
 
         Args:
             resource_str (str): String of url form '{hostname or IPv4 address}:{port number}'
             termination (str, optional): Defines the line termination. Defaults to '\r\n'
-            trim_termination (bool, ooptional): If True the termination chars on incomming responses will be trimmed, otherwise unchanged. Defaults to False.
+            trim_termination (bool, ooptional): If True the termination chars on incomming responses will be trimmed, otherwise unchanged. Defaults to True.
             open_connection (bool, optional): If True, the connection is opened once on creation and never actively closed.
                 If False, the connection is opened on each send/request. Defaults to True.
             pause_on_retry (int, optional): If retries is > 1 on send/request, the pause in milliseconds is held before next try. Defaults to 10.

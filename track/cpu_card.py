@@ -46,7 +46,7 @@ class CPU_Card:
 
         # we need to create the connection device
         if "," in resource_string:
-            self.con = SerialComportDevice(resource_string, termination="\x04", xonxff=True, trim_termination=True)
+            self.con = SerialComportDevice(resource_string, termination="\x04", xonxff=True)
         else:
             self.con = Eth2SerialDevice(resource_string, termination="\n")
 
