@@ -17,12 +17,13 @@ from rrc.custom_logging import getLogger, logger_init
 
 class SerialComportDevice(object):
 
-    def __init__(self, resource_str: str, termination: str = "\r\n"):
+    def __init__(self, resource_str: str, termination: str = "\r\n", xonxff: bool = False) -> None:
         """Serial line communication the object with IP address and port number given by URL style resource string.
 
         Args:
             resource_str (str): String of url form '{portname},{baudrate},{line settings in the form 8N1}'
             termination (str, optional): Defines the line termination. Defaults to '\r\n'
+            xonxff (bool, optional): True enables Xon/Xoff handshake protocoll, False disables it. Defaults to False.
 
         """
         self.termination = termination
@@ -35,6 +36,7 @@ class SerialComportDevice(object):
         _comport, _baud, _line = _sar
         self.comport = _comport
         self.baudrate = _baud
+        self.xonxoff = xonxff
         self.linesettings = _line
         # self.bytesize = int(_line[0])
         # self.parity = int(_line[1])
@@ -60,7 +62,7 @@ class SerialComportDevice(object):
             bool: _description_
         """
 
-        _s = serial.Serial(self.comport, self.baudrate,
+        _s = serial.Serial(self.comport, self.baudrate, xonxoff=self.xonxoff,
                             bytesize=int(self.linesettings[0]), parity=self.linesettings[1], stopbits=int(self.linesettings[2]),
                             timeout=timeout)
         try:
@@ -88,12 +90,12 @@ class SerialComportDevice(object):
         global DEBUG
 
         _log = getLogger(__name__, DEBUG)
-        _s = serial.Serial(self.comport, self.baudrate,
+        _s = serial.Serial(self.comport, self.baudrate, xonxoff=self.xonxoff,
                            bytesize=int(self.linesettings[0]), parity=self.linesettings[1], stopbits=int(self.linesettings[2]),
                            timeout=timeout)
         try:
             if msg:
-                _s.write(bytes(msg, "utf-8") + self._termination_as_bytes)
+                _s.write(bytes(msg, encoding) + self._termination_as_bytes)
             # now read data until termination or timeout
             rcvdata = b""
             while True:
@@ -173,7 +175,7 @@ class SerialComportDevice(object):
         data = None
         # do NOT catch the exception for timeout here, propagate to the caller!
         #reader, writer = await asyncio.wait_for(asyncio.open_connection(_IP, _PORT), timeout/2)
-        reader, writer = await serial_asyncio.open_serial_connection(url=self.comport, baudrate=self.baudrate,
+        reader, writer = await serial_asyncio.open_serial_connection(url=self.comport, baudrate=self.baudrate, xonxoff=self.xonxoff,
                                     bytesize=int(self.linesettings[0]), parity=self.linesettings[1], stopbits=int(self.linesettings[2]))
 
         # Wait for at most 1 second (which is also the pause time for this loop)
