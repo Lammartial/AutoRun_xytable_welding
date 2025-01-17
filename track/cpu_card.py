@@ -41,11 +41,12 @@ class CPU_Card:
         Args:
             resource_string (str): "<IP address or host name>:<port number>"  -> ethernet connection (socket)
                                    "<port name>,<baud rate (9600,115200, etc.)>,<line settings (8N1 etc.)>" -> serial connection
+
         """
 
         # we need to create the connection device
         if "," in resource_string:
-            self.con = SerialComportDevice(resource_string, termination="\x04")
+            self.con = SerialComportDevice(resource_string, termination="\x04", xonxff=True, trim_termination=True)
         else:
             self.con = Eth2SerialDevice(resource_string, termination="\n")
 

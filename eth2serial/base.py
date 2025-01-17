@@ -66,12 +66,13 @@ def is_socket_closed(sock: socket.socket) -> bool:
 
 class Eth2SerialDevice(object):
 
-    def __init__(self, resource_str: str, termination: str = "\r\n", open_connection: bool = True, pause_on_retry: int | None = 10):
+    def __init__(self, resource_str: str, termination: str = "\r\n", trim_termination: bool = False, open_connection: bool = True, pause_on_retry: int | None = 10):
         """Initialize the object with IP address and port number given by URL style resource string.
 
         Args:
             resource_str (str): String of url form '{hostname or IPv4 address}:{port number}'
             termination (str, optional): Defines the line termination. Defaults to '\r\n'
+            trim_termination (bool, ooptional): If True the termination chars on incomming responses will be trimmed, otherwise unchanged. Defaults to False.
             open_connection (bool, optional): If True, the connection is opened once on creation and never actively closed.
                 If False, the connection is opened on each send/request. Defaults to True.
             pause_on_retry (int, optional): If retries is > 1 on send/request, the pause in milliseconds is held before next try. Defaults to 10.
@@ -79,6 +80,7 @@ class Eth2SerialDevice(object):
         """
         self.termination = termination
         self._termination_as_bytes = bytes(termination, "utf-8")  # need them also as bytes
+        self.trim_termination = trim_termination
         lst = resource_str.split(":")
         self.host = lst[0]          # string
         self.port = int(lst[1])     # int
@@ -200,7 +202,7 @@ class Eth2SerialDevice(object):
         try:
             self.connect_socket(timeout=timeout)
             if msg:
-                self.socket.sendall(bytes(msg, "utf-8") + self._termination_as_bytes)
+                self.socket.sendall(bytes(msg, encoding) + self._termination_as_bytes)
                 if pause_after_write:
                     time.sleep(pause_after_write/1000)
             # now read data until termination or timeout
@@ -215,6 +217,10 @@ class Eth2SerialDevice(object):
                     break
                 if (rcvdata.rfind(self._termination_as_bytes) >= 0):
                     break
+            if self.trim_termination:
+                _t = rcvdata.rfind(self._termination_as_bytes)
+                if _t > 0:
+                    rcvdata = rcvdata[:_t]
             if encoding:
                 result = rcvdata.decode(encoding=encoding)
             else:
