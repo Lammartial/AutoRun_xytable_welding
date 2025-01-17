@@ -130,7 +130,7 @@ class DCZPlus(Eth2SerialDevice):
             str: _description_
         """
 
-        return super().request(msg if msg is None else f"{self.select_channel_prefix};{msg}",
+        return super().request(msg if msg is None else f"{self._select_channel_prefix};{msg}",
                                timeout=timeout, pause_after_write=pause_after_write, limit=limit, encoding=encoding, retries=retries)
 
 
