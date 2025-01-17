@@ -45,7 +45,7 @@ class DCZPlus(Eth2SerialDevice):
         """
         super().__init__(resource_str, termination="\n", open_connection=False)  # The hioki expects to have connect/disconnect for each command
         self.change_channel(channel)
-
+        self.response_delay_ms = 50
 
     def __str__(self) -> str:
         return f"DZPlus device on {super().__str__()}"
@@ -57,7 +57,7 @@ class DCZPlus(Eth2SerialDevice):
     #----------------------------------------------------------------------------------------------
 
 
-    def change_channel(self, new_channel: int):
+    def change_channel(self, new_channel: int) -> None:
         """
         Changes the channel number of a device instance.
 
@@ -68,6 +68,17 @@ class DCZPlus(Eth2SerialDevice):
         assert (int(new_channel) > 0 and int(new_channel) < MAX_SUB+1), ValueError(f"Error, 'new_channel' must be in 1..{MAX_SUB} but was {int(new_channel)}")
         self.channel = int(new_channel)
         self._select_channel_prefix = f"INST:NSEL {self.channel:02d}"  # this is the prefix to address the subdevice via the connection gateway
+
+
+    def select_channel(self) -> bool:
+        """Selects and verifies actively the channel on the Lambda gateway.
+
+        Returns:
+            bool: true success else other channel returned
+        """
+        super().send(self._select_channel_prefix)
+        _ch = super().request(f"INST:NSEL")  # verify the selected channel
+        return (int(_ch) == self.channel)
 
 
     #----------------------------------------------------------------------------------------------
@@ -125,6 +136,9 @@ class DCZPlus(Eth2SerialDevice):
 
     #----------------------------------------------------------------------------------------------
 
+    def wait_response_ready(self) -> str:
+        return self.request("SYST:ERR?")  # this will automatically delay until the response is ready
+
 
     def ident(self) -> str:
         return self.request("*IDN?")
@@ -136,5 +150,45 @@ class DCZPlus(Eth2SerialDevice):
 
     #----------------------------------------------------------------------------------------------
 
+    def set_output(self, state: bool | int) -> bool:
+        _st = "ON" if state else "OFF"
+        self.send(f"OUTP:REL {_st}")
+        self.send(f"OUTP {_st}")  # set Output AND Output Relay - The Relay disconnet the AC Source physically
+
+    def clear_protection(self) -> bool:
+        x = self.request("OUTP:PROT:CLE")
+        ret = self.wait_response_ready()
+        return ret == "0"
+
+    def set_foldback(self, mode: str | int) -> bool:
+        """_summary_
+
+        Args:
+            mode (int): OFF|0, CC|1, CV|2
+
+        Returns:
+            bool: _description_
+        """
+
+        _MODES = ("OFF", "CC", "CV")
+        if isinstance(mode, int):
+            if mode < 0 or mode > 2:
+                raise ValueError(f"Mode value  is invalid '{mode}'. Allowed are 0=OFF, 1=CC or 2=CV")
+            _mode_str = _MODES[mode]
+        else:
+            if mode.upper() not in _MODES:
+                raise ValueError(f"Mode string is invalid '{mode}'. Allowed are OFF, CC or CV")
+            _mode_str = mode
+        self.send(f"OUTP:PROT:FOLD {_mode_str}")
+        ret = self.wait_response_ready()
+        return ret == "0"
+
+
+
+
+#--------------------------------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    pass
 
 # END OF FILE
