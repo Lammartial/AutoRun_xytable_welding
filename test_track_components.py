@@ -20,10 +20,11 @@ if __name__ == "__main__":
 
     supply = DCZPlus(cfg["dc_supply"])
     print(supply.ident())
+    supply.clear_protection()
+    supply.set_voltage(5.5)
 
     load = DC63600(cfg["dc_load"])
     print(load.ident())
-
     load.set_load_mode("CCH")
 
     datalogger = DAQ970A(cfg["datalogger"], card_slot=1)

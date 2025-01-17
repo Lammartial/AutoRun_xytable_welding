@@ -150,6 +150,14 @@ class DCZPlus(Eth2SerialDevice):
 
     #----------------------------------------------------------------------------------------------
 
+    def initialize_device(self) -> None:
+        # preconfigure device
+        self.send(":LOAD OFF")
+        self.send(":ACT ON")
+        self.send(":CONF:VOLT:RANG 80")
+        self.send(":CURR:RANG 80")
+        #sleep(0.25)
+
     def set_output(self, state: bool | int) -> bool:
         _st = "ON" if state else "OFF"
         self.send(f"OUTP:REL {_st}")
@@ -187,6 +195,10 @@ class DCZPlus(Eth2SerialDevice):
     def get_foldback(self) -> str:
         return self.request("OUTP:PROT:FOLD?", pause_after_write=20)
 
+    def set_voltage(self, voltage: float) -> bool:
+        self.send(f"VOLT {voltage}")
+        ret = self.wait_response_ready()
+        return ret == "0"
 
 #--------------------------------------------------------------------------------------------------
 
