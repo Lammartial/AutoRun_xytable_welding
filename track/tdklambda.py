@@ -164,7 +164,7 @@ class DCZPlus(Eth2SerialDevice):
         self.send(f"OUTP {_st}")  # set Output AND Output Relay - The Relay disconnet the AC Source physically
 
     def clear_protection(self) -> bool:
-        x = self.request("OUTP:PROT:CLE")
+        self.send("OUTP:PROT:CLE")
         ret = self.wait_response_ready()
         return ret == "0"
 
