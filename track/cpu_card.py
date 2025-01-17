@@ -205,8 +205,8 @@ class CPU_Card:
         return self._is_ok_response(res)
 
     def CPU_Reset(self) -> bool:
-        res = self.con.request(f"*RES")
-        return self._is_ok_response(res)
+        # compatibility function
+        return self.Reset()
 
     #----------------------------------------------------------------------------------------------
 
