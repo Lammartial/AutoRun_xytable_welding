@@ -29,6 +29,6 @@ if __name__ == "__main__":
 
     cpu = CPU_Card(cfg["cpu_card"])
     print(cpu.ident())
-
+    print(cpu.help())
 
 # END OF FILE
