@@ -3,6 +3,7 @@ Driver for Chroma Load devices via Ethernet socket
 
 """
 
+from multiprocessing import Value
 from time import sleep
 from rrc.eth2serial import Eth2SerialDevice
 
@@ -169,6 +170,30 @@ class DC63600(Eth2SerialDevice):
         return _ok
 
 
+    def _convert_to_onoff_string(self, state: int | str) -> str:
+        _STATES = ["OFF", "ON"]
+        if isinstance(state, str):
+            assert(state.upper() in _STATES), ValueError(f"Parameter state may be in '{_STATES}' only, but was '{state}'.")
+            _state_str = state.upper()
+        else:
+            state = int(state)  # Teststand provides float or "Number"
+            assert(state in [0, 1]), ValueError(f"Parameter state may be integer of 0,1 but was '{state}'")
+            _state_str = _STATES[state]
+        return _state_str
+
+
+    def _convert_to_onoff_int(self, state: int | str) -> int:
+        _STATES = ["OFF", "ON"]
+        if isinstance(state, str):
+            assert(state.upper() in _STATES), ValueError(f"Parameter state may be in '{_STATES}' only, but was '{state}'.")
+            _state_int = _STATES.index(state.upper())
+        else:
+            state = int(state)  # Teststand provides float or "Number"
+            assert(state in [0, 1]), ValueError(f"Parameter state may be integer of 0,1 but was '{state}'")
+            _state_int = state
+        return _state_int
+
+
     def set_load_mode(self, modus: str) -> bool:
         """Set the working mode of the Load.
 
@@ -191,6 +216,184 @@ class DC63600(Eth2SerialDevice):
         assert(modus in _MODES), ValueError(f"Modus was '{modus}' but need to be one of {_MODES}.")
         res = self.request(f":MODE {modus}")
         print(res)
+        return self.wait_response_ready()
+
+
+    def get_load_mode(self) -> str:
+        return self.request(f":MODE?")
+
+
+    def set_load_output(self, state: int | str) -> bool:
+        _state_str = self._convert_to_onoff_string(state)
+        self.send(f":LOAD {_state_str}")
+        return self.wait_response_ready()
+
+
+    def set_load_off(self) -> bool:  # Compatibility
+        return self.set_load_output("OFF")
+
+
+    def set_load_on(self) -> bool:  # Compatibility
+        return self.set_load_output("ON")
+
+
+    def get_voltage_rounded(self, ndigits: int = 3) -> float:
+        return round(self.get_voltage(), ndigits=int(ndigits))
+
+
+    def get_voltage(self) -> float:
+        """
+        This command queries the present measured voltage.
+
+        Returns:
+            float: voltage in volt
+        """
+
+        self.set_measure_sense_to("UUT")
+        return float(self.request(":MEAS:VOLT?"))
+
+
+    def set_measure_sense_to(self, sense_target: str) -> bool:
+        assert(sense_target in ["UUT", "LOAD"]), ValueError(f"Parameter sense target need to be in UUT, LOAD. It was '{sense_target}'.")
+        self.send(f":MEAS:INP {sense_target}")
+        return self.wait_response_ready()
+
+
+    def measure_voltage(self) -> float:  # compatibility function
+        return self.get_voltage()
+
+
+
+    def get_current_rounded(self, ndigits: int = 3) -> float:
+        return round(self.get_current(), ndigits=int(ndigits))
+
+
+    def get_current(self) -> float:
+        """
+        This command queries the present current measurement.
+
+        Returns:
+            float: DC current in ampere
+        """
+        return float(self.request("MEAS:CURR?"))
+
+
+    def measure_current(self) -> float:  # compatibility function
+        return self.get_current()
+
+
+    def set_load_resistance(self, resistance: float) -> bool:
+        """Set the Resistance of the Load.
+
+        We are using static load L1
+
+        Args:
+            resistance (float): _description_
+
+        Returns:
+            bool: _description_
+        """
+        self.send(f":RES:STAT:L1 {resistance}")  # Note: :STATic was shown in the DC63xxx manual but not in out DLL lib
+        #self.send(f":RES:L1 {resistance}")  # code like in DLL
+        return self.wait_response_ready()
+
+
+    def set_resistance_change_ratio(self, rise_time: float | str = "MIN", fall_time: float | str = "MIN") -> bool:
+        """_summary_
+
+        Args:
+            rise_time (float | str, optional): Ratio in Ohm/µs or MAX or MIN. Defaults to "MIN".
+            fall_time (float | str, optional): Ratio in Ohm/µs or MAX or MIN. Defaults to "MIN".
+
+        Returns:
+            bool: _description_
+        """
+        # NOTE: did not find rise/fall timing for resistance but for current and power in the data sheet
+        self.send(f":RES:RISE {rise_time};:RES:FALL {fall_time}")
+        return self.wait_response_ready()
+
+
+    def set_load_current(self, current: float) -> bool:
+        self.send(f":CURR:STAT:L1 {current}")
+        return self.wait_response_ready()
+
+
+    def set_current_change_ratio(self, rise_time: float | str = "MIN", fall_time: float | str = "MIN") -> bool:
+        """_summary_
+
+        Args:
+            rise_time (float | str, optional): Ratio in A/µs or MAX or MIN. Defaults to "MIN".
+            fall_time (float | str, optional): Ratio in A/µs or MAX or MIN. Defaults to "MIN".
+
+        Returns:
+            bool: _description_
+        """
+
+        self.send(f":CURR:STAT:RISE {rise_time};:CURR:STAT:FALL {fall_time}")
+        return self.wait_response_ready()
+
+
+    def set_load_voltage(self, voltage) -> bool:
+        self.send(f":VOLT:L1 {voltage}")
+        return self.wait_response_ready()
+
+
+    def set_constant_voltage_current_limit(self, current_limit) -> bool:
+        self.send(f":VOLT:CURR {current_limit}")
+        return self.wait_response_ready()
+
+
+    def set_short_circuit(self, state: int | str) -> bool:
+        _state_str = self._convert_to_onoff_string(state)
+        self.send(f":LOAD:SHORT {_state_str}")
+        return self.wait_response_ready()
+
+
+    def activate_device_display(self) -> bool:
+        """Activate the Display and show the channel inforamtion of Load Object.
+
+        Returns:
+            bool: _description_
+        """
+
+        if (self.channel & 1) != 0:
+            self.send(f":SHOW:DISPLAY L")
+        else:
+            self.send(f":SHOW:DISPLAY R")
+        return self.wait_response_ready()
+
+
+    def activate_device_dual_voltage_display(self) -> bool:
+        self.send(f":SHOW:DISPLAY LRV")
+        return self.wait_response_ready()
+
+
+    def activate_device_dual_current_display(self) -> bool:
+        self.send(f":SHOW:DISPLAY LRI")
+        return self.wait_response_ready()
+
+
+    def set_channel_sync_mode(self, state: int | str) -> bool:
+        """ Enable or Disable the channel syncronization mode.
+
+        Args:
+            state (int | str): _description_
+
+        Returns:
+            bool: _description_
+        """
+        _state_int = self._convert_to_onoff_int(state)
+        self.send(f":CHAN:SYNC {_state_int}")
+        return self.wait_response_ready()
+
+
+    def all_loads_on(self) -> bool:
+        self.send(f":RUN")
+        return self.wait_response_ready()
+
+
+    def all_loads_off(self) -> bool:
+        self.send(f":ABORT")
         return self.wait_response_ready()
 
 
