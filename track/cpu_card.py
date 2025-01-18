@@ -442,8 +442,8 @@ class CPU_Card:
         res = self.con.request(f":IO:P{port_letter}?")
         return res
 
-    def IO_Set_Cfg(self, port_letter: str, bit: int, cfg: int) -> bool:
-        """Set Configuration for a specific port bit.
+    def IO_Set_Cfg_Pin(self, port_letter: str, bit: int, cfg: int) -> bool:
+        """Set Configuration for a specific port pin/bit.
 
         Args:
             port_letter (str): one of A, C
