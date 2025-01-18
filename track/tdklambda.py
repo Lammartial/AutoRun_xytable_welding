@@ -57,19 +57,20 @@ class DCZPlus(Eth2SerialDevice):
         SCPIRemoteDevice (_type_): _description_
     """
 
-    def __init__(self, resource_str: str, channel: int = 1) -> None:
+    def __init__(self, resource_str: str, channel: int = None) -> None:
         """
         Initialize the object with resource string (IP name:socket).
         Example "192.168.1.101:5025"
 
         Args:
             resource_str (str): resource string in the format <IP>:<SOCKET>
-            channel (int, optional): Selects a channel to address communication to the sub-device in range of 1..10. Defaults to 1.
+            channel (int, optional): Selects a channel to address communication to the sub-device in range of 1..10, None deactivates it. Defaults to None.
 
         """
         super().__init__(resource_str,
                          termination="\r\n", trim_termination=True,
                          open_connection=False)  # The TDK Lambda need closing the connection after each transmission
+        self.re_match_sys_err = re.compile(r'(\d*),.*"(.*)"')  # this is the filter for the system error return
         self.change_channel(channel)
 
 
@@ -88,14 +89,17 @@ class DCZPlus(Eth2SerialDevice):
         Changes the channel number of a device instance.
 
         Args:
-            new_slot (int): slot number (1, 2, 3)
+            new_channel (int): channel number of submodule None=no subs or a number in (1, ... ,10)
         """
-        MAX_SUB = 10  # set this to your needs
-        assert (int(new_channel) > 0 and int(new_channel) < MAX_SUB+1), ValueError(f"Error, 'new_channel' must be in 1..{MAX_SUB} but was {int(new_channel)}")
-        self.channel = int(new_channel)
-        self._select_channel_prefix = f"INST:NSEL {self.channel:02d}"  # this is the prefix to address the subdevice via the connection gateway
-        self.re_match_sys_err = re.compile(r'(\d*),.*"(.*)"')  # this is the filter for the system error return
 
+        MAX_SUB = 10  # set this to your needs
+        assert ((new_channel is None) or (int(new_channel) > 0 and int(new_channel) < MAX_SUB+1)), ValueError(f"Error, 'new_channel' must be in 1..{MAX_SUB} but was {int(new_channel)}")
+        if new_channel is None:
+            self.channel = None
+            self._select_channel_prefix = ""
+        else:
+            self.channel = int(new_channel)
+            self._select_channel_prefix = f"INST:NSEL {self.channel:02d}"  # this is the prefix to address the subdevice via the connection gateway
 
     def select_channel(self) -> bool:
         """Selects and verifies actively the channel on the Lambda gateway.
@@ -103,6 +107,8 @@ class DCZPlus(Eth2SerialDevice):
         Returns:
             bool: true success else other channel returned
         """
+        if self.channel is None:
+            return False
         self.send(None)  # this will send the channel selection prefix only
         _ch = super().request(f"INST:NSEL?", pause_after_write=5)  # verify the selected channel
         return (int(_ch) == self.channel)
@@ -111,7 +117,7 @@ class DCZPlus(Eth2SerialDevice):
     #----------------------------------------------------------------------------------------------
 
 
-    def send(self, msg: str,
+    def send(self, msg: str | None,
              timeout: float = 3.0,
              pause_after_write: int | None = 25,    # Note: this sets the delay for all calls as default
              encoding: str | None = "utf-8",
@@ -129,7 +135,8 @@ class DCZPlus(Eth2SerialDevice):
             bool: _description_
         """
 
-        super().send(f"{self._select_channel_prefix};{msg}" if msg else f"{self._select_channel_prefix}", timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
+        super().send(((f"{self._select_channel_prefix};{msg}" if self.channel else msg) if msg else f"{self._select_channel_prefix}"),
+                     timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
 
 
     #----------------------------------------------------------------------------------------------
@@ -145,7 +152,7 @@ class DCZPlus(Eth2SerialDevice):
         It prefixes with the channel selection if a msg is given to send the command to the correct subdevice.
 
         Args:
-            msg (str): _description_
+            msg (str): Message to send or None if only a read should be performed (Note that if a channel is set, the channel prefix will be sent even though)
             timeout (float, optional): _description_. Defaults to 3.0.
             pause_after_write (int, optional):  Pause after writing the command for a request in milliseconds,
                 before reading and waiting the result. None disables it. Defaults to None.
@@ -157,9 +164,10 @@ class DCZPlus(Eth2SerialDevice):
             str: _description_
         """
 
-        # this will send the channel select in front of and wait then only a bit
-        self.send(None, timeout=timeout, pause_after_write=5, encoding=encoding, retries=retries)
-        # now send request without selecting the channel again, but wait the standard time
+        if self.channel:
+            # this will send the channel select in front of and wait then only a bit
+            self.send(None, timeout=timeout, pause_after_write=5, encoding=encoding, retries=retries)
+            # now send request without selecting the channel again, but wait the standard time
         return super().request(msg, timeout=timeout, pause_after_write=pause_after_write, limit=limit, encoding=encoding, retries=retries)
 
 
