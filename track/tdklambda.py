@@ -156,7 +156,7 @@ class DCZPlus(Eth2SerialDevice):
         """
         # this will send the channel select in front of and wait then after
         self.send("", timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
-        # now send request without selecting the channel
+        # now send request without selecting the channel again
         return super().request(msg, timeout=timeout, pause_after_write=pause_after_write, limit=limit, encoding=encoding, retries=retries)
 
 
@@ -185,19 +185,19 @@ class DCZPlus(Eth2SerialDevice):
     def initialize_device(self) -> bool:
         errorcode = 0
         # preconfigure device
-        self.send(":LOAD OFF")
-        ec, et = self.wait_response_ready()
-        errorcode += ec
-        self.send(":ACT ON")
-        ec, et = self.wait_response_ready()
-        errorcode += ec
-        self.send(":CONF:VOLT:RANG 80")
-        ec, et = self.wait_response_ready()
-        errorcode += ec
-        self.send(":CURR:RANG 80")
-        ec, et = self.wait_response_ready()
-        errorcode += ec
-        #sleep(0.25)
+        # self.send(":LOAD OFF")
+        # ec, et = self.wait_response_ready()
+        # errorcode += ec
+        # self.send(":ACT ON")
+        # ec, et = self.wait_response_ready()
+        # errorcode += ec
+        # self.send(":CONF:VOLT:RANG 80")
+        # ec, et = self.wait_response_ready()
+        # errorcode += ec
+        # self.send(":CURR:RANG 80")
+        # ec, et = self.wait_response_ready()
+        # errorcode += ec
+        # #sleep(0.25)
         return (errorcode == 0)
 
 

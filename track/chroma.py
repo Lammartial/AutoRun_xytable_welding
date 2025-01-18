@@ -71,11 +71,23 @@ class DC63600(Eth2SerialDevice):
         self.channel = int(new_channel)
         self._select_channel_prefix = f":CHAN {self.channel:02d}"  # this is the prefix to address the subdevice via the connection gateway
 
+
+    def select_channel(self) -> bool:
+        """Selects and verifies actively the channel on the Lambda gateway.
+
+        Returns:
+            bool: true success else other channel returned
+        """
+        super().send(self._select_channel_prefix)
+        _ch = super().request(f":CHAN")  # verify the selected channel
+        return (int(_ch) == self.channel)
+
+
     #----------------------------------------------------------------------------------------------
 
     def send(self, msg: str,
              timeout: float = 3.0,
-             pause_after_write: int | None = None,
+             pause_after_write: int | None = 20,    # Note: this sets the delay for all calls as default
              encoding: str | None = "utf-8",
              retries: int = 1) -> None:
         """Sends command in 'msg' to the device.
@@ -99,7 +111,7 @@ class DC63600(Eth2SerialDevice):
 
     def request(self, msg: str | None,
                 timeout: float | None = 3,
-                pause_after_write: int | None = None,
+                pause_after_write: int | None = 20,    # Note: this sets the delay for all calls as default
                 limit: int = 0,
                 encoding: str | None = "utf-8",
                 retries: int = 1) -> str:
@@ -119,15 +131,17 @@ class DC63600(Eth2SerialDevice):
             str: _description_
         """
 
-        return super().request(msg if msg is None else f"{self._select_channel_prefix};{msg}",
-                               timeout=timeout, pause_after_write=pause_after_write, limit=limit, encoding=encoding, retries=retries)
+        # this will send the channel select in front of and wait then after
+        self.send("", timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
+        # now send request without selecting the channel again
+        return super().request(msg, timeout=timeout, pause_after_write=pause_after_write, limit=limit, encoding=encoding, retries=retries)
 
 
     #----------------------------------------------------------------------------------------------
 
 
-    def wait_response_ready(self) -> str:
-        return self.request("SYST:ERR?")  # this will automatically delay until the response is ready
+    def wait_response_ready(self) -> bool:
+        return (int(self.request("*OPC?")) == 1)  # this will automatically delay until the response is ready
 
 
     def ident(self) -> str:
@@ -141,13 +155,18 @@ class DC63600(Eth2SerialDevice):
     #----------------------------------------------------------------------------------------------
 
 
-    def initialize_device(self) -> None:
+    def initialize_device(self) -> bool:
+        _ok = True
         # preconfigure device
         self.send(":LOAD OFF")
+        _ok &= self.wait_response_ready()
         self.send(":ACT ON")
+        _ok &= self.wait_response_ready()
         self.send(":CONF:VOLT:RANG 80")
+        _ok &= self.wait_response_ready()
         self.send(":CURR:RANG 80")
-        #sleep(0.25)
+        _ok &= self.wait_response_ready()
+        return _ok
 
 
     def set_load_mode(self, modus: str) -> bool:
