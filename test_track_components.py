@@ -20,8 +20,11 @@ if __name__ == "__main__":
 
     supply = DCZPlus(cfg["dc_supply"])
     print(supply.ident())
+    supply.initialize_device()
     supply.clear_protection()
     supply.set_voltage(5.5)
+    print(supply.get_foldback())
+    print(supply.get_condition_register(2))
 
     load = DC63600(cfg["dc_load"])
     print(load.ident())

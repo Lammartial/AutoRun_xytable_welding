@@ -3,6 +3,7 @@ Driver for Lambda ZUP devices via Ethernet socket
 
 """
 
+import re
 from rrc.eth2serial import Eth2SerialDevice
 
 #--------------------------------------------------------------------------------------------------
@@ -45,7 +46,7 @@ class DCZPlus(Eth2SerialDevice):
         """
         super().__init__(resource_str, termination="\n", open_connection=False)  # The hioki expects to have connect/disconnect for each command
         self.change_channel(channel)
-        self.response_delay_ms = 50
+        self.response_delay_ms = 20
 
     def __str__(self) -> str:
         return f"DZPlus device on {super().__str__()}"
@@ -68,6 +69,7 @@ class DCZPlus(Eth2SerialDevice):
         assert (int(new_channel) > 0 and int(new_channel) < MAX_SUB+1), ValueError(f"Error, 'new_channel' must be in 1..{MAX_SUB} but was {int(new_channel)}")
         self.channel = int(new_channel)
         self._select_channel_prefix = f"INST:NSEL {self.channel:02d}"  # this is the prefix to address the subdevice via the connection gateway
+        self.re_match_sys_err = re.compile(r'(\d*),.*"(.*)"')  # this is the filter for the system error return
 
 
     def select_channel(self) -> bool:
@@ -102,7 +104,7 @@ class DCZPlus(Eth2SerialDevice):
             bool: _description_
         """
 
-        super().send(f"{self._select_channel_prefix};{msg}", timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
+        super().send(f"{self._select_channel_prefix};{msg}", timeout=timeout, pause_after_write=self.response_delay_ms, encoding=encoding, retries=retries)
 
 
     #----------------------------------------------------------------------------------------------
@@ -129,15 +131,22 @@ class DCZPlus(Eth2SerialDevice):
         Returns:
             str: _description_
         """
-
-        return super().request(msg if msg is None else f"{self._select_channel_prefix};{msg}",
-                               timeout=timeout, pause_after_write=pause_after_write, limit=limit, encoding=encoding, retries=retries)
+        # this will send the channel select in front of and wait then after
+        self.send("", timeout=timeout, pause_after_write=self.response_delay_ms, encoding=encoding, retries=retries)
+        # now send request without selecting the channel
+        return super().request(msg, timeout=timeout, pause_after_write=self.response_delay_ms, limit=limit, encoding=encoding, retries=retries)
 
 
     #----------------------------------------------------------------------------------------------
 
-    def wait_response_ready(self) -> str:
-        return self.request("SYST:ERR?")  # this will automatically delay until the response is ready
+    def wait_response_ready(self) -> tuple:
+        res =  super().request("SYST:ERR?")  # this will automatically delay until the response is ready
+        # res is '0, "No Error"\r' if everything is okay
+        m = self.re_match_sys_err.search(res)
+        if m and len(m.groups()) == 2:
+            ercode, ertext = m.groups()
+        ercode = int(ercode)
+        return (ercode, ertext)
 
 
     def ident(self) -> str:
@@ -150,23 +159,41 @@ class DCZPlus(Eth2SerialDevice):
 
     #----------------------------------------------------------------------------------------------
 
-    def initialize_device(self) -> None:
+    def initialize_device(self) -> bool:
+        errorcode = 0
         # preconfigure device
         self.send(":LOAD OFF")
+        ec, et = self.wait_response_ready()
+        errorcode += ec
         self.send(":ACT ON")
+        ec, et = self.wait_response_ready()
+        errorcode += ec
         self.send(":CONF:VOLT:RANG 80")
+        ec, et = self.wait_response_ready()
+        errorcode += ec
         self.send(":CURR:RANG 80")
+        ec, et = self.wait_response_ready()
+        errorcode += ec
         #sleep(0.25)
+        return (errorcode == 0)
+
 
     def set_output(self, state: bool | int) -> bool:
         _st = "ON" if state else "OFF"
         self.send(f"OUTP:REL {_st}")
+        ec, et = self.wait_response_ready()
+        if (ec != 0):
+            return False
         self.send(f"OUTP {_st}")  # set Output AND Output Relay - The Relay disconnet the AC Source physically
+        ec, et = self.wait_response_ready()
+        return (ec == 0)
+
 
     def clear_protection(self) -> bool:
         self.send("OUTP:PROT:CLE")
-        ret = self.wait_response_ready()
-        return ret == "0"
+        ec, et = self.wait_response_ready()
+        return (ec == 0)
+
 
     def set_foldback(self, mode: str | int) -> bool:
         """_summary_
@@ -188,23 +215,98 @@ class DCZPlus(Eth2SerialDevice):
                 raise ValueError(f"Mode string is invalid '{mode}'. Allowed are OFF, CC or CV")
             _mode_str = mode
         self.send(f"OUTP:PROT:FOLD {_mode_str}")
-        ret = self.wait_response_ready()
-        return ret == "0"
+        ec, et = self.wait_response_ready()
+        return (ec == 0)
 
 
     def get_foldback(self) -> str:
-        return self.request("OUTP:PROT:FOLD?", pause_after_write=20)
+        return self.request("OUTP:PROT:FOLD?")
+
 
     def set_voltage(self, voltage: float) -> bool:
         self.send(f"VOLT {voltage}")
-        ret = self.wait_response_ready()
-        return ret == "0"
+        ec, et = self.wait_response_ready()
+        return (ec == 0)
+
+
+    def short_ciruit_state(self) -> bool:
+        return True  # ????
+
+
+    def set_current_limit(self, current_limit_: float) -> bool:
+        self.send(f"CURR {current_limit_}")
+        ec, et = self.wait_response_ready()
+        return (ec == 0)
+
+
+    def get_current_rounded(self, ndigits: int = 3) -> float:
+        return round(self.get_current(), ndigits=int(ndigits))
+
+
+    def get_current(self) -> float:
+        """
+        This command queries the present current measurement.
+
+        Returns:
+            float: DC current in ampere
+        """
+        return float(self.request("MEAS:CURR?"))
+
+
+    def get_voltage_rounded(self, ndigits: int = 3) -> float:
+        return round(self.get_voltage(), ndigits=int(ndigits))
+
+
+    def get_voltage(self) -> float:
+        """
+        This command queries the present measured voltage.
+
+        Returns:
+            float: RMS voltage in volt
+        """
+        return float(self.request("MEAS:VOLT?"))
+
+
+    def get_power_rounded(self, ndigits: int = 3) -> float:
+        return round(self.get_power_rounded(), ndigits=int(ndigits))
+
+
+    def get_power(self) -> float:
+        """
+        This command queries the present measured power.
+
+        Returns:
+            float: Power in watts
+        """
+        return float(self.request("MEAS:POW?"))
+
+
+    def  get_condition_register(self, bitnum: int) -> bool:
+        """_summary_
+
+        Args:
+            bitnum (int): specified register bit to get the value for
+
+        Returns:
+            bool: True bit is set else False
+        """
+
+        res = self.request("STAT:QUES:COND?")
+        v = int(res)
+        return (v & (1 << bitnum) != 0)
+
+
 
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    dev = DCZPlus("172.23.130.33:8003")
-    print(dev.ident())
-
+    #dev = DCZPlus("172.23.130.33:8003")
+    #print(dev.ident())
+    rem = re.compile(r'(\d*),.*"(.*)"')
+    m = rem.search('0, "No Error"\r')
+    if m and len(m.groups()) == 2:
+        ercode, ertext = m.groups()
+    ercode = int(ercode)
+    print(ercode, ertext)
 
 # END OF FILE
