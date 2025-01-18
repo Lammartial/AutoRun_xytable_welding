@@ -12,7 +12,7 @@ from rrc.serialport import SerialComportDevice
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
 #
-VERSION = "0.0.1"
+VERSION = "0.1.0"
 
 __version__ = VERSION
 
@@ -55,7 +55,7 @@ class CPU_Card:
         return f"TRack CPU-Card device on {super().__str__()}"
 
     def __repr__(self) -> str:
-        return f"CPU_Card({self.con.resource_str}, {self.channel})"
+        return f"CPU_Card({self.con.resource_str})"
 
 
     #----------------------------------------------------------------------------------------------
@@ -308,6 +308,16 @@ class CPU_Card:
 
     #----------------------------------------------------------------------------------------------
 
+
+
+#--------------------------------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    # quick test, just call: python cpu_card.py
+    dev = CPU_Card("COM8,115200,8N1")
+    print(dev.ident())
+    print(dev.ident_boot())
+    print(dev.help().replace("\r","\n\r"))
 
 
 # END OF FILE

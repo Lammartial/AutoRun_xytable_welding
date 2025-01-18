@@ -9,7 +9,7 @@ from rrc.eth2serial import Eth2SerialDevice
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
 #
-VERSION = "0.0.1"
+VERSION = "0.1.0"
 
 __version__ = VERSION
 
@@ -34,7 +34,7 @@ class DC63600(Eth2SerialDevice):
         SCPIRemoteDevice (_type_): _description_
     """
 
-    def __init__(self, resource_str: str, channel: int = 1):
+    def __init__(self, resource_str: str, channel: int = 1) -> None:
         """
         Initialize the object with resource string (IP name:socket).
         Example "192.168.1.101:5025"
@@ -125,6 +125,7 @@ class DC63600(Eth2SerialDevice):
 
     #----------------------------------------------------------------------------------------------
 
+
     def wait_response_ready(self) -> str:
         return self.request("SYST:ERR?")  # this will automatically delay until the response is ready
 
@@ -136,7 +137,9 @@ class DC63600(Eth2SerialDevice):
     def reset(self) -> str:
         return self.send("*RST")    # no return!
 
+
     #----------------------------------------------------------------------------------------------
+
 
     def initialize_device(self) -> None:
         # preconfigure device
@@ -162,13 +165,15 @@ class DC63600(Eth2SerialDevice):
 
 class ACSource(Eth2SerialDevice):
     pass
-
+    # do we need this ?
 
 
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-    pass
+     # quick test, just call: python chroma.py
+    dev = DC63600("172.23.130.32:2101")
+    print(dev.ident())
 
 
 # END OF FILE

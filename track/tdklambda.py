@@ -3,13 +3,20 @@ Driver for Lambda ZUP devices via Ethernet socket
 
 """
 
+from typing import Tuple
+import errno
 import re
+from time import sleep, monotonic_ns
+from binascii import hexlify
+from struct import pack, unpack, unpack_from
+from collections import OrderedDict
+
 from rrc.eth2serial import Eth2SerialDevice
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
 #
-VERSION = "0.0.1"
+VERSION = "0.1.0"
 
 __version__ = VERSION
 
@@ -24,6 +31,22 @@ from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
 
+def _od2t(d: OrderedDict) -> tuple:
+    """To convert an ordered dict to a tuple of values for TestStand Container.
+
+    Args:
+        d (OrderedDict): _description_
+
+    Returns:
+        tuple: _description_
+    """
+
+    return tuple([t for t in d.values()])
+
+
+# --------------------------------------------------------------------------- #
+
+
 
 class DCZPlus(Eth2SerialDevice):
     """Defines the Lambda DC ZPlus source communication in a rack using a series of them with one gateway.
@@ -34,7 +57,7 @@ class DCZPlus(Eth2SerialDevice):
         SCPIRemoteDevice (_type_): _description_
     """
 
-    def __init__(self, resource_str: str, channel: int = 1):
+    def __init__(self, resource_str: str, channel: int = 1) -> None:
         """
         Initialize the object with resource string (IP name:socket).
         Example "192.168.1.101:5025"
@@ -46,7 +69,7 @@ class DCZPlus(Eth2SerialDevice):
         """
         super().__init__(resource_str, termination="\n", open_connection=False)  # The hioki expects to have connect/disconnect for each command
         self.change_channel(channel)
-        self.response_delay_ms = 20
+
 
     def __str__(self) -> str:
         return f"DZPlus device on {super().__str__()}"
@@ -88,7 +111,7 @@ class DCZPlus(Eth2SerialDevice):
 
     def send(self, msg: str,
              timeout: float = 3.0,
-             pause_after_write: int | None = None,
+             pause_after_write: int | None = 20,    # Note: this sets the delay for all calls as default
              encoding: str | None = "utf-8",
              retries: int = 1) -> None:
         """Sends command in 'msg' to the device.
@@ -104,7 +127,7 @@ class DCZPlus(Eth2SerialDevice):
             bool: _description_
         """
 
-        super().send(f"{self._select_channel_prefix};{msg}", timeout=timeout, pause_after_write=self.response_delay_ms, encoding=encoding, retries=retries)
+        super().send(f"{self._select_channel_prefix};{msg}", timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
 
 
     #----------------------------------------------------------------------------------------------
@@ -112,7 +135,7 @@ class DCZPlus(Eth2SerialDevice):
 
     def request(self, msg: str | None,
                 timeout: float | None = 3,
-                pause_after_write: int | None = None,
+                pause_after_write: int | None = 20,    # Note: this sets the delay for all calls as default
                 limit: int = 0,
                 encoding: str | None = "utf-8",
                 retries: int = 1) -> str:
@@ -132,9 +155,9 @@ class DCZPlus(Eth2SerialDevice):
             str: _description_
         """
         # this will send the channel select in front of and wait then after
-        self.send("", timeout=timeout, pause_after_write=self.response_delay_ms, encoding=encoding, retries=retries)
+        self.send("", timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
         # now send request without selecting the channel
-        return super().request(msg, timeout=timeout, pause_after_write=self.response_delay_ms, limit=limit, encoding=encoding, retries=retries)
+        return super().request(msg, timeout=timeout, pause_after_write=pause_after_write, limit=limit, encoding=encoding, retries=retries)
 
 
     #----------------------------------------------------------------------------------------------
@@ -293,6 +316,21 @@ class DCZPlus(Eth2SerialDevice):
 
         res = self.request("STAT:QUES:COND?")
         v = int(res)
+        b = unpack("<L", v)[0]
+        self._condition_register = OrderedDict({
+            "block"     : hexlify(b).decode(),
+            "value"     : v,
+            "remote_inhibit" : ((v>>8) & 1),
+            "fan"            : ((v>>7) & 1),
+            "max_lim"        : ((v>>6) & 1),
+            "sync"           : ((v>>5) & 1),
+            "rev"            : ((v>>4) & 1),
+            "opp"            : ((v>>3) & 1),
+            "ocp"            : ((v>>2) & 1),
+            "ovp"            : ((v>>1) & 1),
+            "otp"            : ((v>>0) & 1),
+        })
+        #return _od2t(self._condition_register)  # to return it to Teststand use this converting the bits into a tuple
         return (v & (1 << bitnum) != 0)
 
 
@@ -300,13 +338,13 @@ class DCZPlus(Eth2SerialDevice):
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    #dev = DCZPlus("172.23.130.33:8003")
-    #print(dev.ident())
-    rem = re.compile(r'(\d*),.*"(.*)"')
-    m = rem.search('0, "No Error"\r')
-    if m and len(m.groups()) == 2:
-        ercode, ertext = m.groups()
-    ercode = int(ercode)
-    print(ercode, ertext)
+    # quick test, just call: python tdklambda.py
+    dev = DCZPlus("172.23.130.33:8003")
+    print(dev.ident())
+    dev.initialize_device()
+    dev.clear_protection()
+    dev.set_voltage(5.5)
+    print(dev.get_foldback())
+    print(dev.get_condition_register(2))
 
 # END OF FILE
