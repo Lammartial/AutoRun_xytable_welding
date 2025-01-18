@@ -67,7 +67,9 @@ class DCZPlus(Eth2SerialDevice):
             channel (int, optional): Selects a channel to address communication to the sub-device in range of 1..10. Defaults to 1.
 
         """
-        super().__init__(resource_str, termination="\n", open_connection=False)  # The hioki expects to have connect/disconnect for each command
+        super().__init__(resource_str,
+                         termination="\r\n", trim_termination=True,
+                         open_connection=False)  # The TDK Lambda need closing the connection after each transmission
         self.change_channel(channel)
 
 
@@ -101,8 +103,8 @@ class DCZPlus(Eth2SerialDevice):
         Returns:
             bool: true success else other channel returned
         """
-        super().send(self._select_channel_prefix)
-        _ch = super().request(f"INST:NSEL")  # verify the selected channel
+        self.send(None)  # this will send the channel selection prefix only
+        _ch = super().request(f"INST:NSEL?", pause_after_write=5)  # verify the selected channel
         return (int(_ch) == self.channel)
 
 
@@ -111,7 +113,7 @@ class DCZPlus(Eth2SerialDevice):
 
     def send(self, msg: str,
              timeout: float = 3.0,
-             pause_after_write: int | None = 20,    # Note: this sets the delay for all calls as default
+             pause_after_write: int | None = 25,    # Note: this sets the delay for all calls as default
              encoding: str | None = "utf-8",
              retries: int = 1) -> None:
         """Sends command in 'msg' to the device.
@@ -127,7 +129,7 @@ class DCZPlus(Eth2SerialDevice):
             bool: _description_
         """
 
-        super().send(f"{self._select_channel_prefix};{msg}", timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
+        super().send(f"{self._select_channel_prefix};{msg}" if msg else f"{self._select_channel_prefix}", timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
 
 
     #----------------------------------------------------------------------------------------------
@@ -135,7 +137,7 @@ class DCZPlus(Eth2SerialDevice):
 
     def request(self, msg: str | None,
                 timeout: float | None = 3,
-                pause_after_write: int | None = 20,    # Note: this sets the delay for all calls as default
+                pause_after_write: int | None = 25,    # Note: this sets the delay for all calls as default
                 limit: int = 0,
                 encoding: str | None = "utf-8",
                 retries: int = 1) -> str:
@@ -154,9 +156,10 @@ class DCZPlus(Eth2SerialDevice):
         Returns:
             str: _description_
         """
-        # this will send the channel select in front of and wait then after
-        self.send("", timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
-        # now send request without selecting the channel again
+
+        # this will send the channel select in front of and wait then only a bit
+        self.send(None, timeout=timeout, pause_after_write=5, encoding=encoding, retries=retries)
+        # now send request without selecting the channel again, but wait the standard time
         return super().request(msg, timeout=timeout, pause_after_write=pause_after_write, limit=limit, encoding=encoding, retries=retries)
 
 
@@ -316,7 +319,8 @@ class DCZPlus(Eth2SerialDevice):
 
         res = self.request("STAT:QUES:COND?")
         v = int(res)
-        b = unpack("<L", v)[0]
+        #b = unpack("<L", v)[0]
+        b = v.to_bytes(4, "little")
         self._condition_register = OrderedDict({
             "block"     : hexlify(b).decode(),
             "value"     : v,

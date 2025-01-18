@@ -4,7 +4,6 @@ It implements the Logic CPU components library.
 
 """
 
-from select import poll
 from typing import Tuple
 from time import sleep, monotonic_ns
 from binascii import hexlify

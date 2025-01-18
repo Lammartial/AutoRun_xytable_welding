@@ -3,7 +3,7 @@ Driver for Chroma Load devices via Ethernet socket
 
 """
 
-from multiprocessing import Value
+from typing import List, Tuple
 from time import sleep
 from rrc.eth2serial import Eth2SerialDevice
 
@@ -46,7 +46,7 @@ class DC63600(Eth2SerialDevice):
 
         """
 
-        super().__init__(resource_str, termination="\n", open_connection=False)  # The hioki expects to have connect/disconnect for each command
+        super().__init__(resource_str, termination="\n", trim_termination=True, open_connection=True)  # The Chroma device can keep connection open (saves overhead time)
         self.last_cmd_written = None
         self.change_channel(channel)
 
@@ -70,7 +70,7 @@ class DC63600(Eth2SerialDevice):
         MAX_SUB = 10  # set this to your needs
         assert (int(new_channel) > 0 and int(new_channel) < MAX_SUB+1), ValueError(f"Error, 'new_channel' must be in 1..{MAX_SUB} but was {int(new_channel)}")
         self.channel = int(new_channel)
-        self._select_channel_prefix = f":CHAN {self.channel:02d}"  # this is the prefix to address the subdevice via the connection gateway
+        self._select_channel_prefix = f":CHAN {self.channel}"  # this is the prefix to address the subdevice via the connection gateway
 
 
     def select_channel(self) -> bool:
@@ -80,7 +80,7 @@ class DC63600(Eth2SerialDevice):
             bool: true success else other channel returned
         """
         super().send(self._select_channel_prefix)
-        _ch = super().request(f":CHAN")  # verify the selected channel
+        _ch = super().request(f":CHAN?")  # verify the selected channel
         return (int(_ch) == self.channel)
 
 
@@ -132,11 +132,7 @@ class DC63600(Eth2SerialDevice):
             str: _description_
         """
 
-        # this will send the channel select in front of and wait then after
-        self.send("", timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
-        # now send request without selecting the channel again
-        return super().request(msg, timeout=timeout, pause_after_write=pause_after_write, limit=limit, encoding=encoding, retries=retries)
-
+        return super().request(f"{self._select_channel_prefix};{msg}", timeout=timeout, pause_after_write=pause_after_write, limit=limit, encoding=encoding, retries=retries)
 
     #----------------------------------------------------------------------------------------------
 
@@ -207,15 +203,14 @@ class DC63600(Eth2SerialDevice):
             CV - Constant Voltage
 
         Args:
-            modus (str): String of "CCL", "CCH", "CCDL", "CCDH", "CRL", "CRH", "CV"
+            modus (str): String of "CCL", "CCH", "CCDL", "CCDH", "CRL", "CRH", "CVL", "CVH"
 
         Returns:
             bool: _description_
         """
-        _MODES = ("CCL", "CCH", "CCDL", "CCDH", "CRL", "CRH", "CV")
+        _MODES = ("CCL", "CCH", "CCDL", "CCDH", "CRL", "CRH", "CVL", "CVH")
         assert(modus in _MODES), ValueError(f"Modus was '{modus}' but need to be one of {_MODES}.")
-        res = self.request(f":MODE {modus}")
-        print(res)
+        self.send(f":MODE {modus}")
         return self.wait_response_ready()
 
 
