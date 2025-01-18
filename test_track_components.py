@@ -3,6 +3,7 @@ Test patterns to check MiniTRack components communication including CPU Card eit
 
 """
 
+from time import sleep
 from rrc.track import CPU_Card, DC63600, DCZPlus
 from rrc.keysight import DAQ970A
 
@@ -24,6 +25,8 @@ if __name__ == "__main__":
     cfg = PRODUCTION_LINES_SETUP["toptek"]
 
     supply = DCZPlus(cfg["dc_supply"], channel=1)
+    sleep(0.10)  # wait until all network modules are load, otherwise the first connect throws from time to time
+
     print(supply.ident())
     print(supply.channel, supply.select_channel())
     supply.initialize_device()
