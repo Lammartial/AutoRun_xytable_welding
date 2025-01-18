@@ -170,11 +170,28 @@ class DC63600(Eth2SerialDevice):
 
 
     def set_load_mode(self, modus: str) -> bool:
+        """Set the working mode of the Load.
+
+        Load Modes:
+            CCL - Constant Current Low
+            CCH - Constant Current High
+            CCDL - ???
+            CCDH - ???
+            CRL - Constant Resitence Low
+            CRH - Constant Resistence High
+            CV - Constant Voltage
+
+        Args:
+            modus (str): String of "CCL", "CCH", "CCDL", "CCDH", "CRL", "CRH", "CV"
+
+        Returns:
+            bool: _description_
+        """
         _MODES = ("CCL", "CCH", "CCDL", "CCDH", "CRL", "CRH", "CV")
         assert(modus in _MODES), ValueError(f"Modus was '{modus}' but need to be one of {_MODES}.")
         res = self.request(f":MODE {modus}")
         print(res)
-        return True
+        return self.wait_response_ready()
 
 
 #--------------------------------------------------------------------------------------------------

@@ -28,7 +28,8 @@ if __name__ == "__main__":
 
     load = DC63600(cfg["dc_load"])
     print(load.ident())
-    load.set_load_mode("CCH")
+    load.initialize_device()
+    load.set_load_mode("CV")
 
     datalogger = DAQ970A(cfg["datalogger"], card_slot=1)
     print(datalogger.ident())
