@@ -267,8 +267,8 @@ class DCZPlus(Eth2SerialDevice):
         return True  # ????
 
 
-    def set_current_limit(self, current_limit_: float) -> bool:
-        self.send(f"CURR {current_limit_}")
+    def set_current_limit(self, current_limit: float) -> bool:
+        self.send(f"CURR {current_limit}")
         ec, et = self.wait_response_ready()
         return (ec == 0)
 

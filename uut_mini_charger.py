@@ -30,7 +30,8 @@ class UUT_MiniCharger:
         else:
             # need to create by our own
             self.cpu = CPU_Card(resource_str)
-        self.i2c_address = i2c_address << 1
+        self.i2c_address = int(i2c_address) << 1
+        self.gpio_pattern = 0
 
         
     def initialize_cpu_ports(self) -> None:
@@ -49,6 +50,8 @@ class UUT_MiniCharger:
         self.cpu.IO_Write_Port_bit("A", 1, 1)         # TPBATNTC released
         self.cpu.IO_Write_Port_bit("A", 2, 1)         # I2C-Bus Voltage 5V
         self.cpu.IO_Write_Port_bit("C", 5, 1)         # Signal which is checked with dataloger for channel identification
+
+        self.cpu.I2C_Master_set_PEC(1)  # use PEC by default. This is the only good place to put it
 
 
     def is_adapter_correctly_connected(self) -> Tuple[bool, str]:
@@ -88,15 +91,63 @@ class UUT_MiniCharger:
 
 
     def read_battery_detection_from_uut(self) -> bool:
+        self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_Bat_Detection, 2)
+        self.cpu.I2C_Master_set_PEC(1)
         return (buf[1] == 1)
 
     def read_battery_measurements_from_uut(self) -> Tuple[float, float]:
+        self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_Bat_Values, 5)
-        voltage = unpack_from("<H", buf, 1)[0] / 1000 # data come litte endian
-        current = unpack_from("<H", buf, 3)[0] / 1000 # data come litte endian
+        self.cpu.I2C_Master_set_PEC(1)
+        voltage = unpack_from("<H", buf, 1)[0] / 1000  # data come litte endian
+        current = unpack_from("<H", buf, 3)[0] / 1000  # data come litte endian
         return voltage, current
 
+    def read_charger_measurements_from_uut(self) -> Tuple[float, float]:
+        self.cpu.I2C_Master_set_PEC(0)
+        buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_CHG_Values, 5)
+        self.cpu.I2C_Master_set_PEC(1)
+        VIN = unpack_from("<H", buf, 1)[0] / 1000  # data come litte endian
+        T = unpack_from("<H", buf, 3)[0] / 10      # data come litte endian
+        return VIN, T
+    
+    def read_r_sense_from_uut(self) -> float:
+        self.cpu.I2C_Master_set_PEC(0)
+        buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_R_SNS_BAT, 3)
+        self.cpu.I2C_Master_set_PEC(1)
+        R_SNS_BAT = unpack_from("<H", buf, 1)[0] / 100  # data come litte endian        
+        return R_SNS_BAT
+
+    def read_bq_charge_option(self) -> bytearray:
+        self.cpu.I2C_Master_set_PEC(0)
+        buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address,I2C_CMD_Read_BQ_Charge_Option, 3)
+        self.cpu.I2C_Master_set_PEC(1)   
+        return buf
+
+    def set_u_bat_i_bat(self, ubat: int, ibat: int) -> bool:
+        buf = pack("<b", 4) + pack("<H", int(ubat)) + pack("<H", int(ibat))
+        return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_BAT_V_I_limit, buf)
+
+    def _set_gpio_pattern(self, bit: int, logic: bool) -> None:
+        self.gpio_pattern = (self.gpio_pattern | (1 << bit)) if logic else (self.gpio_pattern & ~(1 << bit))        
+    
+
+    def toggle_gpio(self, bit: int, onoff: bool) -> bool:
+        self._set_gpio_pattern(bit, onoff)
+        buf = pack("<b", 1) + pack("<b", self.gpio_pattern)
+        return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_GPIOs, buf)
+
+
+    def calibrate_R_SNS_BAT(self, reference_current: float) -> int:
+        u_bat, i_bat = self.read_battery_measurements_from_uut()
+        calibration_ratio = int(round((u_bat / i_bat) * 1000) * 10)
+        buf = pack("<b", 2) + pack("<H", calibration_ratio)
+        self.cpu.I2C_Master_set_PEC(1)
+        if self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_R_SNS_BAT, buf):
+            return calibration_ratio
+        else:
+            return -1
 
 
 #--------------------------------------------------------------------------------------------------
