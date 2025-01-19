@@ -1,6 +1,14 @@
 """
-UUT adapter module: simplifies CPU card configurations and more complex tasks 
-which would be to unhandy implementing them in Teststand 
+UUT adapter module for MiniCharger:
+
+simplifies CPU card configurations and more complex tasks
+which would be to unhandy implementing them in Teststand
+
+VERSION WHEN        WHO  WHAT
+-------------------------------------------------------------------------------
+0.1.0   2025-01-19  MR   initially created from C# DLLs
+
+
 """
 
 from typing import Tuple
@@ -9,7 +17,24 @@ from struct import pack, unpack, unpack_from
 from rrc.track import CPU_Card
 
 
-# I2C_Read_commands        
+#--------------------------------------------------------------------------------------------------
+# Fixed Configuration
+#
+VERSION = "0.1.0"
+
+__version__ = VERSION
+
+# --------------------------------------------------------------------------- #
+# Logging
+# --------------------------------------------------------------------------- #
+
+DEBUG = 2
+
+from rrc.custom_logging import getLogger, logger_init
+
+# --------------------------------------------------------------------------- #
+
+# I2C_Read_commands
 I2C_CMD_Read_Bat_Detection = 0x50
 I2C_CMD_Read_Bat_Values = 0x51
 I2C_CMD_Read_CHG_Values = 0x52
@@ -21,10 +46,15 @@ I2C_CMD_Write_BAT_V_I_limit = 0x40
 I2C_CMD_Write_BQ_Charge_Option = 0x41
 I2C_CMD_Write_R_SNS_BAT = 0x42
 I2C_CMD_Write_GPIOs = 0x43
-        
+
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+
+
 class UUT_MiniCharger:
 
-    def __init__(self, i2c_address: int, resource_str: str = None, cpu_reference: CPU_Card = None):
+    def __init__(self, i2c_address: int, resource_str: str = None, cpu_reference: CPU_Card = None) -> None:
         if cpu_reference:
             self.cpu = cpu_reference
         else:
@@ -33,10 +63,10 @@ class UUT_MiniCharger:
         self.i2c_address = int(i2c_address) << 1
         self.gpio_pattern = 0
 
-        
+
     def initialize_cpu_ports(self) -> None:
         self.cpu.IO_Set_Cfg_Pin("A", 0, 2);           # Open Collector: Connected to TPTEST
-        #sleep(0.02)    
+        #sleep(0.02)
         self.cpu.IO_Set_Cfg_Pin("A", 1, 2);           # Open Collector: Connected to TPBATNTC
         self.cpu.IO_Set_Cfg_Pin("A", 2, 1);           # Output: Connected to TPSMBVCC
         self.cpu.IO_Set_Cfg_Pin("C", 0, 0);           # Input: To check whether adapter is closed
@@ -66,20 +96,26 @@ class UUT_MiniCharger:
             if self.cpu.IO_Read_Port_bit(port, pin) != v:
                 return False, error_text
         return True, "Setup correct"
-    
+
 
     def is_adapter_closed(self) -> bool:
-        return (self.cpu.IO_Read_Port_bit("C", 0) == 0) 
+        return (self.cpu.IO_Read_Port_bit("C", 0) == 0)
 
 
-    def set_i2c_5v_hv(self, state: int | str) -> bool:
-        if isinstance(state, str) and state.upper() == "ON":
+    def _state_to_zero_or_one(self, state: int | bool | str) -> int:
+        if isinstance(state, (int, float)) and int(state) > 0:
             _v = 1
-        elif isinstance(state, (int, float)) and int(state) > 0:
+        elif isinstance(state, (bool)) and (state == True):
+            _v = 1
+        elif isinstance(state, str) and state.upper() == "ON":
             _v = 1
         else:
-            _v = 0
-        return self.cpu.IO_Write_Port_bit("A", 2, _v)
+            _v = 0  # OFF, 0 or False
+        return _v
+
+
+    def set_i2c_5v_bus(self, state: bool | int | str) -> bool:
+        return self.cpu.IO_Write_Port_bit("A", 2, self._state_to_zero_or_one(state))
 
 
     def set_bat_ntc_300R(self, onoff: bool) -> bool:
@@ -96,6 +132,7 @@ class UUT_MiniCharger:
         self.cpu.I2C_Master_set_PEC(1)
         return (buf[1] == 1)
 
+
     def read_battery_measurements_from_uut(self) -> Tuple[float, float]:
         """_summary_
 
@@ -108,6 +145,7 @@ class UUT_MiniCharger:
         voltage = unpack_from("<H", buf, 1)[0] / 1e+3  # data come litte endian
         current = unpack_from("<H", buf, 3)[0] / 1e+3  # data come litte endian
         return voltage, current
+
 
     def read_charger_measurements_from_uut(self) -> Tuple[float, float]:
         """_summary_
@@ -122,7 +160,7 @@ class UUT_MiniCharger:
         VIN = unpack_from("<H", buf, 1)[0] / 1e+3  # data come litte endian
         T = unpack_from("<H", buf, 3)[0] / 1e+1    # data come litte endian
         return VIN, T
-    
+
     def read_r_sense_from_uut(self) -> float:
         """_summary_
 
@@ -133,13 +171,13 @@ class UUT_MiniCharger:
         self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_R_SNS_BAT, 3)
         self.cpu.I2C_Master_set_PEC(1)
-        R_SNS_BAT = unpack_from("<H", buf, 1)[0] / 1e+2  # data come litte endian        
+        R_SNS_BAT = unpack_from("<H", buf, 1)[0] / 1e+2  # data come litte endian
         return R_SNS_BAT
 
     def read_bq_charge_option(self) -> bytearray:
         self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address,I2C_CMD_Read_BQ_Charge_Option, 3)
-        self.cpu.I2C_Master_set_PEC(1)   
+        self.cpu.I2C_Master_set_PEC(1)
         return buf
 
     def set_u_bat_i_bat(self, voltage: float, current: float) -> bool:
@@ -158,8 +196,8 @@ class UUT_MiniCharger:
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_BAT_V_I_limit, buf)
 
     def _set_gpio_pattern(self, bit: int, logic: bool) -> None:
-        self.gpio_pattern = (self.gpio_pattern | (1 << bit)) if logic else (self.gpio_pattern & ~(1 << bit))        
-    
+        self.gpio_pattern = (self.gpio_pattern | (1 << bit)) if logic else (self.gpio_pattern & ~(1 << bit))
+
 
     def toggle_gpio(self, bit: int, onoff: bool) -> bool:
         self._set_gpio_pattern(bit, onoff)
@@ -176,8 +214,8 @@ class UUT_MiniCharger:
         Returns:
             int: calibration ratio value as written to the UUT
         """
-        
-        u_bat, i_bat = self.read_battery_measurements_from_uut()        
+
+        u_bat, i_bat = self.read_battery_measurements_from_uut()
         calibration_ratio = int(round(((i_bat * 1e-3) / reference_current) * 1e+3) * 10)
         buf = pack("<b", 2) + pack("<H", calibration_ratio)
         self.cpu.I2C_Master_set_PEC(1)
