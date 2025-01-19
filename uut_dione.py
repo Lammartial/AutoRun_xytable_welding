@@ -78,6 +78,10 @@ class UUT_Dione(UUT_MiniCharger):
         return super().is_adapter_correctly_connected()
 
 
+    def is_adapter_closed(self):
+        return super().is_adapter_closed()
+
+
     def toggle_gpio(self, bit: int, onoff: bool) -> bool:  # overwrite inherited function as command code is different
         self._set_gpio_pattern(bit, onoff)
         buf = pack("<b", 1) + pack("<b", self.gpio_pattern)
