@@ -72,6 +72,9 @@ class CPU_Card:
     def _is_ok_response(self, res) -> bool:
         return ("OK" in res.upper()) and ("ERROR" not in res.upper())
 
+    def _assert_no_error_response(self, res) -> None:
+        if "ERROR" in res.upper():
+            raise ValueError(res)
 
     #----------------------------------------------------------------------------------------------
 
@@ -139,17 +142,20 @@ class CPU_Card:
 
     def I2C_Master_ReadBytes(self, address: int, cmd: int, count: int) -> bytearray | bytes:
         res = self.con.request(f":I2C:MAS:RDB {int(address)},{int(cmd)},{int(count)}")
+        self._assert_no_error_response(res)
         b = bytes(res.split(","))
         return b
 
 
     def I2C_Master_ReadString(self, address: int, cmd: int) -> str:
         res = self.con.request(f":I2C:MAS:RDS {int(address)},{int(cmd)}")
+        self._assert_no_error_response(res)
         return res
 
 
     def I2C_Master_ReadWord(self, address: int, cmd: int) -> int:
         res = self.con.request(f":I2C:MAS:RDW {int(address)},{int(cmd)}", pause_after_write=50)
+        self._assert_no_error_response(res)
         #res = self.con.request(f":I2C:MAS:RDB {int(address)},{int(cmd)},2", pause_after_write=50)
         #buf = bytes(res.split(","))
         #w = unpack("<H", buf)[0]  # this is platform independent; buf is always little endian
@@ -162,13 +168,13 @@ class CPU_Card:
         #buffer = pack("<H", int(word))  # platform independent
         #s = ",".join([str(int(i)) for i in buffer])
         #res = self.con.request(f":I2C:MAS:WRB {int(address)},{int(cmd)},{s}")
-        res = self.con.request(f":I2C:MAS:WRW {int(address)},{int(cmd)},{int(word)}")
+        res = self.con.request(f":I2C:MAS:WRW {int(address)},{int(cmd)},{int(word)}")        
         return self._is_ok_response(res)
 
 
     def I2C_Master_WriteBytes(self, address: int, cmd: int, buffer: bytearray | bytes) -> bool:
         s = ",".join([str(int(i)) for i in buffer])
-        res = self.con.request(f":I2C:MAS:WRB {int(address)},{int(cmd)},{len(s)},{s}")
+        res = self.con.request(f":I2C:MAS:WRB {int(address)},{int(cmd)},{len(s)},{s}")        
         return self._is_ok_response(res)
 
 
@@ -203,18 +209,22 @@ class CPU_Card:
 
     def I2C_Slave_getCfg(self) -> str:
         res = self.con.request(":I2C:SLA:CFG?")
+        self._assert_no_error_response(res)
         return res
 
     def I2C_Slave_clearAllCmds(self) -> bool:
         res = self.con.request(f":I2C:SLA:CLE!")
+        self._assert_no_error_response(res)
         return self._is_ok_response(res)
 
     def I2C_Slave_clearAllRequests(self) -> bool:
         res = self.con.request(f":I2C:SLA:REQ!")
+        self._assert_no_error_response(res)
         return self._is_ok_response(res)
 
     def I2C_Slave_CmdRequest(self, cmd: int) -> str:
         res = self.con.request(f":I2C:SLA:REQ? {int(cmd)}")
+        self._assert_no_error_response(res)
         return res
 
     def I2C_Slave_enablePEC(self, enable: bool) -> bool:
@@ -228,6 +238,7 @@ class CPU_Card:
             bool: true if PEC enable, false if not
         """
         res = self.con.request(f":I2C:SLA:PEC?")
+        self._assert_no_error_response(res)
         return (res == "1")
 
 
@@ -284,18 +295,21 @@ class CPU_Card:
 
     def SMB_ReadBytes(self, id: int, address: int, cmd: int, count: int) -> bytearray | bytes:
         res = self.con.request(f":SMB:RDB {int(id)},{int(address)},{int(cmd)},{int(count)}")
+        self._assert_no_error_response(res)
         b = bytes(res.split(","))
         return b
 
 
     def SMB_ReadBlock(self, id: int, address: int, cmd: int, count_limit: int) -> bytearray | bytes:
         res = self.con.request(f":SMB:BLR {int(id)},{int(address)},{int(cmd)},{int(count_limit)}")
+        self._assert_no_error_response(res)
         b = bytes(res.split(","))
         return b
 
 
     def SMB_ReadString(self, id: int, address: int, cmd: int) -> str:
         res = self.con.request(f":SMB:RDS {int(id)},{int(address)},{int(cmd)}")
+        self._assert_no_error_response(res)
         return res
 
 
@@ -311,6 +325,7 @@ class CPU_Card:
             int: _description_
         """
         res = self.con.request(f":SMB:RDW {int(id)},{int(address)},{int(cmd)}", pause_after_write=50)
+        self._assert_no_error_response(res)
         #w = pack("<H", int(res))  # Platform independent
         w = int(res)
         return w
@@ -389,8 +404,9 @@ class CPU_Card:
 
     def SMB_ModeRead(self, id: int) -> Tuple[str, bytes]:
         res = self.con.request(f":SMB:MODE? {int(id)}")
+        self._assert_no_error_response(res)
         _PATTERNS = ["IFACE=", "PEC=", "HEX="]
-        print(res)
+        #print(res)
         return res, bytes()
 
 
@@ -422,6 +438,7 @@ class CPU_Card:
             int: _description_
         """
         res = self.con.request(f":SMB:GPEC {int(id)}")
+        self._assert_no_error_response(res)
         w = int(res)
         return w
 
@@ -442,6 +459,7 @@ class CPU_Card:
     def IO_Get_Portstatus(self, port_letter: str) -> str:
         self._verify_port_exists(port_letter)
         res = self.con.request(f":IO:P{port_letter}?")
+        self._assert_no_error_response(res)
         return res
 
     def IO_Set_Cfg_Pin(self, port_letter: str, bit: int, cfg: int) -> bool:
@@ -492,6 +510,7 @@ class CPU_Card:
         """
         self._verify_port_exists(port_letter)
         res = self.con.request(f":IO:P{port_letter}:CFG?")
+        self._assert_no_error_response(res)
         return res
 
 
@@ -516,6 +535,7 @@ class CPU_Card:
         bit = int(bit)  # Tribute to Teststands crumpy interface
         self._verify_port_exists(port_letter)
         res = self.con.request(f":IO:P{port_letter}:IN {bit}")
+        self._assert_no_error_response(res)
         return int(res)
 
 

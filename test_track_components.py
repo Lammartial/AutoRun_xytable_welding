@@ -6,11 +6,12 @@ Test patterns to check MiniTRack components communication including CPU Card eit
 from time import sleep
 from rrc.track import CPU_Card, DC63600, DCZPlus
 from rrc.keysight import DAQ970A
+from rrc.uut_mini_charger import UUT_MiniCharger
 
 
 PRODUCTION_LINES_SETUP = {
     "toptek": {
-        "cpu_card":   "COM8,115200,8N1",
+        "cpu_card":   "COM7,115200,8N1",
         "datalogger": "172.23.130.31:5025",
         "dc_load":    "172.23.130.32:2101",
         "dc_supply":  "172.23.130.33:8003",
@@ -34,12 +35,14 @@ if __name__ == "__main__":
     supply.set_voltage(5.5)
     print(supply.get_foldback())
     print(supply.get_condition_register(2))
+    supply.set_output(0)
 
     supply2 = DCZPlus(cfg["dc_supply"], channel=2)
     print(supply2.ident())
     print(supply2.channel, supply2.select_channel())
     supply2.initialize_device()
     supply2.clear_protection()
+    supply2.set_output(0)
 
     load = DC63600(cfg["dc_load"], channel=1)
     print(load.ident())
@@ -47,12 +50,14 @@ if __name__ == "__main__":
     load.initialize_device()
     print(load.get_load_mode())
     load.set_load_mode("CVL")
+    load.set_load_output(0)
 
     load2 = DC63600(cfg["dc_load"], channel=2)
     print(load2.ident())
     print(load2.select_channel())
     load2.initialize_device()
     print(load2.get_load_mode())
+    load2.set_load_output(0)
 
     datalogger = DAQ970A(cfg["datalogger"], card_slot=1)
     print(datalogger.ident())
@@ -61,5 +66,13 @@ if __name__ == "__main__":
     print(cpu.ident())
     #print(cpu.ident_boot())
     #print(cpu.help().replace("\r","\n\r"))
+
+    supply.set_voltage(19.0)
+    supply.set_current_limit(1.0)
+    supply.set_output(1)
+    sleep(2.0)
+
+    uut = UUT_MiniCharger(0x10, cpu_reference=cpu)
+    uut.read_battery_detection_from_uut()
 
 # END OF FILE
