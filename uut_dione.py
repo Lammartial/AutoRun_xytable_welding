@@ -69,7 +69,6 @@ class UUT_Dione(UUT_MiniCharger):
         super().__init__(i2c_address, resource_str=resource_str, cpu_reference=cpu_reference)
 
 
-
     def initialize_cpu_ports(self) -> None:
         super().initialize_cpu_ports()  # this is fix for Teststand missing inheritance
 
@@ -82,11 +81,49 @@ class UUT_Dione(UUT_MiniCharger):
         return super().is_adapter_closed()
 
 
+    def set_i2c_5v_bus(self, state):
+        return super().set_i2c_5v_bus(state)
+
+
+    def set_bat_ntc_300R(self, onoff):
+        return super().set_bat_ntc_300R(onoff)
+    
+
+    def set_uut_into_testmode(self, onoff):
+        return super().set_uut_into_testmode(onoff)
+
+
+    def read_battery_detection_from_uut(self):
+        return super().read_battery_detection_from_uut()
+
+
+    def read_battery_measurements_from_uut(self):
+        return super().read_battery_measurements_from_uut()
+
+
+    def read_r_sense_from_uut(self):
+        return super().read_r_sense_from_uut()
+    
+
+    def read_bq_charge_option(self):
+        return super().read_bq_charge_option()
+    
+
+    def set_u_bat_i_bat(self, voltage, current):
+        return super().set_u_bat_i_bat(voltage, current)
+
+
     def toggle_gpio(self, bit: int, onoff: bool) -> bool:  # overwrite inherited function as command code is different
         self._set_gpio_pattern(bit, onoff)
         buf = pack("<b", 1) + pack("<b", self.gpio_pattern)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_GPIOs, buf)
 
+
+    def calibrate_R_SNS_BAT(self, reference_current):
+        return super().calibrate_R_SNS_BAT(reference_current)
+
+
+    # NEW FUNCTIONS to DIONE
 
     def switch_application_on_off(self, state: bool | int | str) -> bool:
         buf = pack("<b", 1) + pack("<b", self._state_to_zero_or_one(state))
