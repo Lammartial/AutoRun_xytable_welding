@@ -160,14 +160,14 @@ class CPU_Card:
 
     def I2C_Master_WriteWord(self, address: int, cmd: int, word: int) -> bool:
         #buffer = pack("<H", int(word))  # platform independent
-        #s = ",".join([int(i) for i in buffer])
+        #s = ",".join([str(int(i)) for i in buffer])
         #res = self.con.request(f":I2C:MAS:WRB {int(address)},{int(cmd)},{s}")
         res = self.con.request(f":I2C:MAS:WRW {int(address)},{int(cmd)},{int(word)}")
         return self._is_ok_response(res)
 
 
     def I2C_Master_WriteBytes(self, address: int, cmd: int, buffer: bytearray | bytes) -> bool:
-        s = ",".join([int(i) for i in buffer])
+        s = ",".join([str(int(i)) for i in buffer])
         res = self.con.request(f":I2C:MAS:WRB {int(address)},{int(cmd)},{len(s)},{s}")
         return self._is_ok_response(res)
 
@@ -196,7 +196,7 @@ class CPU_Card:
             bool: _description_
         """
 
-        b = ",".join([int(i) for i in bytes_to_send])
+        b = ",".join([str(int(i)) for i in bytes_to_send])
         req = f":I2C:SLA:CFG {int(cmd)},{int(mod)},{int(cnt)},{b}"
         res = self.con.request(req)
         return self._is_ok_response(res)
@@ -350,7 +350,8 @@ class CPU_Card:
         Returns:
             bool: _description_
         """
-        s = ",".join([int(i) for i in buffer])
+
+        s = ",".join([str(int(i)) for i in buffer])
         res = self.con.request(f":SMB:WRB {int(id)},{int(address)},{int(cmd)},{len(s)},{s}")
         return self._is_ok_response(res)
 
@@ -369,7 +370,8 @@ class CPU_Card:
         Returns:
             bool: _description_
         """
-        s = ",".join([int(i) for i in buffer])
+        
+        s = ",".join([str(int(i)) for i in buffer])
         res = self.con.request(f":SMB:BLW {int(id)},{int(address)},{int(cmd)},{len(s)},{s}")
         return self._is_ok_response(res)
 

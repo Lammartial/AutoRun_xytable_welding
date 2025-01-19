@@ -97,26 +97,43 @@ class UUT_MiniCharger:
         return (buf[1] == 1)
 
     def read_battery_measurements_from_uut(self) -> Tuple[float, float]:
+        """_summary_
+
+        Returns:
+            Tuple[float, float]: voltage in volts, current in amps
+        """
         self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_Bat_Values, 5)
         self.cpu.I2C_Master_set_PEC(1)
-        voltage = unpack_from("<H", buf, 1)[0] / 1000  # data come litte endian
-        current = unpack_from("<H", buf, 3)[0] / 1000  # data come litte endian
+        voltage = unpack_from("<H", buf, 1)[0] / 1e+3  # data come litte endian
+        current = unpack_from("<H", buf, 3)[0] / 1e+3  # data come litte endian
         return voltage, current
 
     def read_charger_measurements_from_uut(self) -> Tuple[float, float]:
+        """_summary_
+
+        Returns:
+            Tuple[float, float]: VIN in volts, T in Celsius.
+        """
+
         self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_CHG_Values, 5)
         self.cpu.I2C_Master_set_PEC(1)
-        VIN = unpack_from("<H", buf, 1)[0] / 1000  # data come litte endian
-        T = unpack_from("<H", buf, 3)[0] / 10      # data come litte endian
+        VIN = unpack_from("<H", buf, 1)[0] / 1e+3  # data come litte endian
+        T = unpack_from("<H", buf, 3)[0] / 1e+1    # data come litte endian
         return VIN, T
     
     def read_r_sense_from_uut(self) -> float:
+        """_summary_
+
+        Returns:
+            float: R sense in ohms.
+        """
+
         self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_R_SNS_BAT, 3)
         self.cpu.I2C_Master_set_PEC(1)
-        R_SNS_BAT = unpack_from("<H", buf, 1)[0] / 100  # data come litte endian        
+        R_SNS_BAT = unpack_from("<H", buf, 1)[0] / 1e+2  # data come litte endian        
         return R_SNS_BAT
 
     def read_bq_charge_option(self) -> bytearray:
@@ -125,8 +142,19 @@ class UUT_MiniCharger:
         self.cpu.I2C_Master_set_PEC(1)   
         return buf
 
-    def set_u_bat_i_bat(self, ubat: int, ibat: int) -> bool:
-        buf = pack("<b", 4) + pack("<H", int(ubat)) + pack("<H", int(ibat))
+    def set_u_bat_i_bat(self, voltage: float, current: float) -> bool:
+        """
+
+        Args:
+            voltage (float): battery voltage limit in V
+            current (float): battery current limit in A
+
+        Returns:
+            bool: _description_
+        """
+        ubat: int = int(round(voltage * 1e+3))
+        ibat: int = int(round(current * 1e+3))
+        buf = pack("<b", 4) + pack("<H", ubat) + pack("<H", ibat)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_BAT_V_I_limit, buf)
 
     def _set_gpio_pattern(self, bit: int, logic: bool) -> None:
@@ -140,8 +168,17 @@ class UUT_MiniCharger:
 
 
     def calibrate_R_SNS_BAT(self, reference_current: float) -> int:
-        u_bat, i_bat = self.read_battery_measurements_from_uut()
-        calibration_ratio = int(round((u_bat / i_bat) * 1000) * 10)
+        """_summary_
+
+        Args:
+            reference_current (float): measured reference current in A
+
+        Returns:
+            int: calibration ratio value as written to the UUT
+        """
+        
+        u_bat, i_bat = self.read_battery_measurements_from_uut()        
+        calibration_ratio = int(round(((i_bat * 1e-3) / reference_current) * 1e+3) * 10)
         buf = pack("<b", 2) + pack("<H", calibration_ratio)
         self.cpu.I2C_Master_set_PEC(1)
         if self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_R_SNS_BAT, buf):
