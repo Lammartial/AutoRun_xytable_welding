@@ -143,7 +143,7 @@ class CPU_Card:
     def I2C_Master_ReadBytes(self, address: int, cmd: int, count: int) -> bytearray | bytes:
         res = self.con.request(f":I2C:MAS:RDB {int(address)},{int(cmd)},{int(count)}")
         self._assert_no_error_response(res)
-        b = bytes(res.split(","))
+        b = b''.join([pack("<B", int(i)) for i in res.split(",")])
         return b
 
 
@@ -174,7 +174,7 @@ class CPU_Card:
 
     def I2C_Master_WriteBytes(self, address: int, cmd: int, buffer: bytearray | bytes) -> bool:
         s = ",".join([str(int(i)) for i in buffer])
-        res = self.con.request(f":I2C:MAS:WRB {int(address)},{int(cmd)},{len(s)},{s}")        
+        res = self.con.request(f":I2C:MAS:WRB {int(address)},{int(cmd)},{len(buffer)},{s}")        
         return self._is_ok_response(res)
 
 
@@ -367,7 +367,7 @@ class CPU_Card:
         """
 
         s = ",".join([str(int(i)) for i in buffer])
-        res = self.con.request(f":SMB:WRB {int(id)},{int(address)},{int(cmd)},{len(s)},{s}")
+        res = self.con.request(f":SMB:WRB {int(id)},{int(address)},{int(cmd)},{len(buffer)},{s}")
         return self._is_ok_response(res)
 
 
@@ -387,7 +387,7 @@ class CPU_Card:
         """
         
         s = ",".join([str(int(i)) for i in buffer])
-        res = self.con.request(f":SMB:BLW {int(id)},{int(address)},{int(cmd)},{len(s)},{s}")
+        res = self.con.request(f":SMB:BLW {int(id)},{int(address)},{int(cmd)},{len(buffer)},{s}")
         return self._is_ok_response(res)
 
 
