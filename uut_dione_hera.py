@@ -126,10 +126,10 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_CHG_Values, 5)
         self.cpu.I2C_Master_set_PEC(1)
-        VIN = unpack_from("<H", buf, 1)[0] / 1e+3  # data come litte endian
-        V_SYS = unpack_from("<H", buf, 3)[0] / 1e+3  # data come litte endian
-        T = unpack_from("<H", buf, 5)[0] / 1e+1    # data come litte endian
-        I_Adapter = unpack_from("<H", buf, 7)[0] / 1e+3  # data come litte endian
+        VIN = unpack_from(">H", buf, 1)[0] / 1e+3  # data come big endian
+        V_SYS = unpack_from(">H", buf, 3)[0] / 1e+3  # data come big endian
+        T = unpack_from(">H", buf, 5)[0] / 1e+1    # data come big endian
+        I_Adapter = unpack_from(">H", buf, 7)[0] / 1e+3  # data come big endian
         return VIN, T, V_SYS, I_Adapter
 
 
@@ -145,8 +145,8 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_R_SNS_BAT, 3)
         self.cpu.I2C_Master_set_PEC(1)
-        #R_SNS_BAT = unpack_from("<H", buf, 1)[0] / 1e+2  # data come litte endian
-        R_SNS_BAT = unpack_from("<H", buf, 1)[0] / 10 / 5  # this was the precalc of Hera DLL
+        #R_SNS_BAT = unpack_from(">H", buf, 1)[0] / 1e+2  # data come big endian
+        R_SNS_BAT = unpack_from(">H", buf, 1)[0] / 10 / 5  # this was the precalc of Hera DLL
         return R_SNS_BAT
     
 
@@ -162,8 +162,8 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_R_SNS_DC_IN, 3)
         self.cpu.I2C_Master_set_PEC(1)
-        #R_SNS_BAT = unpack_from("<H", buf, 1)[0] / 1e+2  # data come litte endian
-        R_SNS_BAT = unpack_from("<H", buf, 1)[0] / 10 / 5  # this was the precalc of Hera DLL
+        #R_SNS_BAT = unpack_from(">H", buf, 1)[0] / 1e+2  # data come big endian
+        R_SNS_BAT = unpack_from(">H", buf, 1)[0] / 10 / 5  # this was the precalc of Hera DLL
         return R_SNS_BAT
     
 
@@ -232,7 +232,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
         u_bat, i_bat = self.read_battery_measurements_from_uut()
         calibration_ratio = int(round((i_bat / reference_current) * r_sense_ohm * 1e+6))
-        buf = pack("<b", 2) + pack("<H", calibration_ratio)
+        buf = pack("<B", 2) + pack(">H", calibration_ratio)
         self.cpu.I2C_Master_set_PEC(1)
         if self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_R_SNS_BAT, buf):
             return calibration_ratio
@@ -252,7 +252,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
         v_in, t, v_sys, i_adapter = self.read_charger_measurements_from_uut()
         calibration_ratio = int(round((i_adapter / reference_current) * 1e+3) * 2)
-        buf = pack("<b", 2) + pack("<H", calibration_ratio)
+        buf = pack("<B", 2) + pack(">H", calibration_ratio)
         self.cpu.I2C_Master_set_PEC(1)
         if self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_R_SNS_DC_IN, buf):
             return calibration_ratio
@@ -275,7 +275,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
         v_in, t, v_sys, i_adapter = self.read_charger_measurements_from_uut()
         calibration_ratio = int(round((i_adapter / reference_current) * (r_sense_ohm * 1e+6)))
-        buf = pack("<b", 2) + pack("<H", calibration_ratio)
+        buf = pack("<B", 2) + pack(">H", calibration_ratio)
         self.cpu.I2C_Master_set_PEC(1)
         if self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_R_SNS_DC_IN, buf):
             return calibration_ratio
@@ -288,7 +288,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
         v_in, t, v_sys, i_adapter = self.read_charger_measurements_from_uut()
         calibration_value = int(round((reference_current - i_adapter) * 1e+3))
-        buf = pack("<b", 2) + pack("<H", calibration_value)
+        buf = pack("<B", 2) + pack(">H", calibration_value)
         self.cpu.I2C_Master_set_PEC(1)
         if self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_AdapterCurrentOffset, buf):
             return calibration_value
@@ -300,7 +300,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
     def toggle_gpio(self, bit: int, onoff: bool) -> bool:  # overwrite inherited function as command code is different
         self._set_gpio_pattern(bit, onoff)
-        buf = pack("<b", 1) + pack("<b", self.gpio_pattern)
+        buf = pack("<B", 1) + pack("<B", self.gpio_pattern)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_GPIOs, buf)
 
 
@@ -309,18 +309,18 @@ class UUT_Dione_Hera(UUT_MiniCharger):
     # NEW FUNCTIONS to DIONE / HERA
 
     def switch_application_on_off(self, state: bool | int | str) -> bool:
-        buf = pack("<b", 1) + pack("<b", self._state_to_zero_or_one(state))
+        buf = pack("<B", 1) + pack("<B", self._state_to_zero_or_one(state))
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_APP_ON_OFF, buf)
 
 
     def set_power_path(self, mode: int) -> bool:
-        buf = pack("<b", 1) + pack("<b", mode)
+        buf = pack("<B", 1) + pack("<B", mode)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_APP_ON_OFF, buf)  # uses the same command as APP ON/OFF
 
 
     def set_input_current_limit(self, current_limit: float) -> bool:
         _w = int(round(current_limit * 1000))
-        buf = pack("<b", 2) + pack("<H", _w)
+        buf = pack("<B", 2) + pack(">H", _w)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_Input_Current_Limit, buf)
 
 
@@ -341,7 +341,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
     def reset_calibration(self) -> bool:
         # write the magic keyword into two word addresses
-        buf = pack("<b", 2) + pack("<H", 0x1388)
+        buf = pack("<B", 2) + pack(">H", 0x1388)
         self.cpu.I2C_Master_set_PEC(1)
         ok = self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_R_SNS_BAT, buf)
         ok &= self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_R_SNS_DC_IN, buf)
@@ -360,7 +360,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
         if len(udi != 16):
             raise ValueError(f"Length of UDI string is '{len(udi)}' which is not 16.")
-        buf = pack("<b", 16) + udi.encode("utf-8")
+        buf = pack("<B", 16) + udi.encode("utf-8")
         self.cpu.I2C_Master_set_PEC(1)
         ok = self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_UDI, buf)
         self.cpu.I2C_Master_set_PEC(2)
