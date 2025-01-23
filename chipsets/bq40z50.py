@@ -1028,8 +1028,8 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
         self._ccadc_cal = OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),  # all blocks of bytes as they are - but hexlified as it looks better in JSON files later ...
-            "counter":        unpack_from("<B", buf, 0)[0],
-            "status":         unpack_from("<b", buf, 1)[0],
+            "counter":        unpack_from("<B", buf, 0)[0],  # unsigned char
+            "status":         unpack_from("<B", buf, 1)[0],  # unsigned char
             "current_cc":     unpack_from("<h", buf, 2)[0]*1e-3,  # mA, signed short, little endian, current (coulomb counter)
             "cell_voltage_1": unpack_from("<h", buf, 4)[0]*1e-3,   # mV, signed short, little endian,
             "cell_voltage_2": unpack_from("<h", buf, 6)[0]*1e-3,  # mV, signed short, little endian,
@@ -1467,7 +1467,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         dastatus2 = self.manufacturing_dastatus2()
         res = [dastatus2[2 + i] for i in range(n_ts)]
         # return the measurements and offsets for documentation
-        return np.array(res), *[unpack_from("<b", new_offset[i:])[0] for i in range(4)]
+        return np.array(res), *[unpack_from("<b", new_offset[i:])[0] for i in range(4)]  # signed bytes !
 
     def _ms_toggle_helper(self, ms_key: str, enable: bool, ma_cmd: int, retries: int = 5, pause_on_retry: float = 0.1) -> bool:
         """Internal function to set a defined state using toggle and manufacturing_status() reads for control.
@@ -1683,27 +1683,27 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return _od2t(OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
-            "interrupt_status":  unpack_from("<b", buf, 0)[0],
-            "fet_status":  unpack_from("<b", buf, 0)[0],
-            "rxin":  unpack_from("<b", buf, 0)[0],
-            "latch_status":  unpack_from("<b", buf, 0)[0],
-            "interrupt_enable":  unpack_from("<b", buf, 0)[0],
-            "fet_control":  unpack_from("<b", buf, 0)[0],
-            "rxien":  unpack_from("<b", buf, 0)[0],
-            "rlout":  unpack_from("<b", buf, 0)[0],
-            "rhout":  unpack_from("<b", buf, 0)[0],
-            "rhint":  unpack_from("<b", buf, 0)[0],
-            "cell_balance":  unpack_from("<b", buf, 0)[0],
-            "adc_cc_control":  unpack_from("<b", buf, 0)[0],
-            "adc_mux_control":  unpack_from("<b", buf, 0)[0],
-            "led_control":  unpack_from("<b", buf, 0)[0],
-            "control_various":  unpack_from("<b", buf, 0)[0],
-            "timer_control":  unpack_from("<b", buf, 0)[0],
-            "protection_delay_control":  unpack_from("<b", buf, 0)[0],
-            "ocd":  unpack_from("<b", buf, 0)[0],
-            "scc":  unpack_from("<b", buf, 0)[0],
-            "scd1":  unpack_from("<b", buf, 0)[0],
-            "scd2":  unpack_from("<b", buf, 0)[0],
+            "interrupt_status":  unpack_from("<B", buf, 0)[0],
+            "fet_status":  unpack_from("<B", buf, 0)[0],
+            "rxin":  unpack_from("<B", buf, 0)[0],
+            "latch_status":  unpack_from("<B", buf, 0)[0],
+            "interrupt_enable":  unpack_from("<B", buf, 0)[0],
+            "fet_control":  unpack_from("<B", buf, 0)[0],
+            "rxien":  unpack_from("<B", buf, 0)[0],
+            "rlout":  unpack_from("<B", buf, 0)[0],
+            "rhout":  unpack_from("<B", buf, 0)[0],
+            "rhint":  unpack_from("<B", buf, 0)[0],
+            "cell_balance":  unpack_from("<B", buf, 0)[0],
+            "adc_cc_control":  unpack_from("<B", buf, 0)[0],
+            "adc_mux_control":  unpack_from("<B", buf, 0)[0],
+            "led_control":  unpack_from("<B", buf, 0)[0],
+            "control_various":  unpack_from("<B", buf, 0)[0],
+            "timer_control":  unpack_from("<B", buf, 0)[0],
+            "protection_delay_control":  unpack_from("<B", buf, 0)[0],
+            "ocd":  unpack_from("<B", buf, 0)[0],
+            "scc":  unpack_from("<B", buf, 0)[0],
+            "scd1":  unpack_from("<B", buf, 0)[0],
+            "scd2":  unpack_from("<B", buf, 0)[0],
         }))
 
 
@@ -1783,7 +1783,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             bool: True - success, False - failed
         """
         assert(len(device_name) <= 20), ValueError('Device name length more then 20 characters.')
-        buffer = pack("<b", len(device_name)) + bytes(device_name, encoding="utf-8")
+        buffer = pack("<B", len(device_name)) + bytes(device_name, encoding="utf-8")
         if len(buffer) < 21:
             buffer += bytes(21-len(buffer))  # append \x00 bytes if less than 21
         return self.write_flash_block(0x4085, buffer)
