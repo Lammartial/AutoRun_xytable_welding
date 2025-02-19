@@ -11,7 +11,7 @@ from rrc.uut_mini_charger import UUT_MiniCharger
 
 PRODUCTION_LINES_SETUP = {
     "toptek": {
-        "cpu_card":   "COM7,115200,8N1",
+        "cpu_card":   "COM9,115200,8N1",
         "datalogger": "172.23.130.31:5025",
         "dc_load":    "172.23.130.32:2101",
         "dc_supply":  "172.23.130.33:8003",
@@ -64,15 +64,29 @@ if __name__ == "__main__":
 
     cpu = CPU_Card(cfg["cpu_card"])
     print(cpu.ident())
+    
     #print(cpu.ident_boot())
     #print(cpu.help().replace("\r","\n\r"))
 
-    supply.set_voltage(19.0)
-    supply.set_current_limit(1.0)
-    supply.set_output(1)
-    sleep(2.0)
 
     uut = UUT_MiniCharger(0x10, cpu_reference=cpu)
+    uut.initialize_cpu_ports()
+    print(uut.is_adapter_closed())
+    print(uut.is_adapter_closed())
+    
+
+    # Power UUT
+    supply.set_voltage(19.0)
+    supply.set_current_limit(1.0)
+    supply.set_output("ON")
+    #supply2.set_voltage(19.0)
+    #supply2.set_current_limit(1.0)
+    #supply2.set_output(1)
+    sleep(2.0)
+    uut.toggle_gpio(0, 0)
+    uut.toggle_gpio(0, 1)
     uut.read_battery_detection_from_uut()
+    print(uut.read_charger_measurements_from_uut())
+    
 
 # END OF FILE

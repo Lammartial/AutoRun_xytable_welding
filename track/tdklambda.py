@@ -99,7 +99,7 @@ class DCZPlus(Eth2SerialDevice):
             self._select_channel_prefix = ""
         else:
             self.channel = int(new_channel)
-            self._select_channel_prefix = f"INST:NSEL {self.channel:02d}"  # this is the prefix to address the subdevice via the connection gateway
+            self._select_channel_prefix = f"INST:nSEL {self.channel:d}"  # this is the prefix to address the subdevice via the connection gateway
 
     def select_channel(self) -> bool:
         """Selects and verifies actively the channel on the Lambda gateway.
@@ -110,7 +110,7 @@ class DCZPlus(Eth2SerialDevice):
         if self.channel is None:
             return False
         self.send(None)  # this will send the channel selection prefix only
-        _ch = super().request(f"INST:NSEL?", pause_after_write=5)  # verify the selected channel
+        _ch = super().request(f"INST:nSEL?", pause_after_write=5)  # verify the selected channel
         return (int(_ch) == self.channel)
 
 
@@ -214,17 +214,17 @@ class DCZPlus(Eth2SerialDevice):
 
     def set_output(self, state: bool | int) -> bool:
         _st = "ON" if state else "OFF"
-        self.send(f"OUTP:REL {_st}")
+        self.send(f":OUTP:REL {_st}")
         ec, et = self.wait_response_ready()
         if (ec != 0):
             return False
-        self.send(f"OUTP {_st}")  # set Output AND Output Relay - The Relay disconnet the AC Source physically
+        self.send(f":OUTP {_st}")  # set Output AND Output Relay - The Relay disconnet the AC Source physically
         ec, et = self.wait_response_ready()
         return (ec == 0)
 
 
     def clear_protection(self) -> bool:
-        self.send("OUTP:PROT:CLE")
+        self.send(":OUTP:PROT:CLE")
         ec, et = self.wait_response_ready()
         return (ec == 0)
 
@@ -248,17 +248,17 @@ class DCZPlus(Eth2SerialDevice):
             if mode.upper() not in _MODES:
                 raise ValueError(f"Mode string is invalid '{mode}'. Allowed are OFF, CC or CV")
             _mode_str = mode
-        self.send(f"OUTP:PROT:FOLD {_mode_str}")
+        self.send(f":OUTP:PROT:FOLD {_mode_str}")
         ec, et = self.wait_response_ready()
         return (ec == 0)
 
 
     def get_foldback(self) -> str:
-        return self.request("OUTP:PROT:FOLD?")
+        return self.request(":OUTP:PROT:FOLD?")
 
 
     def set_voltage(self, voltage: float) -> bool:
-        self.send(f"VOLT {voltage}")
+        self.send(f":VOLT {voltage}")
         ec, et = self.wait_response_ready()
         return (ec == 0)
 
@@ -268,7 +268,7 @@ class DCZPlus(Eth2SerialDevice):
 
 
     def set_current_limit(self, current_limit: float) -> bool:
-        self.send(f"CURR {current_limit}")
+        self.send(f":CURR {current_limit}")
         ec, et = self.wait_response_ready()
         return (ec == 0)
 
@@ -284,7 +284,7 @@ class DCZPlus(Eth2SerialDevice):
         Returns:
             float: DC current in ampere
         """
-        return float(self.request("MEAS:CURR?"))
+        return float(self.request(":MEAS:CURR?"))
 
 
     def get_voltage_rounded(self, ndigits: int = 3) -> float:
@@ -298,7 +298,7 @@ class DCZPlus(Eth2SerialDevice):
         Returns:
             float: RMS voltage in volt
         """
-        return float(self.request("MEAS:VOLT?"))
+        return float(self.request(":MEAS:VOLT?"))
 
 
     def get_power_rounded(self, ndigits: int = 3) -> float:
@@ -312,7 +312,7 @@ class DCZPlus(Eth2SerialDevice):
         Returns:
             float: Power in watts
         """
-        return float(self.request("MEAS:POW?"))
+        return float(self.request(":MEAS:POW?"))
 
 
     def  get_condition_register(self, bitnum: int) -> bool:
@@ -325,7 +325,7 @@ class DCZPlus(Eth2SerialDevice):
             bool: True bit is set else False
         """
 
-        res = self.request("STAT:QUES:COND?")
+        res = self.request(":STAT:QUES:COND?")
         v = int(res)
         #b = unpack("<L", v)[0]
         b = v.to_bytes(4, "little")
