@@ -1421,9 +1421,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Write a default current gain calibration.
 
         Args:
-            current (int): measured (known) current, Amps
-            shorted (bool, optional): Decides if shorted CCADC mode or normal. This mode enables an
-                internal short on the coulomb counter inputs (SRP, SRN). Defaults to False.
+            None
 
         Returns:
             tuple:
