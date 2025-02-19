@@ -66,15 +66,15 @@ class WindowUI(object):
     """
 
     def __init__(self, command_queue: mp.Queue,
-                 title: str = "ENTER SERIAL NUMBER", test_socket: int = -1, 
+                 title: str = "ENTER SERIAL NUMBER", test_socket: int = -1,
                  allow_manual_edit: bool = False) -> None:
 
         global serialno_to_scan, ok_button
 
         self._log = getLogger(__name__, DEBUG)
         self.q_cmd = command_queue
-        row_itr = itertools.count()    
-      
+        row_itr = itertools.count()
+
         # Create the Tk root and mainframe.
         self.root = tk.Tk()
 
@@ -152,16 +152,16 @@ class WindowUI(object):
         #
         # create the Widgets and keep them inside our object
         #
-        _padall = 15      
+        _padall = 15
         self.mainframe = ttk.Frame(self.root, pad=(_padall,_padall,_padall,_padall), takefocus=True)
-       
+
         # Create a Frame for input widgets
         #self.mainframe.grid(row=0, column=0, sticky="NESW")
         self.mainframe.grid(
             row=0, column=0, padx=10, pady=(30, 10),
             sticky="NSEW", rowspan=3
         )
-        #self.mainframe.columnconfigure(index=0, weight=1)        
+        #self.mainframe.columnconfigure(index=0, weight=1)
         self.mainframe.grid_columnconfigure(0, weight=1)
         #self.mainframe.grid_columnconfigure(1, weight=1)
         self.root.grid_rowconfigure(0, weight=1)
@@ -197,7 +197,7 @@ class WindowUI(object):
                 state=tk.NORMAL if allow_manual_edit else tk.DISABLED,
                 textvariable=item.var,
                 font=("-size", 15),
-            )     
+            )
             entry.configure(validate="all",
                 validatecommand=(self.root.register(validate_entry), "%W", "%d", "%i", "%s", "%S", "%V"),
                 #invalidcommand=(self.root.register(on_invalid_entry), '%W', '%s', '%S'),
@@ -224,7 +224,7 @@ class WindowUI(object):
         cancel_button.bind("<Return>", _cancel )
         cancel_button.bind("<Key-Escape>", _cancel)
         cancel_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, padx=5, pady=10, sticky="nsew")
-             
+
         # schedule queue processing callback
         self._id_after = self.mainframe.after(0, lambda: self.process_command_queue())
 
@@ -236,20 +236,20 @@ class WindowUI(object):
             entry_lst[0][1].focus_set()   # now set the focus to the first dialog element
         else:
             cancel_button.focus_set()
-     
-    
+
+
     def process_command_queue(self):
         global serialno_to_scan
-      
+
         if not self.q_cmd.empty():
             a = self.q_cmd.get()
             #print("UI:", a)
             _do_update = False
-            if a:               
+            if a:
                 if "part_number" in a:
                     #self.var_label_part_number.set(a["part_number"])
                     print("UI:UPDATE PART NUMBER")
-                    _do_update = True               
+                    _do_update = True
                 if "serial_number" in a:
                     if a["serial_number"] is None:
                         #self.label_udi.config(background="gray", foreground="black")
@@ -292,7 +292,7 @@ class WindowUI(object):
                     #self.var_label_udi.set("UDI REJECTED")
                     print("UI:DATE CODE")
                     _do_update = True
-                    pass                    
+                    pass
             if _do_update:
                 self.root.update()
         self._id_after = self.mainframe.after(50, lambda: self.process_command_queue())
@@ -340,7 +340,7 @@ class ProcessScanner(mp.Process):
             while True:
                 _records = None
                 try:
-                    _raw = scanner.request(None, timeout=None, encoding="utf-8")                    
+                    _raw = scanner.request(None, timeout=None, encoding="utf-8")
                 except TimeoutError:
                     pass  # this is ok to keep the loop running
                 except Exception as ex:
@@ -419,7 +419,7 @@ def identify_uut(test_socket: int, requested_serial: list, scanner_resource_str:
 
     _log = getLogger(__name__, DEBUG)
     allow_manual_edit = allow_user_edit
-    #allow_manual_edit = True
+    allow_manual_edit = True
     # # this is just to demonstrate the parameter passing from TestStand
     # context_id = seq_context.Id
     # executing_sequence_name = seq_context.Sequence.Name

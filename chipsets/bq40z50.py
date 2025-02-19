@@ -1377,6 +1377,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 (float) adc_current
 
         """
+
         current = float(current)
         # 1. average adc current
         adc_current = self.calib_read_adc_current(shorted=shorted)
@@ -1413,6 +1414,53 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         bq_st_cc_gain = 3.714528 / cc_gain
         # return the relevant values e.g. for logging
         return _current_meas, bq_st_cc_gain, cc_gain, capacity_gain, adc_current
+
+
+    def write_default_current_gain(self) -> Tuple[float,float,float,float]:
+        """
+        Write a default current gain calibration.
+
+        Args:
+            current (int): measured (known) current, Amps
+            shorted (bool, optional): Decides if shorted CCADC mode or normal. This mode enables an
+                internal short on the coulomb counter inputs (SRP, SRN). Defaults to False.
+
+        Returns:
+            tuple:
+                (float) calibrated current (A),
+                (float) bq_st_cc_gain,
+                (float) cc_gain,
+                (float) capacity_gain
+
+        """
+
+        # 1. set chip into tets mode
+        self._ms_toggle_helper("cal_test", True, 0x002d)
+        sleep(0.05)
+        # 2. set default values for current_gain, capacity_gain.
+        cc_gain = 3.58422
+        capacity_gain = float(cc_gain * 298261.6178)
+        # 3. write bat_gain
+        bytes_cc_gain = bytearray(pack("<f", cc_gain))         # 4 bytes
+        bytes_cap_gain = bytearray(pack("<f", capacity_gain))  # 4 bytes
+        block = self.read_flash_block(0x4000)  # one page, no extras
+        block[6:10] = bytes_cc_gain    # 0x4006/7/8/9
+        block[10:14] = bytes_cap_gain  # 0x400a/b/c/d
+        self.write_flash_block(0x4000, block)
+        # 4. Return calibrated current
+        self._ms_toggle_helper("cal_test", False, 0x002d)
+        sleep(0.3)
+        ## wait the 8-bit counter changed by 2 -> overflow need to be respected!
+        ## timeout = 1s
+        #self.wait_for_adc_update(2, 1.0)
+        # do a measurement to provide verification
+        _current_meas = self.get_current()
+        # use BQ Studio scale factor
+        bq_st_cc_gain = 3.714528 / cc_gain
+        # return the relevant values e.g. for logging
+        return _current_meas, bq_st_cc_gain, cc_gain, capacity_gain
+
+
 
     def calib_write_temp(self, temp: Tuple[float], approx_loops: int = 5) -> Tuple[np.array,int,int,int,int]:
         """
