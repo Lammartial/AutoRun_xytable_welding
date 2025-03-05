@@ -71,7 +71,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2040B", "411829_RRC2040B_PCBA-Test_C"),
+            "test_program_id": ("PT-SQ_2040B", "411829_RRC2040B_PCBA-Test_D"),
             "part_number": ("PT-PN_2040B", "411829-05"),
         },
         "COREPACK_TEST": {
@@ -257,7 +257,7 @@ PART_INFORMATION = {
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
             "test_program_id": ("HP-SQ_2020B", "110102_RRC2020-DR_EOL-Test_C"),
-            "part_number": ("HP-PN_2020B", "110102-14"),  # using the product number PN
+            "part_number": ("HP-PN_2020B", "110102-15"),  # using the product number PN
         }
     },
     #
