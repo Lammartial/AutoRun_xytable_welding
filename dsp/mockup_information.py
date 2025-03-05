@@ -484,6 +484,44 @@ PART_INFORMATION = {
 LABEL_PRINTING = {
 
     #
+    # QSB2054-2
+    #
+    "150002B-03": {
+        "enabled": True,  # set to True to trigger a label print file (.dat) written into unc path
+        "unc_path": "//sv-vn-bartender.rrcpowersolutions.com/batterylabel/",  # slashes / will be transformed by Path() into backslashes on use
+        "file_content": [  # list of possible label file row entries - at least one
+            {
+                "PRINTERNAME": "PRN-{01}-{02}_A11-HARDPACK",  # {01}=plant {02}=line
+                "LABELFILE": "R01_412117_B.BTW", # hardpack label
+                "MATNR": None,       # will be replaced by the KEY above
+                "MATNAME": "QSB2054-2",
+                "DATECODE": None,
+                #"SERIAL": "542S 02 R2 {01} {02}",  # {01}=00 {02}=S/N (DEVELOPMENT ONLY)
+                "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
+                "QUANTITY": int(1),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}',
+                "CODEDATABIG": None,  # stays empty
+                "MANUFACTURE_DATE": None, 	# will be set to the current date as we do not have access to DB here
+                "WEEKDAY": None,   # day of week of MANUFACTURE_DATE
+            },
+            {
+                "PRINTERNAME": "PRN-{01}-{02}_A12-SINGLEBOX",  # {01}=plant {02}=line
+                "LABELFILE": "R01_412077_B.BTW",  # single outer box label
+                "MATNR": None,
+                "MATNAME": "QSB2054-2",
+                "DATECODE": None,
+                "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
+                "QUANTITY": int(1),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}',
+                "CODEDATABIG": None,
+                "MANUFACTURE_DATE": None,
+                "WEEKDAY": None,
+            },
+            # ...
+        ]
+    },
+
+    #
     # RRC2054-2S
     #
     "110064S-08": {
