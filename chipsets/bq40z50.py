@@ -375,30 +375,6 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return (int(self._operation_status["sec"]) in [1, 2]) # unsealed OR full access
 
 
-    def is_unsealed_with_retries(self, check_fullaccess: bool = False, refresh: bool = False, retries: int = 5) -> bool:
-        """Checks if the battery is sealed.
-
-        NOTE: Something is wrong in the manual.
-              Reality: SEC = 10 -> UNSEAL, SEC = 01 -> FULL_ACCESS
-              Manual says 10 -> FULL_ACCESS, SEC = 01 -> UNSEAL
-
-           Args:
-             check_fullaccess (bool): if check_fullaccess is true, it also checks if battery is in full access mode.
-             refresh (bool): if True, the operation_status shadow will be read fresh from battery before analyze its flags
-
-           Returns
-              (bool): true of the device is NOT sealed if check_fullaccess is true,
-                      else only true if battery is unsealed and in full access mode.
-        """
-
-        if refresh or self._operation_status is None:
-            self.wait_for_operation_status_flag("sec1", bool(1), retries=int(retries))  # we ignore sec0 here and check only "unsealed"
-        # using shadow copy to avoid bus access
-        if check_fullaccess:
-            return (int(self._operation_status["sec"]) == 1) # full access
-        return (int(self._operation_status["sec"]) in [1, 2]) # unsealed OR full access
-
-
     #---UNSEALED HELPER FOR PRODUCTION-------------------------------------------------------------
 
 
