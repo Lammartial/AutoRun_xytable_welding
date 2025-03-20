@@ -413,7 +413,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return bool(self._operation_status[os_key]) == state
 
 
-    def read_operation_status_robust(self, retries: int = 10, pause_on_retry: float = 0.1) -> bool:
+    def read_operation_status_robust(self, retries: int = 10, pause_on_retry: float = 0.1) -> None:
         """Reads operation_status() until successfully read or throw after limit of retries."""
         retries = int(retries)
         while (retries >= 0):
@@ -421,10 +421,11 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 self.operation_status()  # => update the self._operation_status attribute
             except OSError as ex:
                 sleep(pause_on_retry)
+                if retries == 0:
+                    raise ex  # no more retries -> propagate failure
             finally:
                 retries -= 1
-        return (retries < 0)
-
+        
 
     def lifetime_datablock(self, hexi: bool | str | None = None):
         """Compatibility function: reading just first block of lifetimedata for use e.g. in production.
@@ -1465,6 +1466,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         sleep(0.05)
         # 2. set default values for current_gain, capacity_gain.
         cc_gain = 3.58422
+        #cc_gain = 0.928
         capacity_gain = float(cc_gain * 298261.6178)
         # 3. write bat_gain
         bytes_cc_gain = bytearray(pack("<f", cc_gain))         # 4 bytes
