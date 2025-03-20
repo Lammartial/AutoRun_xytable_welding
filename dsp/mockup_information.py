@@ -71,7 +71,7 @@ PART_INFORMATION = {
         },
         "PCBA_TEST": {
             # PCBA Test PRT IDs:
-            "test_program_id": ("PT-SQ_2040B", "411829_RRC2040B_PCBA-Test_C"),
+            "test_program_id": ("PT-SQ_2040B", "411829_RRC2040B_PCBA-Test_D"),
             "part_number": ("PT-PN_2040B", "411829-05"),
         },
         "COREPACK_TEST": {
@@ -82,7 +82,7 @@ PART_INFORMATION = {
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
             "test_program_id": ("HP-SQ_2040B", "100498_RRC2040B_EOL-Test_B"),
-            "part_number": ("HP-PN_2040B", "100498-18"),
+            "part_number": ("HP-PN_2040B", "100498-19"),
         }
     },
     #
@@ -172,7 +172,7 @@ PART_INFORMATION = {
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
             "test_program_id": ("HP-SQ_2040-2S", "100559S_RRC2040-2S_EOL-Test_B"),
-            "part_number": ("HP-PN_2040-2S", "100559S-12"),
+            "part_number": ("HP-PN_2040-2S", "100559S-11"),
         }
     },
     #
@@ -257,7 +257,7 @@ PART_INFORMATION = {
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
             "test_program_id": ("HP-SQ_2020B", "110102_RRC2020-DR_EOL-Test_C"),
-            "part_number": ("HP-PN_2020B", "110102-14"),  # using the product number PN
+            "part_number": ("HP-PN_2020B", "110102-15"),  # using the product number PN
         }
     },
     #
@@ -377,7 +377,7 @@ PART_INFORMATION = {
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
             "test_program_id": ("HP-SQ_2040B", "150003B_QSB2040_EOL-Test_B"),
-            "part_number": ("HP-PN_2040B", "100498-18"),
+            "part_number": ("HP-PN_2040B", "150003B-02"),
         }
     },
     #
@@ -406,8 +406,8 @@ PART_INFORMATION = {
         },
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
-            "test_program_id": ("HP-SQ_Q2054B", "150001B_QSB2054_EOL-Test_B"),
-            "part_number": ("HP-PN_Q2054B", "150001B-01"),
+            "test_program_id": ("HP-SQ_Q2054B", "150001B_QSB2054_EOL-Test_C"),
+            "part_number": ("HP-PN_Q2054B", "150001B-02"),
         }
     },
     #
@@ -437,7 +437,7 @@ PART_INFORMATION = {
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
             "test_program_id": ("HP-SQ_Q2040-2B", "150004B_QSB2040-2_EOL-Test_B"),
-            "part_number": ("HP-PN_Q2040-2B", "150004B-01"),
+            "part_number": ("HP-PN_Q2040-2B", "150004B-02"),
         }
     },
     #
@@ -467,7 +467,7 @@ PART_INFORMATION = {
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
             "test_program_id": ("HP-SQ_Q2054-2B", "150002B_QSB2054-2_EOL-Test_B"),
-            "part_number": ("HP-PN_Q2054-2B", "150002B-01"),
+            "part_number": ("HP-PN_Q2054-2B", "150002B-02"),
         }
     },
 }
@@ -482,6 +482,158 @@ PART_INFORMATION = {
 # NOTE: all column names come from MES -> Bartender interface
 #
 LABEL_PRINTING = {
+
+    #
+    # QSB2054-2
+    #
+    "150002B-02": {
+        "enabled": True,  # set to True to trigger a label print file (.dat) written into unc path
+        "unc_path": "//sv-vn-bartender.rrcpowersolutions.com/batterylabel/",  # slashes / will be transformed by Path() into backslashes on use
+        "file_content": [  # list of possible label file row entries - at least one
+            {
+                "PRINTERNAME": "PRN-{01}-{02}_A11-HARDPACK",  # {01}=plant {02}=line
+                "LABELFILE": "R01_412117_B.BTW", # hardpack label
+                "MATNR": None,       # will be replaced by the KEY above
+                "MATNAME": "QSB2054-2",
+                "DATECODE": None,
+                #"SERIAL": "542S 02 R2 {01} {02}",  # {01}=00 {02}=S/N (DEVELOPMENT ONLY)
+                "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
+                "QUANTITY": int(1),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}',
+                "CODEDATABIG": None,  # stays empty
+                "MANUFACTURE_DATE": None, 	# will be set to the current date as we do not have access to DB here
+                "WEEKDAY": None,   # day of week of MANUFACTURE_DATE
+            },
+            {
+                "PRINTERNAME": "PRN-{01}-{02}_A12-SINGLEBOX",  # {01}=plant {02}=line
+                "LABELFILE": "R01_412077_B.BTW",  # single outer box label
+                "MATNR": None,
+                "MATNAME": "QSB2054-2",
+                "DATECODE": None,
+                "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
+                "QUANTITY": int(1),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}',
+                "CODEDATABIG": None,
+                "MANUFACTURE_DATE": None,
+                "WEEKDAY": None,
+            },
+            # ...
+        ]
+    },
+
+    #
+    # QSB2054
+    #
+    "150001B-02": {
+        "enabled": True,  # set to True to trigger a label print file (.dat) written into unc path
+        "unc_path": "//sv-vn-bartender.rrcpowersolutions.com/batterylabel/",  # slashes / will be transformed by Path() into backslashes on use
+        "file_content": [  # list of possible label file row entries - at least one
+            {
+                "PRINTERNAME": "PRN-{01}-{02}_A11-HARDPACK",  # {01}=plant {02}=line
+                "LABELFILE": "R01_412117_B.BTW", # hardpack label
+                "MATNR": None,       # will be replaced by the KEY above
+                "MATNAME": "QSB2054",
+                "DATECODE": None,
+                #"SERIAL": "542S 02 R2 {01} {02}",  # {01}=00 {02}=S/N (DEVELOPMENT ONLY)
+                "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
+                "QUANTITY": int(1),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}',
+                "CODEDATABIG": None,  # stays empty
+                "MANUFACTURE_DATE": None, 	# will be set to the current date as we do not have access to DB here
+                "WEEKDAY": None,   # day of week of MANUFACTURE_DATE
+            },
+            {
+                "PRINTERNAME": "PRN-{01}-{02}_A12-SINGLEBOX",  # {01}=plant {02}=line
+                "LABELFILE": "R01_412077_B.BTW",  # single outer box label
+                "MATNR": None,
+                "MATNAME": "QSB2054",
+                "DATECODE": None,
+                "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
+                "QUANTITY": int(1),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}',
+                "CODEDATABIG": None,
+                "MANUFACTURE_DATE": None,
+                "WEEKDAY": None,
+            },
+            # ...
+        ]
+    },
+
+    #
+    # QSB2040
+    #
+    "150003B-02": {
+        "enabled": True,  # set to True to trigger a label print file (.dat) written into unc path
+        "unc_path": "//sv-vn-bartender.rrcpowersolutions.com/batterylabel/",  # slashes / will be transformed by Path() into backslashes on use
+        "file_content": [  # list of possible label file row entries - at least one
+            {
+                "PRINTERNAME": "PRN-{01}-{02}_A11-HARDPACK",  # {01}=plant {02}=line
+                "LABELFILE": "R01_412117_B.BTW", # hardpack label
+                "MATNR": None,       # will be replaced by the KEY above
+                "MATNAME": "QSB2040",
+                "DATECODE": None,
+                #"SERIAL": "542S 02 R2 {01} {02}",  # {01}=00 {02}=S/N (DEVELOPMENT ONLY)
+                "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
+                "QUANTITY": int(1),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}',
+                "CODEDATABIG": None,  # stays empty
+                "MANUFACTURE_DATE": None, 	# will be set to the current date as we do not have access to DB here
+                "WEEKDAY": None,   # day of week of MANUFACTURE_DATE
+            },
+            {
+                "PRINTERNAME": "PRN-{01}-{02}_A12-SINGLEBOX",  # {01}=plant {02}=line
+                "LABELFILE": "R01_412077_B.BTW",  # single outer box label
+                "MATNR": None,
+                "MATNAME": "QSB2040",
+                "DATECODE": None,
+                "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
+                "QUANTITY": int(1),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}',
+                "CODEDATABIG": None,
+                "MANUFACTURE_DATE": None,
+                "WEEKDAY": None,
+            },
+            # ...
+        ]
+    },
+
+    #
+    # QSB2040-2
+    #
+    "150004B-02": {
+        "enabled": True,  # set to True to trigger a label print file (.dat) written into unc path
+        "unc_path": "//sv-vn-bartender.rrcpowersolutions.com/batterylabel/",  # slashes / will be transformed by Path() into backslashes on use
+        "file_content": [  # list of possible label file row entries - at least one
+            {
+                "PRINTERNAME": "PRN-{01}-{02}_A11-HARDPACK",  # {01}=plant {02}=line
+                "LABELFILE": "R01_412117_B.BTW", # hardpack label
+                "MATNR": None,       # will be replaced by the KEY above
+                "MATNAME": "QSB2040-2",
+                "DATECODE": None,
+                #"SERIAL": "542S 02 R2 {01} {02}",  # {01}=00 {02}=S/N (DEVELOPMENT ONLY)
+                "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
+                "QUANTITY": int(1),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}',
+                "CODEDATABIG": None,  # stays empty
+                "MANUFACTURE_DATE": None, 	# will be set to the current date as we do not have access to DB here
+                "WEEKDAY": None,   # day of week of MANUFACTURE_DATE
+            },
+            {
+                "PRINTERNAME": "PRN-{01}-{02}_A12-SINGLEBOX",  # {01}=plant {02}=line
+                "LABELFILE": "R01_412077_B.BTW",  # single outer box label
+                "MATNR": None,
+                "MATNAME": "QSB2040-2",
+                "DATECODE": None,
+                "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
+                "QUANTITY": int(1),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}',
+                "CODEDATABIG": None,
+                "MANUFACTURE_DATE": None,
+                "WEEKDAY": None,
+            },
+            # ...
+        ]
+    },
 
     #
     # RRC2054-2S
@@ -559,12 +711,49 @@ LABEL_PRINTING = {
             # ...
         ]
     },
+#
+    # RRC2040B
+    #
+    "100498-19": {
+        "enabled": True,  # set to True to trigger a label print file (.dat) written into unc path
+        "unc_path": "//sv-vn-bartender.rrcpowersolutions.com/batterylabel/",  # slashes / will be transformed by Path() into backslashes on use
+        "file_content": [  # list of possible label file row entries - at least one
+            {
+                "PRINTERNAME": "PRN-{01}-{02}_A11-HARDPACK",  # {01}=plant {02}=line
+                "LABELFILE": "R01_412117_B.BTW", # hardpack label
+                "MATNR": None,       # will be replaced by the KEY above
+                "MATNAME": "RRC2040",
+                "DATECODE": None,
+                #"SERIAL": "542S 02 R2 {01} {02}",  # {01}=00 {02}=S/N (DEVELOPMENT ONLY)
+                "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
+                "QUANTITY": int(1),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}',
+                "CODEDATABIG": None,  # stays empty
+                "MANUFACTURE_DATE": None, 	# will be set to the current date as we do not have access to DB here
+                "WEEKDAY": None,   # day of week of MANUFACTURE_DATE
+            },
+            {
+                "PRINTERNAME": "PRN-{01}-{02}_A12-SINGLEBOX",  # {01}=plant {02}=line
+                "LABELFILE": "R01_412077_B.BTW",  # single outer box label
+                "MATNR": None,
+                "MATNAME": "RRC2040",
+                "DATECODE": None,
+                "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
+                "QUANTITY": int(1),
+                "CODEDATA": r'[)>061P{01}30P{02}10D{03}S{04}',
+                "CODEDATABIG": None,
+                "MANUFACTURE_DATE": None,
+                "WEEKDAY": None,
+            },
+            # ...
+        ]
+    },
 
     #
     # RRC2040-2S
     #
     "100559S-11": {
-        "enabled": False,  # set to True to trigger a label print file (.dat) written into unc path
+        "enabled": True,  # set to True to trigger a label print file (.dat) written into unc path
         "unc_path": "//sv-vn-bartender.rrcpowersolutions.com/batterylabel/",  # slashes / will be transformed by Path() into backslashes on use
         #"unc_path": "C:/bartender-out/",  # DEBUG
         "file_content": [  # list of possible label file row entries - at least one

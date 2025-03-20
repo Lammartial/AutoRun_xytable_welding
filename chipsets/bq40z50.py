@@ -325,8 +325,11 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         })
         return _od2t(self._manufacturing_status)
 
+
     def is_sealed(self, refresh: bool = False) -> bool:
-        """check if batetry is sealed
+        """
+        Check if battery is sealed including retries on bus error.
+        Takes up to 1s before throwing finally.
 
         Args:
             refresh (bool, optional): if True, the operation_status shadow will be read fresh from battery before analyze its flags. Defaults to False.
@@ -334,14 +337,19 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             bool: True, if sealed False otherwise
         """
-        if refresh or self._operation_status is None: self.operation_status()
-        # using shadow copy to avoid bus access
-        #print("s_SEC:", self._operation_status["sec"])
-        return self._operation_status["sec"] == 0x03 # using shadow copy to avoid bus access
+
+        if refresh or self._operation_status is None:
+            # using a more robust implementation to read operation_status at this point
+            # as we had issues on EOL test's shipping mode function here
+            self.read_operation_status_robust()
+            #self.operation_status()
+        return self._operation_status["sec"] == 0x03  # using shadow copy to avoid bus access
 
 
     def is_unsealed(self, check_fullaccess: bool = False, refresh: bool = False) -> bool:
-        """Checks if the battery is sealed.
+        """Checks if the battery is sealed including retries on bus error.
+
+        Takes up to 1s before throwing finally.
 
         NOTE: Something is wrong in the manual.
               Reality: SEC = 10 -> UNSEAL, SEC = 01 -> FULL_ACCESS
@@ -355,12 +363,17 @@ class BQ40Z50R1(ChipsetTexasInstruments):
               (bool): true of the device is NOT sealed if check_fullaccess is true,
                       else only true if battery is unsealed and in full access mode.
         """
-        if refresh or self._operation_status is None: self.operation_status()
+
+        if refresh or self._operation_status is None:
+            # using a more robust implementation to read operation_status at this point
+            # as we had issues on EOL test's shipping mode function here
+            self.read_operation_status_robust()
+            #self.operation_status()
         # using shadow copy to avoid bus access
-        #print("u_SEC:", self._operation_status["sec"])
         if check_fullaccess:
             return (int(self._operation_status["sec"]) == 1) # full access
         return (int(self._operation_status["sec"]) in [1, 2]) # unsealed OR full access
+
 
     #---UNSEALED HELPER FOR PRODUCTION-------------------------------------------------------------
 
@@ -399,6 +412,20 @@ class BQ40Z50R1(ChipsetTexasInstruments):
                 retries -= 1
         return bool(self._operation_status[os_key]) == state
 
+
+    def read_operation_status_robust(self, retries: int = 10, pause_on_retry: float = 0.1) -> None:
+        """Reads operation_status() until successfully read or throw after limit of retries."""
+        retries = int(retries)
+        while (retries >= 0):
+            try:
+                self.operation_status()  # => update the self._operation_status attribute
+            except OSError as ex:
+                sleep(pause_on_retry)
+                if retries == 0:
+                    raise ex  # no more retries -> propagate failure
+            finally:
+                retries -= 1
+        
 
     def lifetime_datablock(self, hexi: bool | str | None = None):
         """Compatibility function: reading just first block of lifetimedata for use e.g. in production.
@@ -573,6 +600,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             True if battery is not responding anymore, False else
         """
+
         wassealed = self.is_sealed(refresh=True)
         self.shutdown()
         if ship_delay is not None:
@@ -583,6 +611,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             # no waits requested
             if not self.isReady(): return True
         return False
+
 
     def shutdown(self) -> None:
         """Sends a shutdown command to the battery.
@@ -1437,6 +1466,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         sleep(0.05)
         # 2. set default values for current_gain, capacity_gain.
         cc_gain = 3.58422
+        #cc_gain = 0.928
         capacity_gain = float(cc_gain * 298261.6178)
         # 3. write bat_gain
         bytes_cc_gain = bytearray(pack("<f", cc_gain))         # 4 bytes
