@@ -1437,6 +1437,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         sleep(0.05)
         # 2. set default values for current_gain, capacity_gain.
         cc_gain = 3.58422
+        #cc_gain = 0.928
         capacity_gain = float(cc_gain * 298261.6178)
         # 3. write bat_gain
         bytes_cc_gain = bytearray(pack("<f", cc_gain))         # 4 bytes
