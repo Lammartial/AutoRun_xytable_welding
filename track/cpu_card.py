@@ -168,13 +168,13 @@ class CPU_Card:
         #buffer = pack("<H", int(word))  # platform independent
         #s = ",".join([str(int(i)) for i in buffer])
         #res = self.con.request(f":I2C:MAS:WRB {int(address)},{int(cmd)},{s}")
-        res = self.con.request(f":I2C:MAS:WRW {int(address)},{int(cmd)},{int(word)}")        
+        res = self.con.request(f":I2C:MAS:WRW {int(address)},{int(cmd)},{int(word)}")
         return self._is_ok_response(res)
 
 
     def I2C_Master_WriteBytes(self, address: int, cmd: int, buffer: bytearray | bytes) -> bool:
         s = ",".join([str(int(i)) for i in buffer])
-        res = self.con.request(f":I2C:MAS:WRB {int(address)},{int(cmd)},{len(buffer)},{s}")        
+        res = self.con.request(f":I2C:MAS:WRB {int(address)},{int(cmd)},{len(buffer)},{s}")
         return self._is_ok_response(res)
 
 
@@ -385,7 +385,7 @@ class CPU_Card:
         Returns:
             bool: _description_
         """
-        
+
         s = ",".join([str(int(i)) for i in buffer])
         res = self.con.request(f":SMB:BLW {int(id)},{int(address)},{int(cmd)},{len(buffer)},{s}")
         return self._is_ok_response(res)
@@ -556,7 +556,7 @@ class CPU_Card:
 
 if __name__ == "__main__":
     # quick test, just call: python cpu_card.py
-    dev = CPU_Card("COM8,115200,8N1")
+    dev = CPU_Card("COM43,115200,8N1")
     print(dev.ident())
     print(dev.ident_boot())
     print(dev.help().replace("\r","\n\r"))

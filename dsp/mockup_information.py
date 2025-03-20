@@ -1,7 +1,7 @@
 #
 # Mockup Data for mockup_server and DSP SIMULATION interface
 #
-
+from .mockup_lookup import PRINTER_LOOKUP, BARTENDER_UNC_LOOKUP, SELECTED_PRINTER_LOCATION, DO_PRINT_SINGLEBOX_LABEL, DO_PRINT_HARDPACK_LABEL
 
 #
 # Parameters in the form key:value -> key:payload
@@ -11,14 +11,14 @@ PART_INFORMATION = {
     #
     # BQ40Z50_RECALIBRATION
     #
-    "RRC2020B_RECALIBRATION": {       
+    "RRC2020B_RECALIBRATION": {
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
             "test_program_id": ("HP-SQ_2020B", "BQ40Z50_Recalibration_EOL-Test_A"),
             "part_number": ("HP-PN_2020B", "100496-18"),
         }
     },
-    "RRC2020-DR_RECALIBRATION": {       
+    "RRC2020-DR_RECALIBRATION": {
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
             "test_program_id": ("HP-SQ_2020B", "BQ40Z50_Recalibration_EOL-Test_A"),
@@ -349,7 +349,7 @@ PART_INFORMATION = {
             "test_program_id": ("HP-SQ_2054-2-LM", "110186S_RRC2054-2-LM_EOL-Test_A"),
             "part_number": ("HP-PN_2054-2-LM", "110186S-04"),
         }
-    },   
+    },
     #
     # QSB2040B
     #
@@ -491,7 +491,7 @@ LABEL_PRINTING = {
         "unc_path": "//sv-vn-bartender.rrcpowersolutions.com/batterylabel/",  # slashes / will be transformed by Path() into backslashes on use
         "file_content": [  # list of possible label file row entries - at least one
             {
-                "PRINTERNAME": "PRN-{01}-{02}_A11-HARDPACK",  # {01}=plant {02}=line
+                "PRINTERNAME": PRINTER_LOOKUP[f"{SELECTED_PRINTER_LOCATION}_HARDPACK"],
                 "LABELFILE": "R01_412117_B.BTW", # hardpack label
                 "MATNR": None,       # will be replaced by the KEY above
                 "MATNAME": "QSB2054-2",
@@ -503,9 +503,9 @@ LABEL_PRINTING = {
                 "CODEDATABIG": None,  # stays empty
                 "MANUFACTURE_DATE": None, 	# will be set to the current date as we do not have access to DB here
                 "WEEKDAY": None,   # day of week of MANUFACTURE_DATE
-            },
+            } if DO_PRINT_HARDPACK_LABEL else None,
             {
-                "PRINTERNAME": "PRN-{01}-{02}_A12-SINGLEBOX",  # {01}=plant {02}=line
+                "PRINTERNAME": PRINTER_LOOKUP[f"{SELECTED_PRINTER_LOCATION}_SINGLEBOX"],
                 "LABELFILE": "R01_412077_B.BTW",  # single outer box label
                 "MATNR": None,
                 "MATNAME": "QSB2054-2",
@@ -516,7 +516,7 @@ LABEL_PRINTING = {
                 "CODEDATABIG": None,
                 "MANUFACTURE_DATE": None,
                 "WEEKDAY": None,
-            },
+            } if DO_PRINT_SINGLEBOX_LABEL else None,
             # ...
         ]
     },
@@ -530,7 +530,7 @@ LABEL_PRINTING = {
         #"unc_path": "C:/bartender-out/",  # DEBUG
         "file_content": [  # list of possible label file row entries - at least one
             {
-                "PRINTERNAME": "PRN-{01}-{02}_A11-HARDPACK",  # {01}=plant {02}=line
+                "PRINTERNAME": PRINTER_LOOKUP[f"{SELECTED_PRINTER_LOCATION}_HARDPACK"],
                 "LABELFILE": "R01_412117_B.BTW", # hardpack label
                 "MATNR": None,       # will be replaced by the KEY above
                 "MATNAME": "RRC2054-2",
@@ -542,9 +542,9 @@ LABEL_PRINTING = {
                 "CODEDATABIG": None,  # stays empty
                 "MANUFACTURE_DATE": None, 	# will be set to the current date as we do not have access to DB here
                 "WEEKDAY": None,   # day of week of MANUFACTURE_DATE
-            },
+            } if DO_PRINT_HARDPACK_LABEL else None,
             {
-                "PRINTERNAME": "PRN-{01}-{02}_A12-SINGLEBOX",  # {01}=plant {02}=line
+                "PRINTERNAME": PRINTER_LOOKUP[f"{SELECTED_PRINTER_LOCATION}_SINGLEBOX"],
                 "LABELFILE": "R01_412077_B.BTW",  # single outer box label
                 "MATNR": None,
                 "MATNAME": "RRC2054-2",
@@ -555,7 +555,7 @@ LABEL_PRINTING = {
                 "CODEDATABIG": None,
                 "MANUFACTURE_DATE": None,
                 "WEEKDAY": None,
-            },
+            } if DO_PRINT_SINGLEBOX_LABEL else None,
             # ...
         ]
     },
@@ -569,7 +569,7 @@ LABEL_PRINTING = {
         #"unc_path": "C:/bartender-out/",  # DEBUG
         "file_content": [  # list of possible label file row entries - at least one
             {
-                "PRINTERNAME": "PRN-{01}-{02}_A11-HARDPACK",  # {01}=plant {02}=line
+                "PRINTERNAME": PRINTER_LOOKUP[f"{SELECTED_PRINTER_LOCATION}_HARDPACK"],
                 "LABELFILE": "R01_412117_B.BTW", # hardpack label
                 "MATNR": None,       # will be replaced by the KEY above
                 "MATNAME": "RRC2054",
@@ -580,9 +580,9 @@ LABEL_PRINTING = {
                 "CODEDATABIG": None,  # stays empty
                 "MANUFACTURE_DATE": None, 	# will be set to the current date as we do not have access to DB here
                 "WEEKDAY": None,   # day of week of MANUFACTURE_DATE
-            },
+            } if DO_PRINT_HARDPACK_LABEL else None,
             {
-                "PRINTERNAME": "PRN-{01}-{02}_A12-SINGLEBOX",  # {01}=plant {02}=line
+                "PRINTERNAME": PRINTER_LOOKUP[f"{SELECTED_PRINTER_LOCATION}_SINGLEBOX"],
                 "LABELFILE": "R01_412077_B.BTW",  # single outer box label
                 "MATNR": None,
                 "MATNAME": "RRC2054",
@@ -593,7 +593,7 @@ LABEL_PRINTING = {
                 "CODEDATABIG": None,
                 "MANUFACTURE_DATE": None,
                 "WEEKDAY": None,
-            },
+            } if DO_PRINT_SINGLEBOX_LABEL else None,
             # ...
         ]
     },
@@ -607,7 +607,7 @@ LABEL_PRINTING = {
         #"unc_path": "C:/bartender-out/",  # DEBUG
         "file_content": [  # list of possible label file row entries - at least one
             {
-                "PRINTERNAME": "PRN-{01}-{02}_A11-HARDPACK",  # {01}=plant {02}=line
+                "PRINTERNAME": PRINTER_LOOKUP[f"{SELECTED_PRINTER_LOCATION}_HARDPACK"],
                 "LABELFILE": "R01_412117_B.BTW", # hardpack label
                 "MATNR": None,       # will be replaced by the KEY above
                 "MATNAME": "RRC2040-2",
@@ -618,9 +618,9 @@ LABEL_PRINTING = {
                 "CODEDATABIG": None,  # stays empty
                 "MANUFACTURE_DATE": None, 	# will be set to the current date as we do not have access to DB here
                 "WEEKDAY": None,   # day of week of MANUFACTURE_DATE
-            },
+            } if DO_PRINT_HARDPACK_LABEL else None,
             {
-                "PRINTERNAME": "PRN-{01}-{02}_A12-SINGLEBOX",  # {01}=plant {02}=line
+                "PRINTERNAME": PRINTER_LOOKUP[f"{SELECTED_PRINTER_LOCATION}_SINGLEBOX"],
                 "LABELFILE": "R01_412077_B.BTW",  # single outer box label
                 "MATNR": None,
                 "MATNAME": "RRC2040-2",
@@ -631,7 +631,7 @@ LABEL_PRINTING = {
                 "CODEDATABIG": None,
                 "MANUFACTURE_DATE": None,
                 "WEEKDAY": None,
-            },
+            } if DO_PRINT_SINGLEBOX_LABEL else None,
             # ...
         ]
     },
