@@ -258,7 +258,7 @@ class I2CPort(I2CBase):
 
     def i2c_change_clock_frequency_ncd(self, frequency: int) -> list:
         """This function SHOULD work with NCD boards, but it DOES NOT!
-        
+
         From internet:
             100KHz: AA 06 BC 32 01 01 00 00 A0
             38KHz:  AA 06 BC 32 01 01 00 01 A1
@@ -289,7 +289,7 @@ class I2CPort(I2CBase):
 
     def i2c_change_clock_frequency(self, frequency: int, timeout_ms: int = None) -> list:
         """Allows to change the clock speed and transaction timeout on the fly.
-        
+
         RRC API specific function only !
 
         Args:
@@ -301,10 +301,10 @@ class I2CPort(I2CBase):
         """
 
         if not self.interface_is_rrc:
-            # just ignore it so that you could use this function with NCD 
+            # just ignore it so that you could use this function with NCD
             # board or with ours using same code!
             return []
-        
+
         tx_payload = bytes([0xCF]) \
                         + pack(">L", frequency) \
                         + (pack(">L", timeout_ms) if timeout_ms else bytes())  # to 32 bit unsigned each
@@ -315,21 +315,21 @@ class I2CPort(I2CBase):
 
     def gpio_write_output(self, port_pin: int, value: int) -> bool:
         """Allows to change a preconfigured, valid output pin's value.
-        
+
         RRC API specific function only !
 
         Args:
             value (int): Set the output to 0 or 1.
-            
+
         Returns:
             bool: good or not
         """
 
         if not self.interface_is_rrc:
-            # just ignore it so that you could use this function with NCD 
+            # just ignore it so that you could use this function with NCD
             # board or with ours using same code!
             return False
-        
+
         tx_payload = bytes([0xCF]) + b'W' \
                         + int(port_pin).to_bytes(1, 'little') \
                         + int(value & 0x01).to_bytes(1, 'little')  # only lowbyte
@@ -339,21 +339,21 @@ class I2CPort(I2CBase):
 
     def gpio_read_input(self, port_pin: int) -> bool:
         """Allows to change a preconfigured, valid output pin's value.
-        
+
         RRC API specific function only !
 
         Args:
             value (int): Set the output to 0 or 1.
-            
+
         Returns:
             bool: good or not
         """
 
         if not self.interface_is_rrc:
-            # just ignore it so that you could use this function with NCD 
+            # just ignore it so that you could use this function with NCD
             # board or with ours using same code!
             return False
-        
+
         tx_payload = bytes([0xCF]) + b'R' + int(port_pin).to_bytes(1, 'little')
         rx_payload = self.__data_exchange(tx_payload)
         self.__check_for_errors(rx_payload)
@@ -379,14 +379,18 @@ class I2CPort(I2CBase):
         # NOTE:
         #   error messages taken from AlphaStation source code write/read I2C functions
         #
+        #   !!! please keep using .format() instead of f"..." strings here as the latter's
+        #   !!!    lazy execution is not processed on any Exception situation.
+        #
         if error_code == NCD_I2C_READ_ERROR:
-            raise OSError(error_code, f"I2C timeout error while read on {self}, slave-IC did Not Respond, check I2C address.")
+            raise OSError(error_code, "I2C timeout error while read on {}, slave-IC did Not Respond, check I2C address.".format(str(self)))
         elif error_code in [NCD_I2C_WRITE_ERROR1, NCD_I2C_WRITE_ERROR2]:
-            raise OSError(error_code, f"I2C timeout error while write on {self}, slave-IC did Not Respond, check I2C address.")
+            raise OSError(error_code, "I2C timeout error while write on {}, slave-IC did Not Respond, check I2C address.".format(str(self)))
         elif error_code == NCD_I2C_ACK_ERROR:
-            raise OSError(error_code, f"I2C ACK Error on {self}")
+            raise OSError(error_code, "I2C ACK Error on {}".format(str(self)))
         elif error_code == NCD_I2C_NOT_IMPLEMENTED_ERROR:
-            raise Exception("Not implemented I2C function used")
+            #raise Exception("Not implemented I2C function used")
+            raise OSError(error_code, "Not implemented I2C interface function used on {}".format(str(self)))  # this avoids Error on Teststand if catching for OSError() only
         else:
             raise NCDUnknownErrorCodeError(self, error_code)
 
@@ -529,7 +533,7 @@ def test_interface(resource_str: str) -> None:
         print("Change clock frequency and timeout - RRC: ", str(dev.i2c_change_clock_frequency(55000, timeout_ms = 33)))
         #print("Change clock frequency - NCD: ", str(dev.i2c_change_clock_frequency_ncd(38000)))
         #dev.writeto(0x77, bytearray([0x02]))
-        
+
         # for c in range(1, 9):
         #     mux.setChannel(c)
         #     print(f"Channel {c}:", str(dev.i2c_bus_scan()))
