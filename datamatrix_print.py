@@ -141,7 +141,7 @@ def print_datamatrix_label(content: str, printer_name: str = "DEFAULT") -> bool:
         img = img.rotate (90)
 
     ratios = [1.0 * printable_area[0] / img.size[0], 1.0 * printable_area[1] / img.size[1]]
-    scale = min (ratios)
+    scale = min(ratios)
 
     #
     # Start the print job, and draw the bitmap to
