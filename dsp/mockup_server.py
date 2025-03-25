@@ -59,9 +59,8 @@ class UdiItem(BaseModel):
     udi: str
 
 
-from rrc.dsp.mockup_information import PART_INFORMATION, LABEL_PRINTING
-from rrc.dsp.mockup_lookup import SELECTED_PRINTER_LOCATION, PLANT_CODE_LOOKUP
-
+from rrc.dsp.mockup import LABEL_PRINTING_LOOKUP, SELECTED_PRINTER_LOCATION, PLANT_CODE_LOOKUP, \
+                           get_part_information_for_selected_product
 
 
 #--------------------------------------------------------------------------------------------------
@@ -121,23 +120,6 @@ async def send_udi(item: UdiItem, response: Response):
 #--------------------------------------------------------------------------------------------------
 
 
-# @app.get("/GET_PARAMETER_FOR_WELDING", status_code=status.HTTP_200_OK)
-# async def get_parameter_for_test_run(station_id, line_id):
-
-#     # set the product to test for mockup: "RRC2040B" or "RRC2020B"
-#     _product_name = "RRC2020B"
-#     #_product_name = "RRC2040B"
-#     _mock = PART_INFORMATION[_product_name]
-
-#     _fhm = _mock["CELL_WELDING"]
-#     return {
-#         "station_id": station_id,
-#         "line_id": line_id,
-#         "sequence_revision": _fhm["test_program_id"][1],  # str
-#         "part_number": _fhm["part_number"][1],        # str
-#     }
-
-
 @app.get("/GET_PARAMETER_FOR_TEST_RUN", status_code=status.HTTP_200_OK)
 async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket):
     global next_serial, lock_next_serial
@@ -156,13 +138,14 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
     #_product_name = "RRC2054-2S"
     #_product_name = "RRC2054-2-HM"
     #_product_name = "RRC2054-2-LM"
-    _product_name = "QSB2040B"
+    #_product_name = "QSB2040B"
     #_product_name = "QSB2054B"
     #_product_name = "QSB2040-2B"
     #_product_name = "QSB2054-2B"
 
 
-    _mock = PART_INFORMATION[_product_name]
+    #_mock = PART_INFORMATION[_product_name]
+    _mock = get_part_information_for_selected_product()
 
     # #_serial = random.randint(1, 47236513)
     # async with lock_next_serial:
@@ -214,7 +197,7 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
 
 @app.post("/REPORT_TEST_RESULT", response_model=Item, status_code=status.HTTP_202_ACCEPTED)
 async def report_test_result(item: Item):
-    global LABEL_PRINTING
+    global LABEL_PRINTING_LOOKUP, ENABLE_PRINTING
 
     _log = getLogger(__name__, 2)
     _log.debug(f"Accepted item: {item}")
@@ -223,9 +206,9 @@ async def report_test_result(item: Item):
         # check option to trigger print of product labels
         #_pn_no_revision = item.part_number.split("-", maxsplit=1)[0]
         _pn = item.part_number
-        if _pn in LABEL_PRINTING:
+        if _pn in LABEL_PRINTING_LOOKUP:
             try:
-                _lblprn = LABEL_PRINTING[_pn]
+                _lblprn = LABEL_PRINTING_LOOKUP[_pn]
                 if _lblprn["enabled"]:
                     # generally enabled
                     if item.result.upper() == "P":

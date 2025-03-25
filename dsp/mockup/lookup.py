@@ -22,10 +22,6 @@ DO_PRINT_HARDPACK_LABEL = 1
 #--------------------------------------------------------------------------------------------------
 # DON'T EDIT HERE
 #--------------------------------------------------------------------------------------------------
-#
-# This is the datamatrix code for the label which printing service expects in a text file
-#
-LABEL_CODE_DATA = r'[)>061P{01}30P{02}10D{03}S{04}'
 
 
 PLANT_CODE_LOOKUP = {

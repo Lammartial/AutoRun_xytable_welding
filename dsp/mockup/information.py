@@ -1,7 +1,8 @@
 #
 # Mockup Data for mockup_server and DSP SIMULATION interface
 #
-from .mockup_lookup import PRINTER_LOOKUP, BARTENDER_UNC_LOOKUP, SELECTED_PRINTER_LOCATION, DO_PRINT_SINGLEBOX_LABEL, DO_PRINT_HARDPACK_LABEL, LABEL_CODE_DATA
+from .config import CONFIGURED_PRODUCT, SELECTED_PRINTER_LOCATION, DO_PRINT_SINGLEBOX_LABEL, DO_PRINT_HARDPACK_LABEL, ENABLE_LABEL_PRINTING
+from .lookup import PRINTER_LOOKUP, BARTENDER_UNC_LOOKUP
 
 #
 # Parameters in the form key:value -> key:payload
@@ -472,6 +473,20 @@ PART_INFORMATION = {
     },
 }
 
+#--------------------------------------------------------------------------------------------------
+
+def get_part_information_for(product_name: str) -> dict:
+    global PART_INFORMATION
+
+    _part_info = PART_INFORMATION[product_name]  # throws if not in list
+    return _part_info
+
+
+def get_part_information_for_selected_product() -> dict:
+    global CONFIGURED_PRODUCT
+
+    return get_part_information_for(CONFIGURED_PRODUCT)
+
 
 #--------------------------------------------------------------------------------------------------
 #
@@ -482,11 +497,17 @@ PART_INFORMATION = {
 # NOTE: all column names come from MES -> Bartender interface
 #
 
+#
+# This is the datamatrix code for the label which printing service expects in a text file
+#
+LABEL_CODE_DATA = r'[)>061P{01}30P{02}10D{03}S{04}'
+
+
 # generate the lookup dictionary for each partnumber listed
-LABEL_PRINTING = dict([
+LABEL_PRINTING_LOOKUP = dict([
     *[(pn,
         {
-            "enabled": True,  # set to True to trigger a label print file (.dat) written into unc path
+            "enabled": bool(ENABLE_LABEL_PRINTING),  # set to True to trigger a label print file (.dat) written into unc path
             "unc_path": BARTENDER_UNC_LOOKUP[SELECTED_PRINTER_LOCATION],
             "file_content": [  # list of possible label file row entries - at least one
                 {
