@@ -1,24 +1,7 @@
-#
-# This is to configure the printer for mockup_information if used on rework more easily
-#
-#
-#
-#--------------------------------------------------------------------------------------------------
-# Edit this:
+"""
+This is a lookup module to configure the printer for mockup_information if used on rework more easily.
+"""
 
-SELECTED_PRINTER_LOCATION = "DE_LINE_1"  # "VN_GENERIC", "VN_LINE_1", ..., etc.
-
-DO_PRINT_SINGLEBOX_LABEL = 1
-DO_PRINT_HARDPACK_LABEL = 1
-
-#
-# Example of use in douple step lookup for mockup_information:
-#   PRINTER_LOOKUP[SELECTED_PRINTER_LOCATION]["HARDPACK"]
-#   PRINTER_LOOKUP[SELECTED_PRINTER_LOCATION]["SINGLEBOX"]
-#   LABELFILE_LOOKUP[SELECTED_PRINTER_LOCATION]["HARDPACK"]
-#   BARTENDER_UNC_LOOKUP[SELECTED_PRINTER_LOCATION]
-#
-#
 #--------------------------------------------------------------------------------------------------
 # DON'T EDIT HERE
 #--------------------------------------------------------------------------------------------------

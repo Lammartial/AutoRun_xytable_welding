@@ -59,10 +59,13 @@ class UdiItem(BaseModel):
     udi: str
 
 
+from .information import PART_INFORMATION, LABEL_PRINTING_LOOKUP, SELECTED_PRINTER_LOCATION
+from .lookup import PLANT_CODE_LOOKUP
+from .config import CONFIGURED_PRODUCT
 
-from rrc.dsp.mockup.information import PART_INFORMATION, LABEL_PRINTING_LOOKUP, SELECTED_PRINTER_LOCATION
-from rrc.dsp.mockup.lookup import PLANT_CODE_LOOKUP
-from rrc.dsp.mockup.config import CONFIGURED_PRODUCT
+
+# this is startup message (we use the "uvicorn" logger which propagates to the terminal)
+getLogger("uvicorn", 1).info(f"Selected product: '{CONFIGURED_PRODUCT}'")
 
 
 #--------------------------------------------------------------------------------------------------
@@ -110,7 +113,8 @@ async def get_serial(test_type, station_id, line_id, test_socket, udi, response:
 
 @app.post("/SEND_UDI", status_code=status.HTTP_202_ACCEPTED)
 async def send_udi(item: UdiItem, response: Response):
-    getLogger(__name__, 2).debug(f"Accepted UDI: {item}")
+    #_log = getLogger("uvicorn", 1)  # if you like to see the debug messages, set 2nd parameter to 2
+    #_log.debug(f"Accepted UDI: {item}")
     if 0:
         response.status_code = status.HTTP_406_NOT_ACCEPTABLE
         return { "error": "UDI blacklisted", "code": 8,
@@ -125,6 +129,8 @@ async def send_udi(item: UdiItem, response: Response):
 @app.get("/GET_PARAMETER_FOR_TEST_RUN", status_code=status.HTTP_200_OK)
 async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket):
     global next_serial, lock_next_serial
+
+    #_log = getLogger("uvicorn", 1)  # if you like to see the debug messages, set 2nd parameter to 2
 
     #
     # PLEASE SEE FILE .\mockup\config.py TO SELCET A PRODUCT!
@@ -184,7 +190,7 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
 async def report_test_result(item: Item):
     global LABEL_PRINTING_LOOKUP, ENABLE_PRINTING
 
-    _log = getLogger(__name__, 2)
+    _log = getLogger("uvicorn", 1)  # if you like to see the debug messages, set 2nd parameter to 2
     _log.debug(f"Accepted item: {item}")
 
     if "EOL_TEST" in item.test_type:
@@ -197,7 +203,7 @@ async def report_test_result(item: Item):
                 if _lblprn["enabled"]:
                     # generally enabled
                     if item.result.upper() == "P":
-                        _log.info(f"Label printing: {_lblprn}")
+                        _log.debug(f"Label printing: {_lblprn}")
                         # now create the rows for the trigger .dat file
                         _rows_for_datfile = []
                         _ts = datetime.now()  # local time !

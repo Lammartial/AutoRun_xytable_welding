@@ -474,21 +474,6 @@ PART_INFORMATION = {
 }
 
 #--------------------------------------------------------------------------------------------------
-
-def get_part_information_for(product_name: str) -> dict:
-    global PART_INFORMATION
-
-    _part_info = PART_INFORMATION[product_name]  # throws if not in list
-    return _part_info
-
-
-def get_part_information_for_selected_product() -> dict:
-    global CONFIGURED_PRODUCT
-
-    return get_part_information_for(CONFIGURED_PRODUCT)
-
-
-#--------------------------------------------------------------------------------------------------
 #
 #  To enable product label printing while bypassing the MES
 #

@@ -1,1 +1,1 @@
-uvicorn mockup_server:app --reload --host 0.0.0.0 --port 8011
+uvicorn mockup.server:app --host 0.0.0.0 --port 8011
