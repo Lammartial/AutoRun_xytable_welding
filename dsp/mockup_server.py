@@ -60,6 +60,8 @@ class UdiItem(BaseModel):
 
 
 from rrc.dsp.mockup_information import PART_INFORMATION, LABEL_PRINTING
+from rrc.dsp.mockup_lookup import SELECTED_PRINTER_LOCATION, PLANT_CODE_LOOKUP
+
 
 
 #--------------------------------------------------------------------------------------------------
@@ -142,11 +144,11 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
 
     # set the product to test for mockup: "RRC2040B" or "RRC2020B"
     #_product_name = "RRC2020B_RECALIBRATION"
-    #_product_name = "RRC2020-DR_RECALIBRATION"    
-    #_product_name = "RRC2020B"    
+    #_product_name = "RRC2020-DR_RECALIBRATION"
+    #_product_name = "RRC2020B"
     #_product_name = "RRC2020-DR"
     #_product_name = "RRC2020-GE"
-    _product_name = "RRC2040B"
+    #_product_name = "RRC2040B"
     #_product_name = "RRC2054S"
     #_product_name = "RRC2054-SO"
     #_product_name = "SPINEL"
@@ -154,7 +156,7 @@ async def get_parameter_for_test_run(test_type, station_id, line_id, test_socket
     #_product_name = "RRC2054-2S"
     #_product_name = "RRC2054-2-HM"
     #_product_name = "RRC2054-2-LM"
-    #_product_name = "QSB2040B"
+    _product_name = "QSB2040B"
     #_product_name = "QSB2054B"
     #_product_name = "QSB2040-2B"
     #_product_name = "QSB2054-2B"
@@ -226,7 +228,7 @@ async def report_test_result(item: Item):
                 _lblprn = LABEL_PRINTING[_pn]
                 if _lblprn["enabled"]:
                     # generally enabled
-                    if item.result.upper() == "P":                
+                    if item.result.upper() == "P":
                         _log.info(f"Label printing: {_lblprn}")
                         # now create the rows for the trigger .dat file
                         _rows_for_datfile = []
@@ -239,21 +241,24 @@ async def report_test_result(item: Item):
                             _sn_parts = str(item.serial_number).split(",")
                             if len(_sn_parts) == 2:
                                 # we got a correct rework result to process
-                                _prn = str(_ct['PRINTERNAME'])
-                                _plant = "2000"
+                                _prn = str(_ct["PRINTERNAME"])
+                                _plant = str(PLANT_CODE_LOOKUP[SELECTED_PRINTER_LOCATION])
                                 #item.line_id = 1  # DEBUG ONLY
-                                _ct['PRINTERNAME'] = _prn.replace("{01}", _plant).replace("{02}", str(item.line_id))
+                                try:
+                                    _ct["PRINTERNAME"] = _prn.replace("{01}", _plant).replace("{02}", str(item.line_id))
+                                except Exception as ex:
+                                    pass  # leave unchanged as it is probably hardcoded
                                 _manufacture_date = datetime.strptime(_sn_parts[1], "%Y-%m-%d")  # we need to convert into datetime object to get the day of week later on
                                 _ct["MANUFACTURE_DATE"] =  _manufacture_date.strftime("%Y%m%d")
                                 _ct["WEEKDAY"] = "UMTWRFS"[int(_manufacture_date.strftime("%w"))]  # we use our own definition of weekday letters 0=sunday, ... , 6=saturday
                                 #_ct["DATECODE"] = _manufacture_date.strftime("%y%U")  # caldendarweek, first week begins with first sunday
                                 _ct["DATECODE"] = _manufacture_date.strftime("%y%W")  # caldendarweek, first week begins with first monday
-                                
+
                                 # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
                                 #_serial = f"000000{_sn_parts[0]}"[-6:]  # DEVELOP: expand with 0s and get right 6 chars
                                 #_serial = _ct["SERIAL"].replace("{01}", _serial[:2]).replace("{02}", _serial[2:])
                                 _serial = _sn_parts[0]
-                                _ct["SERIAL"] = f"{_serial[:4]} {_serial[4:6]} {_serial[6:8]} {_serial[8:10]} {_serial[10:14]}" 
+                                _ct["SERIAL"] = f"{_serial[:4]} {_serial[4:6]} {_serial[6:8]} {_serial[8:10]} {_serial[10:14]}"
 
                                 # now combine the code for the printer
                                 _da: str = _ct["CODEDATA"]

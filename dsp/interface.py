@@ -84,7 +84,7 @@ class DspInterface:
             # No production order or such alike
             _log.warning(response.json())
             return False, response.json()  # -> bool, str
-        try:            
+        try:
             runparams = response.json()
         except Exception as ex:
             _log.error(f"Cannot get valid parameters for testrun from DSP server, please check connection. {ex}")
@@ -520,6 +520,9 @@ def test_teststand_line_interfaces(
         # simulate test
         sleep(1)
         # # send result to DSP (EOL like, so the serial has to be NONE ZERO!)
+        if 1:
+            # REWORK Test (Label reprint needs date code appended on SN)
+            serial = ",".join((serial, datetime.strftime(datetime.now(), "%Y-%m-%d")))
         # #dsp_lean_res.api = dsp_lean_par.api.copy()
         dsp_eol.ts_send_result_for_testrun(
             test_result,
