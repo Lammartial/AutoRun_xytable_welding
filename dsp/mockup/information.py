@@ -524,6 +524,9 @@ LABEL_PRINTING_LOOKUP = dict([
                 # ...
             ]
         }) for (pn, matname) in [
+        #--------------------------------
+        # Please edit here to add product
+        #--------------------------------
         # Part number, Material name
         ("150002B-02", "QSB2054-2"),
         ("150001B-02", "QSB2054"),
