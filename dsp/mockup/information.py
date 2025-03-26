@@ -501,7 +501,6 @@ LABEL_PRINTING_LOOKUP = dict([
                     "MATNR": pn,  # will also be replaced by the KEY above on printfile generation
                     "MATNAME": matname,
                     "DATECODE": None,
-                    #"SERIAL": "542S 02 R2 {01} {02}",  # {01}=00 {02}=S/N (DEVELOPMENT ONLY)
                     "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
                     "QUANTITY": int(1),
                     "CODEDATA": LABEL_CODE_DATA,
