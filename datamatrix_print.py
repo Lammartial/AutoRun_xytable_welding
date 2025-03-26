@@ -195,7 +195,7 @@ def run_scan_and_print(resource_string: str, printer_name: str) -> None:
     else:
         scanner = Eth2SerialDevice(resource_string, termination="\r")   # socket port
     while 1:
-        print(f"Please scan label code:", end=None)
+        print(f"Please scan label code: ", end=None)
         try:
             content = scanner.request(None, timeout=2.0, encoding=None)
             print(f"got '{content}'")

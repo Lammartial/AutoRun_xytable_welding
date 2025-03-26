@@ -498,8 +498,8 @@ LABEL_PRINTING_LOOKUP = dict([
                 {
                     "PRINTERNAME": PRINTER_LOOKUP[SELECTED_PRINTER_LOCATION]["HARDPACK"],
                     "LABELFILE": "R01_412117_B.BTW", # hardpack label
-                    "MATNR": None,       # will be replaced by the KEY above
-                    "MATNAME": "QSB2054-2",
+                    "MATNR": None,  # will be replaced by the KEY above
+                    "MATNAME": matname,
                     "DATECODE": None,
                     #"SERIAL": "542S 02 R2 {01} {02}",  # {01}=00 {02}=S/N (DEVELOPMENT ONLY)
                     "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
@@ -512,8 +512,8 @@ LABEL_PRINTING_LOOKUP = dict([
                 {
                     "PRINTERNAME": PRINTER_LOOKUP[SELECTED_PRINTER_LOCATION]["SINGLEBOX"],
                     "LABELFILE": "R01_412077_B.BTW",  # single outer box label
-                    "MATNR": None,
-                    "MATNAME": "QSB2054-2",
+                    "MATNR": None,  # will be replaced by the KEY above,
+                    "MATNAME": matname,
                     "DATECODE": None,
                     "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
                     "QUANTITY": int(1),
@@ -524,7 +524,7 @@ LABEL_PRINTING_LOOKUP = dict([
                 } if DO_PRINT_SINGLEBOX_LABEL else None,
                 # ...
             ]
-        }) for (pn, matnr) in [
+        }) for (pn, matname) in [
         # Part number, Material name
         ("150002B-02", "QSB2054-2"),
         ("150001B-02", "QSB2054"),
@@ -535,6 +535,7 @@ LABEL_PRINTING_LOOKUP = dict([
         ("100498-19",  "RRC2040"),
         ("100559S-11", "RRC2040-2"),
         ("100496-18",  "RRC2020"),
+        ("110102-15", "RRC2020-DR"),
     ]
 
     ],  # wrapper to allow more elements appended manually below

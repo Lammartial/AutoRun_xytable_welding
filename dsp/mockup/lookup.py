@@ -45,8 +45,8 @@ BARTENDER_UNC_LOOKUP = {
     #
     # slashes / will be transformed by Path() into backslashes on use
     #
-    "DE_LINE_1": "//sv-de-bartender.rrc/bartender-input/batterylabel/",
-    #"DE_LINE_1": "C:/bartender-output",  # DEBUG ONLY!
+    #"DE_LINE_1": "//sv-de-bartender.rrc/bartender-input/batterylabel/",
+    "DE_LINE_1": "C:/bartender-output",  # DEBUG ONLY!
 
     "VN_GENERIC": "//sv-vn-bartender.rrcpowersolutions.com/batterylabel/",
     #"VN_GENERIC": "C:/bartender-output",  # DEBUG ONLY!

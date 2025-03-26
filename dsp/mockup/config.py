@@ -52,7 +52,7 @@ CONFIGURED_PRODUCT = "RRC2020-DR"
 # This is to configure the printer for mockup_information if used on rework more easily
 #
 #
-SELECTED_PRINTER_LOCATION = "VN_GENERIC"  # "VN_GENERIC", "DE_LINE_1", ..., etc.
+SELECTED_PRINTER_LOCATION = "DE_LINE_1"  # "VN_GENERIC", "DE_LINE_1", ..., etc.
 #
 # set to 1 to allow mockup server to trigger label print for all products, set 0 to disable
 ENABLE_LABEL_PRINTING = 1
