@@ -209,6 +209,8 @@ async def report_test_result(item: Item):
                         _ts = datetime.now()  # local time !
                         _serial = None
                         for _content in _lblprn["file_content"]:
+                            if _content is None:
+                                continue  # no valid entry
                             _ct = deepcopy(_content)  # this is IMPORTANT! otherwise the webserver uses always old data after first execution
                             if _ct["MATNR"] is None:
                                 _ct["MATNR"] = _pn  # update the _pn

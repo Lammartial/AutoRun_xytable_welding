@@ -4,10 +4,109 @@
 from .config import CONFIGURED_PRODUCT, SELECTED_PRINTER_LOCATION, DO_PRINT_SINGLEBOX_LABEL, DO_PRINT_HARDPACK_LABEL, ENABLE_LABEL_PRINTING
 from .lookup import PRINTER_LOOKUP, BARTENDER_UNC_LOOKUP
 
-#
-# Parameters in the form key:value -> key:payload
-#  (z.B. “CT-SQ_2020B” mit dann der maximal 40-stelligen Payload in der PRT Description)
-#
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+
+PRODUCT_CONFIGURATION_TABLE = [
+    #----------------------------------------------------------------
+    # Please edit here to add product (Model name is used on label!)
+    # (keep in alphabetical order)
+    #----------------------------------------------------------------
+    # Model name, Part number, SAP key, (then setup of Teststand)
+    #----------------------------------------------------------------
+    # ("RRC2020B", "100496-18"),
+    # ("RRC2020-DR", "110102-15"),
+    # ("RRC2020-GE", "110270-02"),
+    # ("RRC2040B", "100498-19"),
+    # ("RRC2040-2S", "100559S-11"),
+    # ("RRC2040-2-OL", "110059S-09"),
+    ("RRC2054S", "100568S-15", "2054S",
+            ("412085_RRC2054S",     "B", "412085-01"),     # Cell-Test (id,rev,pn)
+            (None,                  "A", "412085-01"),     # Cell-Welding (id,rev,pn)
+            ("412100_RRC2054S",     "B", "412100-01"),     # PCBA-Test (id,rev,pn)
+            ("412085_RRC2054S",     "C", "412085-01"),     # Corepack-Test (id,rev,pn)
+            ("100568S_RRC2054S",    "C", "100568S-15")),   # EOL-Test (id,rev,pn)
+    # ("RRC2054-SO", "110062S-08"),
+    # ("RRC2054-OL", "110310S-02"),
+    # ("RRC2054-2S", "110064S-08"),
+    # ("RRC2054-2-HM", "110325S-01"),
+    # ("RRC2054-2-LM", "110186S-04"),
+    # ("QSB2040", "150003B-02"),
+    # ("QSB2040-2", "150004B-02"),
+    # ("QSB2054", "150001B-02"),
+    ("QSB2054-2", "150002B-02", "Q2054-2B",
+            ("412159_QSB2054-2B",   "B", "412159-01"),     # Cell-Test (id,rev,pn)
+            (None,                  "A", "412159-01"),     # Cell-Welding (id,rev,pn)
+            ("412159_QSB2054-2B",   "B", "412099-01"),     # PCBA-Test (id,rev,pn)
+            ("412159_QSB2054-2B",   "B", "412159-01"),     # Corepack-Test (id,rev,pn)
+            ("150002B_QSB2054-2",   "B", "150002B-02")),   # EOL-Test (id,rev,pn)
+
+]
+
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+
+PART_INFORMATION_GENERATED = dict([
+    # our smart batteries
+    *[(model,
+        {
+            "CELL_TEST": {
+                # Cell Test PRT IDs
+                "test_program_id": (f"CT-SQ_{sap_key}", f"{cell_test[0]}_Cell-Test_{cell_test[1]}"),
+                "part_number": (f"CT-PN_{sap_key}", f"{cell_test[2]}"),
+            },
+            "CELL_WELDING": {
+                # Cell Welding PRT IDs:
+                "test_program_id": (f"CW-SQ_{sap_key}", f"{cell_welding[1]}"),
+                "part_number": (f"CW-PN_{sap_key}", f"{cell_welding[2]}"),
+            },
+            "PCBA_TEST": {
+                # PCBA Test PRT IDs:
+                "test_program_id": (f"PT-SQ_{sap_key}", f"{pcba_test[0]}_PCBA-Test_{pcba_test[1]}"),
+                "part_number": (f"PT-PN_{sap_key}", f"{pcba_test[2]}"),
+            },
+            "COREPACK_TEST": {
+                # Core Pack Test PRT IDs:
+                "test_program_id": (f"CP-SQ_{sap_key}", f"{corepack_test[0]}_Corepack-Test_{corepack_test[1]}"),
+                "part_number": (f"CP-PN_{sap_key}", f"{corepack_test[2]}"),
+            },
+            "EOL_TEST": {
+                # Hard Pack (End-Of-Line) Test PRT IDs:
+                "test_program_id": (f"HP-SQ_{sap_key}", f"{eol_test[0]}_EOL-Test_{eol_test[1]}"),
+                "part_number": (f"HP-PN_{sap_key}", f"{eol_test[2]}"),
+            }
+
+        }) for (model, pn, sap_key, cell_test, cell_welding, pcba_test, corepack_test, eol_test) in PRODUCT_CONFIGURATION_TABLE
+
+    ],  # wrapper to allow more elements appended manually below
+
+    ("SPINEL", {
+        "CELL_TEST": {
+            # Cell Test (Teststand):
+            "test_program_id": ("CW-SQ_SPINEL", "110282S_SPINEL_Cell-Test_A"),
+            "part_number": ("CW-PN_SPINEL", "110282S-03"),
+        },
+        "CELL_WELDING": {
+            # Cell Welding PRT IDs:
+            "test_program_id": ("CW-SQ_SPINEL", "A"),
+            "part_number": ("CW-PN_SPINEL", "110282S-03"),
+        },
+        "LEANPACK_TEST": {
+            # EOL Test with Corepack hardware (Teststand)
+            "test_program_id": ("CP-SQ_SPINEL", "110282B_SPINEL_Leanpack-Test_A"),
+            "part_number": ("CP-PN_SPINEL", "110282B-03"),
+        }
+    }),
+
+    # ... add more if you like ...
+
+])
+
+#--------------------------------------------------------------------------------------------------
+
+
 PART_INFORMATION = {
     #
     # BQ40Z50_RECALIBRATION
@@ -473,6 +572,8 @@ PART_INFORMATION = {
     },
 }
 
+
+
 #--------------------------------------------------------------------------------------------------
 #
 #  To enable product label printing while bypassing the MES
@@ -499,7 +600,7 @@ LABEL_PRINTING_LOOKUP = dict([
                     "PRINTERNAME": PRINTER_LOOKUP[SELECTED_PRINTER_LOCATION]["HARDPACK"],
                     "LABELFILE": "R01_412117_B.BTW", # hardpack label
                     "MATNR": pn,  # will also be replaced by the KEY above on printfile generation
-                    "MATNAME": matname,
+                    "MATNAME": model,
                     "DATECODE": None,
                     "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
                     "QUANTITY": int(1),
@@ -512,7 +613,7 @@ LABEL_PRINTING_LOOKUP = dict([
                     "PRINTERNAME": PRINTER_LOOKUP[SELECTED_PRINTER_LOCATION]["SINGLEBOX"],
                     "LABELFILE": "R01_412077_B.BTW",  # single outer box label
                     "MATNR": pn,  # will also be replaced by the KEY above on printfile generation
-                    "MATNAME": matname,
+                    "MATNAME": model,
                     "DATECODE": None,
                     "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
                     "QUANTITY": int(1),
@@ -523,32 +624,16 @@ LABEL_PRINTING_LOOKUP = dict([
                 } if DO_PRINT_SINGLEBOX_LABEL else None,
                 # ...
             ]
-        }) for (pn, matname) in [
-        #--------------------------------
-        # Please edit here to add product
-        #--------------------------------
-        # Part number, Material name
-        ("150002B-02", "QSB2054-2"),
-        ("150001B-02", "QSB2054"),
-        ("150003B-02", "QSB2040"),
-        ("150004B-02", "QSB2040-2"),
-        ("110064S-08", "RRC2054-2"),
-        ("100568S-15", "RRC2054"),
-        ("100498-19",  "RRC2040"),
-        ("100559S-11", "RRC2040-2"),
-        ("100496-18",  "RRC2020"),
-        ("110102-15", "RRC2020-DR"),
-    ]
+        }) for (model, pn, _1, _2, _3, _4, _5, _6,) in PRODUCT_CONFIGURATION_TABLE  # Note: the _x, means not needed
 
     ],  # wrapper to allow more elements appended manually below
 
     # add others with different configuration as you need
-    # in the form ( "part_number", dict )
+    # in the form ( "part_number", dict ),
     #
     # filename template: 99ZZ 01 9Z 00 0089 0050568936F31EEEB8D5BAD85F3A82C0 20240315092436.dat
     #                    {product_serial  } { GUID                         } { datetime_str}.dat
     #
 ])
-
 
 # END OF FILE

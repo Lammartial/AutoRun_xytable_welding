@@ -8,12 +8,17 @@ This is a lookup module to configure the printer for mockup information if used 
 
 
 PLANT_CODE_LOOKUP = {
+    "DEBUG": 9999,
     "DE_LINE_1": 1000,
     "VN_GENERIC": 2000,
 }
 
 
 PRINTER_LOOKUP = {
+    "DEBUG": {
+        "HARDPACK":  "MF_ZEBRA_ZT411_03",  # hard coded configuration
+        "SINGLEBOX": "PRN-{01}-{02}_A12-SINGLEBOX",  # {01}=plant {02}=line
+    },
     "DE_LINE_1": {
         "HARDPACK":  "MF_ZEBRA_ZT411_03",  # hard coded configuration
         "SINGLEBOX": "MF_ZEBRA_ZT411_03",  # hard coded configuration
@@ -26,6 +31,10 @@ PRINTER_LOOKUP = {
 
 
 LABELFILE_LOOKUP = {
+    "DEBUG": {
+        "HARDPACK":  "R01_412117_B.BTW",   # product label
+        "SINGLEBOX": "R01_412077_B.BTW",   # single outer box label
+    },
     "DE_LINE_1": {
         "HARDPACK":  "R01_412117_B.BTW",   # product label
         "SINGLEBOX": "R01_412077_B.BTW",   # single outer box label
@@ -45,12 +54,9 @@ BARTENDER_UNC_LOOKUP = {
     #
     # slashes / will be transformed by Path() into backslashes on use
     #
-    #"DE_LINE_1": "//sv-de-bartender.rrc/bartender-input/batterylabel/",
-    "DE_LINE_1": "C:/bartender-output",  # DEBUG ONLY!
-
+    "DEBUG": "C:/bartender-output",  # DEBUG ONLY!
+    "DE_LINE_1": "//sv-de-bartender.rrc/bartender-input/batterylabel/",
     "VN_GENERIC": "//sv-vn-bartender.rrcpowersolutions.com/batterylabel/",
-    #"VN_GENERIC": "C:/bartender-output",  # DEBUG ONLY!
-
 }
 
 
