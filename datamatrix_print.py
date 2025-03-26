@@ -17,6 +17,13 @@ from pathlib import Path
 import win32print
 import win32ui
 
+from rrc.eth2serial import Eth2SerialDevice, Eth2SerialSimulationDevice, tcp_send_and_receive_from_server
+from rrc.serialport import SerialComportDevice
+
+
+
+#--------------------------------------------------------------------------------------------------
+
 
 def get_available_printer_names() -> list:
     printer_names = []
@@ -38,8 +45,14 @@ def get_available_printer_names() -> list:
     return printer_names
 
 
+#--------------------------------------------------------------------------------------------------
+
+
 def print_available_printer_names() -> None:
     [ print(f"{i}: {p}") for i,p in enumerate(get_available_printer_names()) ]
+
+
+#--------------------------------------------------------------------------------------------------
 
 
 def print_pdf_to_printer(printer_name: str, pdf_path: str | Path) -> None:
@@ -62,6 +75,9 @@ def print_pdf_to_printer(printer_name: str, pdf_path: str | Path) -> None:
     finally:
         win32print.ClosePrinter(printer_handle)
         pdf_file.close()
+
+
+#--------------------------------------------------------------------------------------------------
 
 
 def print_datamatrix_label(content: str, printer_name: str = "DEFAULT") -> bool:
@@ -165,6 +181,32 @@ def print_datamatrix_label(content: str, printer_name: str = "DEFAULT") -> bool:
 
 #--------------------------------------------------------------------------------------------------
 
+
+def run_scan_and_print(resource_string: str, printer_name: str) -> None:
+    """_summary_
+
+    Args:
+        resource_string (str): _description_
+        printer_name (str): _description_
+    """
+
+    if "," in resource_string:
+        scanner = SerialComportDevice(resource_string, termination="\r")  # COM port
+    else:
+        scanner = Eth2SerialDevice(resource_string, termination="\r")   # socket port
+    while 1:
+        print(f"Please scan label code:", end=None)
+        try:
+            content = scanner.request(None, timeout=2.0, encoding=None)
+            print(f"got '{content}'")
+            print_datamatrix_label(content, printer_name)
+        except TimeoutError:
+            pass  # just retry
+
+
+
+#--------------------------------------------------------------------------------------------------
+
 def test_create_simple_label() -> None:
     encoded = encode('RRC Zellsorter: Problem solved!'.encode('utf8'))
     img = Image.frombytes('RGB', (encoded.width, encoded.height), encoded.pixels)
@@ -181,5 +223,9 @@ if __name__ == "__main__":
     #printer_name = "Microsoft Print to PDF"
     printer_name = "\\\\printhost-2k16.rrc\\C-1-58-M6630cidn"
     print_datamatrix_label("TESTLABEL XYZ", printer_name=printer_name)
+
+    RESOURCE_STR = "COM38,9600,8N1"  # manual scanner
+    #RESOURCE_STR = "172.21.101.31:2000"  # HOM Line Corepack
+    run_scan_and_print(printer_name, RESOURCE_STR)  # loop blocks until CTRL-C
 
 # END OF FILE
