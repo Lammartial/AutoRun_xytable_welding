@@ -1,5 +1,5 @@
 """
-This is a lookup module to configure the printer for mockup_information if used on rework more easily.
+This is a lookup module to configure the printer for mockup information if used on rework more easily.
 """
 
 #--------------------------------------------------------------------------------------------------

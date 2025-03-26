@@ -49,7 +49,7 @@ CONFIGURED_PRODUCT = "RRC2020-DR"
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 #
-# This is to configure the printer for mockup_information if used on rework more easily
+# This is to configure the printer for mockup server if used on rework more easily
 #
 #
 SELECTED_PRINTER_LOCATION = "DE_LINE_1"  # "VN_GENERIC", "DE_LINE_1", ..., etc.
