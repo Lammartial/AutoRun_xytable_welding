@@ -498,7 +498,7 @@ LABEL_PRINTING_LOOKUP = dict([
                 {
                     "PRINTERNAME": PRINTER_LOOKUP[SELECTED_PRINTER_LOCATION]["HARDPACK"],
                     "LABELFILE": "R01_412117_B.BTW", # hardpack label
-                    "MATNR": None,  # will be replaced by the KEY above
+                    "MATNR": pn,  # will also be replaced by the KEY above on printfile generation
                     "MATNAME": matname,
                     "DATECODE": None,
                     #"SERIAL": "542S 02 R2 {01} {02}",  # {01}=00 {02}=S/N (DEVELOPMENT ONLY)
@@ -512,7 +512,7 @@ LABEL_PRINTING_LOOKUP = dict([
                 {
                     "PRINTERNAME": PRINTER_LOOKUP[SELECTED_PRINTER_LOCATION]["SINGLEBOX"],
                     "LABELFILE": "R01_412077_B.BTW",  # single outer box label
-                    "MATNR": None,  # will be replaced by the KEY above,
+                    "MATNR": pn,  # will also be replaced by the KEY above on printfile generation
                     "MATNAME": matname,
                     "DATECODE": None,
                     "SERIAL": None,  # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
