@@ -32,11 +32,21 @@ PRODUCT_CONFIGURATION_TABLE = [
             ("412100_RRC2054S",     "B", "412100-01"),     # PCBA-Test (id,rev,pn)
             ("412085_RRC2054S",     "C", "412085-01"),     # Corepack-Test (id,rev,pn)
             ("100568S_RRC2054S",    "C", "100568S-15")),   # EOL-Test (id,rev,pn)
-    # ("RRC2054-SO", "110062S-08"),
+    ("RRC2054-SO", "110062S-08", "RRC2054-SO", "2054-S0",
+            ("412085_RRC2054S",     "B", "412085-01"),     # Cell-Test (id,rev,pn)
+            (None,                  "A", "412085-01"),     # Cell-Welding (id,rev,pn)
+            ("412100_RRC2054S",     "B", "412100-01"),     # PCBA-Test (id,rev,pn)
+            ("412085_RRC2054S",     "C", "412085-01"),     # Corepack-Test (id,rev,pn)
+            ("110064S_RRC2054-SO",  "B", "110064S-08")),   # EOL-Test (id,rev,pn)
     # ("RRC2054-OL", "110310S-02"),
     # ("RRC2054-2S", "110064S-08", "RRC2054-2"),
     # ("RRC2054-2-HM", "110325S-01"),
-    # ("RRC2054-2-LM", "110186S-04"),
+    ("RRC2054-2-LM", "110186S-04", "RRC2054-2-LM", "2054-2-LM",
+            ("412080_RRC2054-2S",   "B", "412080-01"),     # Cell-Test (id,rev,pn)
+            (None,                  "A", "412080-01"),     # Cell-Welding (id,rev,pn)
+            ("412099_RRC2054-2S",   "B", "412099-01"),     # PCBA-Test (id,rev,pn)
+            ("412080_RRC2054-2S",   "B", "412080-01"),     # Corepack-Test (id,rev,pn)
+            ("110186S_RRC2054-2-LM","A", "110186S-04")),   # EOL-Test (id,rev,pn)
     # ("QSB2040", "150003B-02"),
     # ("QSB2040-2", "150004B-02"),
     # ("QSB2054", "150001B-02"),
@@ -270,7 +280,7 @@ PART_INFORMATION = {
         },
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
-            "test_program_id": ("HP-SQ_2054S", "110062S_RRC2054-SO_EOL-Test_A"),
+            "test_program_id": ("HP-SQ_2054S", "110062S_RRC2054-SO_EOL-Test_B"),
             "part_number": ("HP-PN_2054S", "110062S-08"),
         }
     },
