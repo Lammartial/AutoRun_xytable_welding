@@ -22,8 +22,13 @@ PRODUCT_CONFIGURATION_TABLE = [
             ("412081_RRC2020B",     "C", "412081-01"),     # Corepack-Test (id,rev,pn)
             ("100496_RRC2020B",     "C", "100496-18")),    # EOL-Test (id,rev,pn)
     # ("RRC2020-DR", "110102-15"),
-    # ("RRC2020-GE", "110270-02"),  
-    # ("RRC2040B", "100498-19", "RRC2040",),
+    # ("RRC2020-GE", "110270-02"),    
+    ("RRC2040B", "100498-19", "RRC2040","2040B",
+           ("412083_RRC2040B",      "C", "412083-01"),     # Cell-Test (id,rev,pn)
+           (None,                   "A", "412083-01"),     # Cell-Welding (id,rev,pn)
+           ("411829_RRC2040B",      "D", "411829-05"),     # PCBA-Test (id,rev,pn)
+           ("412083_RRC2040B",      "D", "412083-01"),     # Corepack-Test (id,rev,pn)
+           ("100498_RRC2040B",      "B", "100498-19")),    # EOL-Test (id,rev,pn)
     # ("RRC2040-2S", "100559S-11"),
     # ("RRC2040-2-OL", "110059S-09"),
     ("RRC2054S", "100568S-15", "RRC2054", "2054S",
@@ -39,7 +44,13 @@ PRODUCT_CONFIGURATION_TABLE = [
             ("412085_RRC2054S",     "C", "412085-01"),     # Corepack-Test (id,rev,pn)
             ("110064S_RRC2054-SO",  "B", "110064S-08")),   # EOL-Test (id,rev,pn)
     # ("RRC2054-OL", "110310S-02"),
-    # ("RRC2054-2S", "110064S-08", "RRC2054-2"),
+    ("RRC2054-2S", "110064S-08", "RRC2054-2", "2054-2",
+            ("412080_RRC2054-2S",   "B", "412080-02"),      # Cell-Test (id,rev,pn)
+            (None,                  "A", "412080-02"),      # Cell-Welding (id,rev,pn)
+            ("412099_RRC2054-2S",   "C", "412099-01"),      # PCBA-Test (id,rev,pn)
+            ("412080_RRC2054-2S",   "C", "412080-02"),       # Corepack-Test (id,rev,pn)
+            ("110064S_RRC2054-2S",  "B", "110064S-08")),    # EOL-Test (id,rev,pn)
+    # ("RRC2054-2-HM", "110325S-01"),
     # ("RRC2054-2-HM", "110325S-01"),
     ("RRC2054-2-LM", "110186S-04", "RRC2054-2-LM", "2054-2-LM",
             ("412080_RRC2054-2S",   "B", "412080-01"),     # Cell-Test (id,rev,pn)
@@ -49,7 +60,12 @@ PRODUCT_CONFIGURATION_TABLE = [
             ("110186S_RRC2054-2-LM","A", "110186S-04")),   # EOL-Test (id,rev,pn)
     # ("QSB2040", "150003B-02"),
     # ("QSB2040-2", "150004B-02"),
-    # ("QSB2054", "150001B-02"),
+    ("QSB2054", "150001B-02", "QSB2054", "QSB2054B",
+            ("412158_QSB2054B",     "B", "412158-01"),     # Cell-Test (id,rev,pn)
+            (None,                  "A", "412158-02"),     # Cell-Welding (id,rev,pn)
+            ("412158_QSB2054B",     "B", "412100-01"),     # PCBA-Test (id,rev,pn)
+            ("412185_QSB2054B",     "B", "412185-01"),     # Corepack-Test (id,rev,pn)
+            ("150001B_QSB2054B",    "C", "150001B-02")),   # EOL-Test (id,rev,pn)
     ("QSB2054-2", "150002B-02", "QSB2054-2", "Q2054-2B",
             ("412159_QSB2054-2B",   "B", "412159-01"),     # Cell-Test (id,rev,pn)
             (None,                  "A", "412159-01"),     # Cell-Welding (id,rev,pn)
