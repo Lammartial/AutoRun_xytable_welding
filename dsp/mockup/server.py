@@ -227,15 +227,20 @@ async def report_test_result(item: Item):
                                 _manufacture_date = datetime.strptime(_sn_parts[1], "%Y-%m-%d")  # we need to convert into datetime object to get the day of week later on
                                 _ct["MANUFACTURE_DATE"] =  _manufacture_date.strftime("%Y%m%d")
                                 _ct["WEEKDAY"] = "UMTWRFS"[int(_manufacture_date.strftime("%w"))]  # we use our own definition of weekday letters 0=sunday, ... , 6=saturday
-                                #_ct["DATECODE"] = _manufacture_date.strftime("%y%U")  # caldendarweek, first week begins with first sunday
-                                _ct["DATECODE"] = _manufacture_date.strftime("%y%W")  # caldendarweek, first week begins with first monday
+                                ##_ct["DATECODE"] = _manufacture_date.strftime("%y%U")  # caldendarweek, first week begins with first sunday
+                                ##_ct["DATECODE"] = _manufacture_date.strftime("%y%W")  # caldendarweek, first week begins with first monday
+                                #
+                                # out datecodes need an ISO calendar week numbering. e.g. 30.12.2024 => 2501 as well as 04.01.2025 => 2501
+                                #
+                                # DO NOT USE THE strftime() FUNCTION AS IT CALCULATES THE WEEK ON YEAR CHANGE WRONG!
+                                #
+                                _ct["DATECODE"] = f"{str(_manufacture_date.isocalendar()[0])[-2:]}{_manufacture_date.isocalendar()[1]:02}"
 
                                 # {01}=MODEL CODE(4) {02}=PREASS-REV(2) {03}=MFC(2) {04}=SN-OVERFLOW(2) {05}=S/N(4)
                                 #_serial = f"000000{_sn_parts[0]}"[-6:]  # DEVELOP: expand with 0s and get right 6 chars
                                 #_serial = _ct["SERIAL"].replace("{01}", _serial[:2]).replace("{02}", _serial[2:])
                                 _serial = _sn_parts[0]
                                 _ct["SERIAL"] = f"{_serial[:4]} {_serial[4:6]} {_serial[6:8]} {_serial[8:10]} {_serial[10:14]}"
-
                                 # now combine the code for the printer
                                 _da: str = _ct["CODEDATA"]
                                 _da = _da.replace("{01}", _ct["MATNR"])\
