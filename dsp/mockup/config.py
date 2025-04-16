@@ -32,13 +32,13 @@ workstation under test or used for rework on a line.
 #CONFIGURED_PRODUCT = "RRC2020B"
 #CONFIGURED_PRODUCT = "RRC2020-DR"
 #CONFIGURED_PRODUCT = "RRC2020-GE"
-CONFIGURED_PRODUCT = "RRC2040B"
+#CONFIGURED_PRODUCT = "RRC2040B"
 #CONFIGURED_PRODUCT = "RRC2040-2S"
 #CONFIGURED_PRODUCT = "RRC2040-2-OL"
 #CONFIGURED_PRODUCT = "RRC2054S"
 #CONFIGURED_PRODUCT = "RRC2054-SO"
 #CONFIGURED_PRODUCT = "RRC2054-OL"
-#CONFIGURED_PRODUCT = "RRC2054-2S"
+CONFIGURED_PRODUCT = "RRC2054-2S"
 #CONFIGURED_PRODUCT = "RRC2054-2-HM"
 #CONFIGURED_PRODUCT = "RRC2054-2-LM"
 #CONFIGURED_PRODUCT = "SPINEL"
@@ -60,8 +60,8 @@ CONFIGURED_PRODUCT = "RRC2040B"
 # This is to configure the printer for mockup server if used on rework more easily
 #
 #
-SELECTED_PRINTER_LOCATION = "VN_GENERIC"  # VN production
-#SELECTED_PRINTER_LOCATION = "DE_LINE_1"  # DE rework line
+#SELECTED_PRINTER_LOCATION = "VN_GENERIC"  # VN production
+SELECTED_PRINTER_LOCATION = "DE_LINE_1"  # DE rework line
 #SELECTED_PRINTER_LOCATION = "DEBUG"  # you guess what...
 #
 # set to 1 to allow mockup server to trigger label print for all products, set 0 to disable
@@ -69,7 +69,7 @@ ENABLE_LABEL_PRINTING = 1
 #
 # set to 1 to allow entry in label .DAT file otherwise set to 0
 DO_PRINT_HARDPACK_LABEL = 1
-DO_PRINT_SINGLEBOX_LABEL = 1
+DO_PRINT_SINGLEBOX_LABEL = 0
 #
 #
 #--------------------------------------------------------------------------------------------------

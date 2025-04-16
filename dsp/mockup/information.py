@@ -30,13 +30,13 @@ PRODUCT_CONFIGURATION_TABLE = [
            ("411829_RRC2040B",      "D", "411829-05"),     # PCBA-Test (id,rev,pn)
            ("412083_RRC2040B",      "D", "412083-01"),     # Corepack-Test (id,rev,pn)
            ("100498_RRC2040B",      "B", "100498-19")),    # EOL-Test (id,rev,pn)
-    ("RRC2040-2S", "100559S-11", "RRC2040-2","2040-2",
-            ("412084_RRD2040-2S",   "B", "412084-02"),
-            (None,                  "A", "412084-02"),
-            ("412101_RRC2042-2S",   "D", "412101-01"),
-            ("412084_RRC2040-2S",   "D", "412084-02"),
-            ("100559S_RRC2040-2S",  "B", "100559S-11")),
-    # ("RRC2040-2-OL", "110059S-09"),
+    ("RRC2040-2S", "100559S-11", "RRC2040-2", "2040-2",
+           ("412084_RRC2040-2S",    "B", "412084-02"),     # Cell-Test (id,rev,pn)
+           (None,                   "A", "412084-02"),     # Cell-Welding (id,rev,pn)
+           ("412101_RRC2040-2S",    "D", "412101-01"),     # PCBA-Test (id,rev,pn)
+           ("412084_RRC2040-2S",    "D", "412084-02"),     # Corepack-Test (id,rev,pn)
+           ("100559S_RRC2040-2S",   "B", "100559S-11")),   # EOL-Test (id,rev,pn)
+    # ("RRC2040-2-OL", "110059S-09", 
     ("RRC2054S", "100568S-15", "RRC2054", "2054S",
             ("412085_RRC2054S",     "B", "412085-01"),     # Cell-Test (id,rev,pn)
             (None,                  "A", "412085-01"),     # Cell-Welding (id,rev,pn)
@@ -50,7 +50,7 @@ PRODUCT_CONFIGURATION_TABLE = [
             ("412085_RRC2054S",     "C", "412085-01"),     # Corepack-Test (id,rev,pn)
             ("110064S_RRC2054-SO",  "B", "110064S-08")),   # EOL-Test (id,rev,pn)
     # ("RRC2054-OL", "110310S-02"),
-    ("RRC2054-2S", "110064S-08", "RRC2054-2", "2054-2",
+    ("RRC2054-2S", "110064S-08", "RRC2054-2", "2054-2S",
             ("412080_RRC2054-2S",   "B", "412080-02"),      # Cell-Test (id,rev,pn)
             (None,                  "A", "412080-02"),      # Cell-Welding (id,rev,pn)
             ("412099_RRC2054-2S",   "C", "412099-01"),      # PCBA-Test (id,rev,pn)
@@ -88,7 +88,8 @@ PRODUCT_CONFIGURATION_TABLE = [
 # here we generate the big part information table based on the product configuration list above
 # and also add some hard coded stuff like SPINEL
 #
-PART_INFORMATION_GENERATED = dict([
+# activated by renaming 11.04.2025 MR
+PART_INFORMATION = dict([
     # our smart batteries
     *[(model,
         {
@@ -167,8 +168,8 @@ PART_INFORMATION_GENERATED = dict([
 
 #--------------------------------------------------------------------------------------------------
 
-
-PART_INFORMATION = {
+# removed by renaming 11.04.2025 MR
+PART_INFORMATION_MANUAL = {
     #
     # BQ40Z50_RECALIBRATION
     #
