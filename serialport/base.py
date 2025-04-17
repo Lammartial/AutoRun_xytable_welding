@@ -17,17 +17,19 @@ from rrc.custom_logging import getLogger, logger_init
 
 class SerialComportDevice(object):
 
-    def __init__(self, resource_str: str, termination: str = "\r\n", xonxff: bool = False) -> None:
+    def __init__(self, resource_str: str, termination: str = "\r\n", trim_termination: bool = True, xonxff: bool = False) -> None:
         """Serial line communication the object with IP address and port number given by URL style resource string.
 
         Args:
             resource_str (str): String of url form '{portname},{baudrate},{line settings in the form 8N1}'
             termination (str, optional): Defines the line termination. Defaults to '\r\n'
+            trim_termination (bool, ooptional): If True the termination chars on incomming responses will be trimmed, otherwise unchanged. Defaults to True.
             xonxff (bool, optional): True enables Xon/Xoff handshake protocoll, False disables it. Defaults to False.
 
         """
         self.termination = termination
         self._termination_as_bytes = bytes(termination, "utf-8")  # need them also as bytes
+        self.trim_termination = trim_termination
         self._resource_str = resource_str  # for debug information in __repr__
         _sar = resource_str.split(",")
         # [COMPORT],[BAUD],[LINE SETTINGS]
@@ -108,6 +110,10 @@ class SerialComportDevice(object):
                     break
                 if (rcvdata.rfind(self._termination_as_bytes) >= 0):
                     break
+            if self.trim_termination:
+                _t = rcvdata.rfind(self._termination_as_bytes)
+                if _t > 0:
+                    rcvdata = rcvdata[:_t]
             if encoding:
                 result = rcvdata.decode(encoding=encoding)
             else:

@@ -101,7 +101,7 @@ class DC63600:
             return False
         self.send(None)  # this will send the channel selection prefix only
         _ch = self.device.request(f":CHAN?", pause_after_write=20)  # verify the selected channel
-        return (int(_ch) == self.channel), _ch
+        return (int(_ch) == self.channel)
 
 
     #----------------------------------------------------------------------------------------------
