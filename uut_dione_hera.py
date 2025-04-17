@@ -382,6 +382,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         #buf = self.cpu.SMB_ReadBytes(0, self.i2c_address, 0x81, 5)  # what command is it ?
         #buf = self.cpu.I2C_Master_ReadBytes(self.second_i2c_address, 0x81, 5)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, 0x81, 5)
+        self.cpu.I2C_Master_set_PEC(1)
         if len(buf) != 4:
             raise ValueError(f"Expected 4 bytes for UDI, got '{len(buf)}'")
         num = unpack_from("<L", buf, 1)[0]
@@ -399,25 +400,28 @@ def test_myself():
     psu1 = DCZPlus("192.168.31.101:8003", channel=1)
     psu2 = DCZPlus("192.168.31.101:8003", channel=2)
     daq = DAQ970A("192.168.31.106:5025", card_slot=1)
-    #print(daq.ident())
-    #print(daq.selftest())
-      
+    daq.send("*RST")
+    sleep(0.5)
+    print(daq.ident())
+    #print(daq.selftest())      
     dev = UUT_Dione_Hera(0x10, 0x14, resource_str="COM3,115200,8N1")
-    print(dev.cpu.ident())    
-    dev.initialize_cpu_ports()
+    print(dev.cpu.ident())
+    dev.initialize_cpu_ports()    
+    psu1.set_voltage(24.0)
+    psu1.set_current_limit(1.0)
+    psu1.set_output(1)
+    sleep(0.5)
     for port in "AC":
         print(f"Port {port} Status: ", dev.cpu.IO_Get_Portstatus(port))
         for bit in range(8):
             print(f"Read Port {port}, bit {bit}:", dev.cpu.IO_Read_Port_bit(port, bit))
-    psu1.set_voltage(24.0)
-    psu1.set_current_limit(1.0)
-    psu1.set_output(1)
+    print(dev.is_adapter_correctly_connected())
     print("VCC:", daq.get_VDC_rounded(3,3))
     #print("TEMP:",daq.get_temp_rounded(6, "FRTD", 100, 0, "", 2))
     print("TP_V_SYSM:", daq.get_VDC_rounded(4,3))
     print("TP_VIN_M:", daq.get_VDC_rounded(5,3))
     
-    #print(dev.get_udi())
+    print(dev.get_udi())
     #print(dev.read_charger_measurements_from_uut())
     #print(dev.read_battery_measurements_from_uut())
     
