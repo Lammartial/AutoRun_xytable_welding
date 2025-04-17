@@ -91,7 +91,7 @@ class DAQ970A(Eth2SerialDevice):
             card_slot (int, optional): Selects a measurement channel card on slot 1..3. Defaults to 1
 
         """
-        super().__init__(resource_str, termination="\n", open_connection=False)  # The hioki expects to have connect/disconnect for each command
+        super().__init__(resource_str, termination="\n", open_connection=False)  # The Keysight expects to have connect/disconnect for each command
         self.change_card_slot(card_slot)  # also sets the self.card_slot
         self._channel_delay_map = {}  # this map's values can be adjusted by the setup_channel_delay_preset() function later on
         self._voltage_range_map = {}  # this map's values can be adjusted by the setup_voltage_range_and_resolution_preset() function later on

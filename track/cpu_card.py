@@ -556,7 +556,7 @@ class CPU_Card:
 
 if __name__ == "__main__":
     # quick test, just call: python cpu_card.py
-    dev = CPU_Card("COM43,115200,8N1")
+    dev = CPU_Card("COM3,115200,8N1")
     print(dev.ident())
     print(dev.ident_boot())
     print(dev.help().replace("\r","\n\r"))

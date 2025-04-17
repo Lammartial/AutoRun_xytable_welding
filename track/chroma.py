@@ -25,11 +25,16 @@ from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
 
+# lookup table for ethernet connections to Chroma Gateways which need to be reused if using channels 
+CHROMA_DEVICES_LOOKUP = {
+    # resource_str : Eth2SerialDevice
+}
 
-class DC63600(Eth2SerialDevice):
+
+class DC63600:
     """Defines the Chroma DC-Load 63600 communication in a rack using a series of them with one gateway.
 
-    Avoids need for VISA devices.s
+    Avoids need for VISA devices.
 
     Args:
         SCPIRemoteDevice (_type_): _description_
@@ -46,15 +51,21 @@ class DC63600(Eth2SerialDevice):
 
         """
 
-        super().__init__(resource_str,
-                         termination="\n", trim_termination=True,
-                         open_connection=True)  # The Chroma device can keep connection open (saves overhead time)
+        if resource_str in CHROMA_DEVICES_LOOKUP:
+            # there is already a device for this resource opened
+            self.device = CHROMA_DEVICES_LOOKUP[resource_str]
+        else:
+            self.device = Eth2SerialDevice(resource_str,
+                        termination="\n", trim_termination=True,
+                        open_connection=True)  # The Chroma device can keep connection open (saves overhead time)
+            CHROMA_DEVICES_LOOKUP[resource_str] = self.device  # store for reuse this connection
+        self.resource_str = resource_str
         self.last_cmd_written = None
         self.change_channel(channel)
 
 
     def __str__(self) -> str:
-        return f"Chroma Load, V1.1, DC63600 device on {super().__str__()}"
+        return f"Chroma Load, V1.1, DC63600 device on {self.device.__str__()}"
 
     def __repr__(self) -> str:
         return f"DC63600({self.resource_str}, {self.channel})"
@@ -89,7 +100,7 @@ class DC63600(Eth2SerialDevice):
         if self.channel is None:
             return False
         self.send(None)  # this will send the channel selection prefix only
-        _ch = super().request(f":CHAN?")  # verify the selected channel
+        _ch = self.device.request(f":CHAN?", pause_after_write=20)  # verify the selected channel
         return (int(_ch) == self.channel)
 
 
@@ -110,11 +121,13 @@ class DC63600(Eth2SerialDevice):
             retries (int, optional): Number of retries - NOT YET IMPLEMENTED - . Defaults to 1 (no retry).
 
         Returns:
-            bool: _description_
+            None
         """
 
-        super().send(((f"{self._select_channel_prefix};{msg}" if self.channel else msg) if msg else f"{self._select_channel_prefix}"),
-                     timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
+        if self.channel is not None:
+            self.device.send(self._select_channel_prefix, timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
+        if msg is not None:           
+            self.device.send(msg, timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
 
 
     #----------------------------------------------------------------------------------------------
@@ -142,8 +155,9 @@ class DC63600(Eth2SerialDevice):
             str: _description_
         """
 
-        return super().request(f"{self._select_channel_prefix};{msg}" if self.channel else msg,
-                               timeout=timeout, pause_after_write=pause_after_write, limit=limit, encoding=encoding, retries=retries)
+        if self.channel is not None:
+            self.device.send(self._select_channel_prefix, timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
+        return self.device.request(msg, timeout=timeout, pause_after_write=pause_after_write, limit=limit, encoding=encoding, retries=retries)
 
 
     #----------------------------------------------------------------------------------------------
@@ -417,9 +431,20 @@ class ACSource(Eth2SerialDevice):
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
-     # quick test, just call: python chroma.py
-    dev = DC63600("172.23.130.32:2101")
-    print(dev.ident())
+    # quick test, just call: python chroma.py
+    dev1 = DC63600("192.168.31.103:2101", channel=1)
+    #dev1.select_channel()
+    print(dev1.select_channel())
+    print(dev1.ident())
+    #dev1.change_channel(2)
+    #dev1.close_connection(force=True)
+
+    #print(dev1.ident())
+    #dev1.initialize_device()
+    dev2 = DC63600("192.168.31.103:2101", channel=2)
+    print(dev2.select_channel())
+    print(dev2.ident())
+    #dev2.initialize_device()
 
 
 # END OF FILE
