@@ -81,6 +81,7 @@ class Eth2SerialDevice(object):
         self.termination = termination
         self._termination_as_bytes = bytes(termination, "utf-8")  # need them also as bytes
         self.trim_termination = trim_termination
+        self._resource_str = resource_str  # for debug information in __repr__
         lst = resource_str.split(":")
         self.host = lst[0]          # string
         self.port = int(lst[1])     # int

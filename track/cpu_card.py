@@ -63,7 +63,7 @@ class CPU_Card:
         return f"TRack CPU-Card device on {super().__str__()}"
 
     def __repr__(self) -> str:
-        return f"CPU_Card({self.con.resource_str})"
+        return f"CPU_Card({self.con._resource_str})"
 
 
     #----------------------------------------------------------------------------------------------
@@ -550,16 +550,27 @@ class CPU_Card:
 
     #----------------------------------------------------------------------------------------------
 
+#--------------------------------------------------------------------------------------------------
+# SELF TEST
+
+def test_myself(resource_str: str):
+    print(f"Selftest TRACK-CPU:")
+    dev = CPU_Card(resource_str)
+    print(dev)
+    print("APP-IDENT:", dev.ident())
+    print("BOOT-IDENT:", dev.ident_boot())
+    print("HELP CONTENT:", dev.help().replace("\r","\n\r"))
+    for port in "AC":
+        print(f"Port {port} Status: ", dev.IO_Get_Portstatus(port))
+        for bit in range(8):
+            print(f"Read Port {port}, bit {bit}:", dev.IO_Read_Port_bit(port, bit))
+    
 
 
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
     # quick test, just call: python cpu_card.py
-    dev = CPU_Card("COM3,115200,8N1")
-    print(dev.ident())
-    #print(dev.ident_boot())
-    #print(dev.help().replace("\r","\n\r"))
-    print(dev.IO_Read_Port_bit("C", 0))
+    test_myself("COM3,115200,8N1")
 
 # END OF FILE
