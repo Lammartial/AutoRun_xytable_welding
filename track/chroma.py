@@ -56,8 +56,8 @@ class DC63600:
             self.device = CHROMA_DEVICES_LOOKUP[resource_str]
         else:
             self.device = Eth2SerialDevice(resource_str,
-                        termination="\n", trim_termination=True,
-                        open_connection=True)  # The Chroma device can keep connection open (saves overhead time)
+                termination="\n", trim_termination=True,
+                open_connection=True)  # The Chroma device can keep connection open (saves overhead time)
             CHROMA_DEVICES_LOOKUP[resource_str] = self.device  # store for reuse this connection
         self.resource_str = resource_str
         self.last_cmd_written = None
@@ -101,7 +101,7 @@ class DC63600:
             return False
         self.send(None)  # this will send the channel selection prefix only
         _ch = self.device.request(f":CHAN?", pause_after_write=20)  # verify the selected channel
-        return (int(_ch) == self.channel)
+        return (int(_ch) == self.channel), _ch
 
 
     #----------------------------------------------------------------------------------------------
@@ -117,6 +117,7 @@ class DC63600:
         Args:
             msg (str): message string to send. Line teminator will be added.
             timeout (float, optional): _description_. Defaults to 1.0.
+            pause_after_write (int, optional): Pause in milliseconds after sending message. Defaults to 20.
             encoding (str, optional): will be passed to write() function.
             retries (int, optional): Number of retries - NOT YET IMPLEMENTED - . Defaults to 1 (no retry).
 
@@ -124,10 +125,9 @@ class DC63600:
             None
         """
 
-        if self.channel is not None:
-            self.device.send(self._select_channel_prefix, timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
-        if msg is not None:           
-            self.device.send(msg, timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
+        self.device.send(
+            ((f"{self._select_channel_prefix};{msg}" if self.channel else msg) if msg else f"{self._select_channel_prefix}"),
+            timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
 
 
     #----------------------------------------------------------------------------------------------
@@ -146,7 +146,7 @@ class DC63600:
             msg (str): Message to send or None if only a read should be performed (Note that if a channel is set, the channel prefix will be sent even though)
             timeout (float, optional): _description_. Defaults to 3.0.
             pause_after_write (int, optional):  Pause after writing the command for a request in milliseconds,
-                before reading and waiting the result. None disables it. Defaults to None.
+                before reading and waiting the result. None disables it. Defaults to 20.
             limit (int, optional): _description_. Defaults to 0.
             encoding (str, optional): if given will be used to decode() result from bytes. If None, bytes will be returned. Defaults to utf-8.
             retries (int, optional): Number of retries - NOT YET IMPLEMENTED - . Defaults to 1 (no retry).
@@ -155,9 +155,9 @@ class DC63600:
             str: _description_
         """
 
-        if self.channel is not None:
-            self.device.send(self._select_channel_prefix, timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
-        return self.device.request(msg, timeout=timeout, pause_after_write=pause_after_write, limit=limit, encoding=encoding, retries=retries)
+        return self.device.request(
+            f"{self._select_channel_prefix};{msg}" if self.channel else msg,
+            timeout=timeout, pause_after_write=pause_after_write, limit=limit, encoding=encoding, retries=retries)
 
 
     #----------------------------------------------------------------------------------------------
