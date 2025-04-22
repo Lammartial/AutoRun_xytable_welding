@@ -148,11 +148,13 @@ class Eth2SerialDevice(object):
              pause_after_write: int | None = None,
              encoding: str | None = "utf-8",
              retries: int = 1) -> None:
-        """_summary_
+        
+        """Sends a message to a serial device.
 
         Args:
             msg (str): message string to send. Line teminator will be added.
             timeout (float, optional): _description_. Defaults to 1.0.
+            pause_after_write (int, optional):  Pause after sending the command in milliseconds. Defaults to None.
             encoding (str, optional): will be passed to write() function.
             retries (int, optional): Number of retries - NOT YET IMPLEMENTED - . Defaults to 1 (no retry).
 
@@ -183,8 +185,10 @@ class Eth2SerialDevice(object):
                 limit: int = 0,
                 encoding: str | None = "utf-8",
                 retries: int = 1) -> str:
-        """_summary_
-
+        """
+        Sends a message to a serial device if msg is given, then receives response from the serial device
+        with given timeout.
+        
         Args:
             msg (str): _description_
             timeout (float, optional): _description_. Defaults to 5.0.

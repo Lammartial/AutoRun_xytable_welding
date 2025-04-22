@@ -1,6 +1,7 @@
 import asyncio
 import serial_asyncio
 import serial
+import time
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -52,12 +53,16 @@ class SerialComportDevice(object):
 
     #----------------------------------------------------------------------------------------------
 
-    def send(self, msg: str, timeout: float = 3.0, encoding: str | None = "utf-8") -> None:
-        """_summary_
+    def send(self, msg: str, 
+             timeout: float = 3.0,
+             pause_after_write: int | None = None,
+             encoding: str | None = "utf-8") -> None:
+        """Sends a message to a socket device.
 
         Args:
             msg (str): _description_
             timeout (float, optional): _description_. Defaults to 1.0.
+
             encoding (str, optional): will be passed to write() function.
 
         Returns:
@@ -69,6 +74,8 @@ class SerialComportDevice(object):
                             timeout=timeout)
         try:
             _s.write(bytes(msg, encoding) + self._termination_as_bytes)
+            if pause_after_write:
+                time.sleep(pause_after_write/1000)
         except TimeoutError as ex:
             # do NOT log, we need this exception being quiet when polling
             raise
@@ -77,12 +84,20 @@ class SerialComportDevice(object):
 
     #----------------------------------------------------------------------------------------------
 
-    def request(self, msg: str | None, timeout: float | None = 3.0, limit: int = 0, encoding: str | None = "utf-8") -> str:
-        """_summary_
+    def request(self, msg: str | None, 
+                timeout: float | None = 3.0,
+                pause_after_write: int | None = None,
+                limit: int = 0, 
+                encoding: str | None = "utf-8") -> str:
+        """
+        Sends a message to a serial device if msg is given, then receives response from the serial device
+        with given timeout.
 
         Args:
             msg (str): _description_
             timeout (float, optional): _description_. Defaults to 5.0.
+            pause_after_write (int, optional):  Pause after writing the command for a request in milliseconds,
+                before reading and waiting the result. None disables it. Defaults to None.
             limit (int, optional): _description_. Defaults to 0.
             encoding (str, optional): if given will be used to decode() result from bytes. If None, bytes will be returned. Defaults to utf-8.
 
@@ -98,6 +113,8 @@ class SerialComportDevice(object):
         try:
             if msg:
                 _s.write(bytes(msg, encoding) + self._termination_as_bytes)
+                if pause_after_write:
+                    time.sleep(pause_after_write/1000)
             # now read data until termination or timeout
             rcvdata = b""
             while True:

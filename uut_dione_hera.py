@@ -124,7 +124,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         """
 
         self.cpu.I2C_Master_set_PEC(0)
-        buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_CHG_Values, 5)
+        buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_CHG_Values, 9)        
         self.cpu.I2C_Master_set_PEC(1)
         VIN = unpack_from(">H", buf, 1)[0] / 1e+3  # data come big endian
         V_SYS = unpack_from(">H", buf, 3)[0] / 1e+3  # data come big endian
@@ -299,7 +299,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
 
     def toggle_gpio(self, bit: int, onoff: bool) -> bool:  # overwrite inherited function as command code is different
-        self._set_gpio_pattern(bit, onoff)
+        self._set_gpio_pattern(int(bit), bool(onoff))
         buf = pack("<B", 1) + pack("<B", self.gpio_pattern)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_GPIOs, buf)
 
@@ -348,8 +348,8 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         return ok
 
 
-    def set_udi(self, udi: str) -> bool:
-        """Write a string of len 16 into the UUT's EEPROM.
+    def set_and_verify_udi(self, udi: str) -> bool:
+        """Write a string of len 16 into the UUT's EEPROM and read it back with compare.
 
         Args:
             udi (str): _description_
@@ -358,13 +358,13 @@ class UUT_Dione_Hera(UUT_MiniCharger):
             bool: _description_
         """
 
-        if len(udi != 16):
+        if len(udi) != 16:
             raise ValueError(f"Length of UDI string is '{len(udi)}' which is not 16.")
         buf = pack("<B", 16) + udi.encode("utf-8")
-        self.cpu.I2C_Master_set_PEC(1)
+        self.cpu.I2C_Master_set_PEC(0)
         ok = self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_UDI, buf)
-        self.cpu.I2C_Master_set_PEC(2)
-        rbbuf = self.cpu.SMB_ReadBytes(self.i2c_address, 0x81, 17)  # what command is it ?
+        self.cpu.I2C_Master_set_PEC(1)
+        rbbuf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, 0x81, 17)
         if rbbuf[0] != 16:
             raise ValueError(f"Length of readback UDI string is '{rbbuf[0]}' which is not 16.")
         rbstr = bytes(rbbuf[1:]).decode("utf-8")
@@ -375,18 +375,13 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
     def get_udi(self) -> str:
         #
-        # this is coded like in DLL but it feels wrong as there is a number conversion of UDI involved
-        # using less bytes than the UDI provides.
+        # read UDI as string.
         #
-        self.cpu.I2C_Master_set_PEC(0)
-        #buf = self.cpu.SMB_ReadBytes(0, self.i2c_address, 0x81, 5)  # what command is it ?
-        #buf = self.cpu.I2C_Master_ReadBytes(self.second_i2c_address, 0x81, 5)
-        buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, 0x81, 5)
         self.cpu.I2C_Master_set_PEC(1)
-        if len(buf) != 4:
-            raise ValueError(f"Expected 4 bytes for UDI, got '{len(buf)}'")
-        num = unpack_from("<L", buf, 1)[0]
-        return str(num)
+        buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, 0x81, 17)
+        if len(buf) != 17:
+            raise ValueError(f"Expected 17 bytes for UDI, got '{len(buf)}'")
+        return bytes(buf[1:]).decode("utf-8")
 
 
 #--------------------------------------------------------------------------------------------------
@@ -404,9 +399,11 @@ def test_myself():
     sleep(0.5)
     print(daq.ident())
     #print(daq.selftest())      
-    dev = UUT_Dione_Hera(0x10, 0x14, resource_str="COM3,115200,8N1")
+    dev = UUT_Dione_Hera(0x33, 0x09, resource_str="COM3,115200,8N1")
     print(dev.cpu.ident())
     dev.initialize_cpu_ports()    
+    #psu1.set_output(0)
+    #sleep(2)
     psu1.set_voltage(24.0)
     psu1.set_current_limit(1.0)
     psu1.set_output(1)
@@ -421,10 +418,13 @@ def test_myself():
     print("TP_V_SYSM:", daq.get_VDC_rounded(4,3))
     print("TP_VIN_M:", daq.get_VDC_rounded(5,3))
     
-    print(dev.get_udi())
+    
+    #print(dev.reset_calibration())
+    print(dev.set_and_verify_udi("1234567890123456"))
     #print(dev.read_charger_measurements_from_uut())
     #print(dev.read_battery_measurements_from_uut())
-    
+    print(dev.read_charger_measurements_from_uut())
+
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
