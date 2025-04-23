@@ -1,10 +1,15 @@
-from rrc.visa import AdhocVisaDevice
+
+"""
+Driver for Keysight and Agilent datalogger devices via Ethernet socket
+
+"""
+
 from rrc.eth2serial import Eth2SerialDevice
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
 #
-VERSION = "0.0.1"
+VERSION = "1.0.0"
 
 __version__ = VERSION
 
@@ -25,7 +30,8 @@ from rrc.custom_logging import getLogger, logger_init
 #--------------------------------------------------------------------------------------------------
 
 class DAQ970A(Eth2SerialDevice):
-    """Defines the Keysight DAQ970A datalogger interface as a simple socket communication.
+    """
+    Defines the Keysight DAQ970A datalogger interface as a simple socket communication.
 
     Avoids need for VISA devices.
 
@@ -47,17 +53,22 @@ class DAQ970A(Eth2SerialDevice):
         self._voltage_range_map = {}  # this map's values can be adjusted by the setup_voltage_range_and_resolution_preset() function later on
         self._voltage_resolution_map = {}  # this map's values can be adjusted by the setup_voltage_range_and_resolution_preset() function later on
 
+
     def __str__(self) -> str:
         return f"DAQ970A device on {super().__str__()}"
+
 
     def __repr__(self) -> str:
         return f"DAQ970A({self.resource_str}, {self.card_slot})"
 
+
     #----------------------------------------------------------------------------------------------
     # insert the channel to message strings for this device
 
+
     def send(self, msg: str, timeout: int = 3000) -> None:
         super().send(msg, timeout=timeout/1000, pause_after_write=10, retries=3)
+
 
     def request(self, msg: str, timeout: int = 5000) -> str:
         return super().request(msg, timeout=timeout/1000, pause_after_write=80, retries=5).strip()
@@ -414,9 +425,9 @@ class DAQ970A(Eth2SerialDevice):
 #--------------------------------------------------------------------------------------------------
 
 
-class AGILENT34972A(DAQ970A):
-    
-    """Defines the older Agilent / Keysight AGILENT34972A datalogger interface as a simple socket communication.
+class AGILENT34972A(Eth2SerialDevice):  
+    """
+    Defines the older Agilent / Keysight AGILENT34972A datalogger interface as a simple socket communication.
 
     Avoids need for VISA devices.
 
@@ -459,6 +470,14 @@ class AGILENT34972A(DAQ970A):
     def ident(self) -> str:
         return self.request("*IDN?")
 
+
+    def read_error_status(self) -> str:
+        return self.request("SYSTEM:ERROR?")
+
+
+    def wait_response_ready(self) -> bool:
+        return (int(self.request("*OPC?")) == 1)  # this will automatically delay until the response is ready    
+
     #----------------------------------------------------------------------------------------------
 
     def selftest(self) -> int:
@@ -677,7 +696,7 @@ class AGILENT34972A(DAQ970A):
         Returns:
             float: VDC
         """
-        # trick to use function in NI Teststand
+        # NI Teststand does provide numbers as float, need to cast
         channel = int(channel)
         assert ((channel >= 1) and (channel <= 20)), ValueError('Error, get_VDC: Allowed channel range is 1 .. 20.')
         try:
@@ -756,9 +775,26 @@ class AGILENT34972A(DAQ970A):
     def get_temp_rounded(self, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str, ndigits: int = 3) -> float:
         return round(self.get_temp(int(channel), tran_type, int(rtd_resist), int(fth_type), tc_type), ndigits=int(ndigits))
 
-    def get_temp(self, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str) -> float:
+    def get_temp(self, channel: int, tran_type: str, rtd_resist: int, fth_type: int, tc_type: str, alpha: int = 85) -> float:
         """
         Returns temperature measurement.
+
+        From Tutorial 7, Keysight 34970A/34972A User’s Guide 279
+            RTD Measurements
+            An RTD is constructed of a metal (typically platinum) that changes resistance with
+            a change in temperature in a precisely known way. The internal DMM measures
+            the resistance of the RTD and then calculates the equivalent temperature.
+            An RTD has the highest stability of the temperature transducers. The output from
+            an RTD is also very linear. This makes an RTD a good choice for high-accuracy,
+            long-term measurements. The 34970A/34972A supports RTDs with α = 0.00385
+            (DIN / IEC 751) using ITS-90 software conversions and α = 0.00391 using IPTS-68
+            software conversions. “PT100” is a special label that is sometimes used to refer to
+            an RTD with α = 0.00385 and R 0 = 100Ω.
+            The resistance of an RTD is nominal at 0 °C and is referred to as R 0 . The 34970A/
+            34972A can measure RTDs with R 0 values from 49Ω to 2.1 kΩ.
+            You can measure RTDs using a 2-wire or 4-wire measurement method. The 4-wire
+            method provides the most accurate way to measure small resistances. Connection
+            lead resistance is automatically removed using the 4-wire method.
 
         Args:
             slot (int): slot number (1, 2, 3)
@@ -767,6 +803,7 @@ class AGILENT34972A(DAQ970A):
             rtd_resist (int): FRTD|RTD trancduser resistance (100 or 1000 Ohm), otherwise = 0
             fth_type (int): FTH|THER type (2252, 5000, 10000), otherwise = 0
             tc_type (str): TCouple type (B, E, J, K, N, R, S, or T), otherwise = 'empty string'
+            alpha (int): additional parameter for older Agilent Datalogger. usually 85 or 91. Defaults to 85
 
         Raises:
             ValueError: invalid argument
@@ -777,27 +814,53 @@ class AGILENT34972A(DAQ970A):
 
         channel = int(channel)
         rtd_resist = int(rtd_resist)
-        fth_type = int(fth_type)
+        fth_type = int(fth_type)          
         assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
+        _ch = self._meas_chan(0, channel)
         try:
             match tran_type:
                 case 'TC' | 'DEF':
                     assert (tc_type in ["B", "E", "J", "K", "N", "R", "S", "T"]), ValueError('Error, get_temp: incorrect tc_type parameter')
-                    cmd = "MEAS:TEMP:TC?" + " " + tc_type + ",(@" + self._meas_chan(0, channel) + ")"
+                    cmd = f"MEAS:TEMP? TC,{tc_type},(@{_ch})" 
                     return float(self.request(cmd))
                 case 'FTH' | 'THER':
                     assert ((fth_type == 2252) or (fth_type == 5000) or (fth_type == 10000)), ValueError('Error, get_temp: incorrect fth_type parameter')
-                    cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(fth_type) + ",(@" + self._meas_chan(0, channel) + ")"
+                    self.send(f"SENS:TEMP:TRAN:THERM:TYPE {str(fth_type)},(@{_ch})")
+                    cmd = f"MEAS:TEMP? {tran_type},{str(fth_type)},(@{_ch})"
                     return float(self.request(cmd))
                 case 'FRTD' | 'RTD':
+                    assert((alpha == 85) or (alpha == 91)), ValueError('Error alpha: incorrect alpha parameter')
                     assert((rtd_resist == 100) or (rtd_resist == 1000)), ValueError('Error, get_temp: incorrect rtd_resist parameters')
-                    cmd = "MEAS:TEMP:"+ tran_type +"?" + " " + str(rtd_resist) + ",(@" + self._meas_chan(0, channel) + ")"
+                    self.send(f"SENS:TEMP:TRAN:FRTD:TYPE {alpha},(@{_ch})")
+                    self.send(f"SENS:TEMP:TRAN:FRTD:RES {str(rtd_resist)},(@{_ch})")
+                    cmd = f"MEAS:TEMP? {tran_type},{alpha},(@{_ch})"
                     return float(self.request(cmd))
                 case _:
                     raise ValueError('Error, get_temp: unknown parameter')
         except Exception as ex:
             #_log.exception(ex)
             raise
+
+
+    # some functions found in DataloggerLXI class
+    def preselect_channel_measure_VDC(self, channel: int) -> None:
+        assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
+        _ch = self._meas_chan(0, channel)
+        _scale = self._voltage_range_map[_ch] if _ch in self._voltage_range_map else "AUTO"
+        _resolution = self._voltage_resolution_map[_ch] if _ch in self._voltage_resolution_map else "DEF"
+        cmd = f"CONF:VOLT:DC {_scale},{_resolution},(@{_ch})"
+        self.send(cmd)
+        self.send("TRIG:SOUR IMM")
+
+
+    def read_configured_channel_measure(self) -> float:
+        return float(self.request("READ?"))
+
+
+    def set_monitor_channel(self, channel: int) -> None:
+        assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
+        cmd = "ROUT:MON (@" + self._meas_chan(0, channel) + ")"
+        self.send(cmd)
 
 
 #--------------------------------------------------------------------------------------------------

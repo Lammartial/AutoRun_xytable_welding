@@ -33,23 +33,22 @@ CHROMA_DEVICES_LOOKUP = {
 
 class DC63600:
     """Defines the Chroma DC-Load 63600 communication in a rack using a series of them 
-    by one gateway identified by 'slot' number. Each module can be single or dual channel 
-    depending on its channel selection.
+    by one gateway identified by 'channel' number. Each module can be single or dual channel 
+    depending on its channel selection. The dual channel modules occupy two channels.
 
     Avoids need for VISA devices.
 
     """
 
-    def __init__(self, resource_str: str, slot: int = 1, channel: str = None) -> None:
+    def __init__(self, resource_str: str, channel: int = 1) -> None:
         """
         Initialize the object with resource string (IP name:socket).
         Example "192.168.1.101:5025"
 
         Args:
             resource_str (str): resource string in the format <IP>:<SOCKET>
-            slot (int, optional): Selects a slot to address communication to the sub-device in range of 1..10. Defaults to 1.
-            channel (str): Defines if it is a dual channel module which uses the left "L" or right "R" side 
-                for identification or None for single module. Defaults to None.
+            channel (int, optional): Selects a channel to address communication to the sub-device in range of 1..10 
+                (MAX also depends on mainframe type). Defaults to 1.
         """
 
         if resource_str in CHROMA_DEVICES_LOOKUP:
@@ -63,64 +62,48 @@ class DC63600:
         self.resource_str = resource_str
         self.last_cmd_written = None
         self.change_channel(channel)
-        self.change_slot(slot)
-
+       
 
     def __str__(self) -> str:
         return f"Chroma Load, V1.1, DC63600 device on {self.device.__str__()}"
 
     def __repr__(self) -> str:
-        return f"DC63600({self.resource_str}, {self.slot}, {self.channel})"
+        return f"DC63600({self.resource_str}, {self.channel}, {self.channel})"
 
 
     #----------------------------------------------------------------------------------------------
 
-    def change_channel(self, new_channel: str | None) -> None:
-        """Changes if module is single channel or dual channel.
+    
+    def change_channel(self, new_channel: int) -> None:
+        """
+        Changes the channel number of a device instance.
 
         Args:
-            new_channel (str): Dual module channel selection need to be either None, 'L' or 'R'.
+            new_channel (int): channel number of submodule None=no subs or a number in (1, ... ,10)
         """
 
-        assert(new_channel in [None, "L", "R"]), ValueError(f"Dual module channel selection need to be either None, 'L' or 'R'. Given was {new_channel}")
+        MAX_SUB = 10  # set this to your needs
+        assert ((new_channel is None) or (int(new_channel) > 0 and int(new_channel) < MAX_SUB+1)), ValueError(f"Error, 'new_channel' must be in 1..{MAX_SUB} but was {int(new_channel)}")
         if new_channel is None:
             self.channel = None
             self._select_channel_prefix = ""
         else:
-            self.channel = new_channel
-            self._select_channel_prefix = str(new_channel)
+            self.channel = int(new_channel)
+            self._select_channel_prefix = f"CHAN {self.channel}"  # this is the prefix to address the subdevice via the connection gateway
 
 
-    def change_slot(self, new_slot: int) -> None:
-        """
-        Changes the slot number of a device instance.
-
-        Args:
-            new_slot (int): slot number of submodule None=no subs or a number in (1, ... ,10)
-        """
-
-        MAX_SUB = 10  # set this to your needs
-        assert ((new_slot is None) or (int(new_slot) > 0 and int(new_slot) < MAX_SUB+1)), ValueError(f"Error, 'new_slot' must be in 1..{MAX_SUB} but was {int(new_slot)}")
-        if new_slot is None:
-            self.slot = None
-            self._select_slot_prefix = ""
-        else:
-            self.slot = int(new_slot)
-            self._select_slot_prefix = f":CHAN {self.slot}"  # this is the prefix to address the subdevice via the connection gateway
-
-
-    def select_slot(self) -> bool:
-        """Selects and verifies actively the slot on the Lambda gateway.
+    def select_channel(self) -> bool:
+        """Selects and verifies actively the channel on the Lambda gateway.
 
         Returns:
-            bool: true success else other slot is active
+            bool: true success else other channel is active
         """
 
-        if self.slot is None:
+        if self.channel is None:
             return False
         self.send(None)  # this will send the channel selection prefix only
-        _ch = self.device.request(f":CHAN?")  # verify the selected channel
-        return (int(_ch) == self.slot)
+        _ch = self.device.request(f"CHAN?")  # verify the selected channel
+        return (int(_ch) == self.channel)
 
 
     #----------------------------------------------------------------------------------------------
@@ -145,7 +128,7 @@ class DC63600:
         """
 
         self.device.send(
-            ((f"{self._select_slot_prefix};{msg}" if self.slot else msg) if msg else f"{self._select_slot_prefix}"),
+            ((f"{self._select_channel_prefix};{msg}" if self.channel else msg) if msg else f"{self._select_channel_prefix}"),
             timeout=timeout, pause_after_write=pause_after_write, encoding=encoding, retries=retries)
 
 
@@ -175,7 +158,7 @@ class DC63600:
         """
 
         return self.device.request(
-            f"{self._select_slot_prefix};{msg}" if self.slot else msg,
+            f"{self._select_channel_prefix};{msg}" if self.channel else msg,
             timeout=timeout, pause_after_write=pause_after_write, limit=limit, encoding=encoding, retries=retries)
 
 
@@ -401,7 +384,7 @@ class DC63600:
             bool: _description_
         """
 
-        if (self.slot & 1) != 0:
+        if (self.channel & 1) != 0:
             self.send(f":SHOW:DISPLAY L")
         else:
             self.send(f":SHOW:DISPLAY R")
@@ -456,24 +439,22 @@ class ACSource(Eth2SerialDevice):
 #--------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     # quick test, just call: python chroma.py
-    dev1 = DC63600("192.168.31.103:2101", slot=1, channel="L")
-    # #dev1.select_channel()
-    # print(dev1.select_slot())
+    dev1 = DC63600("192.168.31.103:2101", channel=1)
     print(dev1.ident())
+    # #dev1.select_channel()
     # #dev1.change_channel(2)
     # #dev1.close_connection(force=True)
 
     #print(dev1.ident())
     #dev1.initialize_device()
-    dev2 = DC63600("192.168.31.103:2101", slot=2, channel=None)
+    dev2 = DC63600("192.168.31.103:2101", channel=2)
+    print(dev2.ident())
     # for c in range(1,5):
     #     #dev2.send(f"CHAN {c}")
     #     print(dev2.request(f"CHAN {c};CHANnel:ID?"))
     # print(dev2.request("CHANnel:LOAD? MAX"))
     # print(dev2.request("CHANnel:LOAD 3;*IDN?"))
-    # #print(dev2.select_slot())
-    print(dev2.ident())
-    
+    # #print(dev2.select_channel())
     #dev2.initialize_device()
 
 
