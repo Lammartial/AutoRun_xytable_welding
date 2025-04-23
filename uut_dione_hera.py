@@ -389,12 +389,16 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 def test_myself():
     from rrc.track.chroma import DC63600
     from rrc.track.tdklambda import DCZPlus
-    from rrc.keysight import DAQ970A
+    from rrc.keysight import AGILENT34972A
     load1 = DC63600("192.168.31.103:2101", slot=1, channel="L")
-    load2 = DC63600("192.168.31.103:2101", slot=1, channel="R")
+    print(load1.ident())
+    load2 = DC63600("192.168.31.103:2101", slot=2, channel="R")
+    print(load2.ident())
     psu1 = DCZPlus("192.168.31.101:8003", channel=1)
+    print(psu1.ident())
     psu2 = DCZPlus("192.168.31.101:8003", channel=2)
-    daq = DAQ970A("192.168.31.106:5025", card_slot=1)
+    print(psu2.ident())
+    daq = AGILENT34972A("192.168.31.106:5025", card_slot=1)
     daq.send("*RST")
     sleep(0.5)
     print(daq.ident())

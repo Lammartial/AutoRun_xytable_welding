@@ -187,7 +187,12 @@ class DC63600:
 
 
     def ident(self) -> str:
-        return self.request("*IDN?")
+        return self.request(f"CHAN?;CHAN:ID?;*IDN?")  # channel; load itself ident; rack/mainframe ident
+        # return ";".join([
+        # self.request(f":CHAN?"),  # channel
+        # self.request("CHAN:ID?"), # load itself ident
+        # self.request("*IDN?")     # rack/mainframe ident
+        # ])
 
 
     def reset(self) -> str:
@@ -452,17 +457,23 @@ class ACSource(Eth2SerialDevice):
 if __name__ == "__main__":
     # quick test, just call: python chroma.py
     dev1 = DC63600("192.168.31.103:2101", slot=1, channel="L")
-    #dev1.select_channel()
-    print(dev1.select_slot())
+    # #dev1.select_channel()
+    # print(dev1.select_slot())
     print(dev1.ident())
-    #dev1.change_channel(2)
-    #dev1.close_connection(force=True)
+    # #dev1.change_channel(2)
+    # #dev1.close_connection(force=True)
 
     #print(dev1.ident())
     #dev1.initialize_device()
-    dev2 = DC63600("192.168.31.103:2101", slot=1, channel="R")
-    print(dev2.select_slot())
+    dev2 = DC63600("192.168.31.103:2101", slot=2, channel=None)
+    # for c in range(1,5):
+    #     #dev2.send(f"CHAN {c}")
+    #     print(dev2.request(f"CHAN {c};CHANnel:ID?"))
+    # print(dev2.request("CHANnel:LOAD? MAX"))
+    # print(dev2.request("CHANnel:LOAD 3;*IDN?"))
+    # #print(dev2.select_slot())
     print(dev2.ident())
+    
     #dev2.initialize_device()
 
 
