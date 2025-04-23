@@ -390,8 +390,8 @@ def test_myself():
     from rrc.track.chroma import DC63600
     from rrc.track.tdklambda import DCZPlus
     from rrc.keysight import DAQ970A
-    load1 = DC63600("192.168.31.103:2101", channel=1)
-    load2 = DC63600("192.168.31.103:2101", channel=2)    
+    load1 = DC63600("192.168.31.103:2101", slot=1, channel="L")
+    load2 = DC63600("192.168.31.103:2101", slot=1, channel="R")
     psu1 = DCZPlus("192.168.31.101:8003", channel=1)
     psu2 = DCZPlus("192.168.31.101:8003", channel=2)
     daq = DAQ970A("192.168.31.106:5025", card_slot=1)
