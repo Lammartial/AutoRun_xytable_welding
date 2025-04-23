@@ -33,6 +33,7 @@ CHROMA_DEVICES_LOOKUP = {
 
 class DC63600:
     """Defines the Chroma DC-Load 63600 communication in a rack using a series of them with one gateway.
+    SINGLE channel module.
 
     Avoids need for VISA devices.
 
@@ -73,13 +74,14 @@ class DC63600:
 
     #----------------------------------------------------------------------------------------------
 
-    def change_channel(self, new_channel: int):
+    def change_channel(self, new_channel: int) -> None:
         """
         Changes the channel number of a device instance.
 
         Args:
             new_slot (int): channel number of submodule None=no subs or a number in (1, ... ,10)
         """
+
         MAX_SUB = 10  # set this to your needs
         assert ((new_channel is None) or (int(new_channel) > 0 and int(new_channel) < MAX_SUB+1)), ValueError(f"Error, 'new_channel' must be in 1..{MAX_SUB} but was {int(new_channel)}")
         if new_channel is None:
@@ -416,6 +418,60 @@ class DC63600:
     def all_loads_off(self) -> bool:
         self.send(f":ABORT")
         return self.wait_response_ready()
+
+
+
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+
+
+class DC63610(DC63600):
+    """ 
+    Defines the Chroma DC-Load 63600 communication in a rack using a series of them with one gateway.
+    
+    DUAL CHANNEL module. Uses "L" and "R" to identify the two channels on the module.
+
+    Avoids need for VISA devices.
+    
+    """
+
+    def __init__(self, resource_str: str, channel: int = 1, lr_side_channel: str = "L") -> None:
+        """
+        Initialize the object with resource string (IP name:socket).
+        Example "192.168.1.101:5025"
+
+        Args:
+            resource_str (str): resource string in the format <IP>:<SOCKET>            
+            channel (int, optional): Selects a channel to address communication to the sub-device in range of 1..10. Defaults to 1.
+            lr_side_channel (str): defines if it uses the left "L" or right "R" channel side. Defaults to "L".
+
+        """
+
+        if resource_str in CHROMA_DEVICES_LOOKUP:
+            # there is already a device for this resource opened
+            self.device = CHROMA_DEVICES_LOOKUP[resource_str]
+        else:
+            self.device = Eth2SerialDevice(resource_str,
+                termination="\n", trim_termination=True,
+                open_connection=True)  # The Chroma device can keep connection open (saves overhead time)
+            CHROMA_DEVICES_LOOKUP[resource_str] = self.device  # store for reuse this connection
+        self.resource_str = resource_str
+        self.last_cmd_written = None
+        self.change_channel(channel, lr_side_channel.upper())
+
+
+    def __str__(self) -> str:
+        return f"Chroma Load, V1.1, DC63610 device on {self.device.__str__()}"
+
+    def __repr__(self) -> str:
+        return f"DC63610({self.resource_str}, {self.channel})"
+
+
+    def change_channel(self, new_channel, new_lr_side) -> None:        
+        super().change_channel(new_channel)
+        assert(new_lr_side in "LR"), ValueError("LR Side channel need to be either 'L' or 'R'")
+        self.lr_side_channel = new_lr_side 
 
 
 #--------------------------------------------------------------------------------------------------
