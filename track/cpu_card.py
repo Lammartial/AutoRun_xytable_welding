@@ -58,9 +58,13 @@ class CPU_Card:
                 "use_hex": False,
                 "use_pec": False
             }) for i in range(self._smb_num_of_ifc)])
+        self._ident_shadow = None
+        self._ident_boot_shadow = None
+
 
     def __str__(self) -> str:
         return f"TRack CPU-Card device on {super().__str__()}"
+
 
     def __repr__(self) -> str:
         return f"CPU_Card({self.con._resource_str})"
@@ -84,9 +88,12 @@ class CPU_Card:
         """Returns the identification string of the application.
 
         Returns:
-            str: _description_
+            str: Identification string of the application.
         """
-        return self.con.request("*IDN")  # Note: *IDN? returns string of 0xff, probably unflashed area
+
+        if self._ident_shadow is None:
+            self._ident_shadow = self.con.request("*IDN")  # Note: *IDN? returns string of 0xff, probably unflashed area
+        return self._ident_shadow
 
 
     def ident_boot(self) -> str:
@@ -96,12 +103,15 @@ class CPU_Card:
         Returns:
             str: Identification string of the bootloader.
         """
-        r1 = self.con.request("*BOO")
-        sleep(0.050)  #  Give CPUcard time to start bootloader and re-init UART
-        res = self.con.request("*IDN")  # Note: *IDN? returns string of 0xff, probably unflashed area
-        r2 = self.con.request(f"*RES")
-        sleep(0.050)  # Give CPUcard time to start application and re-init UART
-        return res
+
+        if self._ident_boot_shadow is None:
+            r1 = self.con.request("*BOO")
+            sleep(0.050)  #  Give CPUcard time to start bootloader and re-init UART
+            res = self.con.request("*IDN")  # Note: *IDN? returns string of 0xff, probably unflashed area
+            self._ident_boot_shadow = res
+            r2 = self.con.request(f"*RES")
+            sleep(0.050)  # Give CPUcard time to start application and re-init UART
+        return self._ident_boot_shadow
 
 
     def help(self) -> str:

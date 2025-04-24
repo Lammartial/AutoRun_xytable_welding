@@ -72,13 +72,15 @@ class DCZPlus(Eth2SerialDevice):
                          open_connection=False)  # The TDK Lambda need closing the connection after each transmission
         self.re_match_sys_err = re.compile(r'(\d*),.*"(.*)"')  # this is the filter for the system error return
         self.change_channel(channel)
+        self._ident_shadow = None
 
 
     def __str__(self) -> str:
         return f"DZPlus device on {super().__str__()}"
 
+
     def __repr__(self) -> str:
-        return f"DZPlus({self.resource_str}, {self.channel})"
+        return f"DZPlus({self._resource_str}, {self.channel})"
 
 
     #----------------------------------------------------------------------------------------------
@@ -184,7 +186,9 @@ class DCZPlus(Eth2SerialDevice):
 
 
     def ident(self) -> str:
-        return self.request("*IDN?")
+        if self._ident_shadow is None:
+            self._ident_shadow = self.request("*IDN?")
+        return self._ident_shadow
 
 
     def reset(self) -> str:

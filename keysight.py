@@ -50,6 +50,7 @@ class DAQ970A(Eth2SerialDevice):
         self._channel_delay_map = {}  # this map's values can be adjusted by the setup_channel_delay_preset() function later on
         self._voltage_range_map = {}  # this map's values can be adjusted by the setup_voltage_range_and_resolution_preset() function later on
         self._voltage_resolution_map = {}  # this map's values can be adjusted by the setup_voltage_range_and_resolution_preset() function later on
+        self._ident_shadow = None
 
 
     def __str__(self) -> str:
@@ -75,7 +76,20 @@ class DAQ970A(Eth2SerialDevice):
     #----------------------------------------------------------------------------------------------
 
     def ident(self) -> str:
-        return self.request("*IDN?")
+        if self._ident_shadow is None:
+            self._ident_shadow = self.request("*IDN?")
+        return self._ident_shadow
+
+
+    # taken from Agilent class - not yet tested!
+    def read_error_status(self) -> str:
+        return self.request("SYSTEM:ERROR?")
+
+
+    # taken from Agilent class - not yet tested!
+    def wait_response_ready(self) -> bool:
+        return (int(self.request("*OPC?")) == 1)  # this will automatically delay until the response is ready
+    
 
     #----------------------------------------------------------------------------------------------
 
@@ -446,12 +460,16 @@ class AGILENT34972A(Eth2SerialDevice):
         self._channel_delay_map = {}  # this map's values can be adjusted by the setup_channel_delay_preset() function later on
         self._voltage_range_map = {}  # this map's values can be adjusted by the setup_voltage_range_and_resolution_preset() function later on
         self._voltage_resolution_map = {}  # this map's values can be adjusted by the setup_voltage_range_and_resolution_preset() function later on
+        self._ident_shadow = None
+
 
     def __str__(self) -> str:
         return f"DAQ970A device on {super().__str__()}"
 
+
     def __repr__(self) -> str:
         return f"DAQ970A({self._resource_str}, {self.card_slot})"
+
 
     #----------------------------------------------------------------------------------------------
     # insert the channel to message strings for this device
@@ -466,7 +484,9 @@ class AGILENT34972A(Eth2SerialDevice):
     #----------------------------------------------------------------------------------------------
 
     def ident(self) -> str:
-        return self.request("*IDN?")
+        if self._ident_shadow is None:
+            self._ident_shadow = self.request("*IDN?")
+        return self._ident_shadow
 
 
     def read_error_status(self) -> str:

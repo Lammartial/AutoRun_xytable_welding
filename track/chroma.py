@@ -62,6 +62,7 @@ class DC63600:
         self.resource_str = resource_str
         self.last_cmd_written = None
         self.change_channel(channel)
+        self._ident_shadow = None   # to keep an identstring; used to decide if dual or single module
        
 
     def __str__(self) -> str:
@@ -170,7 +171,17 @@ class DC63600:
 
 
     def ident(self) -> str:
-        return self.request(f"CHAN?;CHAN:ID?;*IDN?")  # channel; load itself ident; rack/mainframe ident
+        """Creates an identification string containing channel, load module and mainframe information.
+        Stores it into local shadow once retrieved so that this information is faster available 
+        for consecutive access to ident() function.
+
+        Returns:
+            str: Identification string separated by colon with following format: channel; load itself ident; rack/mainframe ident
+        """
+        
+        if self._ident_shadow is None:
+            self._ident_shadow = self.request(f"CHAN?;CHAN:ID?;*IDN?")  # channel; load itself ident; rack/mainframe ident
+        return self._ident_shadow
     
 
     def reset(self) -> str:
@@ -373,28 +384,66 @@ class DC63600:
         return self.wait_response_ready()
 
 
+    def _check_if_dual_channel_module(self) -> str:
+        """
+        Internal function to check if the moduke is a dual or single channel module 
+        by using the ident() generated string.
+
+        Returns:
+            str: "L","R" if dual channel module, else ""
+        """
+
+        _m  = self.ident().split(";")[1]  # extract the module ident part
+        _pn = _m.split(",")[1].upper()    # extract the part-number
+        if _pn[-1] in "LR":
+            return _pn[-1]  # "L" or "R"
+        else:
+            return ""  # empty string
+
+
     def activate_device_display(self) -> bool:
         """Activate the Display and show the channel inforamtion of Load Object.
 
         Returns:
-            bool: _description_
+            bool: True on success, False else. Could also throw Exception!
         """
-
-        if (self.channel & 1) != 0:
-            self.send(f"SHOW:DISPLAY L")
-        else:
-            self.send(f"SHOW:DISPLAY R")
+       
+        _LR = self._check_if_dual_channel_module()
+        self.send(f"SHOW:DISPLAY {_LR}")
         return self.wait_response_ready()
 
 
     def activate_device_dual_voltage_display(self) -> bool:
-        self.send(f"SHOW:DISPLAY LRV")
-        return self.wait_response_ready()
+        """
+        Activates a dual voltage display - if the module has two channels!
+        Otherwise it does not send command and returns False.
+
+        Returns:
+            bool: True on success, False else, e.g. not a dual module.
+        """
+        
+        if self._check_if_dual_channel_module() != "":
+            self.send(f"SHOW:DISPLAY LRV")
+            return self.wait_response_ready()
+        else:
+            return False
 
 
     def activate_device_dual_current_display(self) -> bool:
-        self.send(f"SHOW:DISPLAY LRI")
-        return self.wait_response_ready()
+        """
+        Activates a dual current display - if the module has two channels!
+        Otherwise it does not send command and returns False.
+
+        Returns:
+            bool: True on success, False else, e.g. not a dual module.
+        """
+         
+        if self._check_if_dual_channel_module() != "":
+            self.send(f"SHOW:DISPLAY LRI")
+            return self.wait_response_ready()
+        else:
+            return False
+
 
 
     def set_channel_sync_mode(self, state: int | str) -> bool:
