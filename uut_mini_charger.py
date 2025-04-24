@@ -127,9 +127,9 @@ class UUT_MiniCharger:
 
 
     def read_battery_detection_from_uut(self) -> bool:
-        self.cpu.I2C_Master_set_PEC(0)
+        #self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_Bat_Detection, 2)
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         return (buf[1] == 1)
 
 
@@ -139,9 +139,9 @@ class UUT_MiniCharger:
         Returns:
             Tuple[float, float]: voltage in volts, current in amps
         """
-        self.cpu.I2C_Master_set_PEC(0)
+        #self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_Bat_Values, 5)
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         voltage = float(unpack_from(">H", buf, 1)[0]) / 1e+3  # data come big endian
         current = float(unpack_from(">H", buf, 3)[0]) / 1e+3  # data come big endian
         return voltage, current
@@ -154,9 +154,9 @@ class UUT_MiniCharger:
             Tuple[float, float]: VIN in volts, T in Celsius.
         """
 
-        self.cpu.I2C_Master_set_PEC(0)
+        #self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_CHG_Values, 5)
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         VIN = float(unpack_from(">H", buf, 1)[0]) / 1e+3  # data come big endian
         T   = float(unpack_from(">H", buf, 3)[0]) / 1e+1    # data come big endian
         return VIN, T
@@ -169,17 +169,17 @@ class UUT_MiniCharger:
             float: R sense in ohms.
         """
 
-        self.cpu.I2C_Master_set_PEC(0)
+        #self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_R_SNS_BAT, 3)
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         R_SNS_BAT = unpack_from(">H", buf, 1)[0] / 1e+2  # data come big endian
         return R_SNS_BAT
 
 
     def read_bq_charge_option(self) -> bytearray:
-        self.cpu.I2C_Master_set_PEC(0)
+        #self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_BQ_Charge_Option, 3)
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         return buf
 
 
@@ -197,7 +197,7 @@ class UUT_MiniCharger:
         ubat: int = int(round(voltage * 1e+3))
         ibat: int = int(round(current * 1e+3))
         buf = pack("<B", 4) + pack(">H", ubat) + pack(">H", ibat)  # need big endian
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_BAT_V_I_limit, buf)
     
 
@@ -208,28 +208,32 @@ class UUT_MiniCharger:
     def toggle_gpio(self, bit: int, onoff: bool) -> bool:
         self._set_gpio_pattern(int(bit), bool(onoff))
         buf = pack("<B", 1) + pack("<B", self.gpio_pattern)
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_GPIOs, buf)
 
 
-    def calibrate_r_sns_bat(self, reference_current: float) -> int:
-        """_summary_
+    def calibrate_r_sns_bat(self, reference_current: float, r_sense_ohm: float = 0.010) -> int:
+        """
+        Calculates the current calibration value for UUT's battery path and also writes this
+        value to the UUT. An uncalibrated measurement of current by UUT is performed as preparation. 
 
         Args:
-            reference_current (float): measured reference current in A
+            reference_current (float): With high accuracy measured current.
+            r_sense_ohm (float, optional): Used sense resistor in *Ohm*. Defaults to 0.010.
 
         Returns:
-            int: calibration ratio value as written to the UUT
+            int: Calibration value as it is written into UUT.
         """
-
+        
         u_bat, i_bat = self.read_battery_measurements_from_uut()
-        calibration_ratio = int(round(((i_bat / reference_current) * 1e+3))) * 10
+        calibration_ratio = int(round((i_bat / reference_current) * r_sense_ohm * 1e+6))
         buf = pack("<B", 2) + pack(">h", calibration_ratio)  # UUT need in big endian signed short int
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         if self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_R_SNS_BAT, buf):
             return calibration_ratio
         else:
             return -1
+
 
 
 #--------------------------------------------------------------------------------------------------

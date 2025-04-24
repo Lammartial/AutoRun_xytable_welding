@@ -123,9 +123,9 @@ class UUT_Dione_Hera(UUT_MiniCharger):
             Tuple[float, float]: VIN in volts, T in Celsius, V_SYS in volts, I_Adapter in amperes
         """
 
-        self.cpu.I2C_Master_set_PEC(0)
+        #self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_CHG_Values, 9)        
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         VIN = unpack_from(">H", buf, 1)[0] / 1e+3  # data come big endian
         V_SYS = unpack_from(">H", buf, 3)[0] / 1e+3  # data come big endian
         T = unpack_from(">H", buf, 5)[0] / 1e+1    # data come big endian
@@ -142,9 +142,9 @@ class UUT_Dione_Hera(UUT_MiniCharger):
             float: R sense in ohms.
         """
 
-        self.cpu.I2C_Master_set_PEC(0)
+        #self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_R_SNS_BAT, 3)
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         #R_SNS_BAT = unpack_from(">H", buf, 1)[0] / 1e+2  # data come big endian
         R_SNS_BAT = unpack_from(">H", buf, 1)[0] / 10 / 5  # this was the precalc of Hera DLL
         return R_SNS_BAT
@@ -159,9 +159,9 @@ class UUT_Dione_Hera(UUT_MiniCharger):
             float: R sense DC IN in ohms.
         """
 
-        self.cpu.I2C_Master_set_PEC(0)
+        #self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_R_SNS_DC_IN, 3)
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         #R_SNS_BAT = unpack_from(">H", buf, 1)[0] / 1e+2  # data come big endian
         R_SNS_BAT = unpack_from(">H", buf, 1)[0] / 10 / 5  # this was the precalc of Hera DLL
         return R_SNS_BAT
@@ -185,7 +185,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
             buf[2] |= 0x08
         else:
             buf[2] &= ~0x08
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_BQ_Charge_Option, buf)
 
 
@@ -203,93 +203,63 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         return super().set_u_bat_i_bat(voltage, current)
     
 
-    def calibrate_r_sns_bat(self, reference_current: float) -> int:
-        """_summary_
+    def calibrate_r_sns_bat(self, reference_current: float, r_sense_ohm: float = 0.010) -> int:
+        """
+        Calculates the current calibration value for UUT's battery path and also writes this
+        value to the UUT. An uncalibrated measurement of current by UUT is performed as preparation. 
 
         Args:
-            reference_current (float): measured reference current in A
+            reference_current (float): With high accuracy measured current.
+            r_sense_ohm (float, optional): Used sense resistor in *Ohm*. Defaults to 0.010.
 
         Returns:
-            int: calibration ratio value as written to the UUT
+            int: Calibration value as it is written into UUT.
         """
 
-        return super().calibrate_r_sns_bat(reference_current)
+        return super().calibrate_r_sns_bat(reference_current, r_sense_ohm=r_sense_ohm)
 
-
-
-    def calibrate_r_sns_bat_generic(self, reference_current: float, r_sense_ohm: float) -> int:
+ 
+    def calibrate_r_sns_dc_in(self, reference_current: float, r_sense_ohm: float = 0.002) -> int:
         """
-
-        Not sure if this function is need.
+        Calculates the current calibration value for UUT's DC IN path and also writes this
+        value to the UUT. An uncalibrated measurement of current by UUT is performed 
+        as preparation.
 
         Args:
             reference_current (float): measured reference current in A.
-            r_sense_ohm (float): R sense in *Ohm*. R-Sense typically in milliohm range.
+            r_sense_ohm (float, optional): Used sense resistor in *Ohm*. Defaults to 0.002.
 
         Returns:
             int: calibration ratio value as written to the UUT
         """
 
-        u_bat, i_bat = self.read_battery_measurements_from_uut()
-        calibration_ratio = int(round((i_bat / reference_current) * r_sense_ohm * 1e+3))
+        v_in, t, v_sys, i_adapter = self.read_charger_measurements_from_uut()
+        calibration_ratio = int(round((i_adapter / reference_current) * r_sense_ohm * 1e+6))
         buf = pack("<B", 2) + pack(">h", calibration_ratio)  # UUT need in big endian signed short int
-        self.cpu.I2C_Master_set_PEC(1)
-        if self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_R_SNS_BAT, buf):
-            return calibration_ratio
-        else:
-            return -1
-
-
-    def calibrate_r_sns_dc_in(self, reference_current: float) -> int:
-        """_summary_
-
-       Args:
-            reference_current (float): measured reference current in A.
-
-        Returns:
-            int: calibration ratio value as written to the UUT
-        """
-
-        v_in, t, v_sys, i_adapter = self.read_charger_measurements_from_uut()
-        calibration_ratio = int(round((i_adapter / reference_current) * 1e+3) * 2)
-        buf = pack("<B", 2) + pack(">H", calibration_ratio)
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         if self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_R_SNS_DC_IN, buf):
             return calibration_ratio
         else:
             return -1
-
-
-    def calibrate_r_sns_dc_in_generic(self, reference_current: float, r_sense_ohm: float) -> int:
-        """
-
-        Not sure if this function is need...
-
-        Args:
-            reference_current (float): measured reference current in A.
-            r_sense_ohm (float): R sense in *Ohm*. R-Sense typically in milliohm range.
-
-        Returns:
-            int: calibration ratio value as written to the UUT
-        """
-
-        v_in, t, v_sys, i_adapter = self.read_charger_measurements_from_uut()
-        calibration_ratio = int(round((i_adapter / reference_current) * (r_sense_ohm * 1e+6)))
-        buf = pack("<B", 2) + pack(">H", calibration_ratio)
-        self.cpu.I2C_Master_set_PEC(1)
-        if self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_R_SNS_DC_IN, buf):
-            return calibration_ratio
-        else:
-            return -1
-
 
 
     def calibrate_input_current_offset(self, reference_current: float) -> int:
+        """
+        Calibrates input current measurement offset correction. 
+        An measurement of current by UUT is performed as preparation. 
+        Thus the calibration of this should be done before.
+
+        Args:
+            reference_current (float): measured reference current in A.
+
+        Returns:
+            int: Offset as it is written into UUT.
+        """
 
         v_in, t, v_sys, i_adapter = self.read_charger_measurements_from_uut()
         calibration_value = int(round((reference_current - i_adapter) * 1e+3))
-        buf = pack("<B", 2) + pack(">H", calibration_value)
-        self.cpu.I2C_Master_set_PEC(1)
+        buf = pack("<B", 2) + pack(">h", calibration_value)  # UUT need in big endian signed short int
+        #self.cpu.I2C_Master_set_PEC(1)
         if self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_AdapterCurrentOffset, buf):
             return calibration_value
         else:
@@ -297,10 +267,10 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
 
 
-
     def toggle_gpio(self, bit: int, onoff: bool) -> bool:  # overwrite inherited function as command code is different
         self._set_gpio_pattern(int(bit), bool(onoff))
         buf = pack("<B", 1) + pack("<B", self.gpio_pattern)
+        #self.cpu.I2C_Master_set_PEC(1)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_GPIOs, buf)
 
 
@@ -310,20 +280,20 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
     def switch_application_on_off(self, state: bool | int | str) -> bool:
         buf = pack("<B", 1) + pack("<B", self._state_to_zero_or_one(state))
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_APP_ON_OFF, buf)
 
 
     def set_power_path(self, mode: int) -> bool:
         buf = pack("<B", 1) + pack("<B", mode)
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_APP_ON_OFF, buf)  # uses the same command as APP ON/OFF
 
 
     def set_input_current_limit(self, current_limit: float) -> bool:
         _w = int(round(current_limit * 1000))
         buf = pack("<B", 2) + pack(">H", _w)
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_Input_Current_Limit, buf)
 
 
@@ -336,16 +306,16 @@ class UUT_Dione_Hera(UUT_MiniCharger):
             float: Returns the input current limit in A
         """
 
-        self.cpu.I2C_Master_set_PEC(0)
+        #self.cpu.I2C_Master_set_PEC(0)
         w = self.cpu.I2C_Master_ReadWord(self.second_i2c_address, 63)
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         return float(w) * 1e-3
 
 
     def reset_calibration(self) -> bool:
         # write the magic keyword into two word addresses
         buf = pack("<B", 2) + pack(">H", 0x1388)
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         ok = self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_R_SNS_BAT, buf)
         ok &= self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_R_SNS_DC_IN, buf)
         return ok
@@ -364,9 +334,9 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         if len(udi) != 16:
             raise ValueError(f"Length of UDI string is '{len(udi)}' which is not 16.")
         buf = pack("<B", 16) + udi.encode("utf-8")
-        self.cpu.I2C_Master_set_PEC(0)
+        #self.cpu.I2C_Master_set_PEC(0)
         ok = self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_UDI, buf)
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         rbbuf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, 0x81, 17)
         if rbbuf[0] != 16:
             raise ValueError(f"Length of readback UDI string is '{rbbuf[0]}' which is not 16.")
@@ -380,7 +350,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         #
         # read UDI as string.
         #
-        self.cpu.I2C_Master_set_PEC(1)
+        #self.cpu.I2C_Master_set_PEC(1)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, 0x81, 17)
         if len(buf) != 17:
             raise ValueError(f"Expected 17 bytes for UDI, got '{len(buf)}'")
