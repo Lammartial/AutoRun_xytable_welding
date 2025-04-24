@@ -453,17 +453,20 @@ def test_myself():
     print(dev.read_battery_measurements_from_uut())
     print(dev.read_charger_measurements_from_uut())    
     print(dev.switch_application_on_off(0))
+    dev.set_u_bat_i_bat(0, 0)  # dummy action, next one will set correctly 
+    #dev.set_u_bat_i_bat(12.05, 3.6)
     #print("Startup with 0 load")
     #print(load2.set_load_current(0))
     #print(load2.set_load_output(1))
     for c in [0,50,10,4,2,1]:
         # set next current
-        _nc: float = (3.6 / c) if c > 0 else 0
+        cc = 3.6
+        dev.set_u_bat_i_bat(12.05, cc)
+        _nc: float = (cc / c) if c > 0 else 0
         print(f"Set current {_nc:.3f}A")
         load2.set_load_current(_nc)
-        load2.set_load_output(1)
-        dev.set_u_bat_i_bat(12.05, 3.6)        
-        sleep(2.75)
+        load2.set_load_output(1)                
+        sleep(0.75)
         #print(dev.read_battery_measurements_from_uut())
         #print(dev.read_charger_measurements_from_uut())
         print(f"{load2.measure_voltage():.3f}")
