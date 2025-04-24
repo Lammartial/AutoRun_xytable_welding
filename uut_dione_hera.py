@@ -231,8 +231,8 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         """
 
         u_bat, i_bat = self.read_battery_measurements_from_uut()
-        calibration_ratio = int(round((i_bat / reference_current) * r_sense_ohm * 1e+6))
-        buf = pack("<B", 2) + pack(">H", calibration_ratio)
+        calibration_ratio = int(round((i_bat / reference_current) * r_sense_ohm * 1e+3))
+        buf = pack("<B", 2) + pack(">h", calibration_ratio)  # UUT need in big endian signed short int
         self.cpu.I2C_Master_set_PEC(1)
         if self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_R_SNS_BAT, buf):
             return calibration_ratio
@@ -453,7 +453,13 @@ def test_myself():
     print(dev.read_battery_measurements_from_uut())
     print(dev.read_charger_measurements_from_uut())    
     print(dev.switch_application_on_off(0))
-    dev.set_u_bat_i_bat(0, 0)  # dummy action, next one will set correctly 
+    dev.set_u_bat_i_bat(0, 0)  # dummy action, next one will set correctly
+    print(load2.set_load_mode("CRL"))
+    print(load2.get_load_mode())
+    print(load2.set_load_output(1))
+    load2.set_load_resistance(10.0)    
+    load2.set_load_resistance(5.0)
+    load2.set_load_resistance(3.0)
     #dev.set_u_bat_i_bat(12.05, 3.6)
     #print("Startup with 0 load")
     #print(load2.set_load_current(0))

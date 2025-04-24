@@ -142,8 +142,8 @@ class UUT_MiniCharger:
         self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_Bat_Values, 5)
         self.cpu.I2C_Master_set_PEC(1)
-        voltage = unpack_from(">H", buf, 1)[0] / 1e+3  # data come big endian
-        current = unpack_from(">H", buf, 3)[0] / 1e+3  # data come big endian
+        voltage = float(unpack_from(">H", buf, 1)[0]) / 1e+3  # data come big endian
+        current = float(unpack_from(">H", buf, 3)[0]) / 1e+3  # data come big endian
         return voltage, current
 
 
@@ -157,8 +157,8 @@ class UUT_MiniCharger:
         self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_CHG_Values, 5)
         self.cpu.I2C_Master_set_PEC(1)
-        VIN = unpack_from(">H", buf, 1)[0] / 1e+3  # data come big endian
-        T = unpack_from(">H", buf, 3)[0] / 1e+1    # data come big endian
+        VIN = float(unpack_from(">H", buf, 1)[0]) / 1e+3  # data come big endian
+        T   = float(unpack_from(">H", buf, 3)[0]) / 1e+1    # data come big endian
         return VIN, T
 
 
@@ -223,8 +223,8 @@ class UUT_MiniCharger:
         """
 
         u_bat, i_bat = self.read_battery_measurements_from_uut()
-        calibration_ratio = int(round((i_bat / reference_current) * 1e+3) * 10)
-        buf = pack("<B", 2) + pack(">H", calibration_ratio)  # UUT need in big endian
+        calibration_ratio = int(round(((i_bat / reference_current) * 1e+3))) * 10
+        buf = pack("<B", 2) + pack(">h", calibration_ratio)  # UUT need in big endian signed short int
         self.cpu.I2C_Master_set_PEC(1)
         if self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_R_SNS_BAT, buf):
             return calibration_ratio

@@ -178,7 +178,7 @@ class DC63600:
         Returns:
             str: Identification string separated by colon with following format: channel; load itself ident; rack/mainframe ident
         """
-        
+
         if self._ident_shadow is None:
             self._ident_shadow = self.request(f"CHAN?;CHAN:ID?;*IDN?")  # channel; load itself ident; rack/mainframe ident
         return self._ident_shadow
@@ -328,6 +328,7 @@ class DC63600:
         Returns:
             bool: _description_
         """
+        
         self.send(f"RES:STAT:L1 {resistance}")  # Note: :STATic was shown in the DC63xxx manual but not in out DLL lib
         #self.send(f"RES:L1 {resistance}")  # code like in DLL
         return self.wait_response_ready()
