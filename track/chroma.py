@@ -171,12 +171,7 @@ class DC63600:
 
     def ident(self) -> str:
         return self.request(f"CHAN?;CHAN:ID?;*IDN?")  # channel; load itself ident; rack/mainframe ident
-        # return ";".join([
-        # self.request(f":CHAN?"),  # channel
-        # self.request("CHAN:ID?"), # load itself ident
-        # self.request("*IDN?")     # rack/mainframe ident
-        # ])
-
+    
 
     def reset(self) -> str:
         return self.send("*RST")    # no return!
@@ -188,13 +183,14 @@ class DC63600:
     def initialize_device(self) -> bool:
         _ok = True
         # preconfigure device
-        self.send(":LOAD OFF")
+        self.send("*OPC")
+        self.send("LOAD OFF")
         _ok &= self.wait_response_ready()
-        self.send(":ACT ON")
+        self.send("ACT ON")
         _ok &= self.wait_response_ready()
-        self.send(":CONF:VOLT:RANG 80")
+        self.send("CONF:VOLT:RANG 80")
         _ok &= self.wait_response_ready()
-        self.send(":CURR:RANG 80")
+        self.send("CURR:RANG 80")
         _ok &= self.wait_response_ready()
         return _ok
 
@@ -243,17 +239,17 @@ class DC63600:
         """
         _MODES = ("CCL", "CCH", "CCDL", "CCDH", "CRL", "CRH", "CVL", "CVH")
         assert(modus in _MODES), ValueError(f"Modus was '{modus}' but need to be one of {_MODES}.")
-        self.send(f":MODE {modus}")
+        self.send(f"MODE {modus}")
         return self.wait_response_ready()
 
 
     def get_load_mode(self) -> str:
-        return self.request(f":MODE?")
+        return self.request(f"MODE?")
 
 
     def set_load_output(self, state: int | str) -> bool:
         _state_str = self._convert_to_onoff_string(state)
-        self.send(f":LOAD {_state_str}")
+        self.send(f"LOAD {_state_str}")
         return self.wait_response_ready()
 
 
@@ -278,12 +274,12 @@ class DC63600:
         """
 
         self.set_measure_sense_to("UUT")
-        return float(self.request(":MEAS:VOLT?"))
+        return float(self.request("MEAS:VOLT?"))
 
 
     def set_measure_sense_to(self, sense_target: str) -> bool:
         assert(sense_target in ["UUT", "LOAD"]), ValueError(f"Parameter sense target need to be in UUT, LOAD. It was '{sense_target}'.")
-        self.send(f":MEAS:INP {sense_target}")
+        self.send(f"MEAS:INP {sense_target}")
         return self.wait_response_ready()
 
 
@@ -321,8 +317,8 @@ class DC63600:
         Returns:
             bool: _description_
         """
-        self.send(f":RES:STAT:L1 {resistance}")  # Note: :STATic was shown in the DC63xxx manual but not in out DLL lib
-        #self.send(f":RES:L1 {resistance}")  # code like in DLL
+        self.send(f"RES:STAT:L1 {resistance}")  # Note: :STATic was shown in the DC63xxx manual but not in out DLL lib
+        #self.send(f"RES:L1 {resistance}")  # code like in DLL
         return self.wait_response_ready()
 
 
@@ -337,12 +333,12 @@ class DC63600:
             bool: _description_
         """
         # NOTE: did not find rise/fall timing for resistance but for current and power in the data sheet
-        self.send(f":RES:RISE {rise_time};:RES:FALL {fall_time}")
+        self.send(f"RES:RISE {rise_time};:RES:FALL {fall_time}")
         return self.wait_response_ready()
 
 
     def set_load_current(self, current: float) -> bool:
-        self.send(f":CURR:STAT:L1 {current}")
+        self.send(f"CURR:STAT:L1 {current}")
         return self.wait_response_ready()
 
 
@@ -357,23 +353,23 @@ class DC63600:
             bool: _description_
         """
 
-        self.send(f":CURR:STAT:RISE {rise_time};:CURR:STAT:FALL {fall_time}")
+        self.send(f"CURR:STAT:RISE {rise_time};:CURR:STAT:FALL {fall_time}")
         return self.wait_response_ready()
 
 
     def set_load_voltage(self, voltage) -> bool:
-        self.send(f":VOLT:L1 {voltage}")
+        self.send(f"VOLT:L1 {voltage}")
         return self.wait_response_ready()
 
 
     def set_constant_voltage_current_limit(self, current_limit) -> bool:
-        self.send(f":VOLT:CURR {current_limit}")
+        self.send(f"VOLT:CURR {current_limit}")
         return self.wait_response_ready()
 
 
     def set_short_circuit(self, state: int | str) -> bool:
         _state_str = self._convert_to_onoff_string(state)
-        self.send(f":LOAD:SHORT {_state_str}")
+        self.send(f"LOAD:SHORT {_state_str}")
         return self.wait_response_ready()
 
 
@@ -385,19 +381,19 @@ class DC63600:
         """
 
         if (self.channel & 1) != 0:
-            self.send(f":SHOW:DISPLAY L")
+            self.send(f"SHOW:DISPLAY L")
         else:
-            self.send(f":SHOW:DISPLAY R")
+            self.send(f"SHOW:DISPLAY R")
         return self.wait_response_ready()
 
 
     def activate_device_dual_voltage_display(self) -> bool:
-        self.send(f":SHOW:DISPLAY LRV")
+        self.send(f"SHOW:DISPLAY LRV")
         return self.wait_response_ready()
 
 
     def activate_device_dual_current_display(self) -> bool:
-        self.send(f":SHOW:DISPLAY LRI")
+        self.send(f"SHOW:DISPLAY LRI")
         return self.wait_response_ready()
 
 
@@ -411,17 +407,17 @@ class DC63600:
             bool: _description_
         """
         _state_int = self._convert_to_onoff_int(state)
-        self.send(f":CHAN:SYNC {_state_int}")
+        self.send(f"CHAN:SYNC {_state_int}")
         return self.wait_response_ready()
 
 
     def all_loads_on(self) -> bool:
-        self.send(f":RUN")
+        self.send(f"RUN")
         return self.wait_response_ready()
 
 
     def all_loads_off(self) -> bool:
-        self.send(f":ABORT")
+        self.send(f"ABORT")
         return self.wait_response_ready()
 
 

@@ -310,17 +310,20 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
     def switch_application_on_off(self, state: bool | int | str) -> bool:
         buf = pack("<B", 1) + pack("<B", self._state_to_zero_or_one(state))
+        self.cpu.I2C_Master_set_PEC(1)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_APP_ON_OFF, buf)
 
 
     def set_power_path(self, mode: int) -> bool:
         buf = pack("<B", 1) + pack("<B", mode)
+        self.cpu.I2C_Master_set_PEC(1)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_APP_ON_OFF, buf)  # uses the same command as APP ON/OFF
 
 
     def set_input_current_limit(self, current_limit: float) -> bool:
         _w = int(round(current_limit * 1000))
         buf = pack("<B", 2) + pack(">H", _w)
+        self.cpu.I2C_Master_set_PEC(1)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_Input_Current_Limit, buf)
 
 
@@ -389,16 +392,21 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 def test_myself():
     from rrc.track.chroma import DC63600
     from rrc.track.tdklambda import DCZPlus
-    from rrc.keysight import AGILENT34972A
+    from rrc.keysight import AGILENT34972A, DAQ970A, daq_class_selector
     load1 = DC63600("192.168.31.103:2101", channel=1)
     print(load1.ident())
+    load1.initialize_device()
     load2 = DC63600("192.168.31.103:2101", channel=2)
     print(load2.ident())
+    load2.initialize_device()
     psu1 = DCZPlus("192.168.31.101:8003", channel=1)
     print(psu1.ident())
+    psu1.initialize_device()
     psu2 = DCZPlus("192.168.31.101:8003", channel=2)
     print(psu2.ident())
-    daq = AGILENT34972A("192.168.31.106:5025", card_slot=1)    
+    psu2.initialize_device()
+    daq = daq_class_selector("192.168.31.106:5025", 1)
+    #daq = AGILENT34972A("192.168.31.106:5025", card_slot=1)    
     print(daq.ident())
     #daq.send("*RST")
     #sleep(0.5)    
@@ -431,13 +439,40 @@ def test_myself():
     print("TP_V_SYSM:", daq.get_VDC_rounded(4,3))
     print("TP_VIN_M:", daq.get_VDC_rounded(5,3))
     print("TEMP:",daq.get_temp_rounded(6, "FRTD", 100, 0, "", 2))
-    
-    
     #print(dev.reset_calibration())
     print(dev.set_and_verify_udi("1234567890123456"))
-    #print(dev.read_charger_measurements_from_uut())
-    #print(dev.read_battery_measurements_from_uut())
+    print(psu1.set_voltage(16.0))
+    print(psu1.set_current_limit(4.0))
+    print(psu1.set_output(1))
+    print(load2.set_load_output(0))
+    print(load2.set_load_mode("CCH"))
+    print(load2.activate_device_display())
+    print(load2.measure_voltage())
+    print(load2.measure_current())
+    print(dev.read_battery_measurements_from_uut())
+    print(dev.read_charger_measurements_from_uut())    
+    print(dev.switch_application_on_off(0))
+    sleep(1.0)
+    print(dev.set_u_bat_i_bat(12.05, 3.6/4))
+    sleep(1.0)
+    print(dev.read_battery_measurements_from_uut())
     print(dev.read_charger_measurements_from_uut())
+    print(load2.measure_voltage())
+    print(load2.measure_current())
+    load2.set_load_output(1)
+    sleep(1.0)
+    print(load2.measure_voltage())
+    print(load2.measure_current())
+    print(load1.measure_voltage())
+    print(load1.measure_current())
+    print(load2.set_load_output(0))
+    print(load1.set_load_output(0))
+    print(psu2.set_output(0))
+    print(psu1.set_output(0))
+    
+
+
+
 
 #--------------------------------------------------------------------------------------------------
 

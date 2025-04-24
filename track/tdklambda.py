@@ -196,19 +196,19 @@ class DCZPlus(Eth2SerialDevice):
     def initialize_device(self) -> bool:
         errorcode = 0
         # preconfigure device
-        # self.send(":LOAD OFF")
-        # ec, et = self.wait_response_ready()
-        # errorcode += ec
-        # self.send(":ACT ON")
-        # ec, et = self.wait_response_ready()
-        # errorcode += ec
-        # self.send(":CONF:VOLT:RANG 80")
-        # ec, et = self.wait_response_ready()
-        # errorcode += ec
-        # self.send(":CURR:RANG 80")
-        # ec, et = self.wait_response_ready()
-        # errorcode += ec
-        # #sleep(0.25)
+        self.send(":LOAD OFF")
+        ec, et = self.wait_response_ready()
+        errorcode += ec
+        self.send(":ACT ON")
+        ec, et = self.wait_response_ready()
+        errorcode += ec
+        self.send(":CONF:VOLT:RANG 80")
+        ec, et = self.wait_response_ready()
+        errorcode += ec
+        self.send(":CURR:RANG 80")
+        ec, et = self.wait_response_ready()
+        errorcode += ec
+        #sleep(0.25)
         return (errorcode == 0)
 
 

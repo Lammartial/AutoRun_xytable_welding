@@ -26,8 +26,6 @@ from rrc.custom_logging import getLogger, logger_init
 
 
 #--------------------------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------------------
-#--------------------------------------------------------------------------------------------------
 
 class DAQ970A(Eth2SerialDevice):
     """
@@ -59,7 +57,7 @@ class DAQ970A(Eth2SerialDevice):
 
 
     def __repr__(self) -> str:
-        return f"DAQ970A({self.resource_str}, {self.card_slot})"
+        return f"DAQ970A({self._resource_str}, {self.card_slot})"
 
 
     #----------------------------------------------------------------------------------------------
@@ -424,7 +422,6 @@ class DAQ970A(Eth2SerialDevice):
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 
-
 class AGILENT34972A(Eth2SerialDevice):  
     """
     Defines the older Agilent / Keysight AGILENT34972A datalogger interface as a simple socket communication.
@@ -443,6 +440,7 @@ class AGILENT34972A(Eth2SerialDevice):
             card_slot (int, optional): Selects a measurement channel card on slot 1..3. Defaults to 1
 
         """
+        
         super().__init__(resource_str, termination="\n", open_connection=True)  # The Keysight expects to have connect/disconnect for each command
         self.change_card_slot(card_slot)  # also sets the self.card_slot
         self._channel_delay_map = {}  # this map's values can be adjusted by the setup_channel_delay_preset() function later on
@@ -453,7 +451,7 @@ class AGILENT34972A(Eth2SerialDevice):
         return f"DAQ970A device on {super().__str__()}"
 
     def __repr__(self) -> str:
-        return f"DAQ970A({self.resource_str}, {self.card_slot})"
+        return f"DAQ970A({self._resource_str}, {self.card_slot})"
 
     #----------------------------------------------------------------------------------------------
     # insert the channel to message strings for this device
@@ -779,17 +777,17 @@ class AGILENT34972A(Eth2SerialDevice):
         """
         Returns temperature measurement.
 
-        From Tutorial 7, Keysight 34970A/34972A User’s Guide 279
+        From Tutorial 7, Keysight 34970A/34972A User's Guide 279
             RTD Measurements
             An RTD is constructed of a metal (typically platinum) that changes resistance with
             a change in temperature in a precisely known way. The internal DMM measures
             the resistance of the RTD and then calculates the equivalent temperature.
             An RTD has the highest stability of the temperature transducers. The output from
             an RTD is also very linear. This makes an RTD a good choice for high-accuracy,
-            long-term measurements. The 34970A/34972A supports RTDs with α = 0.00385
-            (DIN / IEC 751) using ITS-90 software conversions and α = 0.00391 using IPTS-68
-            software conversions. “PT100” is a special label that is sometimes used to refer to
-            an RTD with α = 0.00385 and R 0 = 100Ω.
+            long-term measurements. The 34970A/34972A supports RTDs with alpha = 0.00385
+            (DIN / IEC 751) using ITS-90 software conversions and alpha = 0.00391 using IPTS-68
+            software conversions. "PT100" is a special label that is sometimes used to refer to
+            an RTD with alpha = 0.00385 and R 0 = 100Ω.
             The resistance of an RTD is nominal at 0 °C and is referred to as R 0 . The 34970A/
             34972A can measure RTDs with R 0 values from 49Ω to 2.1 kΩ.
             You can measure RTDs using a 2-wire or 4-wire measurement method. The 4-wire
@@ -862,12 +860,17 @@ class AGILENT34972A(Eth2SerialDevice):
         cmd = "ROUT:MON (@" + self._meas_chan(0, channel) + ")"
         self.send(cmd)
 
-
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 
-
+def daq_class_selector(resource_str: str, card_slot: int) -> DAQ970A | AGILENT34972A:
+    c = DAQ970A(resource_str, card_slot=card_slot)
+    s = c.ident()
+    if "AGILENT" in s.upper():
+        c.close_connection(force=True)
+        c = AGILENT34972A(resource_str, card_slot=card_slot)
+    return c
 
 
 #--------------------------------------------------------------------------------------------------

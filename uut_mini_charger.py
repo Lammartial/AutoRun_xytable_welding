@@ -197,6 +197,7 @@ class UUT_MiniCharger:
         ubat: int = int(round(voltage * 1e+3))
         ibat: int = int(round(current * 1e+3))
         buf = pack("<B", 4) + pack(">H", ubat) + pack(">H", ibat)  # need big endian
+        self.cpu.I2C_Master_set_PEC(1)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_BAT_V_I_limit, buf)
     
 
@@ -207,6 +208,7 @@ class UUT_MiniCharger:
     def toggle_gpio(self, bit: int, onoff: bool) -> bool:
         self._set_gpio_pattern(int(bit), bool(onoff))
         buf = pack("<B", 1) + pack("<B", self.gpio_pattern)
+        self.cpu.I2C_Master_set_PEC(1)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_GPIOs, buf)
 
 
