@@ -66,7 +66,7 @@ BAYS = [BAY_1, BAY_2, BAY_3, BAY_4]
 
 CHARGER_1 = 1
 CHARGER_2 = 2
-[CHARGER_1, CHARGER_2]
+CHARGERS = [CHARGER_1, CHARGER_2]
 
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
@@ -265,7 +265,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         return ok
 
 
-    def set_udi(self, udi: str) -> bool:
+    def set_and_verify_udi(self, udi: str) -> bool:
         """Write the UUT's UDI. Must be 16 characters long. Only ASCII characters
 
         Args:
@@ -275,15 +275,16 @@ class UUT_Dione_Hera(UUT_MiniCharger):
             bool: True
         """
 
-        if len(udi != 16):
+        if len(udi) != 16:
             raise ValueError(f"Length of UDI string is '{len(udi)}' which is not 16.")
-        if not isascii(udi):
-            raise ValueError(f"The UDI string may only consist of ASCII characters. \"{udi}\"")
+        #if not isascii(udi):
+        #    raise ValueError(f"The UDI string may only consist of ASCII characters. \"{udi}\"")
 
         buf = pack("<B", 16) + udi.encode("ascii")
 
         self.cpu.I2C_Master_set_PEC(1)
         ok = self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_UDI, buf)
+        sleep(0.25)
         self.cpu.I2C_Master_set_PEC(2)
         rbbuf = self.cpu.I2C_Master_ReadBytes(self.second_i2c_address, 0x81, 17)  # what command is it ?
         if rbbuf[0] != 16:
@@ -371,12 +372,125 @@ class UUT_Dione_Hera(UUT_MiniCharger):
             new_control_reg |= 8
 
         buf = pack("<B", new_control_reg)
+        self.cpu.I2C_Master_set_PEC(0)
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address_mux_testsystem, 0x00, buf)
 
 #--------------------------------------------------------------------------------------------------
 
+def test_myself():
+    from rrc.track.chroma import DC63600
+    from rrc.track.tdklambda import DCZPlus
+    from rrc.keysight import AGILENT34972A, DAQ970A, daq_class_selector
+    load1 = DC63600("192.168.31.103:2101", channel=1)
+    print(load1.ident())
+    load1.initialize_device()
+    load2 = DC63600("192.168.31.103:2101", channel=2)
+    print(load2.ident())
+    load2.initialize_device()
+    psu1 = DCZPlus("192.168.31.101:8003", channel=1)
+    print(psu1.ident())
+    psu1.initialize_device()
+    psu2 = DCZPlus("192.168.31.101:8003", channel=2)
+    print(psu2.ident())
+    psu2.initialize_device()
+    daq = daq_class_selector("192.168.31.106:5025", 1)
+    #daq = AGILENT34972A("192.168.31.106:5025", card_slot=1)    
+    print(daq.ident())
+    #daq.send("*RST")
+    #sleep(0.5)    
+    #daq.send("MEAS:TEMP:FRTD? 100,(@106)")
+    daq.wait_response_ready()
+    # daq.send("SENS:TEMP:TRAN:FRTD:TYPE 85,(@106)")
+    print(daq.read_error_status())
+    # daq.send("SENS:TEMP:TRAN:FRTD:RES 100,(@106)")
+    # print(daq.read_error_status())
+    # print(daq.request("MEAS:TEMP? FRTD,85,(@106)"))
+    # print(daq.read_error_status())
+    # print(daq.get_temp_rounded(6, "FRTD", 100, 0, "", 2))
+
+    #print(daq.selftest())      
+    dev = UUT_Dione_Hera(0x09, 0x33, resource_str="COM3,115200,8N1")
+    print(dev.cpu.ident())
+    dev.initialize_cpu_ports()    
+    #psu1.set_output(0)
+    #sleep(2)
+    psu1.set_voltage(20.0)
+    psu1.set_current_limit(1.0)
+    psu1.set_output(1)
+    sleep(0.5)
+    # for port in "AC":
+    #     print(f"Port {port} Status: ", dev.cpu.IO_Get_Portstatus(port))
+    #     for bit in range(8):
+    #         print(f"Read Port {port}, bit {bit}:", dev.cpu.IO_Read_Port_bit(port, bit))
+    # print(dev.is_adapter_correctly_connected())
+    # print("VCC:", daq.get_VDC_rounded(3,3))
+    # print("TP_V_SYSM:", daq.get_VDC_rounded(4,3))
+    # print("TP_VIN_M:", daq.get_VDC_rounded(5,3))
+    # print("TEMP:",daq.get_temp_rounded(6, "FRTD", 100, 0, "", 2))
+    # print(dev.reset_calibration())
+    # dev.cpu.reset()
+    # sleep(0.5)
+    dev.set_uut_into_testmode(True)
+    # sleep(0.5)
+    #dev.cpu.I2C_Master_set_PEC(0)
+    #dev.cpu.I2C_Master_WriteBytes(0xE2, 0x01, bytes([0x01]))
+    print(dev.set_and_verify_udi("1234567890123456"))
+    # print(dev.get_r_sense_battery_from_uut(1))
+    # print(psu1.set_voltage(16.0))
+    # print(psu1.set_current_limit(4.0))
+    # print(psu1.set_output(1))
+    # print(load2.set_load_output(0))
+    # print(load2.set_load_mode("CCH"))
+    # print(load2.set_measure_sense_to("UUT"))    
+    # print(load2.activate_device_display())
+    # print(load2.measure_voltage())
+    # print(load2.measure_current())
+    # print(dev.read_battery_measurements_from_uut())
+    # print(dev.read_charger_measurements_from_uut())    
+    # print(dev.switch_application_on_off(0))
+    # dev.set_u_bat_i_bat(0, 0)  # dummy action, next one will set correctly
+    # print(load2.set_load_mode("CRL"))
+    # print(load2.get_load_mode())
+    # print(load2.set_load_output(1))
+    # load2.set_load_resistance(10.0)    
+    # load2.set_load_resistance(5.0)
+    # load2.set_load_resistance(3.0)
+    #dev.set_u_bat_i_bat(12.05, 3.6)
+    #print("Startup with 0 load")
+    #print(load2.set_load_current(0))
+    #print(load2.set_load_output(1))
+    # for c in [0,50,10,4,2,1]:
+    #     # set next current
+    #     cc = 3.6
+    #     dev.set_u_bat_i_bat(12.05, cc)
+    #     _nc: float = (cc / c) if c > 0 else 0
+    #     print(f"Set current {_nc:.3f}A")
+    #     load2.set_load_current(_nc)
+    #     load2.set_load_output(1)                
+    #     sleep(0.75)
+    #     #print(dev.read_battery_measurements_from_uut())
+    #     #print(dev.read_charger_measurements_from_uut())
+    #     print(f"{load2.measure_voltage():.3f}")
+    #     print(f"{load2.measure_current():.4f}")
+    #     #print(load1.measure_voltage())
+    #     #print(load1.measure_current())
+    #     load2.set_load_output(0)
+    
+    # OFF
+    print(load2.set_load_output(0))
+    print(load1.set_load_output(0))
+    print(psu2.set_output(0))
+    print(psu1.set_output(0))
+    
+
+
+
+
+#--------------------------------------------------------------------------------------------------
+
 if __name__ == "__main__":
-   pass
+   # quick test, just call: python uut_dione_hera.py
+   test_myself()
 
 
 # END OF FILE
