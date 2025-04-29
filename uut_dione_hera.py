@@ -336,6 +336,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         buf = pack("<B", 16) + udi.encode("utf-8")
         #self.cpu.I2C_Master_set_PEC(0)
         ok = self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_UDI, buf)
+        sleep(0.25)
         #self.cpu.I2C_Master_set_PEC(1)
         rbbuf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, 0x81, 17)
         if rbbuf[0] != 16:
