@@ -15,6 +15,8 @@ from time import sleep
 from struct import pack, unpack, unpack_from
 from rrc.track import CPU_Card
 from rrc.uut_mini_charger import UUT_MiniCharger
+from rrc.uut_dione_hera import UUT_Dione_Hera
+
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
@@ -72,7 +74,7 @@ CHARGERS = [CHARGER_1, CHARGER_2]
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 
-
+#class UUT_4bayCharger(UUT_Dione_Hera):
 class UUT_Dione_Hera(UUT_MiniCharger):
     """Dione is using much of the MiniCharger UUT base.
     Hera extends the Dione functionality a bit more.
@@ -92,7 +94,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         """
         super().__init__(i2c_address_7bit, resource_str=resource_str, cpu_reference=cpu_reference)
         self.second_i2c_address = int(second_i2c_address_7bit) << 1  # used to read input current limit from SmartCharger Address (0x14)
-        self.i2c_address_mux_testsystem = 0x71
+        self.i2c_address_mux_testsystem = (0x71 << 1)
 
 
     def initialize_cpu_ports(self) -> None:
@@ -266,43 +268,40 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
 
     def set_and_verify_udi(self, udi: str) -> bool:
-        """Write the UUT's UDI. Must be 16 characters long. Only ASCII characters
+        """Write a string of len 16 into the UUT's EEPROM and read it back with compare.
 
         Args:
-            udi (str): UDI as a string. 16 characters long. ASCII only
+            udi (str): _description_
 
         Returns:
-            bool: True
+            bool: _description_
         """
 
         if len(udi) != 16:
             raise ValueError(f"Length of UDI string is '{len(udi)}' which is not 16.")
-        #if not isascii(udi):
-        #    raise ValueError(f"The UDI string may only consist of ASCII characters. \"{udi}\"")
-
-        buf = pack("<B", 16) + udi.encode("ascii")
-
-        self.cpu.I2C_Master_set_PEC(1)
+        buf = pack("<B", 16) + udi.encode("utf-8")
+        #self.cpu.I2C_Master_set_PEC(0)
         ok = self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_UDI, buf)
         sleep(0.25)
-        self.cpu.I2C_Master_set_PEC(2)
-        rbbuf = self.cpu.I2C_Master_ReadBytes(self.second_i2c_address, 0x81, 17)  # what command is it ?
+        #self.cpu.I2C_Master_set_PEC(1)
+        rbbuf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, 0x81, 17)
         if rbbuf[0] != 16:
             raise ValueError(f"Length of readback UDI string is '{rbbuf[0]}' which is not 16.")
-        rbstr = bytes(rbbuf[1:]).decode("ascii")
+        rbstr = bytes(rbbuf[1:]).decode("utf-8")
         if rbstr != udi:
             raise ValueError(f"Readback UDI string is different from exprected one.")
         return True
 
 
-    def get_udi(self) -> str:
 
-        self.cpu.I2C_Master_set_PEC(1)
-        buf = self.cpu.I2C_Master_ReadBytes(self.second_i2c_address, 0x81, 17)
+    def get_udi(self) -> str:
+        #self.cpu.I2C_Master_set_PEC(1)
+        buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, 0x81, 17)
         if buf[0] != 16:
             raise ValueError(f"Expected 16 bytes for UDI, got '{buf[0]}'")
         udi = buf[1:].decode("ascii")
         return udi
+    
 
     def set_bay_fets(self, charger_ID: int, bay_ID: int, state: bool) -> bool:
         """Enables or disables the FET between the given charger and bay.
@@ -340,40 +339,33 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         if bay_ID not in BAYS:
             return False
 
-        buf = pack("<B", 2) + pack(">B", bay_ID) + pack(">B", int(state))  # need big endian
+        buf = pack("<B", 2) + pack("<B", bay_ID) + pack("<b", int(state))  # need big endian
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_I2CMUX, buf)
 
 
-    def set_I2C_mux_TestSystem(self, state_bay1: bool, state_bay2: bool, state_bay3: bool, state_bay4: bool) -> bool:
+    def set_I2C_mux_TestSystem(self, state_bays: tuple | list) -> bool:
         """Enables or disables the channel of test system's I2C mux.
 
         Args:
-            state_bay1 (bool): new state of the channel 1
-            state_bay2 (bool): new state of the channel 2
-            state_bay3 (bool): new state of the channel 3
-            state_bay4 (bool): new state of the channel 4
+            state_bays (tuple of bool,int or str): new state of the channel 1,2,3 and 4. can by any combination.            
 
         Returns:
             bool: Result of I2C transfer
         """
 
         new_control_reg = 0
-
-        if state_bay1:
-            new_control_reg |= 1
-
-        if state_bay2:
-            new_control_reg |= 2
-
-        if state_bay3:
-            new_control_reg |= 4
-
-        if state_bay4:
-            new_control_reg |= 8
-
+        for i,b in enumerate(state_bays):
+            # combine the bits according to the given list
+            new_control_reg |= (1 << i) if int(b) else 0
+        
         buf = pack("<B", new_control_reg)
         self.cpu.I2C_Master_set_PEC(0)
-        return self.cpu.I2C_Master_WriteBytes(self.i2c_address_mux_testsystem, 0x00, buf)
+        # Writes command byte only (select channel) and reads it back.
+        # With this trick there is only one byte written and we get the verififaction in one turn
+        rbuf = self.cpu.I2C_Master_ReadBytes(self.i2c_address_mux_testsystem, new_control_reg, 1)
+        return (buf == rbuf)
+        #return new_control_reg == int(unpack("<B", rbuf)[0])
+        #return self.cpu.I2C_Master_WriteBytes(self.i2c_address_mux_testsystem, 0x00, buf)
 
 #--------------------------------------------------------------------------------------------------
 
@@ -412,12 +404,15 @@ def test_myself():
     dev = UUT_Dione_Hera(0x09, 0x33, resource_str="COM3,115200,8N1")
     print(dev.cpu.ident())
     dev.initialize_cpu_ports()    
-    #psu1.set_output(0)
-    #sleep(2)
+    #print("HELP CONTENT:", dev.cpu.help().replace("\r","\n\r"))
+    psu1.set_output(0)
+    sleep(0.5)
+    print(dev.set_uut_into_testmode(False))
     psu1.set_voltage(20.0)
     psu1.set_current_limit(1.0)
     psu1.set_output(1)
     sleep(0.5)
+    print(dev.set_uut_into_testmode(True))
     # for port in "AC":
     #     print(f"Port {port} Status: ", dev.cpu.IO_Get_Portstatus(port))
     #     for bit in range(8):
@@ -429,12 +424,27 @@ def test_myself():
     # print("TEMP:",daq.get_temp_rounded(6, "FRTD", 100, 0, "", 2))
     # print(dev.reset_calibration())
     # dev.cpu.reset()
+    # sleep(0.5)  
+    #dev.set_I2C_mux_UUT(1, True)
     # sleep(0.5)
-    dev.set_uut_into_testmode(True)
-    # sleep(0.5)
-    #dev.cpu.I2C_Master_set_PEC(0)
-    #dev.cpu.I2C_Master_WriteBytes(0xE2, 0x01, bytes([0x01]))
-    print(dev.set_and_verify_udi("1234567890123456"))
+    dev.cpu.I2C_Master_set_PEC(0)
+    for i in range(8):
+        # tca9548a - set bit for channel
+        _ch = int(1 << i)        
+        #print(i, dev.cpu.I2C_Master_WriteBytes((0x71 << 1), _ch, bytes()))
+        #print(i, dev.cpu.I2C_Master_ReadBytes((0x71 << 1), _ch, 1))  # writes command (select channel) and reads it back
+        print(dev.set_I2C_mux_TestSystem([1,0,1,0]))
+        #print(i, dev.cpu.I2C_Master_WriteBytes((0x70 << 1), _ch, bytes([_ch])))
+        try:
+            #dev.set_and_verify_udi("1234567890123456")
+            #print(i, dev.get_udi())
+            #dev.cpu.I2C_Master_ReadBytes((0x09 << 1), I2C_CMD_Read_Bat_Detection, 5)
+            dev.cpu.I2C_Master_ReadBytes((0x09 << 1), 0x81, 17)
+            #dev.cpu.I2C_Master_ReadBytes((0x33 << 1), 0x81, 17)
+        except Exception as ex:
+            print("False", ex)
+            pass
+
     # print(dev.get_r_sense_battery_from_uut(1))
     # print(psu1.set_voltage(16.0))
     # print(psu1.set_current_limit(4.0))
