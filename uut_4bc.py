@@ -343,25 +343,31 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_I2CMUX, buf)
 
 
-    def set_I2C_mux_TestSystem(self, state_bays: tuple | list) -> bool:
+    def set_I2C_mux_TestSystem(self, state_bays: tuple | list | int) -> bool:
         """Enables or disables the channel of test system's I2C mux.
 
         Args:
-            state_bays (tuple of bool,int or str): new state of the channel 1,2,3 and 4. can by any combination.            
+            state_bays (tuple or list or int): new state of the channel 1,2,3 and 4 depending on positon, 
+                e.g. (1,0,1,0) selects bay 1 and 3. Can by any combination or select one by an integer in the range 1 to 4.
 
         Returns:
             bool: Result of I2C transfer
         """
 
         new_control_reg = 0
-        for i,b in enumerate(state_bays):
-            # combine the bits according to the given list
-            new_control_reg |= (1 << i) if int(b) else 0
-        
-        buf = pack("<B", new_control_reg)
+        if isinstance(state_bays, int):
+            new_control_reg = (1 << ((state_bays-1) & 0x3))
+        else:
+            for i,b in enumerate(state_bays):
+                # combine the bits according to the given list
+                new_control_reg |= (1 << i) if int(b) else 0
         self.cpu.I2C_Master_set_PEC(0)
+        ok = self.cpu.I2C_Master_WriteBytes(self.i2c_address_mux_testsystem, new_control_reg, bytes())
+        self.cpu.I2C_Master_set_PEC(1)
+        return ok
         # Writes command byte only (select channel) and reads it back.
         # With this trick there is only one byte written and we get the verififaction in one turn
+        buf = pack("<B", new_control_reg)
         rbuf = self.cpu.I2C_Master_ReadBytes(self.i2c_address_mux_testsystem, new_control_reg, 1)
         return (buf == rbuf)
         #return new_control_reg == int(unpack("<B", rbuf)[0])
@@ -406,13 +412,13 @@ def test_myself():
     dev.initialize_cpu_ports()    
     #print("HELP CONTENT:", dev.cpu.help().replace("\r","\n\r"))
     psu1.set_output(0)
-    sleep(0.5)
-    print(dev.set_uut_into_testmode(False))
+    sleep(1.5)
+    #print(dev.set_uut_into_testmode(False))
     psu1.set_voltage(20.0)
     psu1.set_current_limit(1.0)
     psu1.set_output(1)
     sleep(0.5)
-    print(dev.set_uut_into_testmode(True))
+    #print(dev.set_uut_into_testmode(True))
     # for port in "AC":
     #     print(f"Port {port} Status: ", dev.cpu.IO_Get_Portstatus(port))
     #     for bit in range(8):
@@ -428,22 +434,27 @@ def test_myself():
     #dev.set_I2C_mux_UUT(1, True)
     # sleep(0.5)
     dev.cpu.I2C_Master_set_PEC(0)
-    for i in range(8):
-        # tca9548a - set bit for channel
-        _ch = int(1 << i)        
-        #print(i, dev.cpu.I2C_Master_WriteBytes((0x71 << 1), _ch, bytes()))
-        #print(i, dev.cpu.I2C_Master_ReadBytes((0x71 << 1), _ch, 1))  # writes command (select channel) and reads it back
-        print(dev.set_I2C_mux_TestSystem([1,0,1,0]))
-        #print(i, dev.cpu.I2C_Master_WriteBytes((0x70 << 1), _ch, bytes([_ch])))
-        try:
-            #dev.set_and_verify_udi("1234567890123456")
-            #print(i, dev.get_udi())
-            #dev.cpu.I2C_Master_ReadBytes((0x09 << 1), I2C_CMD_Read_Bat_Detection, 5)
-            dev.cpu.I2C_Master_ReadBytes((0x09 << 1), 0x81, 17)
-            #dev.cpu.I2C_Master_ReadBytes((0x33 << 1), 0x81, 17)
-        except Exception as ex:
-            print("False", ex)
-            pass
+    while True:
+        for i in range(0, 5):
+            # tca9548a - set bit for channel
+            _ch = int(1 << i)   
+            #_ch = 0x1f
+            #print(i, dev.cpu.I2C_Master_WriteBytes((0x71 << 1), _ch, bytes()))
+            #print(i, dev.cpu.I2C_Master_WriteBytes((0x71 << 1), _ch, bytes([_ch])))
+            #print(i, dev.cpu.I2C_Master_ReadBytes((0x71 << 1), _ch, 0))  # writes command (select channel) and reads it back
+            #print(i, dev.cpu.I2C_Master_ReadBytes((0x71 << 1), _ch, 1))  # writes command (select channel) and reads it back
+            print(dev.set_I2C_mux_TestSystem([1,0,0,0]))
+            #print(dev.set_I2C_mux_TestSystem(i))
+            #print(i, dev.cpu.I2C_Master_WriteBytes((0x70 << 1), _ch, bytes([_ch])))
+            try:
+                #dev.set_and_verify_udi("1234567890123456")
+                #print(i, dev.get_udi())
+                #dev.cpu.I2C_Master_ReadBytes((0x09 << 1), I2C_CMD_Read_Bat_Detection, 5)
+                dev.cpu.I2C_Master_ReadBytes((0x09 << 1), 0x81, 17)
+                #dev.cpu.I2C_Master_ReadBytes((0x33 << 1), 0x81, 17)
+            except Exception as ex:
+                print("False", ex)
+                pass
 
     # print(dev.get_r_sense_battery_from_uut(1))
     # print(psu1.set_voltage(16.0))
