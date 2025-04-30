@@ -140,6 +140,49 @@ class CPU_Card:
 
     # I2C Master commands
 
+
+    def I2C_Master_set_Clockfrequency(self, clock_frequency: int, fcpu : int = 14745600) -> bool:
+        """Controls the I2C bus clock frequency.
+
+        If using our AVR based TRACK CPU card, following scheme is being used:
+
+            SCL_frequency = CPU_clockfrequency / (16 + 2(TWBR) - 4^TWPS)
+
+            • TWBR = Value of the TWI Bit Rate Register
+            • TWPS = Value of the prescaler bits in the TWI Status Register
+
+            TWBR = ((CPU_clockfrequency / SCL_frequency) - 17) / 2
+
+            with TWPS = 0
+
+        On using the OLIMEX gateway board: t.b.d.
+
+        Args:
+            clock_frequency (int): Frequency in Herz in the range 10000Hz to 100000Hz
+            fcpu (int, optional): TRACK CPU frequency used to calculate the TWBR value.
+                Valid values are 7372800, 8000000, 14745600, 16000000, 18432000.
+                Defaults to 14745600.
+
+        Returns:
+            bool: _description_
+        """
+
+        clock_frequency = int(clock_frequency)  # this is tribute to Teststand parameter passing
+        assert(clock_frequency >= 10000 and clock_frequency <= 100000), ValueError(f"Clock frequency must be in 10000Hz to 100000Hz. Given was '{clock_frequency}'")
+        fcpu = int(fcpu)
+        _VALID_FCPU = [7372800, 8000000, 14745600, 16000000, 18432000]
+        assert(fcpu in _VALID_FCPU), ValueError(f"CPU clock frequency must be in {_VALID_FCPU}. Given was '{fcpu}'")
+
+        #fcpu =  7372800
+        #fcpu = 14745600
+        #fcpu = 16000000
+        #fcpu = 18432000
+
+        TWBR = int(round(((fcpu / clock_frequency) - 17) / 2))
+        return self.con.request(f":I2C:MAS:TIM {TWBR},0")
+
+
+
     def I2C_Master_is_PEC_enabled(self) -> bool:
         _PEC = int(self.con.request(":I2C:MAS:PEC?"))
         return (_PEC == 1)
@@ -558,6 +601,8 @@ class CPU_Card:
         return self._is_ok_response(res)
 
 
+
+
     #----------------------------------------------------------------------------------------------
 
 #--------------------------------------------------------------------------------------------------
@@ -574,7 +619,7 @@ def test_myself(resource_str: str):
         print(f"Port {port} Status: ", dev.IO_Get_Portstatus(port))
         for bit in range(8):
             print(f"Read Port {port}, bit {bit}:", dev.IO_Read_Port_bit(port, bit))
-    
+
 
 
 #--------------------------------------------------------------------------------------------------
