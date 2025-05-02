@@ -11,8 +11,14 @@ Need to install 'pylibdtmx'
 
 """
 
-from pylibdmtx.pylibdmtx import encode, decode
-from PIL import Image, ImageWin, ImageDraw
+import base64
+from io import BytesIO
+from PIL.ImageFile import ImageFile
+from pylibdmtx import pylibdmtx
+from qrcode import QRCode
+from pystrich.datamatrix import DataMatrixEncoder
+from pystrich.qrcode import QRCodeEncoder
+from PIL import Image, ImageWin, ImageDraw, ImageOps
 from pathlib import Path
 import win32print
 import win32ui
@@ -22,6 +28,9 @@ import win32gui
 from rrc.eth2serial import Eth2SerialDevice, Eth2SerialSimulationDevice, tcp_send_and_receive_from_server
 from rrc.serialport import SerialComportDevice
 
+
+INCH_TWIPS: int = 1440   # twips - 1440 per inch allows fine res
+MM_TWIPS: float = INCH_TWIPS / 25.4  # => 56.6929 per mm but we need float
 
 
 #--------------------------------------------------------------------------------------------------
@@ -209,26 +218,239 @@ def print_datamatrix_label_0(content: str, printer_name: str = "DEFAULT") -> boo
 
 
 #--------------------------------------------------------------------------------------------------
+"""
+printer_name = "MXP T11"
+raw_data = bytes(label_text, "utf-8")
+
+drivers = win32print.EnumPrinterDrivers(None, None, 2)
+hPrinter = win32print.OpenPrinter(printer_name)
+printer_info = win32print.GetPrinter(hPrinter, 2)
+for driver in drivers:
+    if driver["Name"] == printer_info["pDriverName"]:
+        printer_driver = driver
+
+raw_type = "XPS_PASS" if printer_driver["Version"] == 4 else "RAW"
+
+try:
+    hJob = win32print.StartDocPrinter(hPrinter, 1, ("test of raw data", None, raw_type))
+    try:
+        win32print.StartPagePrinter(hPrinter)
+        win32print.WritePrinter(hPrinter, raw_data)
+        win32print.EndPagePrinter(hPrinter)
+    except Exception as e:
+        win32print.EndDocPrinter(hPrinter)
+        message.warning(request, f"Error! {e}")
+
+except Exception as e:
+    win32print.ClosePrinter(hPrinter)
+    message.warning(request, f'Error! {e}')
+"""
+
+
+def pil_to_html_imgdata(img: Image, fmt: str = "PNG") -> str:
+    """Convert a PIL image into HTML-displayable data.
+
+    The result is a string ``data:image/FMT;base64,xxxxxxxxx`` which you
+    can provide as a "src" parameter to a ``<img/>`` tag.
+
+    Examples
+
+    >>> data = pil_to_html_imgdata(my_pil_img)
+    >>> html_data = '<img src="%s"/>' % data
+
+    Args:
+        img (Image): A Pillow image object.
+        fmt (str, optional): Data (file) format string. Defaults to "PNG".
+
+    Returns:
+        str: HTML string of displayable data.
+    """
+
+    buffered = BytesIO()
+    img.save(buffered, format=fmt)
+    img_str = base64.b64encode(buffered.getvalue())
+    return f"data:image/{fmt.lower()};charset=utf-8;base64,{img_str.decode()}"
+
+
+def qr_code(content,
+            cellsize: int = 5,
+            optimize: int = 20,
+            border: int = None,
+            border_color: str ="black",
+            fill_color: str = "black",
+            back_color: str = "white",
+            **qr_code_params) -> Image.Image:
+    """Return a QR code's image data using PyQRcode library.
+    Useful if colored QR code or more options are needed.
+
+    Examples
+
+    >>> data = qr_code('egf45728')
+    >>> html_data = '<img src="%s"/>' % data
+
+    Args:
+        content (str): Data to be encoded in the QR code.
+        ecl (_type_, optional): _description_. Defaults to None.
+        cellsize (int, optional): _description_. Defaults to 5.
+        optimize (int, optional): Chunk length optimization setting. Defaults to 20.
+        border (int, optional): Draws a border around if not None. Defaults to None.
+        fill_color (str, optional): Colors to use for QRcode and its background. Defaults to "black".
+        back_color (str, optional): Colors to use for QRcode and its background. Defaults to "white".
+
+        **qr_code_params
+            Parameters of the ``QRCode`` constructor, such as ``version``,``error_correction``, ``box_size``, ``border``.
+
+    Returns:
+        Image.Image | ImageFile: A Pillow image object.
+    """
+
+    # qrcode library
+    params = dict(box_size=cellsize, border=border if border else 0)
+    params.update(qr_code_params)
+    qr = QRCode(**params)
+    qr.add_data(content, optimize=optimize)
+    qri = qr.make_image(fill_color=fill_color, back_color=back_color)
+    img = qri.get_image()
+    # create a border by PIL library
+    if border is None:
+        img = img.crop(ImageOps.invert(img).getbbox())
+    else:
+        img = ImageOps.expand(img, border=border, fill=border_color)
+    return img
+
+
+
+def datamatrix(content, cellsize: int = 5, border: int = None, border_color: str = "black") -> Image.Image | ImageFile:
+
+    """Return a datamatrix's image data.
+
+    Examples
+
+    >>> data = datamatrix('EGF')
+    >>> html_data = '<img src="%s"/>' % data
+
+    Args:
+        content (_type_): Data to be encoded in the datamatrix.
+        cellsize (int, optional): Size of the codematrix. Defaults to 5.
+        border (bool, optional): If None, there will be no border or margin to the datamatrix image. Defaults to None.
+
+    Returns:
+        Image.Image | ImageFile: A Pillow image object.
+    """
+
+    # pystrich library:
+    encoder = DataMatrixEncoder(content)
+    img_data = encoder.get_imagedata(cellsize=cellsize)
+    #img_data = encoder.get_imagedata()
+    img = Image.open(BytesIO(img_data))
+
+    # # pylibdmtx library:
+    # encoded = pylibdmtx.encode(content)
+    # img = Image.frombytes('RGB', (encoded.width, encoded.height), encoded.pixels)
+
+    if border is None:
+        img = img.crop(ImageOps.invert(img).getbbox())
+    else:
+        img = ImageOps.expand(img, border=border, fill=border_color)
+    return img
+
+
+
+
 
 def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT") -> bool:
-    # if you just want to use the default printer, you need
-    # to retrieve its name.
+
+    # printers = win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL)
+    # PRINTER_DEFAULTS = {"DesiredAccess":win32print.PRINTER_ALL_ACCESS}
+    # temprint = printers[3][2]
+
+    # if you just want to use the default printer, you need to retrieve its name.
     if printer_name.upper() == "DEFAULT":
         printer_name = win32print.GetDefaultPrinter()
 
     # open the printer.
     hprinter = win32print.OpenPrinter(printer_name)
+    #hprinter = win32print.OpenPrinter(temprint, PRINTER_DEFAULTS)  # does not work
 
-    # retrieve default settings. this code does not work on
-    # win95/98, as GetPrinter does not accept two
-    devmode = win32print.GetPrinter(hprinter, 2)["pDevMode"]
+    # retrieve default settings.
+    # Level 	Structure
+    # 0	        If the Command parameter is PRINTER_CONTROL_SET_STATUS, pPrinter must contain a DWORD value that specifies the new printer status to set.
+    #           For a list of the possible status values, see the Status member of the PRINTER_INFO_2 structure. Note that PRINTER_STATUS_PAUSED and PRINTER_STATUS_PENDING_DELETION are not valid status values to set.
+    #           If Level is 0, but the Command parameter is not PRINTER_CONTROL_SET_STATUS, pPrinter must be NULL.
+    #
+    # 2	        A PRINTER_INFO_2 structure containing detailed information about the printer.
+    # 3	        A PRINTER_INFO_3 structure containing the printer's security information.
+    # 4	        A PRINTER_INFO_4 structure containing minimal printer information, including the name of the printer, the name of the server, and whether the printer is remote or local.
+    # 5	        A PRINTER_INFO_5 structure containing printer information such as printer attributes and time-out settings.
+    # 6	        A PRINTER_INFO_6 structure specifying the status value of a printer.
+    # 7	        A PRINTER_INFO_7 structure. The dwAction member of this structure indicates whether SetPrinter should publish, unpublish, re-publish, or update the printer's data in the directory service.
+    # 8	        A PRINTER_INFO_8 structure specifying the global default printer settings.
+    # 9	        A PRINTER_INFO_9 structure specifying the per-user default printer settings.
+    #
+    level = 2
+    properties = win32print.GetPrinter(hprinter, level)
+    devmode = properties["pDevMode"]
+
+    # Change the default paper source
+    #devmode.DefaultSource = win32con.DMBIN_MANUAL
+    devmode.DefaultSource = win32con.DMBIN_AUTO
+    devmode.Fields = devmode.Fields | win32con.DM_DEFAULTSOURCE
+
+    #win32con.DM_FORMNAME
+    devmode.MediaType = win32con.DMMEDIA_STANDARD
+    devmode.DitherType = win32con.DMDITHER_NONE
+
     # change paper size and orientation
-    # constants are available here:
-    # http://msdn.microsoft.com/library/default.asp?url=/library/en-us/intl/nls_Paper_Sizes.asp
-    # number 10 envelope is 20
-    devmode.PaperSize = 20
+    # constants are available here: win32con.DMPAPERxxxx
+    #devmode.PaperSize = win32con.DMPAPER_A5
+    devmode.PaperSize = win32con.DMPAPER_A4
     # 1 = portrait, 2 = landscape
-    devmode.Orientation = 2
+    #devmode.Orientation = win32con.DMORIENT_LANDSCAPE
+    devmode.Orientation = win32con.DMORIENT_PORTRAIT
+    print(devmode.PrintQuality)
+    #devmode.PrintQuality = 120  # DPI ?
+    # or define custom size for context
+    #devmode.PaperWidth = 6000  # x 0.1mm
+    #devmode.PaperLength = 300  # x 0.1mm
+    #devmode.PaperSize = win32con.DMPAPER_USER
+    ##devmode.PaperSize = 0
+    #win32print.SetPrinter(handle, level, attributes, 0)  # does not work!
+
+    # Write these changes back to the printer
+    win32print.DocumentProperties(None, hprinter, printer_name, devmode, devmode, win32con.DM_IN_BUFFER | win32con.DM_OUT_BUFFER) # | win32con.DM_IN_PROMPT)  # validate devmode structure
+    #win32print.SetPrinter(hprinter, 2, properties, 0)  # does not work due to access rights
+
+
+    #form_name = "my_silly_label_size"
+    # try:
+    #     win32print.DeleteForm(hprinter, form_name)
+    # except Exception:
+    #     pass
+    # tForm = ({
+    #     'Flags': 2,  # form_user ?
+    #     'Name': form_name,
+    #     'Size': {
+    #         #'cx': 215900,   # x 0.001mm
+    #         #'cy': 279400,  # x 0.001mm
+    #         'cx': 120000,  # x 0.001mm
+    #         'cy':  10000,  # x 0.001mm
+    #     },
+    #     'ImageableArea': {
+    #         'left': 0,
+    #         'top': 0,
+    #         #'right': 215900,
+    #         #'bottom': 279400,
+    #         'right': 120000,
+    #         'bottom': 10000,
+    #     }
+    # })
+    # try:
+    #     win32print.AddForm(hprinter, tForm)
+    # except Exception as ex:
+    #     win32print.SetForm(hprinter, form_name, tForm)  # use our format
+    #win32print.DeleteForm(hprinter, form_name)
+    #x = win32print.GetForm(hprinter, form_name)
+
     # create DC using new settings. First get the integer hDC value.
     # Note that we need the name.
     hdc = win32gui.CreateDC("WINSPOOL", printer_name, devmode)
@@ -237,89 +459,164 @@ def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT
 
     # now you can set the map mode, etc. and actually print.
 
-
-
-
-
-    # Constants for GetDeviceCaps:
+    if 1:  # show device infos
+        print("LOGI RES", win32con.HORZRES, win32con.VERTRES, dc.GetDeviceCaps(win32con.HORZRES), dc.GetDeviceCaps(win32con.VERTRES))
+        print("LOGI PIXELS (DPI)", win32con.LOGPIXELSX, win32con.LOGPIXELSY, dc.GetDeviceCaps(win32con.LOGPIXELSX), dc.GetDeviceCaps(win32con.LOGPIXELSY))
+        print("PHYSICAL W/H", win32con.PHYSICALWIDTH, win32con.PHYSICALHEIGHT, dc.GetDeviceCaps(win32con.PHYSICALWIDTH), dc.GetDeviceCaps(win32con.PHYSICALHEIGHT))
+        print("PHYSICAL OFFSETS X/Y", win32con.PHYSICALOFFSETX, win32con.PHYSICALOFFSETY, dc.GetDeviceCaps(win32con.PHYSICALOFFSETX), dc.GetDeviceCaps(win32con.PHYSICALOFFSETY))
     # HORZRES / VERTRES = printable area
-    HORZRES = 8
-    VERTRES = 10
-    # LOGPIXELS = dots per inch
-    LOGPIXELSX = 88
-    LOGPIXELSY = 90
+    # LOGPIXELS = dots per inch (DPI)
+    printable_area = dc.GetDeviceCaps(win32con.HORZRES), dc.GetDeviceCaps(win32con.VERTRES)
     # PHYSICALWIDTH/HEIGHT = total area
-    PHYSICALWIDTH = 110
-    PHYSICALHEIGHT = 111
+    printer_size = dc.GetDeviceCaps(win32con.PHYSICALWIDTH), dc.GetDeviceCaps(win32con.PHYSICALHEIGHT)
     # PHYSICALOFFSETX/Y = left / top margin
-    PHYSICALOFFSETX = 112
-    PHYSICALOFFSETY = 113
-    # get printer context
-    # if printer_name.upper() == "DEFAULT":
-    #     printer_name = win32print.GetDefaultPrinter()
-    hDC = win32ui.CreateDC()
-    hDC.CreatePrinterDC(printer_name)
-    printable_area = hDC.GetDeviceCaps(HORZRES), hDC.GetDeviceCaps(VERTRES)
-    printer_size = hDC.GetDeviceCaps(PHYSICALWIDTH), hDC.GetDeviceCaps(PHYSICALHEIGHT)
-    printer_margins = hDC.GetDeviceCaps(PHYSICALOFFSETX), hDC.GetDeviceCaps(PHYSICALOFFSETY)
-    # create datamatrix code
+    printer_margins = dc.GetDeviceCaps(win32con.PHYSICALOFFSETX), dc.GetDeviceCaps(win32con.PHYSICALOFFSETY)
 
-    encoded = encode(content.encode("utf8"))
-    img = Image.frombytes("RGB", (encoded.width, encoded.height), encoded.pixels)
-    # rotate it if it's wider than it is high, and work out how much to multiply
-    #  each pixel by to get it as big as possible on the page without distorting.
-    if img.size[0] > img.size[1]:
-        img = img.rotate (90)
-    ratios = [1.0 * printable_area[0] / img.size[0], 1.0 * printable_area[1] / img.size[1]]
-    scale = min(ratios)
+
+    # # get printer context
+    # # if printer_name.upper() == "DEFAULT":
+    # #     printer_name = win32print.GetDefaultPrinter()
+    # hDC = win32ui.CreateDC()
+    # hDC.CreatePrinterDC(printer_name)
+    # printable_area = hDC.GetDeviceCaps(HORZRES), hDC.GetDeviceCaps(VERTRES)
+    # printer_size = hDC.GetDeviceCaps(PHYSICALWIDTH), hDC.GetDeviceCaps(PHYSICALHEIGHT)
+    # printer_margins = hDC.GetDeviceCaps(PHYSICALOFFSETX), hDC.GetDeviceCaps(PHYSICALOFFSETY)
+    #
+
+    def gdc_scale_position_and_size(x: float, y: float, width: float, height: float) -> tuple:
+        """Calculates position and dimension tuple to paint an image into GDC.
+        Assumes CM is being defined.
+
+        Origin is top left, thus Y value is converted into negative number as well
+        as height, if they are not provided negative already.
+
+        Args:
+            x (float): Horizontal position offset in mm
+            y (float): Vertical position offset in mm
+            width (float): Width of the image in mm
+            height (float): Height of the image in mm
+
+        Returns:
+            tuple: (x1, y1, x2, y2) to be passed into GDC.Draw() function
+        """
+        global MM_TWIPS
+
+        DPI_y = dc.GetDeviceCaps(win32con.LOGPIXELSY)
+        DPI_x = dc.GetDeviceCaps(win32con.LOGPIXELSX)
+        ofs_y = dc.GetDeviceCaps(win32con.PHYSICALOFFSETY)
+        ofs_x = dc.GetDeviceCaps(win32con.PHYSICALOFFSETX)
+        x1 = (abs(x) + ofs_x) * MM_TWIPS
+        y1 = (-abs(y) + ofs_y) * MM_TWIPS
+        x2 = x1 + (abs(width) * MM_TWIPS)
+        y2 = y1 - (abs(height) * MM_TWIPS)  # neg needed
+        return round(x1),round(y1),round(x2),round(y2)
+
+
+    def calc_fontsize(dc, PointSize: float) -> int:
+        """Assumes MM_TWIPS mapping mode.
+
+        Args:
+            dc (PyCDC): _description_
+            PointSize (float): _description_
+
+        Returns:
+            int: _description_
+        """
+
+        DPI_y = dc.GetDeviceCaps(win32con.LOGPIXELSY)
+        return int(-(PointSize * DPI_y) / 72)  # where is 72 taken from ?
+
+
+    def draw_img(hdc, dib, maxh, maxw) -> None:
+        w, h = dib.size
+        print("Image HW: ({:d}, {:d}), Max HW: ({:d}, {:d})".format(h, w, maxh, maxw))
+        h = min(h, maxh)
+        w = min(w, maxw)
+        l = (maxw - w) // 2
+        t = (maxh - h) // 2
+        dib.draw(hdc, (l, t, l + w, t + h))
+
+
+    # if 0:
+    #     # create datamatrix code
+    #     encoded = encode(content.encode("utf8"))
+    #     print((encoded.width, encoded.height))
+    #     img = Image.frombytes("RGB", (encoded.width, encoded.height), encoded.pixels)
+    # if 1:
+    #     encoder = DataMatrixEncoder(content)
+    #     #img_data = encoder.get_imagedata(cellsize=cellsize)
+    #     img_data = encoder.get_imagedata()
+    #     img = Image.open(BytesIO(img_data))
+
+
+
+    #img_w_border = ImageOps.expand(img, border=3, fill='black')
+    #dib = ImageWin.Dib(img_w_border)
+
+    img1 = datamatrix(content, border=4)
+    dib1 = ImageWin.Dib(img1)
+    img2 = qr_code(content, border=4)
+    dib2 = ImageWin.Dib(img2)
+
+    # # rotate it if it's wider than it is high, and work out how much to multiply
+    # #  each pixel by to get it as big as possible on the page without distorting.
+    # if img.size[0] > img.size[1]:
+    #     img = img.rotate (90)
+    # ratios = [1.0 * printable_area[0] / img.size[0], 1.0 * printable_area[1] / img.size[1]]
+    # scale = min(ratios)
+    # scaled_width, scaled_height = [int(scale * i) for i in img.size]
+    # x1 = int((printer_size[0] - scaled_width) / 2)
+    # y1 = int((printer_size[1] - scaled_height) / 2)
+    # x2 = x1 + scaled_width
+    # y2 = y1 + scaled_height
+
+
     # Start the print job, and draw the bitmap to
     #  the printer device at the scaled size.
     doc_name = "dmtx.png"
-    hDC.StartDoc(doc_name)
-    hDC.StartPage()
+    dc.StartDoc(doc_name)
+    dc.StartPage()
 
-    dib = ImageWin.Dib(img)
-    scaled_width, scaled_height = [int(scale * i) for i in img.size]
-    x1 = int((printer_size[0] - scaled_width) / 2)
-    y1 = int((printer_size[1] - scaled_height) / 2)
-    x2 = x1 + scaled_width
-    y2 = y1 + scaled_height
-
-    dib.draw(hDC.GetHandleOutput(), (x1, y1, x2, y2))
-
-    # win32gui.DrawText(
-    #     hDC,
-    #     "Printed by Python!",
-    #     -1,
-    #     (0, 0, int(printer_size[0] * 0.9), int(printer_size[1] * 0.9)),
-    #     win32con.DT_RIGHT | win32con.DT_BOTTOM | win32con.DT_SINGLELINE,
-    # )
-
+    #dib.draw(dc.GetHandleOutput(), (x1, y1, x2, y2))
+    # maxw = dc.GetDeviceCaps(win32con.HORZRES)
+    # maxh = dc.GetDeviceCaps(win32con.VERTRES)
+    # draw_img(dc.GetHandleOutput(), dib, maxh, maxw)
     # draw = ImageDraw.Draw(dib)
 
+    dc.SetMapMode(win32con.MM_TWIPS)  # Note: upper left is 0,0 with x increasing to the right and y decreasing (negative) moving down
+    #win32con.MM_HIMETRIC
+    dib1.draw(dc.GetHandleOutput(), gdc_scale_position_and_size(10, 10, 20, 20))
+    dib2.draw(dc.GetHandleOutput(), gdc_scale_position_and_size(10, 60, 20, 20))
+
+
+    font1size = calc_fontsize(dc, 32)
+    fontdata = {
+        "name": "Arial",
+        "height": font1size,
+        "italic": True,
+        "weight": win32con.FW_NORMAL,
+    }
+    font1 = win32ui.CreateFont(fontdata)
+    font2size = calc_fontsize(dc, 48)
+    fontdata = {
+        "name": "Arial",
+        "height": font2size,
+        "italic": False,
+        "weight": win32con.FW_LIGHT,
+    }
+    font2 = win32ui.CreateFont(fontdata)
+
     txt = text.split("\r")
-    pixel_scale = 84
+    pixel_scale = font1size
+    bounding_box_start_y = 0
     for idx,line in enumerate(txt):
         print("Text line {:d}: {:s}".format(idx, line))
+        dc.SelectObject(font1)
+        dc.TextOut(12, idx * pixel_scale, line)
+        dc.SelectObject(font2)
+        _height = dc.DrawText('TEST', (int(110 * MM_TWIPS), bounding_box_start_y, int(200 * MM_TWIPS), bounding_box_start_y + font2size), win32con.DT_LEFT)  # returns height in logical units
+        bounding_box_start_y += _height
 
-        # font=win32gui.LOGFONT()
-        # font.lfHeight=int(100/1.5)
-        # font.lfWidth=(int(font.lfHeight/4))
-        # font.lfWeight=150
-        # hf=win32gui.CreateFontIndirect(font)
-        # win32gui.SelectObject(hDC,hf)
-        # win32gui.DrawText(hDC,trialtext,-1,(ulc_x,ulc_y,lrc_x,lrc_y),win32con.DT_LEFT|win32con.DT_TOP)
-
-        # font=win32gui.LOGFONT()
-        # font.lfHeight=int(printerheight/20)
-        # font.lfWidth=(font.lfHeight/2)
-        # font.lfWeight=10
-        # hf2=win32gui.CreateFontIndirect(font)
-        # win32gui.SelectObject(hDC,hf2)
-        # win32gui.DrawText(hDC,PrintText,-1,(ulc_x,ulc_y,lrc_x,lrc_y),win32con.DT_LEFT|win32con.DT_BOTTOM)
-
-        hDC.TextOut(12, idx * pixel_scale, line)
-        #draw.text((5, idx*pixel_scale), line)
 
     # #draw.draw(hDC.GetHandleOutput(), (x1, y1, x2, y2))
 
@@ -327,19 +624,17 @@ def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT
     # font = win32ui.CreateFont(fontdata)
     # hDC.SelectObject(font)
 
-    INCH = 1440   # twips - 1440 per inch allows fine res
-    fontdata = { 'name':'Arial', 'height':int(25*scale)}
-    font = win32ui.CreateFont(fontdata)
-    hDC.SelectObject(font)
+
+    #dc.SelectObject(font)
     #dc = win32ui.CreateDC()
     #dc.CreatePrinterDC(printer_name)
     #dc.StartDoc('My Python Document')
     #dc.StartPage()
     # note: upper left is 0,0 with x increasing to the right,
     #       and y decreasing (negative) moving down
-    hDC.SetMapMode(win32con.MM_TWIPS)
+
     # Centers "TEST" about an inch down on page
-    hDC.DrawText('TEST', (0,INCH*-1,INCH*8,INCH*-2), win32con.DT_CENTER )
+    #dc.DrawText('TEST', (0,INCH*-1,INCH*8,INCH*-2), win32con.DT_CENTER )
     #dc.EndPage()
     #dc.EndDoc()
     #del dc
@@ -351,9 +646,9 @@ def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT
 
     # del draw
 
-    hDC.EndPage()
-    hDC.EndDoc()
-    hDC.DeleteDC()
+    dc.EndPage()
+    dc.EndDoc()
+    dc.DeleteDC()
 
 
 
@@ -386,12 +681,11 @@ def run_scan_and_print(resource_string: str, printer_name: str) -> None:
 #--------------------------------------------------------------------------------------------------
 
 def test_create_simple_label() -> None:
-    encoded = encode('RRC Zellsorter: Problem solved!'.encode('utf8'))
+    encoded = pylibdmtx.encode('RRC Zellsorter: Problem solved!'.encode('utf8'))
     img = Image.frombytes('RGB', (encoded.width, encoded.height), encoded.pixels)
     _fp = Path('dmtx.png')
     img.save(_fp)
-    print(decode(Image.open(_fp)))
-
+    print(pylibdmtx.decode(Image.open(_fp)))
 
 
 
@@ -403,7 +697,17 @@ if __name__ == "__main__":
 
     printer_name = "Microsoft Print to PDF"
     #printer_name = "\\\\printhost-2k16.rrc\\C-1-58-M6630cidn"
-    print_datamatrix_label("TESTLABEL XYZ", "Zeile 1\rZeile 2", printer_name=printer_name)
+
+    print_datamatrix_label("00231872347699829949", "Zeile 1\rZeile 2", printer_name=printer_name)  # test buggy QRCode
+    # print_datamatrix_label(
+    #     "01234567890123456789012345678901234567890123456789"+
+    #     "01234567890123456789012345678901234567890123456789"+
+    #     "01234567890123456789012345678901234567890123456789"+
+    #     "01234567890123456789012345678901234567890123456789"+
+    #     "01234567890123456789012345678901234567890123456789"+
+    #     "01234567890123456789012345678901234567890123456789",
+    #     "Zeile 1\rZeile 2", printer_name=printer_name)  # test buggy Datamatrix
+    #print_datamatrix_label("TESTLABEL XYZ", "Zeile 1\rZeile 2", printer_name=printer_name)
 
     RESOURCE_STR = "COM38,9600,8N1"  # manual scanner
     #RESOURCE_STR = "172.21.101.31:2000"  # HOM Line Corepack
