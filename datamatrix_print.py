@@ -14,6 +14,7 @@ Need to install 'pylibdtmx'
 import base64
 #import math
 from io import BytesIO
+import mmap
 from PIL.ImageFile import ImageFile
 from pylibdmtx import pylibdmtx
 from qrcode import QRCode
@@ -455,6 +456,22 @@ def draw_text_at(dc, text: str, x: float, y: float, width: float = None, height:
 
 #--------------------------------------------------------------------------------------------------
 
+def draw_box_at(dc, x: float, y: float, w: float, h: float) -> None:
+    global MM_TWIPS
+
+    _x = x * MM_TWIPS
+    _y = -abs(y) * MM_TWIPS
+    _w = w * MM_TWIPS
+    _h = -abs(h) * MM_TWIPS
+    dc.MoveTo((int(_x), int(_y)))
+    dc.LineTo((int(_x + _w), int(_y)))
+    dc.LineTo((int(_x + _w), int(_y + _h)))
+    dc.LineTo((int(_x), int(_y + _h)))
+    dc.LineTo((int(_x), int(_y)))
+
+
+#--------------------------------------------------------------------------------------------------
+
 
 def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT") -> bool:
 
@@ -518,7 +535,6 @@ def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT
     win32print.DocumentProperties(None, hprinter, printer_name, devmode, devmode, win32con.DM_IN_BUFFER | win32con.DM_OUT_BUFFER) # | win32con.DM_IN_PROMPT)  # validate devmode structure
     #win32print.SetPrinter(hprinter, 2, properties, 0)  # does not work due to access rights
 
-
     #form_name = "my_silly_label_size"
     # try:
     #     win32print.DeleteForm(hprinter, form_name)
@@ -571,51 +587,14 @@ def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT
     printer_margins = dc.GetDeviceCaps(win32con.PHYSICALOFFSETX), dc.GetDeviceCaps(win32con.PHYSICALOFFSETY)
 
 
-    # # get printer context
-    # # if printer_name.upper() == "DEFAULT":
-    # #     printer_name = win32print.GetDefaultPrinter()
-    # hDC = win32ui.CreateDC()
-    # hDC.CreatePrinterDC(printer_name)
-    # printable_area = hDC.GetDeviceCaps(HORZRES), hDC.GetDeviceCaps(VERTRES)
-    # printer_size = hDC.GetDeviceCaps(PHYSICALWIDTH), hDC.GetDeviceCaps(PHYSICALHEIGHT)
-    # printer_margins = hDC.GetDeviceCaps(PHYSICALOFFSETX), hDC.GetDeviceCaps(PHYSICALOFFSETY)
-    #
-
-
-
-    # if 0:
-    #     # create datamatrix code
-    #     encoded = encode(content.encode("utf8"))
-    #     print((encoded.width, encoded.height))
-    #     img = Image.frombytes("RGB", (encoded.width, encoded.height), encoded.pixels)
-    # if 1:
-    #     encoder = DataMatrixEncoder(content)
-    #     #img_data = encoder.get_imagedata(cellsize=cellsize)
-    #     img_data = encoder.get_imagedata()
-    #     img = Image.open(BytesIO(img_data))
-
-
-
-    #img_w_border = ImageOps.expand(img, border=3, fill='black')
-    #dib = ImageWin.Dib(img_w_border)
-
     img1 = datamatrix(content, border=1)
     dib1 = ImageWin.Dib(img1)
     img2 = qr_code(content, border=1)
     dib2 = ImageWin.Dib(img2)
 
-    # # rotate it if it's wider than it is high, and work out how much to multiply
-    # #  each pixel by to get it as big as possible on the page without distorting.
+    # # rotate it if it's wider than it is high
     # if img.size[0] > img.size[1]:
     #     img = img.rotate (90)
-    # ratios = [1.0 * printable_area[0] / img.size[0], 1.0 * printable_area[1] / img.size[1]]
-    # scale = min(ratios)
-    # scaled_width, scaled_height = [int(scale * i) for i in img.size]
-    # x1 = int((printer_size[0] - scaled_width) / 2)
-    # y1 = int((printer_size[1] - scaled_height) / 2)
-    # x2 = x1 + scaled_width
-    # y2 = y1 + scaled_height
-
 
     # Start the print job, and draw the bitmap to
     #  the printer device at the scaled size.
@@ -623,16 +602,8 @@ def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT
     dc.StartDoc(doc_name)
     dc.StartPage()
 
-    #dib.draw(dc.GetHandleOutput(), (x1, y1, x2, y2))
-    # maxw = dc.GetDeviceCaps(win32con.HORZRES)
-    # maxh = dc.GetDeviceCaps(win32con.VERTRES)
-    # draw_img(dc.GetHandleOutput(), dib, maxh, maxw)
-    # draw = ImageDraw.Draw(dib)
-
     dc.SetMapMode(win32con.MM_TWIPS)  # Note: upper left is 0,0 with x increasing to the right and y decreasing (negative) moving down
     #win32con.MM_HIMETRIC
-    #dib1.draw(dc.GetHandleOutput(), gdc_scale_position_and_size(dc,  5,  5, 30, 30))
-    #dib2.draw(dc.GetHandleOutput(), gdc_scale_position_and_size(dc, 125, 5, 30, 30))
     draw_img(dc, img2,   5, 5, w=30, h=30)
     draw_img(dc, img1, 125, 5, w=30, h=30)
 
@@ -663,43 +634,8 @@ def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT
         bounding_box_y += draw_text_at(dc, line, 40, bounding_box_y, width=120, font_size=font2size)
         #dc.SelectObject(font1)
         #dc.TextOut(12, idx * pixel_scale, line)
-        #dc.SelectObject(font2)
-        #_height = dc.DrawText('TEST', (int(110 * MM_TWIPS), bounding_box_start_y, int(200 * MM_TWIPS), bounding_box_start_y + font2size), win32con.DT_LEFT)  # returns height in logical units
-        # _height = dc.DrawText(line,
-        #                       (int(40 * MM_TWIPS), bounding_box_start_y,
-        #                        int(120 * MM_TWIPS), bounding_box_start_y + font2size),
-        #                       win32con.DT_LEFT)  # returns height in logical units
-        # bounding_box_start_y += _height
 
-
-
-    # #draw.draw(hDC.GetHandleOutput(), (x1, y1, x2, y2))
-
-    # fontdata = { 'name':'Arial', 'height':15}
-    # font = win32ui.CreateFont(fontdata)
-    # hDC.SelectObject(font)
-
-
-    #dc.SelectObject(font)
-    #dc = win32ui.CreateDC()
-    #dc.CreatePrinterDC(printer_name)
-    #dc.StartDoc('My Python Document')
-    #dc.StartPage()
-    # note: upper left is 0,0 with x increasing to the right,
-    #       and y decreasing (negative) moving down
-
-    # Centers "TEST" about an inch down on page
-    #dc.DrawText('TEST', (0,INCH*-1,INCH*8,INCH*-2), win32con.DT_CENTER )
-    #dc.EndPage()
-    #dc.EndDoc()
-    #del dc
-    # for i in range(len(samplePrintText)):
-    #     dc.TextOut(0,i, samplePrintText[i])
-    #     dc.MoveTo(0, i)
-    #     dc.LineTo(0, i)
-
-
-    # del draw
+    draw_box_at(dc, 0,0, 160, 40)
 
     dc.EndPage()
     dc.EndDoc()
