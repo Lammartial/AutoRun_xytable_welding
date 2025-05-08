@@ -12,6 +12,7 @@ Need to install 'pylibdtmx'
 """
 
 import base64
+#import math
 from io import BytesIO
 from PIL.ImageFile import ImageFile
 from pylibdmtx import pylibdmtx
@@ -338,15 +339,15 @@ def datamatrix(content, cellsize: int = 5, border: int = None, border_color: str
         Image.Image | ImageFile: A Pillow image object.
     """
 
-    # pystrich library:
-    encoder = DataMatrixEncoder(content)
-    img_data = encoder.get_imagedata(cellsize=cellsize)
-    #img_data = encoder.get_imagedata()
-    img = Image.open(BytesIO(img_data))
+    # # pystrich library:
+    # encoder = DataMatrixEncoder(content)
+    # img_data = encoder.get_imagedata(cellsize=cellsize)
+    # #img_data = encoder.get_imagedata()
+    # img = Image.open(BytesIO(img_data))
 
-    # # pylibdmtx library:
-    # encoded = pylibdmtx.encode(content)
-    # img = Image.frombytes('RGB', (encoded.width, encoded.height), encoded.pixels)
+    # pylibdmtx library:
+    encoded = pylibdmtx.encode(content)
+    img = Image.frombytes('RGB', (encoded.width, encoded.height), encoded.pixels)
 
     if border is None:
         img = img.crop(ImageOps.invert(img).getbbox())
@@ -355,7 +356,104 @@ def datamatrix(content, cellsize: int = 5, border: int = None, border_color: str
     return img
 
 
+#--------------------------------------------------------------------------------------------------
 
+def gdc_scale_position_and_size(dc, x: float, y: float, width: float, height: float) -> tuple:
+    """Calculates position and dimension tuple to paint an image into GDC.
+    Assumes CM is being defined.
+
+    Origin is top left, thus Y value is converted into negative number as well
+    as height, if they are not provided negative already.
+
+    Args:
+        dc (PyCDC): Python device context
+        x (float): Horizontal position offset in mm
+        y (float): Vertical position offset in mm
+        width (float): Width of the image in mm
+        height (float): Height of the image in mm
+
+    Returns:
+        tuple: (x1, y1, x2, y2) to be passed into GDC.Draw() function
+    """
+    global MM_TWIPS
+
+    DPI_y = dc.GetDeviceCaps(win32con.LOGPIXELSY)
+    DPI_x = dc.GetDeviceCaps(win32con.LOGPIXELSX)
+    ofs_y = dc.GetDeviceCaps(win32con.PHYSICALOFFSETY)
+    ofs_x = dc.GetDeviceCaps(win32con.PHYSICALOFFSETX)
+    x1 = (abs(x) + ofs_x) * MM_TWIPS
+    y1 = (-abs(y) + ofs_y) * MM_TWIPS
+    x2 = x1 + (abs(width) * MM_TWIPS)
+    y2 = y1 - (abs(height) * MM_TWIPS)  # neg needed
+    return round(x1),round(y1),round(x2),round(y2)
+
+
+#--------------------------------------------------------------------------------------------------
+
+
+def calc_fontsize(dc, PointSize: float) -> int:
+    """Assumes MM_TWIPS mapping mode.
+
+    Args:
+        dc (PyCDC): Python device context
+        PointSize (float): Font size in points, e.g. 12 or 10.5
+
+    Returns:
+        int: Fontsize in device DPI assuming that point means size in 72 DPI
+    """
+
+    DPI_y = dc.GetDeviceCaps(win32con.LOGPIXELSY)
+    return int(-(PointSize * DPI_y) / 72)  # where is 72 taken from ?
+
+
+#--------------------------------------------------------------------------------------------------
+
+
+def draw_img(dc, img: Image, x: float, y: float, w: float = None, h: float = None) -> None:
+    """Draws an image into Windows device context.
+
+    Args:
+        dc (PyCDC): Python device context
+        img (Image): _description_
+        x (float): _description_
+        y (float): _description_
+        w (float, optional): _description_. Defaults to None.
+        h (float, optional): _description_. Defaults to None.
+    """
+
+    dib = ImageWin.Dib(img)
+    _w, _h = dib.size
+    dib.draw(dc.GetHandleOutput(),
+             gdc_scale_position_and_size(dc,  x,  y,
+                                         _w if w is None else w,
+                                         _h if h is None else h))
+
+
+#--------------------------------------------------------------------------------------------------
+
+
+def draw_text_at(dc, text: str, x: float, y: float, width: float = None, height: float = None, font_size: float = None, align: int = win32con.DT_LEFT) -> float:
+    global MM_TWIPS
+
+    _x = int(x * MM_TWIPS)
+    #_sy = math.copysign(y)
+    #_sy = int(y/abs(y)) if x != 0 else 1
+    _sy = -1 if y < 0 else 1
+    _y = -int(abs(y) * MM_TWIPS)
+    if font_size:
+        if width:
+            _x1 = _x + int(abs(width) * MM_TWIPS)
+        else:
+            _x1 = len(text) * font_size
+        _y1 = _y + font_size
+    else:
+        _x1 = _x + int(abs(width) * MM_TWIPS)
+        _y1 = _y - int(abs(height) * MM_TWIPS)
+    _height = dc.DrawText(text, (_x, _y, _x1, _y1), align)
+    return _sy * abs(_height) / MM_TWIPS  # -> mm, keeping the sign of INPUT y
+
+
+#--------------------------------------------------------------------------------------------------
 
 
 def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT") -> bool:
@@ -483,58 +581,6 @@ def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT
     # printer_margins = hDC.GetDeviceCaps(PHYSICALOFFSETX), hDC.GetDeviceCaps(PHYSICALOFFSETY)
     #
 
-    def gdc_scale_position_and_size(x: float, y: float, width: float, height: float) -> tuple:
-        """Calculates position and dimension tuple to paint an image into GDC.
-        Assumes CM is being defined.
-
-        Origin is top left, thus Y value is converted into negative number as well
-        as height, if they are not provided negative already.
-
-        Args:
-            x (float): Horizontal position offset in mm
-            y (float): Vertical position offset in mm
-            width (float): Width of the image in mm
-            height (float): Height of the image in mm
-
-        Returns:
-            tuple: (x1, y1, x2, y2) to be passed into GDC.Draw() function
-        """
-        global MM_TWIPS
-
-        DPI_y = dc.GetDeviceCaps(win32con.LOGPIXELSY)
-        DPI_x = dc.GetDeviceCaps(win32con.LOGPIXELSX)
-        ofs_y = dc.GetDeviceCaps(win32con.PHYSICALOFFSETY)
-        ofs_x = dc.GetDeviceCaps(win32con.PHYSICALOFFSETX)
-        x1 = (abs(x) + ofs_x) * MM_TWIPS
-        y1 = (-abs(y) + ofs_y) * MM_TWIPS
-        x2 = x1 + (abs(width) * MM_TWIPS)
-        y2 = y1 - (abs(height) * MM_TWIPS)  # neg needed
-        return round(x1),round(y1),round(x2),round(y2)
-
-
-    def calc_fontsize(dc, PointSize: float) -> int:
-        """Assumes MM_TWIPS mapping mode.
-
-        Args:
-            dc (PyCDC): _description_
-            PointSize (float): _description_
-
-        Returns:
-            int: _description_
-        """
-
-        DPI_y = dc.GetDeviceCaps(win32con.LOGPIXELSY)
-        return int(-(PointSize * DPI_y) / 72)  # where is 72 taken from ?
-
-
-    def draw_img(hdc, dib, maxh, maxw) -> None:
-        w, h = dib.size
-        print("Image HW: ({:d}, {:d}), Max HW: ({:d}, {:d})".format(h, w, maxh, maxw))
-        h = min(h, maxh)
-        w = min(w, maxw)
-        l = (maxw - w) // 2
-        t = (maxh - h) // 2
-        dib.draw(hdc, (l, t, l + w, t + h))
 
 
     # if 0:
@@ -553,9 +599,9 @@ def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT
     #img_w_border = ImageOps.expand(img, border=3, fill='black')
     #dib = ImageWin.Dib(img_w_border)
 
-    img1 = datamatrix(content, border=4)
+    img1 = datamatrix(content, border=1)
     dib1 = ImageWin.Dib(img1)
-    img2 = qr_code(content, border=4)
+    img2 = qr_code(content, border=1)
     dib2 = ImageWin.Dib(img2)
 
     # # rotate it if it's wider than it is high, and work out how much to multiply
@@ -585,9 +631,10 @@ def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT
 
     dc.SetMapMode(win32con.MM_TWIPS)  # Note: upper left is 0,0 with x increasing to the right and y decreasing (negative) moving down
     #win32con.MM_HIMETRIC
-    dib1.draw(dc.GetHandleOutput(), gdc_scale_position_and_size(10, 10, 20, 20))
-    dib2.draw(dc.GetHandleOutput(), gdc_scale_position_and_size(10, 60, 20, 20))
-
+    #dib1.draw(dc.GetHandleOutput(), gdc_scale_position_and_size(dc,  5,  5, 30, 30))
+    #dib2.draw(dc.GetHandleOutput(), gdc_scale_position_and_size(dc, 125, 5, 30, 30))
+    draw_img(dc, img2,   5, 5, w=30, h=30)
+    draw_img(dc, img1, 125, 5, w=30, h=30)
 
     font1size = calc_fontsize(dc, 32)
     fontdata = {
@@ -606,16 +653,24 @@ def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT
     }
     font2 = win32ui.CreateFont(fontdata)
 
-    txt = text.split("\r")
-    pixel_scale = font1size
-    bounding_box_start_y = 0
+    txt = text.split("\n")
+    pixel_scale = font2size
+    #bounding_box_start_y = -(int(5 * MM_TWIPS))
+    bounding_box_y: float = 5  # would normally need negative sign position, but our function converts it on demand
+    dc.SelectObject(font2)
     for idx,line in enumerate(txt):
         print("Text line {:d}: {:s}".format(idx, line))
-        dc.SelectObject(font1)
-        dc.TextOut(12, idx * pixel_scale, line)
-        dc.SelectObject(font2)
-        _height = dc.DrawText('TEST', (int(110 * MM_TWIPS), bounding_box_start_y, int(200 * MM_TWIPS), bounding_box_start_y + font2size), win32con.DT_LEFT)  # returns height in logical units
-        bounding_box_start_y += _height
+        bounding_box_y += draw_text_at(dc, line, 40, bounding_box_y, width=120, font_size=font2size)
+        #dc.SelectObject(font1)
+        #dc.TextOut(12, idx * pixel_scale, line)
+        #dc.SelectObject(font2)
+        #_height = dc.DrawText('TEST', (int(110 * MM_TWIPS), bounding_box_start_y, int(200 * MM_TWIPS), bounding_box_start_y + font2size), win32con.DT_LEFT)  # returns height in logical units
+        # _height = dc.DrawText(line,
+        #                       (int(40 * MM_TWIPS), bounding_box_start_y,
+        #                        int(120 * MM_TWIPS), bounding_box_start_y + font2size),
+        #                       win32con.DT_LEFT)  # returns height in logical units
+        # bounding_box_start_y += _height
+
 
 
     # #draw.draw(hDC.GetHandleOutput(), (x1, y1, x2, y2))
@@ -698,7 +753,10 @@ if __name__ == "__main__":
     printer_name = "Microsoft Print to PDF"
     #printer_name = "\\\\printhost-2k16.rrc\\C-1-58-M6630cidn"
 
-    print_datamatrix_label("00231872347699829949", "Zeile 1\rZeile 2", printer_name=printer_name)  # test buggy QRCode
+    _content = "00231872347699829949"
+    _content = "Schacht #1\nZelltyp ICR18650E28-XX"
+
+    print_datamatrix_label(_content, _content, printer_name=printer_name)  # test buggy QRCode
     # print_datamatrix_label(
     #     "01234567890123456789012345678901234567890123456789"+
     #     "01234567890123456789012345678901234567890123456789"+
