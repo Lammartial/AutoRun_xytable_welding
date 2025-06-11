@@ -31,8 +31,150 @@ from rrc.eth2serial import Eth2SerialDevice, Eth2SerialSimulationDevice, tcp_sen
 from rrc.serialport import SerialComportDevice
 
 
-INCH_TWIPS: int = 1440   # twips - 1440 per inch allows fine res
+#--------------------------------------------------------------------------------------------------
+
+
+INCH_TWIPS: int = 1440  # TWIPS - 1440 per inch allows fine res
+                        # NOTE:
+                        #   20 TWIPS per point (need to scale font)
+                        #   72 points per inch
+                        # 1440 TWIPS per inch
 MM_TWIPS: float = INCH_TWIPS / 25.4  # => 56.6929 per mm but we need float
+
+
+
+# NOTE:
+# The Zebra ZD220 Printer should be set to this size manually and thermal temperature
+# to 24 with original Zebra transfer foil.
+#
+
+LABEL_LAYOUT_DEFINITION = {
+    # Width x Height in mm
+    "76mm_x_51mm": {
+        "dimensions": {
+            "width": 76,
+            "height": 51,
+        },
+        "textbox": [
+                # for each line define a separate entry: (if more lines are used than entries: last entry will be repeated)
+                # (x, y, width, height, font) - "None" for y/height means: auto/calculated
+                (30,    5, 43, None, "big"),    # line 1
+                (30, None, 43, None, "big"),    # line 2
+                (30, None, 43, None, "big"),    # line 3
+                ( 5, None, 73, None, "std"),    # line 4
+                ( 5, None, 73, None, "std"),    # line 5
+                ( 5, None, 73, None, "small"),  # line 6
+        ],
+        "codebox": [
+            # for each 2D code define:
+            # (x, y, width, height, code_type, border) - type = ["qr" or "mx"] and x,y,width,height in mm
+            (3.0, 4.5, 25, 25, "mx", 0),
+        ],
+        "fonts": {
+            # definition of fonts
+            "std": {
+                "name": "Arial",
+                "size": 32,  # in points, used to calculate height in DPI
+                "height": None,  # in DPI, will be calculated if None
+                "italic": False,
+                "weight": win32con.FW_NORMAL,
+            },
+            "big": {
+                "name": "Arial",
+                "size": 48,
+                "height": None,
+                "italic": False,
+                "weight": win32con.FW_NORMAL,
+            },
+            "small": {
+                "name": "Arial",
+                "size": 16,
+                "height": None,
+                "italic": True,
+                "weight": win32con.FW_LIGHT,
+            },
+        },
+    },
+    #--------------------------------------------
+    "160mm_x_40mm": {
+         "dimensions": {
+            "width": 160,
+            "height": 40,
+        },
+        "textbox": [
+                # for each line define a separate entry: (if more lines are used than entries: last entry will be repeated)
+                # (x, y, width, height, font) - "None" for y/height means: auto/calculated
+                (40, 5, 120, None, "std"),    # first line at y=5, all other lines will be put under each other (auto y calculation)
+        ],
+        "codebox": [
+            # for each 2D code define one entry:
+            # (x, y, w, h, code_type, border) - type = ["qr" or "mx"] and x,y,w,h in mm
+            (2.5, 2.5, 25, 25, "mx", 1),
+            (125, 2.5, 25, 25, "qr", 1),
+        ],
+        "fonts": {
+            # definition of fonts
+            "std": {
+                "name": "Arial",
+                "size": 32,  # in points, used to calculate height in DPI
+                "height": None,  # in DPI, will be calculated if None
+                "italic": True,
+                "weight": win32con.FW_NORMAL,
+            },
+        },
+    }
+
+
+}
+
+#--------------------------------------------------------------------------------------------------
+
+
+def _calc_font_heights_for_labeldefinition(L, dc = None):
+    for k,v in L["fonts"].items():
+        if "size" in v:
+            L["fonts"][k]["height"] = calc_fontheight_in_dpi(v["size"], dc=dc)
+            del L["fonts"][k]["size"]  # size keyword not allowed in further processing
+    return L
+
+
+#--------------------------------------------------------------------------------------------------
+
+
+def label_size_76mm_x_51mm(dc = None) -> dict:
+    """For Labels of size 76mm x 51mm with one datamatrx code
+
+    The Zebra ZD220 Printer should be set to this size manually and thermal temperature
+    to 24 with original Zebra transfer foil.
+
+    Args:
+        dc (optional, PyCDC): Python device context wrapper
+
+    Returns:
+        dict: layout dictionary
+    """
+
+    global LABEL_LAYOUT_DEFINITION
+
+    return _calc_font_heights_for_labeldefinition(LABEL_LAYOUT_DEFINITION["76mm_x_51mm"], dc=dc)
+
+
+#--------------------------------------------------------------------------------------------------
+
+
+def label_size_160mm_x_40mm(dc = None) -> dict:
+    """Layout for Label 160mm x 40mm with one datamatrix and one QR code.
+
+    Args:
+        dc (optional, PyCDC): Python device context wrapper
+
+    Returns:
+        dict: layout dictionary
+    """
+
+    global LABEL_LAYOUT_DEFINITION
+
+    return _calc_font_heights_for_labeldefinition(LABEL_LAYOUT_DEFINITION["160mm_x_40mm"], dc=dc)
 
 
 #--------------------------------------------------------------------------------------------------
@@ -63,58 +205,6 @@ def get_available_printer_names() -> list:
 
 def print_available_printer_names() -> None:
     [ print(f"{i}: {p}") for i,p in enumerate(get_available_printer_names()) ]
-
-
-#--------------------------------------------------------------------------------------------------
-
-
-def print_pdf_to_printer(printer_name: str, pdf_path: str | Path) -> None:
-    printer_handle = win32print.OpenPrinter(printer_name)
-    try:
-        pdf_path = Path(pdf_path)
-        default_printer_info = win32print.GetPrinter(printer_handle, 2)
-        printer_info = default_printer_info.copy()
-        printer_info['pDevMode'].DriverData = b'RAW'
-        pdf_file = open(pdf_path, 'rb')
-        #printer = win32ui.CreatePrinterDC(printer_name)
-        printer = win32ui.CreateDC()
-        printer.CreatePrinterDC(printer_name)
-        printer.StartDoc(str(pdf_path.absolute()))
-        printer.StartPage()
-        pdf_data = pdf_file.read()
-        printer.Write(pdf_data)
-        printer.EndPage()
-        printer.EndDoc()
-    except Exception as e:
-        print("Exception occurred: ", e)
-    finally:
-        win32print.ClosePrinter(printer_handle)
-        pdf_file.close()
-
-
-def print_docx_to_printer(printer_name: str, docx_path: str | Path) -> None:
-    printer_handle = win32print.OpenPrinter(printer_name)
-    try:
-        docx_path = Path(docx_path)
-        default_printer_info = win32print.GetPrinter(printer_handle, 2)
-        printer_info = default_printer_info.copy()
-        printer_info['pDevMode'].DriverData = b'RAW'
-        docx_file = open(docx_path, 'rb')
-        printer = win32ui.CreateDC()
-        printer.CreatePrinterDC(printer_name)
-        #printer = win32ui.CreatePrinterDC(printer_name)
-        printer.StartDoc(str(docx_path.absolute()))
-        printer.StartPage()
-        docx_data = docx_file.read()
-        printer.Write(docx_data)
-        printer.EndPage()
-        printer.EndDoc()
-    except Exception as e:
-        print("Exception occurred: ", e)
-    finally:
-        win32print.ClosePrinter(printer_handle)
-        docx_file.close()
-
 
 
 #--------------------------------------------------------------------------------------------------
@@ -220,36 +310,9 @@ def print_datamatrix_label_0(content: str, printer_name: str = "DEFAULT") -> boo
 
 
 #--------------------------------------------------------------------------------------------------
-"""
-printer_name = "MXP T11"
-raw_data = bytes(label_text, "utf-8")
-
-drivers = win32print.EnumPrinterDrivers(None, None, 2)
-hPrinter = win32print.OpenPrinter(printer_name)
-printer_info = win32print.GetPrinter(hPrinter, 2)
-for driver in drivers:
-    if driver["Name"] == printer_info["pDriverName"]:
-        printer_driver = driver
-
-raw_type = "XPS_PASS" if printer_driver["Version"] == 4 else "RAW"
-
-try:
-    hJob = win32print.StartDocPrinter(hPrinter, 1, ("test of raw data", None, raw_type))
-    try:
-        win32print.StartPagePrinter(hPrinter)
-        win32print.WritePrinter(hPrinter, raw_data)
-        win32print.EndPagePrinter(hPrinter)
-    except Exception as e:
-        win32print.EndDocPrinter(hPrinter)
-        message.warning(request, f"Error! {e}")
-
-except Exception as e:
-    win32print.ClosePrinter(hPrinter)
-    message.warning(request, f'Error! {e}')
-"""
 
 
-def pil_to_html_imgdata(img: Image, fmt: str = "PNG") -> str:
+def image_to_html_imgtag_data(img: Image, fmt: str = "PNG") -> str:
     """Convert a PIL image into HTML-displayable data.
 
     The result is a string ``data:image/FMT;base64,xxxxxxxxx`` which you
@@ -257,7 +320,7 @@ def pil_to_html_imgdata(img: Image, fmt: str = "PNG") -> str:
 
     Examples
 
-    >>> data = pil_to_html_imgdata(my_pil_img)
+    >>> data = image_to_html_imgdata(my_pil_img)
     >>> html_data = '<img src="%s"/>' % data
 
     Args:
@@ -272,6 +335,9 @@ def pil_to_html_imgdata(img: Image, fmt: str = "PNG") -> str:
     img.save(buffered, format=fmt)
     img_str = base64.b64encode(buffered.getvalue())
     return f"data:image/{fmt.lower()};charset=utf-8;base64,{img_str.decode()}"
+
+
+#--------------------------------------------------------------------------------------------------
 
 
 def qr_code(content,
@@ -321,6 +387,8 @@ def qr_code(content,
     return img
 
 
+#--------------------------------------------------------------------------------------------------
+
 
 def datamatrix(content, cellsize: int = 5, border: int = None, border_color: str = "black") -> Image.Image | ImageFile:
 
@@ -347,7 +415,7 @@ def datamatrix(content, cellsize: int = 5, border: int = None, border_color: str
     # img = Image.open(BytesIO(img_data))
 
     # pylibdmtx library:
-    encoded = pylibdmtx.encode(content)
+    encoded = pylibdmtx.encode(content.encode('utf-8'))
     img = Image.frombytes('RGB', (encoded.width, encoded.height), encoded.pixels)
 
     if border is None:
@@ -358,6 +426,7 @@ def datamatrix(content, cellsize: int = 5, border: int = None, border_color: str
 
 
 #--------------------------------------------------------------------------------------------------
+
 
 def gdc_scale_position_and_size(dc, x: float, y: float, width: float, height: float) -> tuple:
     """Calculates position and dimension tuple to paint an image into GDC.
@@ -392,25 +461,36 @@ def gdc_scale_position_and_size(dc, x: float, y: float, width: float, height: fl
 #--------------------------------------------------------------------------------------------------
 
 
-def calc_fontsize(dc, PointSize: float) -> int:
+def calc_fontheight_in_dpi(PointSize: float, dc = None) -> int:
     """Assumes MM_TWIPS mapping mode.
 
+    NOTE:     20 TWIPS per point
+              72 points per inch
+            1440 TWIPS per inch
+
+            Anyway the printer driver scales the fonts to 600 DPI regardsless of the printer setting.
+            Thus we set the DPI_y fixed to 600.
+
     Args:
-        dc (PyCDC): Python device context
         PointSize (float): Font size in points, e.g. 12 or 10.5
+        dc (optional, PyCDC): Python device context. If given, the DPI scale of the device is being used,
+            else a fixed DPI of 600 is used.
 
     Returns:
         int: Fontsize in device DPI assuming that point means size in 72 DPI
     """
 
-    DPI_y = dc.GetDeviceCaps(win32con.LOGPIXELSY)
-    return int(-(PointSize * DPI_y) / 72)  # where is 72 taken from ?
+    if dc is not None:
+        DPI_y = dc.GetDeviceCaps(win32con.LOGPIXELSY)
+    else:
+        DPI_y = 600  # see the note above
+    return int(-((PointSize / 72) * DPI_y))  # 72 points per inch
 
 
 #--------------------------------------------------------------------------------------------------
 
 
-def draw_img(dc, img: Image, x: float, y: float, w: float = None, h: float = None) -> None:
+def draw_img_at(dc, img: Image, x: float, y: float, w: float = None, h: float = None) -> None:
     """Draws an image into Windows device context.
 
     Args:
@@ -472,8 +552,22 @@ def draw_box_at(dc, x: float, y: float, w: float, h: float) -> None:
 
 #--------------------------------------------------------------------------------------------------
 
+def print_datamatrix_label(content: str, text: str, label_layout: str, printer_name: str = "DEFAULT") -> bool:
+    """_summary_
 
-def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT") -> bool:
+    Args:
+        content (str): _description_
+        text (str): _description_
+        label_layout (str): _description_
+        printer_name (str, optional): _description_. Defaults to "DEFAULT".
+
+    Returns:
+        bool: _description_
+    """
+
+    global LABEL_LAYOUT_DEFINITION
+
+    assert label_layout in LABEL_LAYOUT_DEFINITION, f"Unknown label definition '{label_layout}'"
 
     # printers = win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL)
     # PRINTER_DEFAULTS = {"DesiredAccess":win32print.PRINTER_ALL_ACCESS}
@@ -531,39 +625,40 @@ def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT
     ##devmode.PaperSize = 0
     #win32print.SetPrinter(handle, level, attributes, 0)  # does not work!
 
-    # Write these changes back to the printer
-    win32print.DocumentProperties(None, hprinter, printer_name, devmode, devmode, win32con.DM_IN_BUFFER | win32con.DM_OUT_BUFFER) # | win32con.DM_IN_PROMPT)  # validate devmode structure
-    #win32print.SetPrinter(hprinter, 2, properties, 0)  # does not work due to access rights
+    if 0:
+        # Write these changes back to the printer
+        win32print.DocumentProperties(None, hprinter, printer_name, devmode, devmode, win32con.DM_IN_BUFFER | win32con.DM_OUT_BUFFER) # | win32con.DM_IN_PROMPT)  # validate devmode structure
+        #win32print.SetPrinter(hprinter, 2, properties, 0)  # does not work due to access rights
 
-    #form_name = "my_silly_label_size"
-    # try:
-    #     win32print.DeleteForm(hprinter, form_name)
-    # except Exception:
-    #     pass
-    # tForm = ({
-    #     'Flags': 2,  # form_user ?
-    #     'Name': form_name,
-    #     'Size': {
-    #         #'cx': 215900,   # x 0.001mm
-    #         #'cy': 279400,  # x 0.001mm
-    #         'cx': 120000,  # x 0.001mm
-    #         'cy':  10000,  # x 0.001mm
-    #     },
-    #     'ImageableArea': {
-    #         'left': 0,
-    #         'top': 0,
-    #         #'right': 215900,
-    #         #'bottom': 279400,
-    #         'right': 120000,
-    #         'bottom': 10000,
-    #     }
-    # })
-    # try:
-    #     win32print.AddForm(hprinter, tForm)
-    # except Exception as ex:
-    #     win32print.SetForm(hprinter, form_name, tForm)  # use our format
-    #win32print.DeleteForm(hprinter, form_name)
-    #x = win32print.GetForm(hprinter, form_name)
+        #form_name = "my_silly_label_size"
+        # try:
+        #     win32print.DeleteForm(hprinter, form_name)
+        # except Exception:
+        #     pass
+        # tForm = ({
+        #     'Flags': 2,  # form_user ?
+        #     'Name': form_name,
+        #     'Size': {
+        #         #'cx': 215900,   # x 0.001mm
+        #         #'cy': 279400,  # x 0.001mm
+        #         'cx': 120000,  # x 0.001mm
+        #         'cy':  10000,  # x 0.001mm
+        #     },
+        #     'ImageableArea': {
+        #         'left': 0,
+        #         'top': 0,
+        #         #'right': 215900,
+        #         #'bottom': 279400,
+        #         'right': 120000,
+        #         'bottom': 10000,
+        #     }
+        # })
+        # try:
+        #     win32print.AddForm(hprinter, tForm)
+        # except Exception as ex:
+        #     win32print.SetForm(hprinter, form_name, tForm)  # use our format
+        #win32print.DeleteForm(hprinter, form_name)
+        #x = win32print.GetForm(hprinter, form_name)
 
     # create DC using new settings. First get the integer hDC value.
     # Note that we need the name.
@@ -586,15 +681,30 @@ def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT
     # PHYSICALOFFSETX/Y = left / top margin
     printer_margins = dc.GetDeviceCaps(win32con.PHYSICALOFFSETX), dc.GetDeviceCaps(win32con.PHYSICALOFFSETY)
 
+    # img_mx = datamatrix(content, border=1)
+    # #img_mx = datamatrix(content.replace("\n",""), border=1)
+    # #img_mx = datamatrix("00231872347699829949")
+    # dib1 = ImageWin.Dib(img_mx)
+    # img_qr = qr_code(content, border=1)
+    # dib2 = ImageWin.Dib(img_qr)
 
-    img1 = datamatrix(content, border=1)
-    dib1 = ImageWin.Dib(img1)
-    img2 = qr_code(content, border=1)
-    dib2 = ImageWin.Dib(img2)
-
-    # # rotate it if it's wider than it is high
+    # # rotate it if it's wider than it is height
     # if img.size[0] > img.size[1]:
     #     img = img.rotate (90)
+
+    def activate_font(dc, fontdata):
+        _font = win32ui.CreateFont(fontdata)
+        _height = fontdata["height"]
+        dc.SelectObject(_font)
+        return _font, _height
+
+    def calc_font_heights_for_labeldefinition(L, dc = None):
+        for k,v in L["fonts"].items():
+            if "size" in v:
+                L["fonts"][k]["height"] = calc_fontheight_in_dpi(v["size"], dc=dc)
+                del L["fonts"][k]["size"]  # size keyword not allowed in further processing
+        return L
+
 
     # Start the print job, and draw the bitmap to
     #  the printer device at the scaled size.
@@ -604,38 +714,46 @@ def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT
 
     dc.SetMapMode(win32con.MM_TWIPS)  # Note: upper left is 0,0 with x increasing to the right and y decreasing (negative) moving down
     #win32con.MM_HIMETRIC
-    draw_img(dc, img2,   5, 5, w=30, h=30)
-    draw_img(dc, img1, 125, 5, w=30, h=30)
 
-    font1size = calc_fontsize(dc, 32)
-    fontdata = {
-        "name": "Arial",
-        "height": font1size,
-        "italic": True,
-        "weight": win32con.FW_NORMAL,
-    }
-    font1 = win32ui.CreateFont(fontdata)
-    font2size = calc_fontsize(dc, 48)
-    fontdata = {
-        "name": "Arial",
-        "height": font2size,
-        "italic": False,
-        "weight": win32con.FW_LIGHT,
-    }
-    font2 = win32ui.CreateFont(fontdata)
+    # retrieve the label's layout definition and prepare the font heights by calculation
+    #layout =  calc_font_heights_for_labeldefinition(LABEL_LAYOUT_DEFINITION[label_layout], dc=dc)
+    layout =  calc_font_heights_for_labeldefinition(LABEL_LAYOUT_DEFINITION[label_layout])
+    print(layout)
 
-    txt = text.split("\n")
-    pixel_scale = font2size
-    #bounding_box_start_y = -(int(5 * MM_TWIPS))
-    bounding_box_y: float = 5  # would normally need negative sign position, but our function converts it on demand
-    dc.SelectObject(font2)
-    for idx,line in enumerate(txt):
+    # process the 2D codes as defined in the label definition
+    for _x, _y, _w, _h, _code_type, _border in layout["codebox"]:
+        img = datamatrix(content, border=_border) if _code_type in ["mx","matrix","datamatrix"] else qr_code(content, border=_border)
+        draw_img_at(dc, img,  _x, _y, w=_w, h=_h)  # copy and scale the image into the device context
+
+    # process the text lines into the textbox definition
+    bounding_box_y: float = 0  # would normally need negative sign position, but our function converts it on demand
+    for idx, line in enumerate(text.split("\n")):
         print("Text line {:d}: {:s}".format(idx, line))
-        bounding_box_y += draw_text_at(dc, line, 40, bounding_box_y, width=120, font_size=font2size)
-        #dc.SelectObject(font1)
-        #dc.TextOut(12, idx * pixel_scale, line)
 
-    draw_box_at(dc, 0,0, 160, 40)
+        if (idx < len(layout["textbox"])):
+            # setting for this line available
+            _x, _y, _width, _height, _font_type = layout["textbox"][idx]
+            if _y is not None:
+                bounding_box_y = _y
+        else:
+            # no explicit definition for this line number: use last definition available
+            _x, _y, _width, _height, _font_type = layout["textbox"][-1]
+            # bounding_box_y is now being calculated no matter if there is a definition for y
+        # activate the font for the device context and get the height of the font in DPI
+        _, font_height = activate_font(dc, layout["fonts"][_font_type])
+
+        # draw the current text line into the device context at defined/calculated postion
+        line_height = draw_text_at(dc, line,
+            _x, bounding_box_y,
+            width=_width, font_size=font_height
+        )
+        if _height is None:
+            bounding_box_y += line_height  # no user defined height -> add the last line's font height
+        else:
+            bounding_box_y += _height  # add the user's height definition for this line
+
+    # DEBUG: draw a box around the label
+    draw_box_at(dc, 0,0, layout["dimensions"]["width"], layout["dimensions"]["height"])
 
     dc.EndPage()
     dc.EndDoc()
@@ -647,11 +765,15 @@ def print_datamatrix_label(content: str, text: str, printer_name: str = "DEFAULT
 
 
 def run_scan_and_print(resource_string: str, printer_name: str) -> None:
-    """_summary_
+    """Runs a scanner task which triggers a print if a valid string is being read. The Termination char is set to LF only.
+    It creates either a network socket scanner or a COM port scanner, depending on the resource string given.
 
     Args:
-        resource_string (str): _description_
-        printer_name (str): _description_
+        resource_string (str): Resource connection string of the scanner. Valid resource strings are:
+            "hostname:port", e.g. "172.25.101.43:2000" for IPv4 172.25.101.43 at port 2000.
+            "comport,baud,linesettings", e.g."COM7,9600,8N1" for COM7 with 9600 baud and 8 bits No parity, 1 stop bit.
+        printer_name (str): Either printer name as known by Windows OS (use print_available_printer_names() to list them)
+            or "DEFAULT" as the default printer set by OS.
     """
 
     if "," in resource_string:
@@ -661,11 +783,15 @@ def run_scan_and_print(resource_string: str, printer_name: str) -> None:
     while 1:
         print(f"Please scan label code: ", end=None)
         try:
-            content = scanner.request(None, timeout=2.0, encoding=None)
-            print(f"got '{content}'")
-            print_datamatrix_label(content, printer_name)
+            content = scanner.request(None, timeout=2.0, encoding="utf-8")
+            if content and len(content) > 0:
+                print(f"got '{content}'")
+                print_datamatrix_label(content, content, printer_name)
         except TimeoutError:
             pass  # just retry
+        #except Exception as e:
+        #    win32print.ClosePrinter(hPrinter)
+        #    message.warning(request, f'Error! {e}')
 
 
 
@@ -679,20 +805,24 @@ def test_create_simple_label() -> None:
     print(pylibdmtx.decode(Image.open(_fp)))
 
 
-
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
 
-    test_create_simple_label()  # on disk
+    print_available_printer_names()
+    #exit()
 
-    printer_name = "Microsoft Print to PDF"
+    #test_create_simple_label()  # on disk
+
+    #printer_name = "Microsoft Print to PDF"
+    printer_name = "ZDesigner ZD220-203dpi ZPL"
     #printer_name = "\\\\printhost-2k16.rrc\\C-1-58-M6630cidn"
 
-    _content = "00231872347699829949"
-    _content = "Schacht #1\nZelltyp ICR18650E28-XX"
+    _content = "00231872347699829949"  # test buggy QRCode
+    _content = "Schacht #1\nZelltyp ICR18650E28-XX\nZeile 3\nZeile 4\nZeile 5"
 
-    print_datamatrix_label(_content, _content, printer_name=printer_name)  # test buggy QRCode
+    #print_datamatrix_label(_content, _content, "160mm_x_40mm", printer_name=printer_name)
+    print_datamatrix_label(_content, _content, "76mm_x_51mm", printer_name=printer_name)
     # print_datamatrix_label(
     #     "01234567890123456789012345678901234567890123456789"+
     #     "01234567890123456789012345678901234567890123456789"+
@@ -705,8 +835,7 @@ if __name__ == "__main__":
 
     RESOURCE_STR = "COM38,9600,8N1"  # manual scanner
     #RESOURCE_STR = "172.21.101.31:2000"  # HOM Line Corepack
-    #run_scan_and_print(printer_name, RESOURCE_STR)  # loop blocks until CTRL-C
+    #run_scan_and_print(RESOURCE_STR, printer_name)  # loop blocks until CTRL-C
 
-    #print_docx_to_printer(printer_name, "./Python_Libs/rrc/hallo_welt.docx")
 
 # END OF FILE
