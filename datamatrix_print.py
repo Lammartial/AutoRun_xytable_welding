@@ -14,14 +14,17 @@ Need to install 'pylibdtmx'
 import base64
 #import math
 from io import BytesIO
-import mmap
+from pathlib import Path
 from PIL.ImageFile import ImageFile
+from PIL import Image, ImageWin, ImageDraw, ImageOps
 from pylibdmtx import pylibdmtx
 from qrcode import QRCode
+from pystrich.code128 import Code128Encoder, Code128Renderer
 from pystrich.datamatrix import DataMatrixEncoder
 from pystrich.qrcode import QRCodeEncoder
-from PIL import Image, ImageWin, ImageDraw, ImageOps
-from pathlib import Path
+from barcode import get_barcode_class, PROVIDED_BARCODES
+from barcode.writer import ImageWriter as barcode_ImageWriter, SVGWriter as barcode_SVGWriter
+
 import win32print
 import win32ui
 import win32con
@@ -66,8 +69,12 @@ LABEL_LAYOUT_DEFINITION = {
                 ( 5, None, 73, None, "small"),  # line 6
         ],
         "codebox": [
-            # for each 2D code define:
-            # (x, y, width, height, code_type, border) - type = ["qr" or "mx"] and x,y,width,height in mm
+            # for each code define one entry:
+            # (x, y, w, h, code_type, border) - x,y,w,h in mm; border 1 or 0
+            # Supported code types:
+            # 2D: 'mx' | 'matrix' | 'datamatrix' -> Data Matrix Code, anything else -> QR-code
+            # Bar: 'codabar', 'code128', 'code39', 'ean', 'ean13', 'ean13-guard', 'ean14', 'ean8', 'ean8-guard', 'gs1',
+            #      'gs1_128', 'gtin', 'isbn', 'isbn10', 'isbn13', 'issn', 'itf', 'jan', 'nw-7', 'pzn', 'upc', 'upca'
             (3.0, 4.5, 25, 25, "mx", 0),
         ],
         "fonts": {
@@ -107,10 +114,16 @@ LABEL_LAYOUT_DEFINITION = {
                 (40, 5, 120, None, "std"),    # first line at y=5, all other lines will be put under each other (auto y calculation)
         ],
         "codebox": [
-            # for each 2D code define one entry:
-            # (x, y, w, h, code_type, border) - type = ["qr" or "mx"] and x,y,w,h in mm
-            (2.5, 2.5, 25, 25, "mx", 1),
-            (125, 2.5, 25, 25, "qr", 1),
+            # for each code define one entry:
+            # (x, y, w, h, code_type, border) - x,y,w,h in mm; border 1 or 0
+            # Supported code types:
+            # 2D: 'mx' | 'matrix' | 'datamatrix' -> Data Matrix Code, anything else -> QR-code
+            # Bar: 'codabar', 'code128', 'code39', 'ean', 'ean13', 'ean13-guard', 'ean14', 'ean8', 'ean8-guard', 'gs1',
+            #      'gs1_128', 'gtin', 'isbn', 'isbn10', 'isbn13', 'issn', 'itf', 'jan', 'nw-7', 'pzn', 'upc', 'upca'
+            (2.5, 2.5, 25, 25, "mx", 1),  # this is datamatrix
+            (125, 2.5, 25, 25, "qr", 1),  # this is QR-code
+            #(2.5, 15, 55, 25, "ean", 1),  # this is EAN barcode
+            (2.5, 15, 55, 25, "code128", 1),  # this is Code128 barcode
         ],
         "fonts": {
             # definition of fonts
@@ -210,108 +223,6 @@ def print_available_printer_names() -> None:
 #--------------------------------------------------------------------------------------------------
 
 
-def print_datamatrix_label_0(content: str, printer_name: str = "DEFAULT") -> bool:
-
-    #
-    # STEP 1: create a datamatrix bitmap file on drive
-    #
-    doc_name = "dmtx.png"
-    encoded = encode(content.encode("utf8"))
-    img = Image.frombytes("RGB", (encoded.width, encoded.height), encoded.pixels)
-
-    file_name = None
-    # _fp = Path(doc_name)
-    # img.save(_fp)
-    # file_name = str(_fp.absolute())
-
-    #
-    # STEP 2: load bitmap into printer device context of Windows to print
-    #
-
-    #
-    # Constants for GetDeviceCaps
-    #
-    #
-    # HORZRES / VERTRES = printable area
-    #
-    HORZRES = 8
-    VERTRES = 10
-    #
-    # LOGPIXELS = dots per inch
-    #
-    LOGPIXELSX = 88
-    LOGPIXELSY = 90
-    #
-    # PHYSICALWIDTH/HEIGHT = total area
-    #
-    PHYSICALWIDTH = 110
-    PHYSICALHEIGHT = 111
-    #
-    # PHYSICALOFFSETX/Y = left / top margin
-    #
-    PHYSICALOFFSETX = 112
-    PHYSICALOFFSETY = 113
-
-
-    if printer_name.upper() == "DEFAULT":
-        printer_name = win32print.GetDefaultPrinter()
-
-    #printer_handle = win32print.OpenPrinter(printer_name)
-    #print(win32print.GetPrinter(printer_handle, 2))
-    #win32print.CloasePrinter(printer_handle)
-
-    #
-    # You can only write a Device-independent bitmap
-    #  directly to a Windows device context; therefore
-    #  we need (for ease) to use the Python Imaging
-    #  Library to manipulate the image.
-    #
-    # Create a device context from a named printer
-    #  and assess the printable size of the paper.
-    #
-    hDC = win32ui.CreateDC()
-    hDC.CreatePrinterDC(printer_name)
-    printable_area = hDC.GetDeviceCaps(HORZRES), hDC.GetDeviceCaps(VERTRES)
-    printer_size = hDC.GetDeviceCaps(PHYSICALWIDTH), hDC.GetDeviceCaps(PHYSICALHEIGHT)
-    printer_margins = hDC.GetDeviceCaps(PHYSICALOFFSETX), hDC.GetDeviceCaps(PHYSICALOFFSETY)
-
-    #
-    # Open the image, rotate it if it's wider than
-    #  it is high, and work out how much to multiply
-    #  each pixel by to get it as big as possible on
-    #  the page without distorting.
-    #
-    if file_name is not None:
-        img = Image.open(file_name)
-    if img.size[0] > img.size[1]:
-        img = img.rotate (90)
-
-    ratios = [1.0 * printable_area[0] / img.size[0], 1.0 * printable_area[1] / img.size[1]]
-    scale = min(ratios)
-
-    #
-    # Start the print job, and draw the bitmap to
-    #  the printer device at the scaled size.
-    #
-    hDC.StartDoc(doc_name)
-    hDC.StartPage()
-
-    dib = ImageWin.Dib(img)
-    scaled_width, scaled_height = [int(scale * i) for i in img.size]
-    x1 = int((printer_size[0] - scaled_width) / 2)
-    y1 = int((printer_size[1] - scaled_height) / 2)
-    x2 = x1 + scaled_width
-    y2 = y1 + scaled_height
-    dib.draw(hDC.GetHandleOutput(), (x1, y1, x2, y2))
-
-    hDC.EndPage()
-    hDC.EndDoc()
-    hDC.DeleteDC()
-
-
-#--------------------------------------------------------------------------------------------------
-
-
 def image_to_html_imgtag_data(img: Image, fmt: str = "PNG") -> str:
     """Convert a PIL image into HTML-displayable data.
 
@@ -341,6 +252,7 @@ def image_to_html_imgtag_data(img: Image, fmt: str = "PNG") -> str:
 
 
 def qr_code(content,
+            to_html: bool = False,
             cellsize: int = 5,
             optimize: int = 20,
             border: int = None,
@@ -384,14 +296,20 @@ def qr_code(content,
         img = img.crop(ImageOps.invert(img).getbbox())
     else:
         img = ImageOps.expand(img, border=border, fill=border_color)
-    return img
+    if to_html:
+        return image_to_html_imgtag_data(img)
+    else:
+        return img
 
 
 #--------------------------------------------------------------------------------------------------
 
 
-def datamatrix(content, cellsize: int = 5, border: int = None, border_color: str = "black") -> Image.Image | ImageFile:
-
+def datamatrix(content,
+               to_html: bool = False,
+               cellsize: int = 5,
+               border: int = None,
+               border_color: str = "black") -> Image.Image:
     """Return a datamatrix's image data.
 
     Examples
@@ -405,7 +323,7 @@ def datamatrix(content, cellsize: int = 5, border: int = None, border_color: str
         border (bool, optional): If None, there will be no border or margin to the datamatrix image. Defaults to None.
 
     Returns:
-        Image.Image | ImageFile: A Pillow image object.
+        Image.Image: A Pillow image object.
     """
 
     # # pystrich library:
@@ -422,7 +340,82 @@ def datamatrix(content, cellsize: int = 5, border: int = None, border_color: str
         img = img.crop(ImageOps.invert(img).getbbox())
     else:
         img = ImageOps.expand(img, border=border, fill=border_color)
-    return img
+    if to_html:
+        return image_to_html_imgtag_data(img)
+    else:
+        return img
+
+
+#--------------------------------------------------------------------------------------------------
+
+
+def barcode(content,
+            to_html: bool = False,
+            barcode_class: str = "code128",
+            fmt: str = "png",
+            add_checksum: bool = True,
+            **writer_options) -> str | Image.Image:
+    """Return a barcode's image data either as a Pillow image object or as HTML <img> tag.
+
+    Powered by the Python library ``python-barcode``. See this library's
+    documentation for more details.
+
+    Examples
+    --------
+
+    >>> data = barcode('EGF12134', barcode_class='code128')
+    >>> html_data = '<img src="%s"/>' % data
+
+    Examples of writer options:
+
+    >>> { 'background': 'white',
+    >>>   'font_size': 10,
+    >>>   'foreground': 'black',
+    >>>   'module_height': 15.0,
+    >>>   'module_width': 0.2,
+    >>>   'quiet_zone': 6.5,
+    >>>   'text': '',
+    >>>   'text_distance': 5.0,
+    >>>   'write_text': True
+    >>> }
+
+    Args:
+        content (str | float | int): Data to be encoded in the datamatrix.
+        barcode_class (str, optional): Class/standard to use to encode the data. Different standards have
+            different constraints. Defaults to "code128".
+        fmt (str, optional): Image type, either svg or png. Defaults to "png".
+        add_checksum (bool, optional): If True add a checksum to the barcode. Defaults to True.
+        to_html (bool, optional): If True, the image is returned as <img> HTML tag, else image is returned
+            as Pilliow object. Defaults to False.
+        writer_options: Various options for the writer to tune the appearance of the barcode
+            (see python-barcode documentation).
+    Returns:
+        str | Image.Image: Image either as Pillow object or as image_base64_data. which is
+            a string ``data:image/png;base64,xxxxxxxxx`` which you can provide as a
+            "src" parameter to a ``<img/>`` tag.
+
+    """
+
+    constructor = get_barcode_class(barcode_class)
+    content = str(content).zfill(constructor.digits)
+    writer = {
+        "svg": barcode_SVGWriter,
+        "png": barcode_ImageWriter,
+    }[fmt]
+    if "add_checksum" in getattr(constructor, "__init__").__code__.co_varnames:
+        barcode_img = constructor(content, writer=writer(), add_checksum=add_checksum)
+    else:
+        barcode_img = constructor(content, writer=writer())
+    img = barcode_img.render(writer_options=writer_options)
+    if to_html:
+        if fmt == "png":
+            return image_to_html_imgtag_data(img, fmt="PNG")
+        else:
+            # SVG can be transformed directly into HTML
+            prefix = "data:image/svg+xml;charset=utf-8;base64,"
+            return prefix + base64.b64encode(img).decode()
+    else:
+        return img
 
 
 #--------------------------------------------------------------------------------------------------
@@ -722,7 +715,13 @@ def print_datamatrix_label(content: str, text: str, label_layout: str, printer_n
 
     # process the 2D codes as defined in the label definition
     for _x, _y, _w, _h, _code_type, _border in layout["codebox"]:
-        img = datamatrix(content, border=_border) if _code_type in ["mx","matrix","datamatrix"] else qr_code(content, border=_border)
+        if (_code_type in ["mx","matrix","datamatrix"]):
+            img = datamatrix(content, border=_border)
+        elif (_code_type in PROVIDED_BARCODES):
+            img = barcode(content, barcode_class=_code_type, border=_border)
+        else:
+            # fallback is QR-code
+            img = qr_code(content, border=_border)
         draw_img_at(dc, img,  _x, _y, w=_w, h=_h)  # copy and scale the image into the device context
 
     # process the text lines into the textbox definition
@@ -764,7 +763,7 @@ def print_datamatrix_label(content: str, text: str, label_layout: str, printer_n
 #--------------------------------------------------------------------------------------------------
 
 
-def run_scan_and_print(resource_string: str, printer_name: str) -> None:
+def run_scan_and_print(resource_string: str, label_layout: str, printer_name: str = "DEFAULT") -> None:
     """Runs a scanner task which triggers a print if a valid string is being read. The Termination char is set to LF only.
     It creates either a network socket scanner or a COM port scanner, depending on the resource string given.
 
@@ -781,12 +780,14 @@ def run_scan_and_print(resource_string: str, printer_name: str) -> None:
     else:
         scanner = Eth2SerialDevice(resource_string, termination="\r")   # socket port
     while 1:
-        print(f"Please scan label code: ", end=None)
+        print(f"Please scan label code: ", end="")
         try:
             content = scanner.request(None, timeout=2.0, encoding="utf-8")
             if content and len(content) > 0:
                 print(f"got '{content}'")
-                print_datamatrix_label(content, content, printer_name)
+                print_datamatrix_label(content, content, label_layout, printer_name=printer_name)
+            else:
+                print("nix!")
         except TimeoutError:
             pass  # just retry
         #except Exception as e:
@@ -808,7 +809,7 @@ def test_create_simple_label() -> None:
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
-
+    print(["qrcode", "datamatrix", *PROVIDED_BARCODES])
     print_available_printer_names()
     #exit()
 
@@ -818,11 +819,12 @@ if __name__ == "__main__":
     printer_name = "ZDesigner ZD220-203dpi ZPL"
     #printer_name = "\\\\printhost-2k16.rrc\\C-1-58-M6630cidn"
 
-    _content = "00231872347699829949"  # test buggy QRCode
-    _content = "Schacht #1\nZelltyp ICR18650E28-XX\nZeile 3\nZeile 4\nZeile 5"
+    content = "00231872347699829949"  # test buggy QRCode
+    content = "Schacht #1\nZelltyp ICR18650E28-XX\nZeile 3\nZeile 4\nZeile 5"
+    label_layout = "160mm_x_40mm"
+    label_layout = "76mm_x_51mm"
 
-    #print_datamatrix_label(_content, _content, "160mm_x_40mm", printer_name=printer_name)
-    print_datamatrix_label(_content, _content, "76mm_x_51mm", printer_name=printer_name)
+    #print_datamatrix_label(content, content, label_layout, printer_name=printer_name)
     # print_datamatrix_label(
     #     "01234567890123456789012345678901234567890123456789"+
     #     "01234567890123456789012345678901234567890123456789"+
@@ -830,12 +832,11 @@ if __name__ == "__main__":
     #     "01234567890123456789012345678901234567890123456789"+
     #     "01234567890123456789012345678901234567890123456789"+
     #     "01234567890123456789012345678901234567890123456789",
-    #     "Zeile 1\rZeile 2", printer_name=printer_name)  # test buggy Datamatrix
-    #print_datamatrix_label("TESTLABEL XYZ", "Zeile 1\rZeile 2", printer_name=printer_name)
+    #     "Zeile 1\rZeile 2", label_layout, printer_name=printer_name)  # test buggy Datamatrix
 
     RESOURCE_STR = "COM38,9600,8N1"  # manual scanner
     #RESOURCE_STR = "172.21.101.31:2000"  # HOM Line Corepack
-    #run_scan_and_print(RESOURCE_STR, printer_name)  # loop blocks until CTRL-C
+    run_scan_and_print(RESOURCE_STR, label_layout, printer_name=printer_name)  # loop blocks until CTRL-C
 
 
 # END OF FILE
