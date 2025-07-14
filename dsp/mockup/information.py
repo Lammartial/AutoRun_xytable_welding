@@ -23,7 +23,12 @@ PRODUCT_CONFIGURATION_TABLE = [
             ("412081_RRC2020B",     "C", "412081-01"),     # Corepack-Test (id,rev,pn)
             ("100496_RRC2020B",     "C", "100496-18")),    # EOL-Test (id,rev,pn)
     # ("RRC2020-DR", "110102-15"),
-    # ("RRC2020-GE", "110270-02"),
+    ("RRC2020-GE", "110270-02", "RRC2020-GE", "2020-GE",
+            ("412081_RRC2020B",     "C", "412081-01"),     # Cell-Test (id,rev,pn)
+            (None,                  "A", "412081-01"),     # Cell-Welding (id,rev,pn)
+            ("411828_RRC2020B",     "C", "411828-05"),     # PCBA-Test (id,rev,pn)
+            ("412081_RRC2020B",     "C", "412081-01"),     # Corepack-Test (id,rev,pn)
+            ("110270_RRC2020-GE",   "B", "110270-02")),    # EOL-Test (id,rev,pn)
     ("RRC2040B", "100498-19", "RRC2040","2040B",
            ("412083_RRC2040B",      "C", "412083-01"),     # Cell-Test (id,rev,pn)
            (None,                   "A", "412083-01"),     # Cell-Welding (id,rev,pn)
@@ -448,8 +453,8 @@ PART_INFORMATION_MANUAL = {
         },
         "EOL_TEST": {
             # Hard Pack (End-Of-Line) Test PRT IDs:
-            "test_program_id": ("HP-SQ_2020B", "110270_RRC2020-GE_EOL-Test_A"),
-            "part_number": ("HP-PN_2020B", "110270-14"),  # using the product number PN
+            "test_program_id": ("HP-SQ_2020B", "110270_RRC2020-GE_EOL-Test_B"),
+            "part_number": ("HP-PN_2020B", "110270-02"),  # using the product number PN
         }
     },
     #
