@@ -235,20 +235,24 @@ class DC63600:
 
         Load Modes:
             CCL - Constant Current Low
+            CCM - Constant Current Middle
             CCH - Constant Current High
             CCDL - ???
             CCDH - ???
             CRL - Constant Resitence Low
+            CRM - Constant Resistance Middle
             CRH - Constant Resistence High
-            CV - Constant Voltage
+            CVL - Constant Voltage Low
+            CVM - Constant Voltage Middle
+            CVH - Constant Voltage High
 
         Args:
-            modus (str): String of "CCL", "CCH", "CCDL", "CCDH", "CRL", "CRH", "CVL", "CVH"
+            modus (str): String of "CCL", "CCM", "CCH", "CCDL", "CCDH", "CRL", "CRM" "CRH", "CVL", "CVM", "CVH"
 
         Returns:
             bool: _description_
         """
-        _MODES = ("CCL", "CCH", "CCDL", "CCDH", "CRL", "CRH", "CVL", "CVH")
+        _MODES = ("CCL", "CCM", "CCH", "CCDL", "CCDH", "CRL", "CRM", "CRH", "CVL", "CVM", "CVH")
         assert(modus in _MODES), ValueError(f"Modus was '{modus}' but need to be one of {_MODES}.")
         self.send(f"MODE {modus}")
         return self.wait_response_ready()
@@ -284,7 +288,7 @@ class DC63600:
             float: voltage in volt
         """
 
-        self.set_measure_sense_to("UUT")
+        #self.set_measure_sense_to("UUT")
         return float(self.request("MEAS:VOLT?"))
 
 
