@@ -4,7 +4,14 @@ Library for Baumer VeriSens AOI Camera access from Teststand.
 
 """
 
+import time
+import socket
+import errno
 from rrc.eth2serial import Eth2SerialDevice
+from binascii import hexlify, unhexlify
+from struct import pack, unpack, unpack_from
+from collections import OrderedDict
+
 
 #--------------------------------------------------------------------------------------------------
 # Fixed Configuration
@@ -23,7 +30,6 @@ DEBUG = 2
 from rrc.custom_logging import getLogger, logger_init
 
 # --------------------------------------------------------------------------- #
-
 
 
 
@@ -89,7 +95,46 @@ class VeriSens_XF100M03(Eth2SerialDevice):
         return f"{j:04x}".upper()
 
 
-    def get_status(self) -> str:
+    def _response_state_to_flagdict(self, response_state: str) -> OrderedDict:
+        _TRIPPLE_RESULT_BITS = ("none", "active", "failed", "?", "ok", "?", "?", "?")
+
+        assert ((response_state[:2].upper() == "RS") and (len(response_state) >= 10)), ValueError(f"Return value not correct value format: {response_state}.")
+        s = int(response_state[2:6], 16)
+        job = int(response_state[6:10], 16)
+        # V2 - speaking results
+        return OrderedDict({
+            "internal_fault": ((s >> 15) & 1),
+            "backup": _TRIPPLE_RESULT_BITS[((s >> 12) & 0x07)],
+            "trigger_possible": ((s >> 11) & 1),
+            "job_update": _TRIPPLE_RESULT_BITS[((s >> 8) & 0x07)],            
+            "mode": ("none", "recovery", "setup", "?", "test", "?", "?", "?", "run", *("?" for n in range(8)) )[((s >> 4) & 0xf)],
+            "photo_shooting": ("?", "external_trigger", "continuous", "?")[((s >> 2) & 3)],
+            "protocol_polling": ("?", "polling", "continuous", "?")[((s >> 0) & 3)],
+            "job_no": job,
+        })
+        # V1 - just bits as they come
+        return OrderedDict({
+            "internal_fault": ((s >> 15) & 1),
+            "backup_ok": ((s >> 14) & 1),
+            "backup_failed": ((s >> 13) & 1),
+            "backup_active": ((s >> 12) & 1),
+            "trigger_possible": ((s >> 11) & 1),
+            "job_update_ok": ((s >> 10) & 1),
+            "job_update_fail": ((s >> 9) & 1),
+            "job_update_active": ((s >> 8) & 1),
+            "mode_run": ((s >> 7) & 1),
+            "mode_test": ((s >> 6) & 1),
+            "mode_setup": ((s >> 5) & 1),
+            "mode_recovery": ((s >> 4) & 1),
+            "photo_shooting_continuous": ((s >> 3) & 1),
+            "photo_shooting_external_trigger": ((s >> 2) & 1),
+            "protocol_continuous_mode": ((s >> 1) & 1),
+            "protocol_polling_mode": ((s >> 0) & 1),
+            "job_no": job,
+        })
+
+
+    def get_status(self) -> OrderedDict:
         """Get status information.
 
         Response is
@@ -121,17 +166,21 @@ class VeriSens_XF100M03(Eth2SerialDevice):
         Returns:
             str: see above
         """
-        return self.request("GS")
+
+        res = self.request("GS")
+        return self._response_state_to_flagdict(res)
 
 
-    def init(self) -> bool:
+    def init(self) -> None:
         """Sets the Camera into defined default state.
 
         Returns:
             bool: True - no errors, otherwise False
         """
 
-        self.device_info = [self.request(f"GM{m}") for m in [
+        res = self.switch_mode("MS")  # parameter mode (stand by)
+        res = self.switch_mode("CL")  # line feed        
+        self.device_info = [self.request(f"GM{m}")[10:] for m in [
             "0001",  # Gerätetyp
             "0002",  # MAC-address
             "0004",  # Seriennummer
@@ -140,31 +189,51 @@ class VeriSens_XF100M03(Eth2SerialDevice):
             "0020",  # Gerätename
             "0040",  # Hersteller
             ]]
+        #self.device_info = self.request("GM0000")  # this will return all data as string but with spaces delimited which is issue with device name
+        res = self.switch_job(1)
+        res = self.switch_mode("DP")  # polling mode
+        #res = self.switch_mode("DC")  # continuous mode
+        res = self.switch_mode("MR")  # mode run
+        #time.sleep(0.250)  # first result available after a short pause of 250ms
+        #res = self.send("TR")  # trigger first result
 
-        self.device_info = self.request("GM0000")
-        return True
+
+    def reboot(self) -> None:
+        """Reboot device, a pause of 10s is need before device is up again.
+        """
+        self.send("VB0000")
+        self.close_connection(force=True)
 
 
     #----------------------------------------------------------------------------------------------
 
     def clear_statistics(self, job_no: int = 0) -> bool:
         assert (job_no >= 0), ValueError("Wrong job number, job no need to be >= 0.")
-        result = self.request(f"CS{self._num2hex(job_no)}", encoding="utf-8")
+        result = self.request(f"CS{self._num2hex(job_no)}")
         return (result == f"RC{self._num2hex(job_no)}")
 
     def start_job(self, job_no: int = 0) -> str:
         assert (job_no >= 0), ValueError("Wrong job number, job no need to be >= 0.")
-        result = self.request(f"CS{self._num2hex(job_no)}", encoding="ascii")
+        result = self.request(f"CS{self._num2hex(job_no)}")
         return result
 
     def get_last_result(self) -> str:
-        result = self.request(f"GD", encoding="ascii")
-        return result
+        result = self.request(f"GD")
+        assert (result[:2].upper() == "RD"), ValueError(f"Wrong response from device: {result}")        
+        data_len = int(result[2:6], 16)
+        if data_len > 0:
+            pass_fail = result[6]
+            alarm = result[7]
+            return (result, pass_fail, alarm)
+        else:
+            return (result,)
+
 
     def switch_job(self, job_no: int = 1) -> str:
         assert (job_no > 0), ValueError("Wrong job number, job no need to be > 0.")
-        result = self.request(f"SJ{self._num2hex(job_no)}", encoding="ascii")
+        result = self.request(f"SJ{self._num2hex(job_no)}")
         return result
+
 
     def switch_mode(self, mode: str = "DC") -> str:
         """
@@ -176,7 +245,7 @@ class VeriSens_XF100M03(Eth2SerialDevice):
             DP = Data transfer - Polling Mode
                 Die Ergebnisdaten werden im Modus Aktiviert sowie im Modus
                 Parametrieren nur nach Erhalt des GD-Kommandos übertragen.
-                MR = Mode switch - Modus Run
+            MR = Mode switch - Modus Run
                 Gerät wird aktiviert
                 Daten werden nur autonom gesendet, wenn der Continuous Mode wie
                 oben beschrieben aktiviert ist.
@@ -199,22 +268,41 @@ class VeriSens_XF100M03(Eth2SerialDevice):
                 abgeschlossen.
 
         Args:
-            mode (str, optional): _description_. Defaults to "DC".
+            mode (str, optional): see above. Defaults to "DC".
 
         Returns:
             str: Response State (RS)
         """
 
-        pass
+        VALID_MODES = ["DC","DP","MR","MS","CC","CL","CB","CN"]
+        assert(mode.upper() in VALID_MODES), ValueError(f"Mode need to be in {VALID_MODES}")
+        return self.request(f"SM{mode.upper()}")
 
+
+    def trigger_analysis(self, pause_for_processing=0.150) -> str:
+        #return self.request("TR", timeout=3.0, pause_after_write=0.150)
+        self.send("TR")
+        time.sleep(pause_for_processing)
+        return self.get_last_result()
 
 #--------------------------------------------------------------------------------------------------
 
 def test_interface(resource_str: str) -> None:
     dev = VeriSens_XF100M03(resource_str)
-    print(dev.start_job(1))
-
-
+    #print("Reboot")
+    #dev.reboot()
+    #time.sleep(10.0)
+    print("Test")
+    dev.init()
+    print(dev.device_info)
+    print(dev.get_status())
+    print(dev.get_last_result())
+    time.sleep(0.250)
+    print("LOOP")
+    for n in range(10):
+        print(dev.trigger_analysis())
+        #print(dev.get_status())
+        time.sleep(1)
 
 #--------------------------------------------------------------------------------------------------
 
@@ -227,7 +315,7 @@ if __name__ == "__main__":
 
     tic = perf_counter()
 
-    CAMERA_RESOURCE_STR = "172.21.101.232:23"  # VN, line 1
+    CAMERA_RESOURCE_STR = "172.25.101.232:5555"  # VN, line 1
 
     test_interface(CAMERA_RESOURCE_STR)
 
