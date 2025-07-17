@@ -176,7 +176,7 @@ class VeriSens_XF100M03(Eth2SerialDevice):
             DP = Data transfer - Polling Mode
                 Die Ergebnisdaten werden im Modus Aktiviert sowie im Modus
                 Parametrieren nur nach Erhalt des GD-Kommandos übertragen.
-                MR = Mode switch - Modus Run
+            MR = Mode switch - Modus Run
                 Gerät wird aktiviert
                 Daten werden nur autonom gesendet, wenn der Continuous Mode wie
                 oben beschrieben aktiviert ist.
@@ -186,7 +186,7 @@ class VeriSens_XF100M03(Eth2SerialDevice):
 
         Only valid for Ethernet
             CC = Command delimiter - Carriage return
-                Datenpakete der Prozessschnittstelle werden mit <CR>
+                 Datenpakete der Prozessschnittstelle werden mit <CR>
                 (Hex: 0D, Escape-Sequenz: \r) abgeschlossen
             CL = Command delimiter - Line feed
                 Datenpakete der Prozessschnittstelle werden mit <LF>
