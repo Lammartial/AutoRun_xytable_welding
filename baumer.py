@@ -279,9 +279,13 @@ class VeriSens_XF100M03(Eth2SerialDevice):
         return self.request(f"SM{mode.upper()}")
 
 
-    def trigger_analysis(self, pause_for_processing=0.150) -> str:
+    def trigger_analysis(self, part_identification_str: str, pause_for_processing=0.150) -> str:
         #return self.request("TR", timeout=3.0, pause_after_write=0.150)
-        self.send("TR")
+        if part_identification_str is None or part_identification_str == "":
+            self.send("TR")
+        else: 
+            assert(len(part_identification_str) < 256), ValueError(f"Identification String too long (limit 255) but got length={len(part_identification_str)}.")
+            self.send(f"TD{self._num2hex(len(part_identification_str))}{part_identification_str}")
         time.sleep(pause_for_processing)
         return self.get_last_result()
 
@@ -300,7 +304,7 @@ def test_interface(resource_str: str) -> None:
     time.sleep(0.250)
     print("LOOP")
     for n in range(10):
-        print(dev.trigger_analysis())
+        print(dev.trigger_analysis("0007,1CELL00000000,1PCBA00000000"))
         #print(dev.get_status())
         time.sleep(1)
 
