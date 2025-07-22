@@ -10,7 +10,7 @@ from .lookup import PRINTER_LOOKUP, BARTENDER_UNC_LOOKUP
 
 PRODUCT_CONFIGURATION_TABLE = [
      #----------------------------------------------------------------------------------
-    # Please edit here to add product (Model name is used on label!)
+    # Please edit here to add product (Material name) is used on label!)
     # (keep in alphabetical order)
     #----------------------------------------------------------------------------------
     # Model name, Part number, Material name, SAP key,
@@ -35,24 +35,24 @@ PRODUCT_CONFIGURATION_TABLE = [
            ("411829_RRC2040B",      "D", "411829-05"),     # PCBA-Test (id,rev,pn)
            ("412083_RRC2040B",      "D", "412083-01"),     # Corepack-Test (id,rev,pn)
            ("100498_RRC2040B",      "B", "100498-19")),    # EOL-Test (id,rev,pn)
-    ("RRC2040-2S", "100559S-11", "RRC2040-2", "2040-2",
+    ("RRC2040-2S", "100559S-12", "RRC2040-2", "2040-2",
            ("412084_RRC2040-2S",    "B", "412084-02"),     # Cell-Test (id,rev,pn)
-           (None,                   "A", "412084-02"),     # Cell-Welding (id,rev,pn)
+           (None,                   "A", "412084-03"),     # Cell-Welding (id,rev,pn)
            ("412101_RRC2040-2S",    "D", "412101-01"),     # PCBA-Test (id,rev,pn)
            ("412084_RRC2040-2S",    "D", "412084-02"),     # Corepack-Test (id,rev,pn)
-           ("100559S_RRC2040-2S",   "B", "100559S-11")),   # EOL-Test (id,rev,pn)
+           ("100559S_RRC2040-2S",   "B", "100559S-12")),   # EOL-Test (id,rev,pn)
     # ("RRC2040-2-OL", "110059S-09", 
     ("RRC2054S", "100568S-15", "RRC2054", "2054S",
             ("412085_RRC2054S",     "B", "412085-01"),     # Cell-Test (id,rev,pn)
             (None,                  "A", "412085-01"),     # Cell-Welding (id,rev,pn)
             ("412100_RRC2054S",     "B", "412100-01"),     # PCBA-Test (id,rev,pn)
-            ("412085_RRC2054S",     "C", "412085-01"),     # Corepack-Test (id,rev,pn)
+            ("412085_RRC2054S",     "D", "412085-01"),     # Corepack-Test (id,rev,pn)
             ("100568S_RRC2054S",    "C", "100568S-15")),   # EOL-Test (id,rev,pn)
     ("RRC2054-SO", "110062S-08", "RRC2054-SO", "2054-S0",
             ("412085_RRC2054S",     "B", "412085-01"),     # Cell-Test (id,rev,pn)
             (None,                  "A", "412085-01"),     # Cell-Welding (id,rev,pn)
             ("412100_RRC2054S",     "B", "412100-01"),     # PCBA-Test (id,rev,pn)
-            ("412085_RRC2054S",     "C", "412085-01"),     # Corepack-Test (id,rev,pn)
+            ("412085_RRC2054S",     "D", "412085-01"),     # Corepack-Test (id,rev,pn)
             ("110064S_RRC2054-SO",  "B", "110064S-08")),   # EOL-Test (id,rev,pn)
     # ("RRC2054-OL", "110310S-02"),
     ("RRC2054-2S", "110064S-08", "RRC2054-2", "2054-2S",
