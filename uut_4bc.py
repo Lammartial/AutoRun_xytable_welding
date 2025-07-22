@@ -431,19 +431,23 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         new_control_reg = 0
 
         if state_bay1:
-            new_control_reg |= 1
-
+           new_control_reg |= 1
+           
         if state_bay2:
-            new_control_reg |= 2
-
+           new_control_reg |= 2
+            
         if state_bay3:
-            new_control_reg |= 4
+           new_control_reg |= 4
 
         if state_bay4:
-            new_control_reg |= 8
+           new_control_reg |= 8
 
-        buf = pack("<B", new_control_reg)
-        return self.cpu.I2C_Master_WriteBytes(self.i2c_address_mux_testsystem, 0x00, buf)
+        self.cpu.I2C_Master_set_PEC(0)  # the TCA9548A MUX may not receive a PEC otherwise the PEC configures the MUX setting
+        res = self.cpu.I2C_Master_WriteBytes(self.i2c_address_mux_testsystem, new_control_reg, bytes())
+        self.cpu.I2C_Master_set_PEC(1)
+        return res
+
+    
 
     def enable_all_bay_leds(self) -> bool:
         """Enables all bay LEDs on the UUT.
@@ -508,19 +512,19 @@ def test_myself():
     from rrc.track.chroma import DC63600
     from rrc.track.tdklambda import DCZPlus
     from rrc.keysight import AGILENT34972A, DAQ970A, daq_class_selector
-    load1 = DC63600("192.168.31.103:2101", channel=1)
+    load1 = DC63600("172.23.130.32:2101", channel=1)
     print(load1.ident())
     load1.initialize_device()
-    load2 = DC63600("192.168.31.103:2101", channel=2)
+    load2 = DC63600("172.23.130.32:2101", channel=2)
     print(load2.ident())
     # load2.initialize_device()
-    psu1 = DCZPlus("192.168.31.101:8003", channel=1)
+    psu1 = DCZPlus("172.23.130.33:8003", channel=1)
     print(psu1.ident())
     psu1.initialize_device()
-    psu2 = DCZPlus("192.168.31.101:8003", channel=2)
+    psu2 = DCZPlus("172.23.130.33:8003", channel=2)
     print(psu2.ident())
     psu2.initialize_device()
-    daq = daq_class_selector("192.168.31.106:5025", 1)
+    daq = daq_class_selector("172.23.130.31:5025", 1)
     #daq = AGILENT34972A("192.168.31.106:5025", card_slot=1)
     print(daq.ident())
     #daq.send("*RST")
@@ -536,7 +540,7 @@ def test_myself():
     # print(daq.get_temp_rounded(6, "FRTD", 100, 0, "", 2))
 
     #print(daq.selftest())
-    dev = UUT_Dione_Hera(0x09, 0x33, resource_str="COM3,115200,8N1")
+    dev = UUT_Dione_Hera(0x09, 0x33, resource_str="COM9,115200,8N1")
     print(dev.cpu.ident())
     dev.initialize_cpu_ports()
     #print("HELP CONTENT:", dev.cpu.help().replace("\r","\n\r"))
@@ -549,16 +553,60 @@ def test_myself():
     sleep(0.5)
     print(dev.set_uut_into_testmode(True))
     sleep(0.5)
-    dev.set_I2C_mux_TestSystem(True, True, True, True)
+    U_CHANNELS = (5, 6, 7, 8)
+    print("BAY1")
+    dev.set_I2C_mux_TestSystem(1, 0, 0, 0)
+    dev.set_bay_fets(1, 1, True) 
+    dev.set_u_bat_i_bat(12.6, 4.5, 1)
+    for n in U_CHANNELS:
+        print(daq.get_VDC(n))
+    dev.set_bay_fets(1, 1, False) 
+    dev.set_u_bat_i_bat(0, 0, 1)
+    for n in U_CHANNELS:
+        print(daq.get_VDC(n))
+    
+    print("BAY2")
+    dev.set_I2C_mux_TestSystem(0, 1, 0, 0)
+    dev.set_bay_fets(1, 2, True) 
+    dev.set_u_bat_i_bat(12.6, 4.5, 1)
+    for n in U_CHANNELS:
+        print(daq.get_VDC(n))
+    dev.set_bay_fets(1, 2, False) 
+    dev.set_u_bat_i_bat(0, 0, 1)
+    for n in U_CHANNELS:
+        print(daq.get_VDC(n))
+
+    print("BAY3")
+    dev.set_I2C_mux_TestSystem(0, 0, 1, 0)
+    dev.set_bay_fets(1, 3, True) 
+    dev.set_u_bat_i_bat(12.6, 4.5, 1)
+    for n in U_CHANNELS:
+        print(daq.get_VDC(n))
+    dev.set_bay_fets(1, 3, False)
+    dev.set_u_bat_i_bat(0, 0, 1)
+    for n in U_CHANNELS:
+        print(daq.get_VDC(n))
+
+    print("BAY4")
+    dev.set_I2C_mux_TestSystem(0, 0, 0, 1)
+    dev.set_bay_fets(2, 4, True)
+    dev.set_u_bat_i_bat(12.6, 4.5, 2)
+    for n in U_CHANNELS:
+        print(daq.get_VDC(n))
+    dev.set_bay_fets(2, 4, False) 
+    dev.set_u_bat_i_bat(0, 0, 2)
+    for n in U_CHANNELS:
+        print(daq.get_VDC(n))
+
     sleep(0.5)
     # dev.cpu.I2C_Master_set_PEC(1)
-    # dev.set_u_bat_i_bat(12.6, 4.5, 1)
-    # sleep(0.5)
-    # dev.set_bay_fets(1, 1, True)
+    #dev.set_u_bat_i_bat(12.6, 4.5, 1)
+    #sleep(0.5)
+    #dev.set_bay_fets(1, 1, True)
     # sleep(0.5)
     # print(dev.read_battery_measurements_from_uut(1, 1))
     # sleep(0.5)
-    # # print(load1.set_load_output(0))
+    # print(load1.set_load_output(0))
     # print(load1.set_load_mode("CCH"))
     # print(load1.set_load_current(0.5))
     # print(load1.set_load_output(1))
@@ -566,11 +614,11 @@ def test_myself():
     # print(load1.set_load_current(2))
     # sleep(0.5)
     # print(load1.set_load_current(4))
-    # print(load1.get_voltage())
+    print(load1.get_voltage())
     # print(dev.read_battery_measurements_from_uut(1,1))
-    for i in range(100):
-        print(dev.get_pushbutton_state())
-        sleep(0.5)
+    # for i in range(100):
+    #     print(dev.get_pushbutton_state())
+    #     sleep(0.5)
     # dev.cpu.I2C_Master_ReadBytes(0x66, 0x81, 17)
     # print(dev.set_and_verify_udi("AAAABBBBCCCCDDDD"))
     # for port in "AC":
@@ -585,11 +633,11 @@ def test_myself():
     # print(dev.reset_calibration())
     # dev.cpu.reset()
     # sleep(0.5)
-    #dev.set_I2C_mux_UUT(1, True)
+    # dev.set_I2C_mux_UUT(1, True)
     # sleep(0.5)
-    #print(dev.set_I2C_mux_TestSystem([1,0,0,0]))
-    #dev.cpu.I2C_Master_set_PEC(0)
-    #print(dev.cpu.con.request(":I2C:MAS:TIM 64,0"))  # speed up I2C com (AVR TWBR,TWPS register)
+    # print(dev.set_I2C_mux_TestSystem([1,0,0,0]))
+    # dev.cpu.I2C_Master_set_PEC(0)
+    # print(dev.cpu.con.request(":I2C:MAS:TIM 64,0"))  # speed up I2C com (AVR TWBR,TWPS register)
     # print(dev.cpu.I2C_Master_set_Clockfrequency(50000, fcpu=7372800))
     # z=0
     # while z < 100:
