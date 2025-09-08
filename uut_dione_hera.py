@@ -307,8 +307,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         """
 
         #self.cpu.I2C_Master_set_PEC(0)
-       # w = self.cpu.I2C_Master_ReadWord(self.second_i2c_address, 63)
-        w = self.cpu.I2C_Master_ReadWord(self.i2c_address_7bit, 63)
+        w = self.cpu.I2C_Master_ReadWord(self.second_i2c_address, 63)
         #self.cpu.I2C_Master_set_PEC(1)
         return float(w) * 1e-3
 

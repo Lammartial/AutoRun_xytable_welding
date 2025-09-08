@@ -81,7 +81,7 @@ class UUT_MiniCharger:
         self.cpu.IO_Write_Port_bit("A", 2, 1)         # I2C-Bus Voltage 5V
         self.cpu.IO_Write_Port_bit("C", 5, 1)         # Signal which is checked with dataloger for channel identification
 
-        self.cpu.I2C_Master_set_PEC(1)  # use PEC by default. This is the only good place to put it
+        self.cpu.I2C_Master_set_PEC(1)  # do use PEC by default. This is the only good place to put it
 
 
     def is_adapter_correctly_connected(self) -> Tuple[bool, str]:
@@ -127,9 +127,9 @@ class UUT_MiniCharger:
 
 
     def read_battery_detection_from_uut(self) -> bool:
-        #self.cpu.I2C_Master_set_PEC(0)
+        self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_Bat_Detection, 2)
-        #self.cpu.I2C_Master_set_PEC(1)
+        self.cpu.I2C_Master_set_PEC(1)
         return (buf[1] == 1)
 
 
@@ -139,9 +139,9 @@ class UUT_MiniCharger:
         Returns:
             Tuple[float, float]: voltage in volts, current in amps
         """
-        #self.cpu.I2C_Master_set_PEC(0)
+        self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_Bat_Values, 5)
-        #self.cpu.I2C_Master_set_PEC(1)
+        self.cpu.I2C_Master_set_PEC(1)
         voltage = float(unpack_from(">H", buf, 1)[0]) / 1e+3  # data come big endian
         current = float(unpack_from(">H", buf, 3)[0]) / 1e+3  # data come big endian
         return voltage, current
@@ -154,9 +154,9 @@ class UUT_MiniCharger:
             Tuple[float, float]: VIN in volts, T in Celsius.
         """
 
-        #self.cpu.I2C_Master_set_PEC(0)
+        self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_CHG_Values, 5)
-        #self.cpu.I2C_Master_set_PEC(1)
+        self.cpu.I2C_Master_set_PEC(1)
         VIN = float(unpack_from(">H", buf, 1)[0]) / 1e+3  # data come big endian
         T   = float(unpack_from(">H", buf, 3)[0]) / 1e+1    # data come big endian
         return VIN, T
@@ -169,17 +169,17 @@ class UUT_MiniCharger:
             float: R sense in ohms.
         """
 
-        #self.cpu.I2C_Master_set_PEC(0)
+        self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_R_SNS_BAT, 3)
-        #self.cpu.I2C_Master_set_PEC(1)
+        self.cpu.I2C_Master_set_PEC(1)
         R_SNS_BAT = unpack_from(">H", buf, 1)[0] / 1e+2  # data come big endian
         return R_SNS_BAT
 
 
     def read_bq_charge_option(self) -> bytearray:
-        #self.cpu.I2C_Master_set_PEC(0)
+        self.cpu.I2C_Master_set_PEC(0)
         buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_BQ_Charge_Option, 3)
-        #self.cpu.I2C_Master_set_PEC(1)
+        self.cpu.I2C_Master_set_PEC(1)
         return buf
 
 
