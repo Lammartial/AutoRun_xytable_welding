@@ -28,7 +28,7 @@ PRODUCT_CONFIGURATION_TABLE = [
             (None,                  "A", "412081-01"),     # Cell-Welding (id,rev,pn)
             ("411828_RRC2020B",     "C", "411828-05"),     # PCBA-Test (id,rev,pn)
             ("412081_RRC2020B",     "C", "412081-01"),     # Corepack-Test (id,rev,pn)
-            ("110270_RRC2020-GE",   "B", "110270-02")),    # EOL-Test (id,rev,pn)
+            ("110270_RRC2020-GE",   "C", "110270-02")),    # EOL-Test (id,rev,pn)
     ("RRC2040B", "100498-19", "RRC2040","2040B",
            ("412083_RRC2040B",      "C", "412083-01"),     # Cell-Test (id,rev,pn)
            (None,                   "A", "412083-01"),     # Cell-Welding (id,rev,pn)

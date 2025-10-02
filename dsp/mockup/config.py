@@ -65,10 +65,10 @@ SELECTED_PRINTER_LOCATION = "DE_LINE_1"  # DE rework line
 #SELECTED_PRINTER_LOCATION = "DEBUG"  # you guess what...
 #
 # set to 1 to allow mockup server to trigger label print for all products, set 0 to disable
-ENABLE_LABEL_PRINTING = 1
+ENABLE_LABEL_PRINTING = 0
 #
 # set to 1 to allow entry in label .DAT file otherwise set to 0
-DO_PRINT_HARDPACK_LABEL = 1
+DO_PRINT_HARDPACK_LABEL = 0
 DO_PRINT_SINGLEBOX_LABEL = 0
 #
 #
