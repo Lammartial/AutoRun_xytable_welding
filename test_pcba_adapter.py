@@ -563,16 +563,17 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    #LINE_NETWORK = "172.21.101"  # HOM Warehouse
+    LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
     #LINE_NETWORK = "172.25.102"  # VN line 2
-    LINE_NETWORK = "172.25.103"  # VN line 3
+    #LINE_NETWORK = "172.25.103"  # VN line 3
 
     SOCKET = 0  # 0, 1 or 2
 
     if SOCKET == 0:
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.31:3000", termination="\n")  # PCBA test, socket 0
-        i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101") # socket 0
+        #i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101") # socket 0
+        i2cbus = I2CPort(f"{LINE_NETWORK}.201:2101") # OLIMEX Inbetriebnahme
         #i2cbus = I2CPort("192.168.69.77:2101") # HOMEGROW
     if SOCKET == 1:
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.33:3000")  # PCBA test, socket 1
@@ -586,8 +587,10 @@ if __name__ == "__main__":
 
     #print("Change clock frequency and timeout - RRC: ",
     #      str(i2cbus.i2c_change_clock_frequency(50000, timeout_ms=50)))
+    print("MASTER:", i2cbus.i2c_bus_scan())
 
-    mux = BusMux(i2cbus, address=0x77)
+    #mux = BusMux(i2cbus, address=0x77)
+    mux = BusMux(i2cbus, address=0x70)  # OLIMEX Breakout
     for c in range(1,9):
         mux.setChannel(c)
         print("CH:", c, i2cbus.i2c_bus_scan())

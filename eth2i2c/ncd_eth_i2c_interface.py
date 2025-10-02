@@ -539,19 +539,21 @@ def test_interface(resource_str: str) -> None:
         #     print(f"Channel {c}:", str(dev.i2c_bus_scan()))
         # mux.setChannel(1)
 
-        # GPIO subfunctions
-        dev.gpio_write_output(12, 0)
-        dev.gpio_read_input(12)
-        dev.gpio_write_output(12, 1)
-        dev.gpio_read_input(12)
+        # # GPIO subfunctions
+        # dev.gpio_write_output(12, 0)
+        # dev.gpio_read_input(12)
+        # dev.gpio_write_output(12, 1)
+        # dev.gpio_read_input(12)
 
+        print(str(dev.i2c_bus_scan()))
     else:
         print(str(dev.i2c_bus_scan()))
     if bat.isReady():
         print("Found SmartBattery:")
-        print(bat.device_name())
+        #print(bat.device_name())
         print(bat.design_capacity())
         print(bat.design_voltage())
+        print(bat.voltage())
     else:
         print("No SmartBattery found")
 
@@ -568,7 +570,8 @@ if __name__ == "__main__":
 
     #I2C_BRIDGE_RESOURCE_STR = "172.21.101.30:2101"  # HOM
     #I2C_BRIDGE_RESOURCE_STR = "172.25.102.20:2101"  # VN
-    I2C_BRIDGE_RESOURCE_STR = "192.168.69.77:2101"
+    #I2C_BRIDGE_RESOURCE_STR = "192.168.69.77:2101"
+    I2C_BRIDGE_RESOURCE_STR = "172.21.11.201:2101"  # office DE
 
     test_interface(I2C_BRIDGE_RESOURCE_STR)
 
