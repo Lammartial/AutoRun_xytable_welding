@@ -73,41 +73,43 @@ def validate_rrc_product_serial(records: dict, v_str: str) -> str:
 
 #--------------------------------------------------------------------------------------------------
 
-async def aio_blocking_communication(task_id: int, tk_q: queue.Queue, resource_string: str) -> None:
-    """ Asynchronously block the thread and put a work package into Tkinter's work queue.
+# async def aio_blocking_communication(task_id: int, tk_q: queue.Queue, resource_string: str) -> None:
+#     """ Asynchronously block the thread and put a work package into Tkinter's work queue.
 
-    This is a producer for Tkinter's work queue. It will run in the same thread as the asyncio loop. The statement
-    `await asyncio.sleep(block)` can be replaced with any awaitable blocking code.
+#     This is a producer for Tkinter's work queue. It will run in the same thread as the asyncio loop. The statement
+#     `await asyncio.sleep(block)` can be replaced with any awaitable blocking code.
 
-    Args:
-        task_id: Sequentially issued tkinter task number.
-        tk_q: tkinter's work queue.
-        block: block time
+#     Args:
+#         task_id: Sequentially issued tkinter task number.
+#         tk_q: tkinter's work queue.
+#         block: block time
 
-    Returns:
-        Nothing. The work package is returned via the threadsafe tk_q.
-    """
-    _log = getLogger(__name__, DEBUG)
-    dev = create_barcode_scanner(resource_string)
-    while True:
-        _response = await dev.request_async(None)
-        if _response:
-            _log.info(_response)
-        else:
-            continue
+#     Returns:
+#         Nothing. The work package is returned via the threadsafe tk_q.
+#     """
 
-        # Put the work package into the tkinter's work queue.
-        while True:
-            try:
-                # Asyncio can't wait for the thread blocking `put` method…
-                tk_q.put_nowait(_response)
-            except queue.Full:
-                # Give control back to asyncio's loop.
-                await asyncio.sleep(0)
-            else:
-                # The work package has been placed in the queue so we're done.
-                break
-        #break
+#     _log = getLogger(__name__, DEBUG)
+#     dev = create_barcode_scanner(resource_string)
+#     while True:
+#         _response = await dev.request_async(None)
+#         #_response = await dev.request(None)
+#         if _response:
+#             _log.info(_response)
+#         else:
+#             continue
+
+#         # Put the work package into the tkinter's work queue.
+#         while True:
+#             try:
+#                 # Asyncio can't wait for the thread blocking `put` method…
+#                 tk_q.put_nowait(_response)
+#             except queue.Full:
+#                 # Give control back to asyncio's loop.
+#                 await asyncio.sleep(0)
+#             else:
+#                 # The work package has been placed in the queue so we're done.
+#                 break
+#         #break
 
     # ends by force only
 
@@ -215,22 +217,22 @@ def tk_callbacks(mainframe: ttk.Frame, row_itr: Iterator, resource_string: str):
     _log.debug('tk_callbacks starting')
     task_id_itr = itertools.count(1)
 
-    # Create the job queue and start its consumer.
-    tk_q = queue.Queue()
+    # run thread's Queue consumer.
+    #tk_q = queue.Queue()
     _log.debug('tk_callback_consumer starting')
     tk_callback_consumer(tk_q, mainframe, row_itr)
 
-    # Schedule the asyncio blockers.
-    # This is a concurrent.futures.Future not an asyncio.Future because it isn't threadsafe. Also,
-    # it doesn't have a wait with timeout which we shall need.
-    task_id = next(task_id_itr)
-    # check which communication function we need:
-    # socket communication
-    future = asyncio.run_coroutine_threadsafe(aio_blocking_communication(task_id, tk_q, resource_string), aio_loop)
+    # # Schedule the asyncio blockers.
+    # # This is a concurrent.futures.Future not an asyncio.Future because it isn't threadsafe. Also,
+    # # it doesn't have a wait with timeout which we shall need.
+    # task_id = next(task_id_itr)
+    # # check which communication function we need:
+    # # socket communication
+    # future = asyncio.run_coroutine_threadsafe(aio_blocking_communication(task_id, tk_q, resource_string), aio_loop)
 
-    # Can't use Future.add_done_callback here. It doesn't return until the future is done and that would block
-    # tkinter's event loop.
-    aio_exception_handler(mainframe, future)
+    # # Can't use Future.add_done_callback here. It doesn't return until the future is done and that would block
+    # # tkinter's event loop.
+    # aio_exception_handler(mainframe, future)
 
 
 #--------------------------------------------------------------------------------------------------
@@ -241,6 +243,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
 
     This runs in the Main Thread.
     """
+
     global udi_to_scan, allow_manual_edit, ok_button #, block_accept_udi
 
     _log = getLogger(__name__, DEBUG)
@@ -263,6 +266,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
         for item in udi_to_scan:
             item.scanned_udi = None
         root.destroy()
+
 
     #---for test only---
 
@@ -497,9 +501,27 @@ def aio_main(aio_initiate_shutdown: threading.Event):
 
     This non-coroutine function runs in Asyncio's thread.
     """
+
     #_log.debug('aio_main starting')
     asyncio.run(manage_aio_loop(aio_initiate_shutdown))
     #_log.debug('aio_main ending')
+
+
+def run_scan_thread(aio_initiate_shutdown: threading.Event, q: queue.Queue, resource_str: str,):
+    """Need to use synched communicate instead of async to work with our OLIMEX board. 
+    Maybe the firmware can only handle one open connection.
+    """   
+    dev = create_barcode_scanner(resource_str)
+    while not aio_initiate_shutdown.is_set():
+        try:
+            s = dev.request(None, timeout=0.1, encoding="utf-8")
+            if s:
+                #print("RAW:", s)
+                q.put_nowait(s)
+        except TimeoutError:
+            #_log.info("Timeout!")
+            pass  # ignore Timeout
+
 
 
 def main(resource_str: str, title: str = "ENTER UDI", test_socket: int = -1):
@@ -507,8 +529,11 @@ def main(resource_str: str, title: str = "ENTER UDI", test_socket: int = -1):
 
     This runs in the Main Thread.
     """
+    
+    global tk_q
 
     #_log.debug('main starting')
+    tk_q = queue.Queue()
 
     # Start the permanent asyncio loop in a new thread.
     # aio_shutdown is signalled between threads. `asyncio.Event()` is not threadsafe.
@@ -516,12 +541,17 @@ def main(resource_str: str, title: str = "ENTER UDI", test_socket: int = -1):
     aio_thread = threading.Thread(target=aio_main, args=(aio_initiate_shutdown,), name="Asyncio's Thread")
     aio_thread.start()
 
+    scan_thread = threading.Thread(target=run_scan_thread, args=(aio_initiate_shutdown, tk_q, resource_str,), name="Scanner's Thread")
+    scan_thread.start()
+
+
     tk_main(resource_str, title, test_socket=int(test_socket))
 
     # Close the asyncio permanent loop and join the thread in which it runs.
     aio_initiate_shutdown.set()
     aio_thread.join()
 
+    scan_thread.join()
     #_log.debug('main ending')
 
 #--------------------------------------------------------------------------------------------------
@@ -587,13 +617,13 @@ if __name__ == '__main__':
     #     UDIScanCtrlItem("CELL", decode_rrc_udi_label, validate_rrc_udi),
     # ]
 
-    #RESOURCE_STR = "172.21.101.41:2000"
+    RESOURCE_STR = "172.21.101.30:2000"
     #RESOURCE_STR = "COM3,9600,8N1"  # Handheld scanner
-    RESOURCE_STR = "SIMULATION"  # select a timed simulation
+    #RESOURCE_STR = "SIMULATION"  # select a timed simulation
 
     allow_manual_edit = True
 
-    identify_uut(1, ["Serial", "PCBA", "CELL"], RESOURCE_STR, allow_user_edit=False)
+    identify_uut(0, ["Serial", "PCBA", "CELL"], RESOURCE_STR, allow_user_edit=False)
 
     res = tuple()
     for item in udi_to_scan:
