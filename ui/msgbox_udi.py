@@ -182,7 +182,6 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
                         _valid_udi = True  # avoid pop-up
             if not _valid_udi:
                 # here we can add an error pop-up !
-                # ...
                 showerror("Wrong UDI code type!", f"{item.records}")
                 _log.warning(f"Wrong UDI code type {item.records}")
             else:
@@ -480,12 +479,12 @@ def tk_main(title: str = "ENTER UID", test_socket: int = -1):
 def io_thread_run(aio_initiate_shutdown: threading.Event, q_to_tk: queue.Queue, scanner_resource_str: str):
     """Separat thread which starts the scanner handling."""
 
-    scanner = None 
+    scanner = None
     while not aio_initiate_shutdown.is_set():
         try:
             if not scanner:
                 # create the scanner device which also could trigger an exception
-                scanner = create_barcode_scanner_with_timeout(scanner_resource_str, timeout=1.0)
+                scanner = create_barcode_scanner_with_timeout(scanner_resource_str, timeout=3.0)
             response = scanner.request(None, timeout=0.1, encoding="utf-8")  # blocking, sync call - timeout keeps it handy
             if response:
                 # send response to TK inter
@@ -494,8 +493,9 @@ def io_thread_run(aio_initiate_shutdown: threading.Event, q_to_tk: queue.Queue, 
         except TimeoutError:
             if (not scanner) and (not aio_initiate_shutdown.is_set()):
                 # could not connect to scanner - inform user
-                showerror("User action required", "Scanner not found")
-            else:                
+                #q_to_tk.put_nowait("ERROR")
+                showerror("User action required", f"Scanner {scanner_resource_str} not found")
+            else:
                 pass  # ignore Timeout
         finally:
             pass
@@ -508,9 +508,9 @@ def main(scanner_resource_str: str, title: str = "ENTER UDI", test_socket: int =
 
     This runs in the Main Thread.
     """
-    
+
     global tk_q
-    
+
     tk_q = queue.Queue()  # need to communicate from io_thread to TK main thread
 
     # Start the permanent asyncio loop in a new thread. This is running the scanner request() polls.
@@ -565,7 +565,7 @@ def identify_uut(test_socket: int, requested_udi: list, scanner_resource_str: st
     ]
 
     main(_scanner, title=title, test_socket=int(test_socket))
-    
+
     res = tuple()
     for item in udi_to_scan:
         _log.debug(f"UDI({item.name})={item.scanned_udi}")
@@ -592,7 +592,7 @@ if __name__ == '__main__':
     #     UDIScanCtrlItem("CELL", decode_rrc_udi_label, validate_rrc_udi),
     # ]
 
-    RESOURCE_STR = "172.21.101.30:2000"
+    RESOURCE_STR = "172.21.101.40:2000"
     #RESOURCE_STR = "COM3,9600,8N1"  # Handheld scanner
     #RESOURCE_STR = "SIMULATION"  # select a timed simulation
 

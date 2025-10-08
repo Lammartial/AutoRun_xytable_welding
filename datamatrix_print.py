@@ -815,15 +815,16 @@ if __name__ == "__main__":
 
     #test_create_simple_label()  # on disk
 
-    #printer_name = "Microsoft Print to PDF"
-    printer_name = "ZDesigner ZD220-203dpi ZPL"
-    #printer_name = "\\\\printhost-2k16.rrc\\C-1-58-M6630cidn"
+    printer_name = "Microsoft Print to PDF"
+    #printer_name = "ZDesigner ZD220-203dpi ZPL"
+    printer_name = "\\\\printhost-2k16.rrc\\C-1-58-M6630cidn"
 
     content = "00231872347699829949"  # test buggy QRCode
     content = "Schacht #1\nZelltyp ICR18650E28-XX\nZeile 3\nZeile 4\nZeile 5"
     label_layout = "160mm_x_40mm"
     label_layout = "76mm_x_51mm"
 
+    print_datamatrix_label("1PCBA01234567890A", "PCBA UDI\nTestlabel\n \n \n1PCBA01234567890A", label_layout, printer_name=printer_name)
     #print_datamatrix_label(content, content, label_layout, printer_name=printer_name)
     # print_datamatrix_label(
     #     "01234567890123456789012345678901234567890123456789"+
@@ -836,7 +837,7 @@ if __name__ == "__main__":
 
     RESOURCE_STR = "COM38,9600,8N1"  # manual scanner
     #RESOURCE_STR = "172.21.101.31:2000"  # HOM Line Corepack
-    run_scan_and_print(RESOURCE_STR, label_layout, printer_name=printer_name)  # loop blocks until CTRL-C
+    #run_scan_and_print(RESOURCE_STR, label_layout, printer_name=printer_name)  # loop blocks until CTRL-C
 
 
 # END OF FILE
