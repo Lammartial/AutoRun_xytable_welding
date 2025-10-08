@@ -23,7 +23,7 @@ from collections.abc import Iterator
 from typing import Optional, Tuple
 from pathlib import Path
 from serial import Serial
-from rrc.barcode_scanner import create_barcode_scanner, decode_rrc_udi_label, decode_rrc_product_serial_label
+from rrc.barcode_scanner import create_barcode_scanner, create_barcode_scanner_with_timeout, decode_rrc_udi_label, decode_rrc_product_serial_label
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -201,7 +201,10 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
         mainframe._id_after["tk_callback_consumer"] = mainframe.after(poll_interval, lambda: tk_callback_consumer(tk_q, mainframe, row_itr))
 
 
-def tk_callbacks(mainframe: ttk.Frame, row_itr: Iterator, resource_string: str):
+#--------------------------------------------------------------------------------------------------
+
+
+def tk_setup_callbacks(mainframe: ttk.Frame, row_itr: Iterator):
     """ Set up 'Hello world' callbacks.
 
     This runs in the Main Thread.
@@ -213,14 +216,14 @@ def tk_callbacks(mainframe: ttk.Frame, row_itr: Iterator, resource_string: str):
 
     global tk_q
 
-    _log = getLogger(__name__, DEBUG)
-    _log.debug('tk_callbacks starting')
+    #_log = getLogger(__name__, DEBUG)
+    #_log.debug('tk_callbacks starting')
     task_id_itr = itertools.count(1)
 
     # run thread's Queue consumer.
     #tk_q = queue.Queue()
-    _log.debug('tk_callback_consumer starting')
-    tk_callback_consumer(tk_q, mainframe, row_itr)
+    #_log.debug('tk_callback_consumer starting')
+    tk_callback_consumer(tk_q, mainframe, row_itr)  # start consumer task and setup follow-ups
 
     # # Schedule the asyncio blockers.
     # # This is a concurrent.futures.Future not an asyncio.Future because it isn't threadsafe. Also,
@@ -238,7 +241,7 @@ def tk_callbacks(mainframe: ttk.Frame, row_itr: Iterator, resource_string: str):
 #--------------------------------------------------------------------------------------------------
 block_accept_udi = True
 
-def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -1):
+def tk_main(title: str = "ENTER UID", test_socket: int = -1):
     """ Run tkinter.
 
     This runs in the Main Thread.
@@ -421,7 +424,7 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
     # Schedule the 'Hello World' callbacks
     mainframe._id_after = {}
     #mainframe._id_after["tk_callbacks"] = mainframe.after(0, functools.partial(tk_callbacks, mainframe, row_itr, resource_string))
-    mainframe._id_after["tk_callbacks"] = mainframe.after(0, lambda: tk_callbacks(mainframe, row_itr, resource_string))
+    mainframe._id_after["tk_callbacks"] = mainframe.after(0, lambda: tk_setup_callbacks(mainframe, row_itr))
 
 
     # Set a minsize for the window, and place it in the middle
@@ -455,9 +458,9 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
     else:
         cancel_button.focus_set()
 
-    # The asyncio loop must start before the tkinter event loop.
-    while not aio_loop:
-        time.sleep(0)
+    # # The asyncio loop must start before the tkinter event loop.
+    # while not aio_loop:
+    #     time.sleep(0)
 
     root.mainloop()
 
@@ -471,88 +474,58 @@ def tk_main(resource_string: str, title: str = "ENTER UID", test_socket: int = -
         _log.debug(f"UDI({item.name})={item.scanned_udi}")
 
 
-async def manage_aio_loop(aio_initiate_shutdown: threading.Event):
-    """ Run the asyncio loop.
-
-    This provides an always available asyncio service for tkinter to make any number of simultaneous blocking IO
-    calls. 'Any number' includes zero.
-
-    This runs in Asyncio's thread and in asyncio's loop.
-    """
-
-    # Communicate the asyncio loop status to tkinter via a global variable.
-    global aio_loop
-
-    _log = getLogger(__name__, DEBUG)
-    #_log.debug('manage_aio_loop starting')
-
-    aio_loop = asyncio.get_running_loop()
-
-    # If there are no awaitables left in the queue asyncio will close.
-    # The usual wait command — Event.wait() — would block the current thread and the asyncio loop.
-    while not aio_initiate_shutdown.is_set():
-        await asyncio.sleep(0)
-
-    #_log.debug('manage_aio_loop ending')
+#--------------------------------------------------------------------------------------------------
 
 
-def aio_main(aio_initiate_shutdown: threading.Event):
-    """ Start the asyncio loop.
+def io_thread_run(aio_initiate_shutdown: threading.Event, q_to_tk: queue.Queue, scanner_resource_str: str):
+    """Separat thread which starts the scanner handling."""
 
-    This non-coroutine function runs in Asyncio's thread.
-    """
-
-    #_log.debug('aio_main starting')
-    asyncio.run(manage_aio_loop(aio_initiate_shutdown))
-    #_log.debug('aio_main ending')
-
-
-def run_scan_thread(aio_initiate_shutdown: threading.Event, q: queue.Queue, resource_str: str,):
-    """Need to use synched communicate instead of async to work with our OLIMEX board. 
-    Maybe the firmware can only handle one open connection.
-    """   
-    dev = create_barcode_scanner(resource_str)
+    scanner = None 
     while not aio_initiate_shutdown.is_set():
         try:
-            s = dev.request(None, timeout=0.1, encoding="utf-8")
-            if s:
-                #print("RAW:", s)
-                q.put_nowait(s)
+            if not scanner:
+                # create the scanner device which also could trigger an exception
+                scanner = create_barcode_scanner_with_timeout(scanner_resource_str, timeout=1.0)
+            response = scanner.request(None, timeout=0.1, encoding="utf-8")  # blocking, sync call - timeout keeps it handy
+            if response:
+                # send response to TK inter
+                #print("RAW:", response)
+                q_to_tk.put_nowait(response)
         except TimeoutError:
-            #_log.info("Timeout!")
-            pass  # ignore Timeout
+            if (not scanner) and (not aio_initiate_shutdown.is_set()):
+                # could not connect to scanner - inform user
+                showerror("User action required", "Scanner not found")
+            else:                
+                pass  # ignore Timeout
+        finally:
+            pass
 
 
+#--------------------------------------------------------------------------------------------------
 
-def main(resource_str: str, title: str = "ENTER UDI", test_socket: int = -1):
+def main(scanner_resource_str: str, title: str = "ENTER UDI", test_socket: int = -1):
     """Set up working environments for asyncio and tkinter.
 
     This runs in the Main Thread.
     """
     
     global tk_q
+    
+    tk_q = queue.Queue()  # need to communicate from io_thread to TK main thread
 
-    #_log.debug('main starting')
-    tk_q = queue.Queue()
-
-    # Start the permanent asyncio loop in a new thread.
+    # Start the permanent asyncio loop in a new thread. This is running the scanner request() polls.
     # aio_shutdown is signalled between threads. `asyncio.Event()` is not threadsafe.
-    aio_initiate_shutdown = threading.Event()
-    aio_thread = threading.Thread(target=aio_main, args=(aio_initiate_shutdown,), name="Asyncio's Thread")
-    aio_thread.start()
+    io_initiate_shutdown = threading.Event()
+    io_thread = threading.Thread(target=io_thread_run, args=(io_initiate_shutdown, tk_q, scanner_resource_str), name="Scanner Thread")
+    io_thread.start()
 
-    scan_thread = threading.Thread(target=run_scan_thread, args=(aio_initiate_shutdown, tk_q, resource_str,), name="Scanner's Thread")
-    scan_thread.start()
+    # create TKinter main window and run its eternal working loop
+    tk_main(title, test_socket=int(test_socket))
 
+    # Close the IO permanent loop and join the thread in which it runs.
+    io_initiate_shutdown.set()
+    io_thread.join()
 
-    tk_main(resource_str, title, test_socket=int(test_socket))
-
-    # Close the asyncio permanent loop and join the thread in which it runs.
-    aio_initiate_shutdown.set()
-    aio_thread.join()
-
-    scan_thread.join()
-    #_log.debug('main ending')
 
 #--------------------------------------------------------------------------------------------------
 
@@ -590,7 +563,9 @@ def identify_uut(test_socket: int, requested_udi: list, scanner_resource_str: st
         (UDIScanCtrlItem(item, decode_rrc_product_serial_label, validate_rrc_product_serial) if ("SERIAL" in item.upper()) else
         UDIScanCtrlItem(item, decode_rrc_udi_label, validate_rrc_udi)) for item in requested_udi
     ]
+
     main(_scanner, title=title, test_socket=int(test_socket))
+    
     res = tuple()
     for item in udi_to_scan:
         _log.debug(f"UDI({item.name})={item.scanned_udi}")

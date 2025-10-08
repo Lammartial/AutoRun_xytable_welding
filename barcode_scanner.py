@@ -59,6 +59,19 @@ def create_barcode_scanner(resource_string: str) -> Eth2SerialDevice | SerialCom
         dev = Eth2SerialDevice(resource_string, termination="\n")   # socket port
     return dev
 
+
+def create_barcode_scanner_with_timeout(resource_string: str, timeout=5.0) -> Eth2SerialDevice | SerialComportDevice:
+    """like create_barcode_scanner but with timeout on separat open."""
+
+    if "," in resource_string:
+        dev = SerialComportDevice(resource_string, termination="\n")  # COM port !!! Production benutzt hier \n !!!
+        # serial connects only on send or receive which come with timeouts
+    else:
+        dev = Eth2SerialDevice(resource_string, termination="\n", open_connection=False)   # socket port
+        dev.connect_socket(timeout=timeout)
+    return dev
+
+
 #--------------------------------------------------------------------------------------------------
 
 def decode_rrc_udi_label(raw: str, pcba_and_cell_udi_tuple: bool = False) -> Tuple[dict, str]:
