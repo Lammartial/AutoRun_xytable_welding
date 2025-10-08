@@ -1,87 +1,65 @@
 from time import sleep
+from math import ceil, floor
 from struct import pack, unpack
+from binascii import hexlify
 from rrc.i2cbus import I2CBase
 
 
-class TCAL6416:
-    INPUT_PORT_0 = 0x00
-    INPUT_PORT_1 = 0x01
-    REG_INPUT = 0x00  # base
-    OUTPUT_PORT_0 = 0x02
-    OUTPUT_PORT_1 = 0x03
-    REG_OUTPUT = 0x02  # base
-    POLARITY_PORT_0 = 0x04
-    POLARITY_PORT_1 = 0x05
-    REG_POLARITY = 0x04 # base
-    CONFIG_PORT_0 = 0x06
-    CONFIG_PORT_1 = 0x07
-    REG_CONFIGURATION = 0x06
 
-    WRITABLE_REGS = (REG_OUTPUT, REG_POLARITY, REG_CONFIGURATION)
+#--------------------------------------------------------------------------------------------------
 
-    def __init__(self, i2c: I2CBase, i2c_address_7bit: int = 0x20, init_shadow_from_ic: bool = False):
+# helper to get a bit pattern from a bitlist of integers
+def shifting_plus(bitlist: tuple | list) -> int:
+    out = 0
+    for bit in bitlist:
+        out = out * 2 + (int(bit) & 0x01)
+    return out
+
+#--------------------------------------------------------------------------------------------------
+
+class GPIO_BASE:
+    """Base class for GPIO expanders."""
+
+    def __init__(self,
+                 i2c: I2CBase,
+                 i2c_address_7bit: int,
+                 number_of_gpio: int,
+                 init_shadow_from_ic: bool,
+                 retry_limit: int = 10,
+                 pause_us: int = 5000) -> None:
+        """_summary_
+
+        Args:
+            i2c (I2CBase): _description_
+            i2c_address_7bit (int): _description_
+            number_of_gpio (int): _description_
+            init_shadow_from_ic (bool): _description_
+            retry_limit (int, optional): _description_. Defaults to 10.
+            pause_us (int, optional): _description_. Defaults to 5000.
+        """
+
         self.bus = i2c
         self.i2c_address_7bit = int(i2c_address_7bit)
-        self.i2c_address = int(i2c_address_7bit) << 1
-        self.retry_limit = 10
-        self.pause_us = 5000
+        self.retry_limit = retry_limit
+        self.pause_us = pause_us
+        assert ((number_of_gpio >= 1) and (number_of_gpio <= 64)), "Maximum number of GPIO pins is 64."
+        self._number_of_gpio = number_of_gpio  # max 64 !!
+        self._number_of_gpio_mask = (1 << number_of_gpio) - 1
+        # calculate the register addresses
+        self.REG_INPUT = 0  * ceil(number_of_gpio / 8)
+        self.REG_OUTPUT = 1 * ceil(number_of_gpio / 8)
+        self.REG_POLARITY = 2 * ceil(number_of_gpio / 8)
+        self.REG_CONFIGURATION = 3 * ceil(number_of_gpio / 8)
         # prepare shadow registers
-        self._shadow_regs = [
-            None,  # dummy for input address
-            self.read_output() if init_shadow_from_ic else 0x0000,
-            self.read_polarity() if init_shadow_from_ic else 0x0000,
-            self.read_direction() if init_shadow_from_ic else 0xFFFF,      # power-up pins input
-        ]
+        self._shadow_regs = {
+            self.REG_OUTPUT: self.read_output() if init_shadow_from_ic else 0,  # can be up to 64 bits !
+            self.REG_POLARITY: self.read_polarity() if init_shadow_from_ic else 0,  # can be up to 64 bits !
+            self.REG_CONFIGURATION: self.read_direction() if init_shadow_from_ic else self._number_of_gpio_mask,  # power-up pins input
+        }
 
     #--------------------------------------------
-
-    def __str__(self) -> str:
-        return f"TCAL6416 GPIO device with address {self.i2c_address_7bit:02x} on {self.bus}"
-
-    def __repr__(self) -> str:
-        return f"TCAL6416({repr(self.bus)}, i2c_address_7bit={self.i2c_address_7bit})"
-
-    #--------------------------------------------
-
-    def read_input(self):
-        from binascii import hexlify
-        port0 = self.bus.readfrom_mem(self.i2c_address_7bit, self.INPUT_PORT_0, 1)
-        port1 = self.bus.readfrom_mem(self.i2c_address_7bit, self.INPUT_PORT_1, 1)
-        buf = port0 + port1
-        print(hexlify(buf).decode())
-        return unpack("<H", buf)[0]
-
-    def write_output(self, value):
-        self.bus.write_byte_data(self.address, self.OUTPUT_PORT_0, value & 0xFF)
-        self.bus.write_byte_data(self.address, self.OUTPUT_PORT_1, (value >> 8) & 0xFF)
-
-    def read_output(self):
-        port0 = self.bus.read_byte_data(self.address, self.OUTPUT_PORT_0)
-        port1 = self.bus.read_byte_data(self.address, self.OUTPUT_PORT_1)
-        return (port1 << 8) | port0
-
-    def set_direction(self, direction):
-        # direction: 1=input, 0=output, 16 bits
-        self.bus.write_byte_data(self.address, self.CONFIG_PORT_0, direction & 0xFF)
-        self.bus.write_byte_data(self.address, self.CONFIG_PORT_1, (direction >> 8) & 0xFF)
-
-    def read_direction(self):
-        port0 = self.bus.read_byte_data(self.address, self.CONFIG_PORT_0)
-        port1 = self.bus.read_byte_data(self.address, self.CONFIG_PORT_1)
-        return (port1 << 8) | port0
-
-    def set_polarity(self, polarity):
-        # polarity: 1=invert, 0=normal, 16 bits
-        self.bus.write_byte_data(self.address, self.POLARITY_PORT_0, polarity & 0xFF)
-        self.bus.write_byte_data(self.address, self.POLARITY_PORT_1, (polarity >> 8) & 0xFF)
-
-    def read_polarity(self):
-        port0 = self.bus.read_byte_data(self.address, self.POLARITY_PORT_0)
-        port1 = self.bus.read_byte_data(self.address, self.POLARITY_PORT_1)
-        return (port1 << 8) | port0
-
     # private functions
-    def _write_register(self, register: int, value: int) -> bool:
+    def _write_helper(self, register: int, value: int) -> bool:
         """Write any of the r/w registers and keeps track of shadow registers for all but input.
 
         Args:
@@ -95,24 +73,17 @@ class TCAL6416:
         Returns:
             bool: _description_
         """
-        if register not in TCAL6416.WRITABLE_REGS:
-            raise ValueError(f"Register '{register}' of {self} not writable.")
+
         value = int(value)
-        if not (0 <= value <= 15):
-            raise ValueError(f"Invalid output register value for {self}. Must be between 0 and 15."
-                             f"You sent {value}")
-
-
-        data = bytearray([register, value])
-        # if len(data) == self.bus.writeto(self.i2c_address_7bit, data):
-        #     self._shadow_regs[register] = value
-        #     return True
-        # else:
-        #     return False
+        register = int(register)
+        # prepare the value into a data array
+        b = value.to_bytes(ceil(self._number_of_gpio / 8), "little")
+        r = register.to_bytes(1, "little", signed=False)  # only 8 bits of register
+        buf = bytearray(r + b)
         for n in range(0, self.retry_limit):
             try:
-                wlen = self.bus.writeto(self.i2c_address_7bit, data)
-                ok: bool = len(data) == wlen
+                wlen = self.bus.writeto(self.i2c_address_7bit, buf)
+                ok: bool = len(buf) == wlen
                 if ok:
                     # we can store the value
                     self._shadow_regs[register] = value
@@ -127,12 +98,16 @@ class TCAL6416:
         raise Exception("Programming Error")
 
 
-    def _read_helper(self, adr: int, data: bytearray) -> bytearray:
+    def _read_helper(self, register: int) -> int:
+        r = register.to_bytes(1, "little")  # only 8 bits of register
+        length = ceil(self._number_of_gpio / 8)
         for n in range(0, self.retry_limit):
             try:
-                value = self.bus.readfrom_mem(adr, data, 1)  # does 3 retries with 1ms pause between
+                buf = self.bus.readfrom_mem(self.i2c_address_7bit, bytearray(r), length)  # does 3 retries with 1ms pause between
+                print(hexlify(buf).decode())  # DEBUG
                 try:
-                    value = value[0]
+                    value = int.from_bytes(buf, "little", signed=False) & self._number_of_gpio_mask
+                    self._shadow_regs[register] = value
                 except IndexError:
                     raise IndexError(f"Didn't receive correct number of bytes from {self}.")
                 return value  # this is the good exit
@@ -146,45 +121,267 @@ class TCAL6416:
         raise Exception("Programming Error")
 
 
-    def _read_input_register(self) -> int:
+    #--------------------------------------------
+    # public generic functions
+
+
+    def configure_pins(self,
+                       pin_io: tuple | str,
+                       invert_input: tuple | str,
+                       preset_output: None | tuple | str = None) -> bool:
+        """The Configuration register (register 3) configures the directions of the I/O pins.
+        If a bit in this register is set to 1, the corresponding port pin is enabled as an input
+        with high-impedance output driver. If a bit in this register is cleared to 0,
+        the corresponding port pin is enabled as an output.
+
+        Length depends on number of GPIO.
+
+        Args:
+            pin_io (tuple | str):  tuple of 0 | 1, 0=pin is output, 1=pin is input, length depends on number of GPIO
+            invert_input (tuple | str):   tuple of 0 | 1, 0=pin is read normal, 1=pin is read inverted, length depends on number of GPIO
+            preset_output (tuple | str):  tuple of 0 | 1, preset if outout, length depends on number of GPIO
+        """
+
+        if len(pin_io) != self._number_of_gpio:
+            raise ValueError(f"Parameter 'pin_as_output' must be tuple of {self._number_of_gpio} integers or a string of length {self._number_of_gpio}.")
+        if len(invert_input) != self._number_of_gpio:
+            raise ValueError(f"Parameter 'invert_input' must be tuple of {self._number_of_gpio} integers or a string of length {self._number_of_gpio}.")
+        if preset_output is not None:
+            if len(preset_output) != self._number_of_gpio:
+                raise ValueError(f"Parameter 'output' must be tuple if {self._number_of_gpio} integers or a string of length {self._number_of_gpio}.")
+            _output = shifting_plus(preset_output)
+            self._write_register(self.REG_OUTPUT, _output)
+        _polarity = shifting_plus(invert_input)
+        _config = shifting_plus(pin_io)
+        ok1 = self._write_helper(self.REG_POLARITY, _polarity)
+        ok2 = self._write_helper(self.REG_CONFIGURATION, _config)
+        return ok1 and ok2
+
+
+
+    def set_pin_as_input(self, pin_number: int) -> bool:
+        """Configure the GPIO with the index n (starts at 0) as an input with a 100k pullup.
+
+        Args:
+            gpio_n int: Index of the GPIO to configure [0, number_of_gpio-1]
+        """
+
+        pin_number = int(pin_number)
+        _config = self._shadow_regs[self.REG_CONFIGURATION] | (1 << (pin_number & self._number_of_gpio_mask))  # set corresponding bit in configuration
+        return self._write_helper(self.REG_CONFIGURATION, _config)
+
+
+    def set_pin_as_output(self, pin_number: int) -> bool:
+        """Configure the GPIO with the index n (starts at 0) as an output.
+
+        Args:
+            gpio_n int: Index of the GPIO to configure [0, number_of_gpio-1]
+        """
+
+        pin_number = int(pin_number)
+        _config = self._shadow_regs[self.REG_CONFIGURATION] & ~(1 << (pin_number & self._number_of_gpio_mask))  # clear corresponding bit in configuration
+        return self._write_helper(self.REG_CONFIGURATION, _config)
+
+
+    def get_pin(self, pin_number: int) -> bool:
+        """Read the logic level of the specified GPIO.
+
+        Args:
+            gpio_n int: Index of the GPIO to configure [0, number_of_gpio-1]
+        Returns:
+            bool: The logic level of the GPIO.
+        """
+
+        pin_number = int(pin_number)
+        reg_value = self.read_input()
+        return bool(reg_value & (1 << (pin_number & self._number_of_gpio_mask)))
+
+
+    def set_pin(self, pin_number: int) -> bool:
+        """Set the specified GPIO to a logic high level (5 V).
+        Has now effect if the GPIO is configured as an input.
+
+        Args:
+            gpio_n int: Index of the GPIO to configure [0, number_of_gpio-1]
+        """
+
+        pin_number = int(pin_number)
+        _value = self._shadow_regs[self.REG_OUTPUT] | (1 << (pin_number & self._number_of_gpio_mask))  # set corresponding bit
+        return self._write_helper(self.REG_OUTPUT, _value)
+
+
+    def reset_pin(self, pin_number: int) -> bool:
+        """Set the specified GPIO to a logic low level (Gnd).
+        Has now effect if the GPIO is configured as an input.
+
+        Args:
+            gpio_n int: Index of the GPIO to configure [0, number_of_gpio-1]
+        """
+
+        pin_number = int(pin_number)
+        _value = self._shadow_regs[self.REG_OUTPUT] & ~(1 << (pin_number & self._number_of_gpio_mask))  # clear corresponding bit
+        return self._write_helper(self.REG_OUTPUT, _value)
+
+
+
+    #--------------------------------------------
+    # virtual functions to be implemented in derived classes
+    def read_input(self) -> int:
         """Read the input register.
 
-        Raises:
-            IndexError: _description_
+        Returns:
+            int: Current value of the input register.
+        """
+        raise NotImplementedError("This is a base class. Use a derived class.")
+
+
+    def read_output(self) -> int:
+        """Read the output register.
 
         Returns:
-            int: _description_
+            int: Current value of the output register.
         """
-        data = bytearray([TCAL6416.REG_INPUT_PORT])
-        return self._read_helper(self.i2c_address_7bit, data)
+        raise NotImplementedError("This is a base class. Use a derived class.")
 
 
-    #----------------------------------------------------------------------------------------------
+    def read_polarity(self) -> int:
+        """Read the polarity register.
 
-    # def configure_pins(self, pin_io: tuple | str, invert_input: tuple | str, preset_output: None | tuple | str = None):
-    #     """The Configuration register (register 3) configures the directions of the I/O pins.
-    #     If a bit in this register is set to 1, the corresponding port pin is enabled as an input
-    #     with high-impedance output driver. If a bit in this register is cleared to 0,
-    #     the corresponding port pin is enabled as an output.
+        Returns:
+            int: Current value of the polarity register.
+        """
+        raise NotImplementedError("This is a base class. Use a derived class.")
 
-    #     Args:
-    #         pin_io (tuple | str):  4-tuple of 0 | 1, 0=pin is output, 1=pin is input
-    #         invert_input (tuple | str):   4-tuple of 0 | 1, 0=pin is read normal, 1=pin is read inverted
-    #         preset_output (tuple | str):  4-tuple of 0 | 1, preset if outout
-    #     """
-    #     if len(pin_io) != 4:
-    #         raise ValueError("Parameter 'pin_as_output' must be tuple if 4 integers or a string of length 4.")
-    #     if len(invert_input) != 4:
-    #         raise ValueError("Parameter 'invert_input' must be tuple if 4 integers or a string of length 4.")
-    #     if preset_output is not None:
-    #         if len(preset_output) != 4:
-    #             raise ValueError("Parameter 'output' must be tuple if 4 integers or a string of length 4.")
-    #         _output = shifting_plus(preset_output)
-    #         self._write_register(TCAL6416.REG_OUTPUT, _output)
-    #     _polarity = shifting_plus(invert_input)
-    #     _config = shifting_plus(pin_io)
-    #     self._write_register(TCAL6416.REG_POLARITY_INVERSE, _polarity)
-    #     self._write_register(TCAL6416.REG_CONFIGURATION, _config)
+
+    def read_direction(self) -> int:
+        """Read the direction register.
+
+        Returns:
+            int: Current value of the direction register.
+        """
+        raise NotImplementedError("This is a base class. Use a derived class.")
+
+#--------------------------------------------------------------------------------------------------
+
+class TCAL6416(GPIO_BASE):
+
+    def __init__(self, i2c: I2CBase,
+                 i2c_address_7bit: int = 0x20,
+                 init_shadow_from_ic: bool = False,
+                 port0_open_drain: bool = False,
+                 port1_open_drain: bool = False) -> None:
+        super().__init__(i2c, i2c_address_7bit, 16, init_shadow_from_ic)
+        # here go the TCAL specific register addresses
+        self.REG_OUTPUT_DRIVE_STRENGTH = 0x40  # needs two bits per port pin -> 32 bits pin
+        self.REG_PULL_RESISTOR_ENABLE = 0x46
+        self.REG_PULL_RESISTOR_SELECTION = 0x48
+        self.REG_OUTPUT_PORT_CONFIGURATION = 0x4f  # !! this is only one byte Register using bits 0 and 1 for the two ports !!
+        self.REG_INPUT_LATCH = 0x44 # UNUSED
+        self.REG_INTERRUPT_MAK = 0x4a # UNUSED
+        self.REG_INTERRUPT_STATUS = 0x4c # UNUSED
+        # preselect the output port type (one time at init)
+        _nogpio = self._number_of_gpio  # we need to trick the _write_helper function to only write one byte
+        self._number_of_gpio = 8  # temporarily set to 8
+        _config_outport = (0x01 if port0_open_drain else 0) | (0x02 if port1_open_drain else 0)
+        self._shadow_regs[self.REG_OUTPUT_PORT_CONFIGURATION] = _config_outport
+        self._write_helper(self.REG_OUTPUT_PORT_CONFIGURATION, self._shadow_regs[self.REG_OUTPUT_PORT_CONFIGURATION])
+        self._number_of_gpio = _nogpio  # restore
+        # update the shadow registers
+        self._shadow_regs[self.REG_OUTPUT_DRIVE_STRENGTH] = self.read_output_drive_strength() if init_shadow_from_ic else 0,
+        self._shadow_regs[self.REG_PULL_RESISTOR_ENABLE] = self.read_pull_resistor_enable() if init_shadow_from_ic else 0,
+        self._shadow_regs[self.REG_PULL_RESISTOR_SELECTION] = self.read_pull_resistor_selection if init_shadow_from_ic else self._number_of_gpio_mask, # 1=pullup, 0=pulldown
+
+
+    #--------------------------------------------
+
+    def __str__(self) -> str:
+        return f"TCAL6416 GPIO device with address {self.i2c_address_7bit:02x} on {self.bus}"
+
+    def __repr__(self) -> str:
+        return f"TCAL6416({repr(self.bus)}, i2c_address_7bit={self.i2c_address_7bit})"
+
+    #--------------------------------------------
+
+    def configure_pins(self,
+                       pin_io: tuple | str,
+                       invert_input: tuple | str,
+                       preset_output: None | tuple | str = None,
+                       pull_resistors_config: tuple | str = None,
+                       enable_pull_resistors: tuple | str = None,
+                       ) -> bool:
+        ok0 = super().configure_pins(pin_io, invert_input, preset_output=preset_output)
+        if not ok0:
+            return False
+        _pull_config = shifting_plus(pull_resistors_config)
+        _pull_enable = shifting_plus(enable_pull_resistors)
+        ok1 = self._write_helper(self.REG_POLARITY, _pull_config)
+        ok2 = self._write_helper(self.REG_CONFIGURATION, _pull_enable)
+        return ok1 and ok2
+
+
+    def read_input(self) -> int:
+        return self._read_helper(self.REG_INPUT)
+
+
+    def write_output(self, value: int) -> bool:
+        return self._write_helper(self.REG_OUTPUT, value)
+
+    def read_output(self) -> int:
+        return self._read_helper(self.REG_OUTPUT)
+
+
+    def set_direction(self, direction) -> bool:
+        # direction: 1=input, 0=output
+        return self._write_helper(self.REG_CONFIGURATION, direction)
+
+
+    def read_direction(self)-> int:
+        return self._read_helper(self.REG_CONFIGURATION)
+
+
+    def set_polarity(self, polarity) -> bool:
+        # polarity: 1=invert, 0=normal
+        return self._write_helper(self.REG_POLARITY, polarity)
+
+
+    def read_polarity(self) -> int:
+        return self._read_helper(self.REG_POLARITY)
+
+
+    def set_output_drive_strength(self, strength: int) -> bool:
+        # strength: 2 bits per pin, 00=2mA, 01=4mA, 10=8mA, 11=12mA
+        if (strength < 0) or (strength > 0x5555):
+            raise ValueError("Output drive strength must be a 16 bit integer with each two bits in the range 0..3.")
+        return self._write_helper(self.REG_OUTPUT_DRIVE_STRENGTH, strength)
+
+
+    def read_output_drive_strength(self) -> int:
+        p0 = self._read_helper(self.REG_OUTPUT_DRIVE_STRENGTH)
+        p1 = self._read_helper(self.REG_OUTPUT_DRIVE_STRENGTH + 2)  # updates also the shadow register 0x42 but it will not be used
+        self._shadow_regs[self.REG_OUTPUT_DRIVE_STRENGTH] = (p1 << 16) | p0
+        return self._shadow_regs[self.REG_OUTPUT_DRIVE_STRENGTH]
+
+
+    def set_pull_resistor_enable(self, enable_pattern: int) -> bool:
+        # enable_pattern: 1=enable, 0=disable by port pin
+        if (enable_pattern < 0) or (enable_pattern > self._number_of_gpio_mask):
+            raise ValueError(f"Pull resistor enable must be a {self._number_of_gpio}-bit integer.")
+        return self._write_helper(self.REG_PULL_RESISTOR_ENABLE, enable_pattern)
+
+
+    def read_pull_resistor_enable(self) -> int:
+        return self._read_helper(self.REG_PULL_RESISTOR_ENABLE)
+
+
+    def set_pull_resistor_selection(self, selection_pattern: int) -> bool:
+        # selection_pattern: 1=pullup, 0=pulldown by port pin
+        if (selection_pattern < 0) or (selection_pattern > self._number_of_gpio_mask):
+            raise ValueError(f"Pull resistor selection must be a {self._number_of_gpio}-bit integer.")
+        return self._write_helper(self.REG_PULL_RESISTOR_SELECTION, selection_pattern)
+
+
+    def read_pull_resistor_selection(self) -> int:
+        return self._read_helper(self.REG_PULL_RESISTOR_SELECTION)
 
 
 
@@ -193,6 +390,7 @@ class TCAL6416:
 if __name__ == '__main__':
     from rrc.eth2i2c import I2CPort
     from rrc.i2cbus import I2CMuxedBus, BusMux
+
 
     i2c_p = I2CPort("172.21.101.30:2101")
     print("MASTER:", i2c_p.i2c_bus_scan())
