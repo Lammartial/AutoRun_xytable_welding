@@ -571,9 +571,9 @@ if __name__ == "__main__":
     SOCKET = 0  # 0, 1 or 2
 
     if SOCKET == 0:
-        feasa = FEASA_CH9121(f"{LINE_NETWORK}.31:3000", termination="\n")  # PCBA test, socket 0
-        #i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101") # socket 0
-        i2cbus = I2CPort(f"{LINE_NETWORK}.201:2101") # OLIMEX Inbetriebnahme
+        #feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:2000", termination="\n")  # PCBA test, socket 0
+        i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101") # socket 0        
+        feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:3000")  # PCBA test, socket 0        
         #i2cbus = I2CPort("192.168.69.77:2101") # HOMEGROW
     if SOCKET == 1:
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.33:3000")  # PCBA test, socket 1
