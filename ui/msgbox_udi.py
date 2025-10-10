@@ -7,6 +7,7 @@ Need Python 3.10
 
 """
 
+from cProfile import label
 from typing import Callable
 import asyncio
 import concurrent.futures
@@ -146,12 +147,17 @@ def aio_exception_handler(mainframe: ttk.Frame, future: concurrent.futures.Futur
         #safeprint(f'aio_exception_handler ending. {block=}s')
         pass
 
+default_dialog_label_text = None
+default_dialog_label_color = None
+
 def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Iterator):
     """ Display queued messages in the Tkinter window.
 
     This is the consumer for Tkinter's work queue. It runs in the Main Thread. After starting, it runs
     continuously until the GUI is closed by the user.
     """
+
+    global root, label_dialog, var_label_dialog, default_dialog_label_text, default_dialog_label_color
 
     _log = getLogger(__name__, DEBUG)
     # Poll continuously while queue has work needing processing.
@@ -169,24 +175,56 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
         if work_package:
             global udi_to_scan
 
-            # validate UDI
-            _valid_udi = False
-            for item in udi_to_scan:
-                if item.decode is not None:
-                    item.records, _ = item.decode(work_package)
-                if item.validate is not None:
-                    # execute the validation function which should return either the UDI or serial number
-                    _s = item.validate(item.records, item.name)
-                    if _s:
-                        item.var.set(_s)   # set the UDI or serial number
-                        _valid_udi = True  # avoid pop-up
-            if not _valid_udi:
-                # here we can add an error pop-up !
-                showerror("Wrong UDI code type!", f"{item.records}")
-                _log.warning(f"Wrong UDI code type {item.records}")
+            if "scan" in work_package:
+                # validate UDI
+                _valid_udi = False
+                for item in udi_to_scan:
+                    if item.decode is not None:
+                        item.records, _ = item.decode(work_package)
+                    if item.validate is not None:
+                        # execute the validation function which should return either the UDI or serial number
+                        _s = item.validate(item.records, item.name)
+                        if _s:
+                            item.var.set(_s)   # set the UDI or serial number
+                            _valid_udi = True  # avoid pop-up
+                if not _valid_udi:
+                    # here we can add an error pop-up !
+                    #showerror("Wrong UDI code type!", f"{item.records}")
+                    label_dialog.config(background="orange", foreground=default_dialog_label_color[1])
+                    var_label_dialog.set(f" Wrong UDI code type! \n {item.records} \n {default_dialog_label_text}")
+                    _log.warning(f"Wrong UDI code type {item.records}")
+                else:
+                    # UDI was valid
+                    # clean up the color
+                    label_dialog.config(background=default_dialog_label_color[0], foreground=default_dialog_label_color[1])
+                    var_label_dialog.set(default_dialog_label_text)
+                    root.update()
+                    # check if we are complete:
+                    _stop = all([(item.var.get() not in [None, ""]) for item in udi_to_scan])
+            elif "error" in work_package:
+                if work_package["error"] == "could not connect":
+                    # to change the whole background we need to change the style:
+                    #s = ttk.Style()
+                    #s.configure('TFrame', background="red")
+                    label_dialog.config(background=default_dialog_label_color[0], foreground="red")
+                    var_label_dialog.set(" PLEASE CONNECT SCANNER! ")
+                    root.update()
+                elif work_package["error"] == "not responding":
+                    label_dialog.config(background=default_dialog_label_color[0], foreground="orange")
+                    var_label_dialog.set(" SCANNER NOT RESPONDING! ")
+                    root.update()
+                else:
+                    showerror("Scanner error!", f"{work_package['error']}")
+                    _log.warning(f"Scanner error {work_package['error']}")
+            elif "info" in work_package:
+                if work_package["info"] == "scanner connected":
+                    # clean up the color
+                    label_dialog.config(background=default_dialog_label_color[0], foreground=default_dialog_label_color[1])
+                    var_label_dialog.set(default_dialog_label_text)
+                    root.update()
             else:
-                # check if we are complete:
-                _stop = all([(item.var.get() not in [None, ""]) for item in udi_to_scan])
+                # may not happen !
+                pass
     finally:
         if _stop:
             #mainframe.master.withdraw()
@@ -214,10 +252,14 @@ def tk_setup_callbacks(mainframe: ttk.Frame, row_itr: Iterator):
     """
 
     global tk_q
+    global default_dialog_label_text, default_dialog_label_color
 
     #_log = getLogger(__name__, DEBUG)
     #_log.debug('tk_callbacks starting')
     task_id_itr = itertools.count(1)
+
+    default_dialog_label_text = var_label_dialog.get()
+    default_dialog_label_color = (label_dialog.cget("background"), label_dialog.cget("foreground"))
 
     # run thread's Queue consumer.
     #tk_q = queue.Queue()
@@ -239,6 +281,16 @@ def tk_setup_callbacks(mainframe: ttk.Frame, row_itr: Iterator):
 
 #--------------------------------------------------------------------------------------------------
 block_accept_udi = True
+root: tk.Tk = None
+mainframe: ttk.Frame = None
+label_dialog: ttk.Label = None
+ok_button: ttk.Button = None
+cancel_button: ttk.Button = None
+
+var_label_dialog: tk.StringVar = None
+var_ok_button: tk.StringVar = None
+var_cancel_button: tk.StringVar = None
+entry_lst = []
 
 def tk_main(title: str = "ENTER UID", test_socket: int = -1):
     """ Run tkinter.
@@ -247,6 +299,9 @@ def tk_main(title: str = "ENTER UID", test_socket: int = -1):
     """
 
     global udi_to_scan, allow_manual_edit, ok_button #, block_accept_udi
+    global root, mainframe, ok_button, cancel_button, label_dialog
+    global var_label_dialog, var_ok_button, var_cancel_button
+    global entry_lst
 
     _log = getLogger(__name__, DEBUG)
     _log.debug('tk_main starting\n')
@@ -339,13 +394,15 @@ def tk_main(title: str = "ENTER UID", test_socket: int = -1):
 
 
     # Label
-    label = ttk.Label(
+    var_label_dialog = tk.StringVar(root, "Scan or Enter the UDI of Device under Test")
+    label_dialog = ttk.Label(
         mainframe,
-        text="Scan or Enter the UDI of Device under Test",
+        textvariable=var_label_dialog,
+        #text="Scan or Enter the UDI of Device under Test",
         justify="center",
         font=("-size", 12, "-weight", "bold"),
     )
-    label.grid(row=next(row_itr), column=0, columnspan=2 , pady=10)
+    label_dialog.grid(row=next(row_itr), column=0, columnspan=2 , pady=10)
 
     # Entry
     entry_lst = []
@@ -391,7 +448,8 @@ def tk_main(title: str = "ENTER UID", test_socket: int = -1):
         entry_lst.append((_label, entry))
 
     # Button
-    ok_button = ttk.Button(mainframe, text="Start Test", style="Accent.TButton", command=lambda: _accept_udi(None))
+    var_ok_button = tk.StringVar(root, "Start Test")
+    ok_button = ttk.Button(mainframe, textvariable=var_ok_button, style="Accent.TButton", command=lambda: _accept_udi(None))
     ok_button.bind("<Return>", _accept_udi)
     ok_button.bind("<Key-Escape>", _cancel)
     ok_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, padx=5, pady=10, sticky="nsew")
@@ -402,7 +460,8 @@ def tk_main(title: str = "ENTER UID", test_socket: int = -1):
     separator.grid(row=next(row_itr), column=0, columnspan=2, padx=(20, 10), pady=10, sticky="ew")
 
     # Button
-    cancel_button = ttk.Button(mainframe, text="Cancel", command=lambda: _cancel(None))
+    var_cancel_button = tk.StringVar(root, "Cancel")
+    cancel_button = ttk.Button(mainframe, textvariable=var_cancel_button, command=lambda: _cancel(None))
     cancel_button.bind("<Return>", _cancel )
     cancel_button.bind("<Key-Escape>", _cancel)
     cancel_button.grid(row=next(row_itr), column=0, columnspan=2, ipady=50, padx=5, pady=10, sticky="nsew")
@@ -484,18 +543,29 @@ def io_thread_run(aio_initiate_shutdown: threading.Event, q_to_tk: queue.Queue, 
         try:
             if not scanner:
                 # create the scanner device which also could trigger an exception
-                scanner = create_barcode_scanner_with_timeout(scanner_resource_str, timeout=3.0)
+                scanner = create_barcode_scanner_with_timeout(scanner_resource_str, timeout=1.5)
+                q_to_tk.put_nowait({
+                    "info": "scanner connected"
+                })
             response = scanner.request(None, timeout=0.1, encoding="utf-8")  # blocking, sync call - timeout keeps it handy
             if response:
                 # send response to TK inter
                 #print("RAW:", response)
-                q_to_tk.put_nowait(response)
+                q_to_tk.put_nowait({
+                    "scan": response
+                })
         except TimeoutError:
             if (not scanner) and (not aio_initiate_shutdown.is_set()):
                 # could not connect to scanner - inform user
-                #q_to_tk.put_nowait("ERROR")
-                showerror("User action required", f"Scanner {scanner_resource_str} not found")
+                q_to_tk.put_nowait({
+                    "error": "could not connect"
+                    })
+                #showerror("User action required", f"Scanner {scanner_resource_str} not found")
             else:
+                # scanner not responding
+                q_to_tk.put_nowait({
+                    "error": "not responding"
+                    })
                 pass  # ignore Timeout
         finally:
             pass
