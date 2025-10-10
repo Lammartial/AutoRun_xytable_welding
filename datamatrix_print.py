@@ -6,7 +6,8 @@ All print is done by the use of PNG graphics files.
 
 It works only on WINDOWS as we use win32XXXX modules for print output.
 
-Need to install 'pylibdtmx'
+Need to install 'pylibdtmx' which needs vcredistributable 2015-2019 installed (vcredist_x64.exe).
+Note: the most recent VC_redist64.exe does not work, use the one from 2015-2019 !
 
 
 """
