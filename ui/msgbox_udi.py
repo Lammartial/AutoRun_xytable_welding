@@ -554,7 +554,7 @@ def io_thread_run(aio_initiate_shutdown: threading.Event, q_to_tk: queue.Queue, 
                 q_to_tk.put_nowait({
                     "scan": response
                 })
-        except TimeoutError:
+        except TimeoutError as ex:
             if (not scanner) and (not aio_initiate_shutdown.is_set()):
                 # could not connect to scanner - inform user
                 q_to_tk.put_nowait({
@@ -562,10 +562,10 @@ def io_thread_run(aio_initiate_shutdown: threading.Event, q_to_tk: queue.Queue, 
                     })
                 #showerror("User action required", f"Scanner {scanner_resource_str} not found")
             else:
-                # scanner not responding
-                q_to_tk.put_nowait({
-                    "error": "not responding"
-                    })
+                # # scanner not responding
+                # q_to_tk.put_nowait({
+                #     "error": "not responding"
+                #     })
                 pass  # ignore Timeout
         finally:
             pass
@@ -662,7 +662,7 @@ if __name__ == '__main__':
     #     UDIScanCtrlItem("CELL", decode_rrc_udi_label, validate_rrc_udi),
     # ]
 
-    RESOURCE_STR = "172.21.101.40:2000"
+    RESOURCE_STR = "172.21.101.30:2000"
     #RESOURCE_STR = "COM3,9600,8N1"  # Handheld scanner
     #RESOURCE_STR = "SIMULATION"  # select a timed simulation
 
