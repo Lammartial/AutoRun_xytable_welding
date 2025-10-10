@@ -91,12 +91,12 @@ if __name__ == "__main__":
 
 
     dutcom = I2CMuxedBus(i2cbus, mux, 2)  # i2c to the DUT
-    mux_on_insert = BusMux(dutcom, address=0x44)  # this is the MUX on the DUT board
+    mux_on_cartridge = BusMux(dutcom, address=0x73)  # this is the MUX on the DUT board
     # double MUX'd
-    dut_micro = BusMaster(I2CMuxedBus(dutcom, mux_on_insert, 1), retry_limit=7, verify_rounds=3, pause_us=50)    
-    dut_gasgauge = BQ34Z100(I2CMuxedBus(dutcom, mux_on_insert, 2))
-    dut_afe = BQ76942(I2CMuxedBus(dutcom, mux_on_insert, 2))
-    dut_gpio = TCAL6416(I2CMuxedBus(dutcom, mux_on_insert, 3), i2c_address_7bit=0x20)
+    dut_micro = BusMaster(I2CMuxedBus(dutcom, mux_on_cartridge, 1), retry_limit=7, verify_rounds=3, pause_us=50)
+    dut_gasgauge = BQ34Z100(I2CMuxedBus(dutcom, mux_on_cartridge, 2))
+    dut_afe = BQ76942(I2CMuxedBus(dutcom, mux_on_cartridge, 2))
+    dut_gpio = TCAL6416(I2CMuxedBus(dutcom, mux_on_cartridge, 3), i2c_address_7bit=0x20)
     # testdummy for double, transparent MUX
     print(dut_micro.bus.i2c_bus_scan())
     print(dut_gasgauge.bus.i2c_bus_scan())
@@ -106,7 +106,7 @@ if __name__ == "__main__":
     # which EEPROM type do we need to implement ?
 
     calib = CalibrationStorage(I2CMuxedBus(i2cbus, mux, 1))
-    print("Inventory:", calib.load_inventory_number())    
+    print("Inventory:", calib.load_inventory_number())
 
     gpio = RelayBoard4Relay4GPIO(I2CMuxedBus(i2cbus, mux, 3))
     vsim = CellVoltageSimulation(I2CMuxedBus(i2cbus, mux, 4))
