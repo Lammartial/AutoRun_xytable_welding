@@ -180,7 +180,7 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
                 _valid_udi = False
                 for item in udi_to_scan:
                     if item.decode is not None:
-                        item.records, _ = item.decode(work_package)
+                        item.records, _ = item.decode(work_package["scan"])
                     if item.validate is not None:
                         # execute the validation function which should return either the UDI or serial number
                         _s = item.validate(item.records, item.name)
