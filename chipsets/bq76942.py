@@ -107,6 +107,81 @@ class BQ76942:
 
     # --------------------------------------------
 
+    def write_subcommand(self, subcmd: int, data: bytes | bytearray = None, timeout: float = 2.0) -> bool:
+        """Write a subcommand with optional data to the BQ76942.
+
+        Args:
+            subcmd (int): The subcommand to write.
+            data (bytes | bytearray, optional): Optional data to send with the subcommand. Defaults to b''.
+        """
+
+        if not (0 <= subcmd <= 0xFFFF):
+            raise ValueError("Subcommand must be a 16-bit value (0-65535).")
+
+        if not self.bus.writeWord(self.address, 0x3E, subcmd, pec=self.pec):  # write Subcommand to the registers 0x3E and 0x3F
+            return False
+        t0 = monotonic_ns()  # common timeout over the rest of the function
+        response = 0xFFFF
+        while response != subcmd:
+            response = self.bus.readWord(self.address, 0x3E, pec=self.pec)  # read back the subcommand register
+            t1 = monotonic_ns()
+            if (t1 - t0) > timeout * 1e+9:  # scale timeout to ns
+                raise TimeoutError("While wait for subcommand to complete.")
+        if data:
+            checksum = (subcmd & 0xFF) | ((subcmd >> 8) & 0xFF)
+            for b in data:
+                checksum += b   # generate the checksum by simple addition
+            checksum = ~checksum & 0xFF  # bitwise inverse
+            if not self.bus.writeBytes(self.address, 0x40, data, pec=self.pec):  # write data to the data registers starting at 0x40
+                return False
+            # activate the data transfer of the command
+            buf = (checksum, ((len(data) + 4) << 8))  # length of data + checksum byte + length byte + the two subcommandbytes
+            if not self.bus.writeBytes(self.address, 0x60, buf, pec=self.pec):  # write checksum to the checksum register 0x60
+                return False
+        return True
+
+
+    def read_subcommand(self, subcmd: int, length: int = 0, timeout: float = 2.0, hexi: None | bool | str = None) -> bytes | bytearray | str:
+        """Read data from a subcommand.
+
+        Args:
+            subcmd (int): The subcommand to read from.
+            length (int, optional): The number of bytes to read. Defaults to 0.
+            timeout (float, optional): Timeout in seconds for the operation. Defaults to 2.0.
+            hexi (None | bool | str, optional): If set to True or a string separator, the returned bytes will be hexlified.
+                                                Defaults to None.
+        Returns:
+            bytes | bytearray | str: The data read from the subcommand, possibly hexlified.
+        """
+
+        if not (0 <= subcmd <= 0xFFFF):
+            raise ValueError("Subcommand must be a 16-bit value (0-65535).")
+
+        if not self.bus.writeWord(self.address, 0x3E, subcmd, pec=self.pec):  # write Subcommand to the registers 0x3E and 0x3F
+            return False
+        t0 = monotonic_ns()  # common timeout over the rest of the function
+        response = 0xFFFF
+        while response != subcmd:
+            response = self.bus.readWord(self.address, 0x3E, pec=self.pec)  # read back the subcommand register
+            t1 = monotonic_ns()
+            if (t1 - t0) > timeout * 1e+9:  # scale timeout to ns
+                raise TimeoutError("While wait for subcommand to complete.")
+        # data is ready now
+        ctrl, ok = self.bus.readBytes(self.address, 0x60, 2, pec=self.pec)  # read checksum and length
+        if not ok:
+            raise IOError("Failed to read checksum and length from BQ76942.")
+        count = ctrl[1]
+        buf, ok = self.bus.readBytes(self.address, 0x40, count, pec=self.pec)
+        # calc expected checksum
+        checksum = (subcmd & 0xff) | ((subcmd >> 8) & 0xff)
+        for b in buf:
+            checksum += b   # generate the checksum by simple addition
+        checksum = ~checksum & 0xFF # bitwise inverse
+        # verify checksum
+        if checksum != ctrl[0]:
+            raise IOError("Checksum mismatch reading from BQ76942.")
+        # success
+        return buf
 
 
 
