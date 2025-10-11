@@ -1,7 +1,7 @@
 """
 Provides basic ETH to SERIAL conversion handling the socket communication.
 """
-import imp
+
 import socket
 import errno
 import asyncio
