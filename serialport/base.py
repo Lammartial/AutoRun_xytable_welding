@@ -2,6 +2,7 @@ import asyncio
 import serial_asyncio
 import serial
 import time
+from binascii import hexlify
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -49,11 +50,11 @@ class SerialComportDevice(object):
         return f"Serial comport device at {self.comport},{self.baudrate},{self.linesettings}"
 
     def __repr__(self) -> str:
-        return f"SerialComportDevice({self._resource_str}, termination={self.termination})"
+        return f"SerialComportDevice({self._resource_str}, termination={hexlify(self._termination_as_bytes).decode()})"
 
     #----------------------------------------------------------------------------------------------
 
-    def send(self, msg: str, 
+    def send(self, msg: str,
              timeout: float = 3.0,
              pause_after_write: int | None = None,
              encoding: str | None = "utf-8") -> None:
@@ -84,10 +85,10 @@ class SerialComportDevice(object):
 
     #----------------------------------------------------------------------------------------------
 
-    def request(self, msg: str | None, 
+    def request(self, msg: str | None,
                 timeout: float | None = 3.0,
                 pause_after_write: int | None = None,
-                limit: int = 0, 
+                limit: int = 0,
                 encoding: str | None = "utf-8") -> str:
         """
         Sends a message to a serial device if msg is given, then receives response from the serial device

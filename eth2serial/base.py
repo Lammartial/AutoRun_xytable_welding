@@ -1,10 +1,12 @@
 """
 Provides basic ETH to SERIAL conversion handling the socket communication.
 """
+import imp
 import socket
 import errno
 import asyncio
 import time
+from binascii import hexlify
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -95,7 +97,7 @@ class Eth2SerialDevice(object):
         return f"ETH to SERIAL bridge at {self.host}:{self.port}"
 
     def __repr__(self) -> str:
-        return f"Eth2SerialDevice('{self.host}:{self.port}', termination='{self.termination}')"
+        return f"Eth2SerialDevice('{self.host}:{self.port}', termination='{hexlify(self._termination_as_bytes).decode()}', trim_termination={self.trim_termination}, open_connection={self._keep_connection_open}, pause_on_retry={self.pause_on_retry})"
 
     #----------------------------------------------------------------------------------------------
 
@@ -148,7 +150,7 @@ class Eth2SerialDevice(object):
              pause_after_write: int | None = None,
              encoding: str | None = "utf-8",
              retries: int = 1) -> None:
-        
+
         """Sends a message to a serial device.
 
         Args:
@@ -188,7 +190,7 @@ class Eth2SerialDevice(object):
         """
         Sends a message to a serial device if msg is given, then receives response from the serial device
         with given timeout.
-        
+
         Args:
             msg (str): _description_
             timeout (float, optional): _description_. Defaults to 5.0.
