@@ -7,13 +7,12 @@ from typing import Tuple
 from time import sleep
 from pathlib import Path
 from rrc.eth2i2c import I2CPort
-from rrc.i2cbus import BusMux
 from rrc.eth2i2c import I2CPort
 from rrc.i2cbus import BusMux, I2CMuxedBus
 from rrc.smbus import BusMaster
 from rrc.chipsets import BQ40Z50R1, BQStudioFileFlasher, BQ34Z100, BQ76942
 from rrc.gpio_tcal6416 import TCAL6416
-from rrc.relayboard_i2cio4r4xdpdt import RelayBoard4Relay4GPIO
+from rrc.cartridge_peta import CartridgePETA
 from rrc.cell_voltage_simulation import CellVoltageSimulation
 from rrc.calibration_storage import CalibrationStorage
 from rrc.temperature_sts21 import STS21
@@ -35,21 +34,22 @@ from rrc.custom_logging import getLogger, logger_init
 
 #--------------------------------------------------------------------------------------------------
 
-def test_calibration_storage_only(calib: CalibrationStorage):
+
+def test_calibration_storage_only(calib: CalibrationStorage) -> None:
     print("Read calibration EEPROM values")
     print("Inventory Number: ", calib.load_inventory_number())
     print("Shunt Resistance: ", calib.load_shunt_resistance_ohm())
     [print(f"Leakage Current: {i}# {calib.load_leakcurrent_amps(i)}") for i in range(3)]
 
 
-def test_relay_only(gpio: RelayBoard4Relay4GPIO):
-    gpio.set_gpio_n_as_output(7)
+def test_cartridge_only(cart: CartridgePETA) -> None:
+    cart.select_bus_to_micro("i2c")
     for i in range(3):
-        gpio.set_gpio_n_high(7)
+        cart.switch_mosfet(i, 1)
         sleep(0.5)
-        gpio.set_gpio_n_low(7)
+        cart.switch_mosfet(i, 0)
         sleep(0.5)
-
+    cart.select_bus_to_micro("can")
 
 #--------------------------------------------------------------------------------------------------
 
@@ -91,6 +91,8 @@ if __name__ == "__main__":
 
 
     dutcom = I2CMuxedBus(i2cbus, mux, 2)  # i2c to the DUT
+    cart = CartridgePETA(dutcom)
+    test_cartridge_only(cart)
     mux_on_cartridge = BusMux(dutcom, address=0x73)  # this is the MUX on the DUT board
     # double MUX'd
     dut_micro = BusMaster(I2CMuxedBus(dutcom, mux_on_cartridge, 1), retry_limit=7, verify_rounds=3, pause_us=50)
