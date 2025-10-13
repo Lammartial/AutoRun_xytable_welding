@@ -13,6 +13,7 @@ from rrc.smbus import BusMaster
 from rrc.chipsets import BQ40Z50R1, BQStudioFileFlasher, BQ34Z100, BQ76942
 from rrc.gpio_tcal6416 import TCAL6416
 from rrc.cartridge_peta import CartridgePETA
+from rrc.relayboard_i2cio4r4xdpdt import RelayBoard4Relay4GPIO
 from rrc.cell_voltage_simulation import CellVoltageSimulation
 from rrc.calibration_storage import CalibrationStorage
 from rrc.temperature_sts21 import STS21
@@ -43,13 +44,82 @@ def test_calibration_storage_only(calib: CalibrationStorage) -> None:
 
 
 def test_cartridge_only(cart: CartridgePETA) -> None:
+
+    cart.gpio.set_pin(7) # enable the AFE and Gasgauge
     cart.select_bus_to_micro("i2c")
+    print("I2C to MICRO: ", cart.get_muxed_i2c_bus_for(1).i2c_bus_scan())
+    #print("I2C to BACKYARD: ", cart.get_muxed_i2c_bus_for(2).i2c_bus_scan())
+    #print("I2C to GPIO: ", cart.get_muxed_i2c_bus_for(8).i2c_bus_scan())
     for i in range(3):
         cart.switch_mosfet(i, 1)
-        sleep(0.5)
+        sleep(0.15)
         cart.switch_mosfet(i, 0)
-        sleep(0.5)
+        sleep(0.15)
     cart.select_bus_to_micro("can")
+    print("I2C to MICRO: ", cart.get_muxed_i2c_bus_for(1).i2c_bus_scan())
+    #print("I2C to BACKYARD: ", cart.get_muxed_i2c_bus_for(2).i2c_bus_scan())
+    #print("I2C to GPIO: ", cart.get_muxed_i2c_bus_for(8).i2c_bus_scan())
+    cart.select_bus_to_micro("i2c")
+
+
+def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
+              vsim: CellVoltageSimulation, calib: CalibrationStorage,
+              feasa: FEASA_CH9121,
+              psu1: M3400, psu2: M3400,
+              daq: DAQ970A) -> None:
+    #psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
+    #psu.configure_current_rise_times(pos="DEF", neg="DEF")
+
+    # verify that PSU does not trigger battery protection
+    print("PSU Output on")
+    psu1.configure_supply(25.090, 0.080, 50, 0)
+    psu2.configure_supply(25.090, 0.080, 50, 0)
+    #psu2.configure_cc_mode(0.05, 10.8*1.15, (10.8*1.15) * 0.8, 50, 1)
+
+    sleep(0.5)  # wait PSU powered up
+
+    print("Measure PSU1", psu1.get_all_measurements())
+    print("Measure PSU2", psu2.get_all_measurements())
+
+    #vsim.power_down_all_cell_channels()
+    #sleep(0.2)
+    vsim.enable_all_cell_channels()
+    for cell_no in range(1, 7):
+        vsim.set_cell_n_voltage(cell_no, 3.6)
+
+    # switch cell side on first
+    psu2.set_output_state(1)
+    sleep(0.25)
+    psu1.set_output_state(1)
+    sleep(0.5)
+
+    print("Measure PSU1", psu1.get_all_measurements())
+    print("Measure PSU2", psu2.get_all_measurements())
+
+    cartridge.select_bus_to_micro("i2c")
+    print("BACKYARD:", cartridge.backyard_bus.i2c.i2c_bus_scan())
+    print("MICRO:", cartridge.smbus_to_mirco.i2c.i2c_bus_scan())
+    #for n in range(1,9):
+    #    print(cartridge.get_muxed_i2c_bus_for(n).i2c_bus_scan())
+
+    print("DAQ - channel 11", daq.get_VDC(11))
+    print("DAQ - channel 12", daq.get_VDC(12))
+    print("DAQ - channel 14", daq.get_VDC(14))
+    print("DAQ - channel 10", daq.get_VDC(10))
+    print("DAQ - channel 18", daq.get_VDC(18))
+    print("DAQ - channel 19", daq.get_VDC(19))
+    print("DAQ - channel 5", daq.get_VDC(5))
+
+    print("DAQ - channel 15", daq.get_VDC(15))  # full pack voltage
+
+    print("DAQ - channel 8", daq.get_VDC(8))  # should be +3.3v
+    print("DAQ - channel 9", daq.get_VDC(9))  # should be +1.8v
+
+
+
+
+    psu1.set_output_state(0)
+    psu2.set_output_state(0)
 
 #--------------------------------------------------------------------------------------------------
 
@@ -79,36 +149,34 @@ if __name__ == "__main__":
         i2cbus = I2CPort(f"{LINE_NETWORK}.34:2101")  # socket 2
 
 
-    #print("Change clock frequency and timeout - RRC: ",
-    #      str(i2cbus.i2c_change_clock_frequency(50000, timeout_ms=50)))
+    print("Change clock frequency and timeout - RRC: ",
+          str(i2cbus.i2c_change_clock_frequency(400000, timeout_ms=30)))
     print("MASTER:", i2cbus.i2c_bus_scan())
 
     mux = BusMux(i2cbus, address=0x77)
-    #mux = BusMux(i2cbus, address=0x70)  # OLIMEX Breakout
     for c in range(1,9):
         mux.setChannel(c)
         print("CH:", c, i2cbus.i2c_bus_scan())
 
-    print("MUX ON CARTRIDGE:")
     dutcom = I2CMuxedBus(i2cbus, mux, 2)  # i2c to the DUT
     mux_on_cartridge = BusMux(dutcom, address=0x70)  # this is the MUX on the DUT board
+    print("MUX ON CARTRIDGE:")
     for c in range(1,9):
         mux_on_cartridge.setChannel(c)
         print("CH:", c, dutcom.i2c_bus_scan())
 
-    
     cart = CartridgePETA(dutcom)
     test_cartridge_only(cart)
     # double MUX'd
-    dut_micro = BusMaster(I2CMuxedBus(dutcom, mux_on_cartridge, 1), retry_limit=7, verify_rounds=3, pause_us=50)
-    dut_gasgauge = BQ34Z100(I2CMuxedBus(dutcom, mux_on_cartridge, 2))
-    dut_afe = BQ76942(I2CMuxedBus(dutcom, mux_on_cartridge, 2))    
-    dut_gpio = TCAL6416(I2CMuxedBus(dutcom, mux_on_cartridge, 8), i2c_address_7bit=0x20)
-    # testdummy for double, transparent MUX
-    print(dut_micro.bus.i2c_bus_scan())
-    print(dut_gasgauge.bus.i2c_bus_scan())
-    print(dut_afe.bus.i2c_bus_scan())
-    print(dut_gpio.bus.i2c_bus_scan())
+    # dut_micro = BusMaster(I2CMuxedBus(dutcom, mux_on_cartridge, 1), retry_limit=7, verify_rounds=3, pause_us=50)
+    # dut_gasgauge = BQ34Z100(I2CMuxedBus(dutcom, mux_on_cartridge, 2))
+    # dut_afe = BQ76942(I2CMuxedBus(dutcom, mux_on_cartridge, 2))
+    # dut_gpio = TCAL6416(I2CMuxedBus(dutcom, mux_on_cartridge, 8), i2c_address_7bit=0x20)
+    # # testdummy for double, transparent MUX
+    # print(dut_micro.i2c.i2c_bus_scan())
+    # print(dut_gasgauge.bus.i2c_bus_scan())
+    # print(dut_afe.bus.i2c_bus_scan())
+    # print(dut_gpio.bus.i2c_bus_scan())
 
     # which EEPROM type do we need to implement ?
 
@@ -139,7 +207,11 @@ if __name__ == "__main__":
     if SOCKET == 2:
         daq = DAQ970A(f"{LINE_NETWORK}.36:5025", card_slot=3)  # socket 2
 
+    print(daq.ident())
+
     # .... do some tests here ....
+
+    rack_test(cart, gpio, vsim, calib, feasa, psu1, psu2, daq)
 
 
 # END OF FILE

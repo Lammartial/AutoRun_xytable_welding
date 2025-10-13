@@ -10,6 +10,7 @@ __version__ = "0.5.0"
 
 # pylint: disable=line-too-long,C0103,C0321,C0413,W0703,W0107,R1702,R0904
 
+from typing import List, Tuple
 from time import sleep, monotonic_ns
 from binascii import hexlify
 from struct import pack, unpack
@@ -39,7 +40,8 @@ def _od2t(d: OrderedDict) -> tuple:
 
     return tuple([t for t in d.values()])
 
-def _maybe_hexlify(self, what: bytes | bytearray, hexi: None | bool | str) -> bytes | bytearray | str:
+
+def _maybe_hexlify(what: bytes | bytearray, hexi: None | bool | str) -> bytes | bytearray | str:
         """Helper to convert returned bytes on user request from bytearray or bytes to hex string with optional separator.
 
         Note: for internal use mainly in the chipset functions which inherits all from this class.
@@ -183,6 +185,56 @@ class BQ76942:
         # success
         return buf
 
+
+    def read_cell_voltages(self, hexi: None | bool | str = bool) -> Tuple[Tuple[float], Tuple[str]]:
+        """Read cell voltages from the BQ76942.
+
+        Args:
+            count (int): Number of cell voltages to read (3 to 10).
+            hexi (None | bool | str, optional): If set to True or a string separator, the returned bytes will be hexlified.
+                                                Defaults to None.
+        Returns:
+            List[float], List[str]: List of voltages read, all values in raw as hex format str.
+        """
+
+        _standard_scale = 1e-3 # mV -> V
+        _user_scale = 1e-3  # user defined scale for the last three voltages: Stack Voltage (VC10 pin), PACK pin voltage, LD pin voltage
+        scale = [_standard_scale] * 10 + [_user_scale] * 3
+        voltages = ()
+        raw = ()
+        regadr = 0x14 # base register address for Cell 1 Voltage
+        for i in range(13):  # 10 cells + 3 special Voltages:
+            buf = self.bus.readBytes(self.address, regadr, 2, pec=self.pec)  # pre-read all cell voltages to update the registers
+            volt = unpack("<H", buf[0])[0] * scale[i]  # scale returned value into Volts
+            voltages += (volt,)
+            raw += (_maybe_hexlify(buf, hexi),)
+            regard += 2
+        return voltages, raw
+
+
+    def read_temperatures(self, hexi: None | bool | str = bool) -> Tuple[Tuple[float], Tuple[str]]:
+        """Read temperature values from the BQ76942.
+
+        Args:
+            hexi (None | bool | str, optional): If set to True or a string separator, the returned bytes will be hexlified.
+                                                Defaults to None.
+        Returns:
+            List[float], List[str]: List of temperatures read, all values in raw as hex format str.
+        """
+
+        _standard_scale = 0.1  # 0.1K -> K
+        _user_scale = 1.0  # user defined scale for the temperature on the TS pin
+        scale = [_standard_scale] * 10
+        temperatures = ()
+        raw = ()
+        regadr = 0x68 # base register address for Temperature 1
+        for i in range(4):  # 3 internal + 1 external temperature:
+            buf = self.bus.readBytes(self.address, regadr, 2, pec=self.pec)  # pre-read all temperature to update the registers
+            temp = (unpack("<H", buf[0])[0] * scale[i]) - KELVIN_ZERO_DEGC  # scale returned value into °C
+            temperatures += (temp,)
+            raw += (_maybe_hexlify(buf, hexi),)
+            regard += 2
+        return temperatures, raw
 
 
 #--------------------------------------------------------------------------------------------------

@@ -38,7 +38,7 @@ def _od2t(d: OrderedDict) -> tuple:
 
     return tuple([t for t in d.values()])
 
-def _maybe_hexlify(self, what: bytes | bytearray, hexi: None | bool | str) -> bytes | bytearray | str:
+def _maybe_hexlify(what: bytes | bytearray, hexi: None | bool | str) -> bytes | bytearray | str:
         """Helper to convert returned bytes on user request from bytearray or bytes to hex string with optional separator.
 
         Note: for internal use mainly in the chipset functions which inherits all from this class.

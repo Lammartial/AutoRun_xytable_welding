@@ -9,7 +9,7 @@ from rrc.gpio_tcal6416 import TCAL6416 as GPIOExtender
 
 class CartridgePETA:
 
-    def __init__(self, i2c: I2CBus, mux_address: int = 0x73) -> None:
+    def __init__(self, i2c: I2CBus, mux_address: int = 0x70) -> None:
         """
         Initialize the CartridgePETA with the given I2C bus.
 
@@ -19,24 +19,25 @@ class CartridgePETA:
             i2c (I2CBus): The I2C bus to use for communication.
         """
 
-        self.i2c = i2c
-        self.mux_address = mux_address
+        self._i2c = i2c
+        self._onboard_mux = BusMux(self._i2c, address=mux_address)  # important to have only ONE instance here
         self.smbus_to_mirco = BusMaster(self.get_muxed_i2c_bus_for(1))  # needs a switch to CAN or I2C !
         self.backyard_bus = BusMaster(self.get_muxed_i2c_bus_for(2))
-        self.gpio = GPIOExtender(self.get_muxed_i2c_bus_for(3), address=0x20)  # Extender on channel 3 of the cartridge MUX
-
+        self.gpio = GPIOExtender(self.get_muxed_i2c_bus_for(8), i2c_address_7bit=0x20)  # Extender on channel 8 of the cartridge MUX
+        # configure GPIO
+        self.gpio.configure_pins("1111111100000000", "0000000000000000", preset_output="0000000000000000")  # all pins output, no polarity inversion,
 
     def get_muxed_i2c_bus_for(self, channel: int) -> I2CMuxedBus:
         """
         Get the I2C bus for the specified channel on the cartridge MUX.
 
         Args:
-            channel (int): The channel number to select (1-4).
+            channel (int): The channel number to select (1-8).
         Returns:
             Muxed I2C bus for the specified channel.
         """
 
-        return I2CMuxedBus(self.i2c, BusMux(self.i2c, address=self.mux_address), channel)
+        return I2CMuxedBus(self._i2c, self._onboard_mux, channel)
 
 
     def switch_mosfet(self, index: int, state: bool | int) -> None:
@@ -67,14 +68,20 @@ class CartridgePETA:
             bustype (str): Either "CAN" or "I2C". Defaults to none of the two if unknown string passed.
         """
 
-        mask = self.gpio._shadow_regs[self.REG_OUTPUT]
+        #mask = self.gpio.get_output_shadow() & ~((0 << 6) | (0 << 5))  # clear both GPIO P5 (CANH) and P6 (SDA)
         if "CAN" in bustype.upper():
-            mask &= ~((0 << 6) | (1 << 5))  # Set GPIO P5 (CANH) and P6 (SDA) for CAN
+            #mask |= ((1 << 6) | (0 << 5))  # Set GPIO P6 (CANH) and P5 (SDA) for CAN
+            self.gpio.reset_pin(5)  # disable I2C
+            self.gpio.set_pin(6)  # enable CAN
         elif "I2C" in bustype.upper():
-            mask &= ~((1 << 6) | (0 << 5))  # Set GPIO P5 (CANH) and P6 (SDA) for I2C
+            #mask |= ((0 << 6) | (1 << 5))  # Set GPIO P6 (CANH) and P5 (SDA) for I2C
+            self.gpio.reset_pin(6)  # disable CAN
+            self.gpio.set_pin(5)  # enable I2C
         else:
-            mask &= ~((0 << 6) | (0 << 5))  # open both GPIO P5 and P6 so that NO ONE works!
-        self.gpio.write_output(mask)  # modify the two port pins at the same time
+            self.gpio.reset_pin(6)  # disable I2C
+            self.gpio.reset_pin(5)  # disable CAN
+            #pass  # open both GPIO P6 and P5 so that NO ONE works!
+        #self.gpio.write_output(mask)  # modify the two port pins at the same time
 
 
     def switch_some_io(self, pin_number: int, state: bool | int) -> None:

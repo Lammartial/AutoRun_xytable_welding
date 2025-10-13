@@ -124,6 +124,23 @@ class GPIO_BASE:
     #--------------------------------------------
     # public generic functions
 
+    def get_output_shadow(self) -> int:
+        """Get the shadow register of the output register.
+
+        Returns:
+            int: Current value of the output shadow register.
+        """
+        return self._shadow_regs[self.REG_OUTPUT]
+
+
+    def get_configuration_shadow(self) -> int:
+        """Get the shadow register of the configuration register.
+
+        Returns:
+            int: Current value of the configuration shadow register.
+        """
+        return self._shadow_regs[self.REG_CONFIGURATION]
+
 
     def configure_pins(self,
                        pin_io: tuple | str,
@@ -150,7 +167,7 @@ class GPIO_BASE:
             if len(preset_output) != self._number_of_gpio:
                 raise ValueError(f"Parameter 'output' must be tuple if {self._number_of_gpio} integers or a string of length {self._number_of_gpio}.")
             _output = shifting_plus(preset_output)
-            self._write_register(self.REG_OUTPUT, _output)
+            self._write_helper(self.REG_OUTPUT, _output)
         _polarity = shifting_plus(invert_input)
         _config = shifting_plus(pin_io)
         ok1 = self._write_helper(self.REG_POLARITY, _polarity)
@@ -312,10 +329,20 @@ class TCAL6416(GPIO_BASE):
         ok0 = super().configure_pins(pin_io, invert_input, preset_output=preset_output)
         if not ok0:
             return False
-        _pull_config = shifting_plus(pull_resistors_config)
-        _pull_enable = shifting_plus(enable_pull_resistors)
-        ok1 = self._write_helper(self.REG_POLARITY, _pull_config)
-        ok2 = self._write_helper(self.REG_CONFIGURATION, _pull_enable)
+        if pull_resistors_config:
+            if len(pull_resistors_config) != self._number_of_gpio:
+                raise ValueError(f"Parameter 'pull_resistors_config' must be tuple of {self._number_of_gpio} integers or a string of length {self._number_of_gpio}.")
+            _pull_config = shifting_plus(pull_resistors_config)
+            ok1 = self._write_helper(self.REG_PULL_RESISTOR_SELECTION, _pull_config)
+        else:
+            ok1 = True
+        if enable_pull_resistors:
+            if len(enable_pull_resistors) != self._number_of_gpio:
+                raise ValueError(f"Parameter 'enable_pull_resistors' must be tuple of {self._number_of_gpio} integers or a string of length {self._number_of_gpio}.")
+            _pull_enable = shifting_plus(enable_pull_resistors)
+            ok2 = self._write_helper(self.REG_PULL_RESISTOR_ENABLE, _pull_enable)
+        else:
+            ok2 = True
         return ok1 and ok2
 
 
