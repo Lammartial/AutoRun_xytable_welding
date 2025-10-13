@@ -83,22 +83,27 @@ if __name__ == "__main__":
     #      str(i2cbus.i2c_change_clock_frequency(50000, timeout_ms=50)))
     print("MASTER:", i2cbus.i2c_bus_scan())
 
-    #mux = BusMux(i2cbus, address=0x77)
-    mux = BusMux(i2cbus, address=0x70)  # OLIMEX Breakout
+    mux = BusMux(i2cbus, address=0x77)
+    #mux = BusMux(i2cbus, address=0x70)  # OLIMEX Breakout
     for c in range(1,9):
         mux.setChannel(c)
         print("CH:", c, i2cbus.i2c_bus_scan())
 
-
+    print("MUX ON CARTRIDGE:")
     dutcom = I2CMuxedBus(i2cbus, mux, 2)  # i2c to the DUT
+    mux_on_cartridge = BusMux(dutcom, address=0x70)  # this is the MUX on the DUT board
+    for c in range(1,9):
+        mux_on_cartridge.setChannel(c)
+        print("CH:", c, dutcom.i2c_bus_scan())
+
+    
     cart = CartridgePETA(dutcom)
     test_cartridge_only(cart)
-    mux_on_cartridge = BusMux(dutcom, address=0x73)  # this is the MUX on the DUT board
     # double MUX'd
     dut_micro = BusMaster(I2CMuxedBus(dutcom, mux_on_cartridge, 1), retry_limit=7, verify_rounds=3, pause_us=50)
     dut_gasgauge = BQ34Z100(I2CMuxedBus(dutcom, mux_on_cartridge, 2))
-    dut_afe = BQ76942(I2CMuxedBus(dutcom, mux_on_cartridge, 2))
-    dut_gpio = TCAL6416(I2CMuxedBus(dutcom, mux_on_cartridge, 3), i2c_address_7bit=0x20)
+    dut_afe = BQ76942(I2CMuxedBus(dutcom, mux_on_cartridge, 2))    
+    dut_gpio = TCAL6416(I2CMuxedBus(dutcom, mux_on_cartridge, 8), i2c_address_7bit=0x20)
     # testdummy for double, transparent MUX
     print(dut_micro.bus.i2c_bus_scan())
     print(dut_gasgauge.bus.i2c_bus_scan())
