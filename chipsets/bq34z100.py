@@ -83,7 +83,11 @@ class BQ34Z100:
         self.bus = smbus
         self.address = int(slvAddress)
         self.pec = bool(pec)
+        self._voltage_scale = None
+        self._current_scale = None
+        self._energy_scale = None
         _bat = self
+
 
     # --------------------------------------------
 
@@ -113,7 +117,7 @@ class BQ34Z100:
         data = bytes()
         for i in range(0, length):
             _cmd = cmd + i
-            b, ok = self.bus.readBytes(self.address, _cmd, 1, pec=self.pec)
+            b, ok = self.bus.readBytes(self.address, _cmd, 1, use_pec=self.pec)
             if not ok:
                 raise IOError(f"Failed to read {length} bytes from command 0x{_cmd:02X} at address 0x{self.address:02X} on {self.bus}.")
             data = data + bytes(b)

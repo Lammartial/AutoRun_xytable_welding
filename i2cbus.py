@@ -78,9 +78,11 @@ class BusMux:
     def getChannelMask(self) -> int:
         return int(self.current_mask)  # work with shadow only
 
+
     def reset(self) -> bool:
         """Disable ALL channels"""
         return self.setChannelMask(0x00)
+
 
     def getChannels(self) -> Tuple[int]:
         mask = self.current_mask  # work with shadow only

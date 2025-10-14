@@ -84,7 +84,7 @@ class BQ76942:
     includes a long-term timeout if the SCL pin is detected low for more than 2 seconds, which applies whether or
     not the timeouts above are enabled.
     """
-    def __init__(self, smbus: BusMaster, slvAddress: int = 0x08, pec: bool = False) -> None:
+    def __init__(self, smbus: BusMaster, slvAddress: int = 0x08, pec: bool = True) -> None:
         """_summary_
 
         Args:
@@ -108,6 +108,50 @@ class BQ76942:
         return f"BQ76942({repr(self.bus)}, slvAddress={self.address}, pec={self.pec})"
 
     # --------------------------------------------
+
+
+    def _read_word_helper(self, reg: int) -> Tuple[bytearray, bool]:
+        """Helper to read a word from the BQ76942 with PEC if enabled.
+
+        Args:
+            reg (int): The register address to read from.
+        Returns:
+            int: The word read from the register.
+        """
+        buf1, ok1 = self.bus.readBytes(self.address, reg,     1, use_pec=self.pec)
+        buf2, ok2 = self.bus.readBytes(self.address, reg + 1, 1, use_pec=self.pec)
+        buf = buf1 + buf2
+        return buf, (ok1 and ok2)
+
+
+    def _write_word_helper(self, reg: int, value: int) -> bool:
+        """Helper to write a word to the BQ76942 with PEC if enabled.
+
+        Args:
+            reg (int): The register address to write to.
+            value (int): The word value to write.
+        Returns:
+            bool: True if the write was successful, False otherwise.
+        """
+
+        buf = value.to_bytes(2, "little" )
+        if not self.bus.writeBytes(self.address, reg,     bytearray(buf[:1]), use_pec=self.pec):
+            return False
+        if not self.bus.writeBytes(self.address, reg + 1, bytearray(buf[1:]), use_pec=self.pec):
+            return False
+        return True
+
+
+    def read_control_status(self) -> Tuple[int, str]:
+        buf, ok = self._read_word_helper(0x00)
+        if ok:
+            return unpack("<H", buf)[0], hexlify(buf).decode()
+
+
+    def read_battery_status(self) -> Tuple[int, str]:
+        buf, ok = self._read_word_helper(0x12)
+        if ok:
+            return unpack("<H", buf)[0], hexlify(buf).decode()
 
     def write_subcommand(self, subcmd: int, data: bytes | bytearray = None, timeout: float = 2.0) -> bool:
         """Write a subcommand with optional data to the BQ76942.
@@ -143,7 +187,7 @@ class BQ76942:
         return True
 
 
-    def read_subcommand(self, subcmd: int, length: int = 0, timeout: float = 2.0, hexi: None | bool | str = None) -> bytes | bytearray | str:
+    def read_subcommand(self, subcmd: int, length: int = 0, timeout: float = 3.0, hexi: None | bool | str = None) -> bytes | bytearray | str:
         """Read data from a subcommand.
 
         Args:
@@ -158,32 +202,43 @@ class BQ76942:
 
         if not (0 <= subcmd <= 0xFFFF):
             raise ValueError("Subcommand must be a 16-bit value (0-65535).")
-
-        if not self.bus.writeWord(self.address, 0x3E, subcmd, pec=self.pec):  # write Subcommand to the registers 0x3E and 0x3F
+        if not self._write_word_helper(0x3E, subcmd):  # write Subcommand to the registers 0x3E and 0x3F
             return False
+
         t0 = monotonic_ns()  # common timeout over the rest of the function
         response = 0xFFFF
         while response != subcmd:
-            response = self.bus.readWord(self.address, 0x3E, pec=self.pec)  # read back the subcommand register
-            t1 = monotonic_ns()
-            if (t1 - t0) > timeout * 1e+9:  # scale timeout to ns
-                raise TimeoutError("While wait for subcommand to complete.")
+            buf, ok = self._read_word_helper(0x3E)
+            response = unpack("<H", buf)[0]
+            #response = self.bus.readWord(self.address, 0x3E, use_pec=self.pec)  # read back the subcommand register
+            #t1 = monotonic_ns()
+            #if (t1 - t0) > timeout * 1e+9:  # scale timeout to ns
+            #    raise TimeoutError("While wait for subcommand to complete.")
+            #sleep(0.005)
         # data is ready now
-        ctrl, ok = self.bus.readBytes(self.address, 0x60, 2, pec=self.pec)  # read checksum and length
+        ctrl_buf, ok = self._read_word_helper(0x60)
+        #ctrl, ok = self.bus.readBytes(self.address, 0x60, 2, use_pec=self.pec)  # read checksum and length
         if not ok:
             raise IOError("Failed to read checksum and length from BQ76942.")
-        count = ctrl[1]
-        buf, ok = self.bus.readBytes(self.address, 0x40, count, pec=self.pec)
+        incoming_cs = ctrl_buf[0]
+        count = ctrl_buf[1]
+        # bb = []
+        # for i in range(count):
+        #     buf, ok = self.bus.readBytes(self.address, 0x40 + i, 1, use_pec=True)
+        #     bb.append(buf[0])
+        buf, ok = self.bus.readBytes(self.address, 0x40, count + 1, use_pec=False)
+        valid_buf = buf[:1] + buf[2:]
         # calc expected checksum
         checksum = (subcmd & 0xff) | ((subcmd >> 8) & 0xff)
-        for b in buf:
-            checksum += b   # generate the checksum by simple addition
+        #checksum = (checksum + count) & 0xFF
+        for b in valid_buf:  # omit the checksum of first byte!
+             checksum = (checksum + int(b)) & 0xFF   # generate the checksum by simple addition
         checksum = ~checksum & 0xFF # bitwise inverse
         # verify checksum
-        if checksum != ctrl[0]:
+        if checksum != incoming_cs:
             raise IOError("Checksum mismatch reading from BQ76942.")
         # success
-        return buf
+        return valid_buf
 
 
     def read_cell_voltages(self, hexi: None | bool | str = bool) -> Tuple[Tuple[float], Tuple[str]]:
@@ -204,11 +259,12 @@ class BQ76942:
         raw = ()
         regadr = 0x14 # base register address for Cell 1 Voltage
         for i in range(13):  # 10 cells + 3 special Voltages:
-            buf = self.bus.readBytes(self.address, regadr, 2, pec=self.pec)  # pre-read all cell voltages to update the registers
-            volt = unpack("<H", buf[0])[0] * scale[i]  # scale returned value into Volts
+            buf, ok = self._read_word_helper(regadr)
+            volt = unpack("<H", buf)[0] * scale[i]  # scale returned value into Volts
             voltages += (volt,)
             raw += (_maybe_hexlify(buf, hexi),)
-            regard += 2
+            regadr += 2
+            sleep(0.005)
         return voltages, raw
 
 
@@ -228,12 +284,13 @@ class BQ76942:
         temperatures = ()
         raw = ()
         regadr = 0x68 # base register address for Temperature 1
-        for i in range(4):  # 3 internal + 1 external temperature:
-            buf = self.bus.readBytes(self.address, regadr, 2, pec=self.pec)  # pre-read all temperature to update the registers
-            temp = (unpack("<H", buf[0])[0] * scale[i]) - KELVIN_ZERO_DEGC  # scale returned value into °C
+        for i in range(10):  # 3 internal + 1 external temperature:
+            buf, ok = self._read_word_helper(regadr)
+            temp = (unpack("<h", buf)[0] * scale[i]) - KELVIN_ZERO_DEGC  # scale returned value into °C
             temperatures += (temp,)
             raw += (_maybe_hexlify(buf, hexi),)
-            regard += 2
+            regadr += 2
+            sleep(0.005)
         return temperatures, raw
 
 

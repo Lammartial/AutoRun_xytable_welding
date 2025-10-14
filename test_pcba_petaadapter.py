@@ -115,8 +115,24 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     print("DAQ - channel 8", daq.get_VDC(8))  # should be +3.3v
     print("DAQ - channel 9", daq.get_VDC(9))  # should be +1.8v
 
-    cartridge._onboard_mux.setChannel(0)
 
+    afe = BQ76942(cartridge.backyard_bus, slvAddress=0x08, pec=True)
+    print(afe.read_cell_voltages())
+    print(afe.read_temperatures())
+    print(afe.read_control_status())
+    print(afe.read_battery_status())
+
+    print(afe.read_subcommand(0x00a0))
+    gg = BQ34Z100(cartridge.backyard_bus, slvAddress=0x55, pec=False)
+    print(gg.get_voltage_scale())
+    print(gg.get_current_scale())
+    print(gg.get_energy_scale())
+    print(gg.voltage())
+    print(gg.temperature())
+
+
+    cartridge.reset_mux()
+    vsim.power_down_all_cell_channels()
 
     psu1.set_output_state(0)
     psu2.set_output_state(0)
@@ -136,10 +152,23 @@ if __name__ == "__main__":
     SOCKET = 0  # 0, 1 or 2
     # following assumes own IF-OLIMEX breakout adapter
     if SOCKET == 0:
+        psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=1)  # socket 0 / share
+        psu2 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=2)  # socket 0 / share
+    if SOCKET == 1:
+        psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=3)  # socket 1 / share
+        psu2 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=4)  # socket 1 / share
+    if SOCKET == 2:
+        psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=5)  # socket 2 / share
+        psu2 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=6)  # socket 2 / share
+    psu1.set_output_state(0)
+    psu2.set_output_state(0)
+
+
+    if SOCKET == 0:
         scanner = create_barcode_scanner(f"{LINE_NETWORK}.31:2000")  # socket 0
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:3000")  # PCBA test, socket 0
         i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101")  # socket 0
-        can = CANBus(f"{LINE_NETWORK}.30:3303")  # socket 0
+        #can = CANBus(f"{LINE_NETWORK}.30:3303")  # socket 0
     if SOCKET == 1:
         scanner = create_barcode_scanner(f"{LINE_NETWORK}.33:2000")  # socket 1
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.32:3000")  # PCBA test, socket 1
@@ -152,12 +181,17 @@ if __name__ == "__main__":
         can = CANBus(f"{LINE_NETWORK}.34:3303")  # socket 2
 
 
+
     print("Change clock frequency and timeout - RRC: ",
-          str(i2cbus.i2c_change_clock_frequency(100000, timeout_ms=30)))
+          str(i2cbus.i2c_change_clock_frequency(400000, timeout_ms=20)))
     print("MASTER:", i2cbus.i2c_bus_scan())
 
     mux = BusMux(i2cbus, address=0x77)
-    for c in range(1,9):
+    vsim = CellVoltageSimulation(I2CMuxedBus(i2cbus, mux, 4))
+    vsim.initialize()
+    vsim.power_down_all_cell_channels()
+
+    for c in range(8,0,-1):
         mux.setChannel(c)
         print("CH:", c, i2cbus.i2c_bus_scan())
 
@@ -192,21 +226,8 @@ if __name__ == "__main__":
     print("Inventory:", calib.load_inventory_number())
 
     gpio = RelayBoard4Relay4GPIO(I2CMuxedBus(i2cbus, mux, 3))
-    vsim = CellVoltageSimulation(I2CMuxedBus(i2cbus, mux, 4))
-    vsim.initialize()
 
     #sleep(0.5)
-    if SOCKET == 0:
-        psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=1)  # socket 0 / share
-        psu2 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=2)  # socket 0 / share
-    if SOCKET == 1:
-        psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=3)  # socket 1 / share
-        psu2 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=4)  # socket 1 / share
-    if SOCKET == 2:
-        psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=5)  # socket 2 / share
-        psu2 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=6)  # socket 2 / share
-    psu1.set_output_state(0)
-    psu2.set_output_state(0)
 
     if SOCKET == 0:
         daq = DAQ970A(f"{LINE_NETWORK}.36:5025", card_slot=1)  # socket 0
@@ -221,5 +242,6 @@ if __name__ == "__main__":
 
     rack_test(cart, gpio, vsim, calib, feasa, psu1, psu2, daq)
 
+    i2cbus.close()
 
 # END OF FILE

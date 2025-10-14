@@ -9,6 +9,7 @@ from rrc.gpio_tcal6416 import TCAL6416 as GPIOExtender
 
 class CartridgePETA:
 
+
     def __init__(self, i2c: I2CBus, mux_address: int = 0x70) -> None:
         """
         Initialize the CartridgePETA with the given I2C bus.
@@ -26,6 +27,12 @@ class CartridgePETA:
         self.gpio = GPIOExtender(self.get_muxed_i2c_bus_for(8), i2c_address_7bit=0x20)  # Extender on channel 8 of the cartridge MUX
         # configure GPIO
         self.gpio.configure_pins("1111111100000000", "0000000000000000", preset_output="0000000000000000")  # all pins output, no polarity inversion,
+
+
+    def reset_mux(self) -> None:
+        """Reset the onboard MUX to no channel selected."""
+        self._onboard_mux.reset()
+
 
     def get_muxed_i2c_bus_for(self, channel: int) -> I2CMuxedBus:
         """
