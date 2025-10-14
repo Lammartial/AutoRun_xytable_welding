@@ -45,9 +45,9 @@ def test_calibration_storage_only(calib: CalibrationStorage) -> None:
 
 def test_cartridge_only(cart: CartridgePETA) -> None:
 
-    cart.gpio.set_pin(7) # enable the AFE and Gasgauge
+    #cart.gpio.set_pin(7) # enable the AFE and Gasgauge
     cart.select_bus_to_micro("i2c")
-    print("I2C to MICRO: ", cart.get_muxed_i2c_bus_for(1).i2c_bus_scan())
+    #print("I2C to MICRO: ", cart.get_muxed_i2c_bus_for(1).i2c_bus_scan())
     #print("I2C to BACKYARD: ", cart.get_muxed_i2c_bus_for(2).i2c_bus_scan())
     #print("I2C to GPIO: ", cart.get_muxed_i2c_bus_for(8).i2c_bus_scan())
     for i in range(3):
@@ -56,7 +56,7 @@ def test_cartridge_only(cart: CartridgePETA) -> None:
         cart.switch_mosfet(i, 0)
         sleep(0.15)
     cart.select_bus_to_micro("can")
-    print("I2C to MICRO: ", cart.get_muxed_i2c_bus_for(1).i2c_bus_scan())
+    #print("I2C to MICRO: ", cart.get_muxed_i2c_bus_for(1).i2c_bus_scan())
     #print("I2C to BACKYARD: ", cart.get_muxed_i2c_bus_for(2).i2c_bus_scan())
     #print("I2C to GPIO: ", cart.get_muxed_i2c_bus_for(8).i2c_bus_scan())
     cart.select_bus_to_micro("i2c")
@@ -96,7 +96,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     print("Measure PSU1", psu1.get_all_measurements())
     print("Measure PSU2", psu2.get_all_measurements())
 
-    cartridge.select_bus_to_micro("i2c")
+    #cartridge.select_bus_to_micro("i2c")
     print("BACKYARD:", cartridge.backyard_bus.i2c.i2c_bus_scan())
     print("MICRO:", cartridge.smbus_to_mirco.i2c.i2c_bus_scan())
     #for n in range(1,9):
@@ -115,7 +115,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     print("DAQ - channel 8", daq.get_VDC(8))  # should be +3.3v
     print("DAQ - channel 9", daq.get_VDC(9))  # should be +1.8v
 
-
+    cartridge._onboard_mux.setChannel(0)
 
 
     psu1.set_output_state(0)
@@ -136,24 +136,24 @@ if __name__ == "__main__":
     SOCKET = 0  # 0, 1 or 2
     # following assumes own IF-OLIMEX breakout adapter
     if SOCKET == 0:
-        scanner = create_barcode_scanner(f"{LINE_NETWORK}.30:2000")  # socket 0
+        scanner = create_barcode_scanner(f"{LINE_NETWORK}.31:2000")  # socket 0
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:3000")  # PCBA test, socket 0
         i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101")  # socket 0
         can = CANBus(f"{LINE_NETWORK}.30:3303")  # socket 0
     if SOCKET == 1:
-        scanner = create_barcode_scanner(f"{LINE_NETWORK}.32:2000")  # socket 1
+        scanner = create_barcode_scanner(f"{LINE_NETWORK}.33:2000")  # socket 1
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.32:3000")  # PCBA test, socket 1
         i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101")  # socket 1
         can = CANBus(f"{LINE_NETWORK}.32:3303")  # socket 1
     if SOCKET == 2:
-        scanner = create_barcode_scanner(f"{LINE_NETWORK}.34:2000")  # socket 2
+        scanner = create_barcode_scanner(f"{LINE_NETWORK}.35:2000")  # socket 2
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.34:3000")  # PCBA test, socket 2
         i2cbus = I2CPort(f"{LINE_NETWORK}.34:2101")  # socket 2
         can = CANBus(f"{LINE_NETWORK}.34:3303")  # socket 2
 
 
     print("Change clock frequency and timeout - RRC: ",
-          str(i2cbus.i2c_change_clock_frequency(400000, timeout_ms=30)))
+          str(i2cbus.i2c_change_clock_frequency(100000, timeout_ms=30)))
     print("MASTER:", i2cbus.i2c_bus_scan())
 
     mux = BusMux(i2cbus, address=0x77)
@@ -162,11 +162,11 @@ if __name__ == "__main__":
         print("CH:", c, i2cbus.i2c_bus_scan())
 
     dutcom = I2CMuxedBus(i2cbus, mux, 2)  # i2c to the DUT
-    mux_on_cartridge = BusMux(dutcom, address=0x70)  # this is the MUX on the DUT board
-    print("MUX ON CARTRIDGE:")
-    for c in range(1,9):
-        mux_on_cartridge.setChannel(c)
-        print("CH:", c, dutcom.i2c_bus_scan())
+    #mux_on_cartridge = BusMux(dutcom, address=0x70)  # this is the MUX on the DUT board
+    # print("MUX ON CARTRIDGE:")
+    # for c in range(1,9):
+    #     mux_on_cartridge.setChannel(c)
+    #     print("CH:", c, dutcom.i2c_bus_scan())
 
     cart = CartridgePETA(dutcom)
     test_cartridge_only(cart)

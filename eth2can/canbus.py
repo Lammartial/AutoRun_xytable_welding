@@ -1,11 +1,12 @@
-from ast import Tuple
+
+from typing import Tuple
 from binascii import hexlify
 from rrc.eth2can.base import Eth2CanPort
 
 class CANBus(Eth2CanPort):
 
 
-    def send(self, identifier: int, data: bytes, flags: int = 0, can_timeout: int = 150, timeout: float = 1.0) -> Tuple[bytes, str]:
+    def send(self, identifier: int, data: bytes | bytearray, flags: int = 0, can_timeout: int = 150, timeout: float = 1.0) -> Tuple[bytes, str]:
         """
         Send raw CAN frame data.
 
