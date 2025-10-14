@@ -2,7 +2,6 @@
 Provides basic ETH to GPIO conversion handling the socket communication by simple API.
 """
 
-from typing import Literal
 from time import perf_counter, sleep
 from binascii import hexlify
 import socket
@@ -26,7 +25,7 @@ API_ERROR_BYTE: int = 0xEE
 #--------------------------------------------------------------------------------------------------
 
 
-def get_ipv4() -> socket.Any | Literal['127.0.0.1']:
+def get_ipv4():
     """
     Helper function that determines the own IPv4 address on the primary interface.
     Falls back to localhost if no IP available.
@@ -47,8 +46,8 @@ def get_ipv4() -> socket.Any | Literal['127.0.0.1']:
     return _ip
 
 
-# initialize on load
-OWN_PRIMARY_IP = get_ipv4()
+## initialize on load
+#OWN_PRIMARY_IP = get_ipv4()
 
 
 #--------------------------------------------------------------------------------------------------

@@ -1,1 +1,2 @@
-from .base import Eth2CanbusDevice, OWN_PRIMARY_IP
+from .base import Eth2CanPort, get_ipv4
+from .canbus import CANBus

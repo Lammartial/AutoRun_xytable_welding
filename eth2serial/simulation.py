@@ -1,6 +1,6 @@
 import socket
 from datetime import datetime, timedelta
-from rrc.eth2serial.base import Eth2SerialDevice, OWN_PRIMARY_IP
+from rrc.eth2serial.base import Eth2SerialDevice, get_ipv4
 
 
 # --------------------------------------------------------------------------- #
@@ -191,7 +191,7 @@ if __name__ == "__main__":
     _log = getLogger(__name__, DEBUG)
 
     tic = perf_counter()
-    _log.info("Own IP: %s", OWN_PRIMARY_IP)
+    _log.info("Own IP: %s", get_ipv4())
 
     _log.info("Simulate receive of bytes with given list")
     c = Eth2SerialSimulationDevice(None,

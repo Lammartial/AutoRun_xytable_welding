@@ -8,7 +8,7 @@ from typing import Tuple
 from time import sleep, monotonic_ns
 from binascii import hexlify
 from struct import pack, unpack, unpack_from
-from rrc.eth2serial.base import Eth2SerialDevice, OWN_PRIMARY_IP
+from rrc.eth2serial.base import Eth2SerialDevice
 from rrc.serialport import SerialComportDevice
 
 #--------------------------------------------------------------------------------------------------

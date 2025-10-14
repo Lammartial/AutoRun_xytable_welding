@@ -177,6 +177,7 @@ def tk_callback_consumer(tk_q: queue.Queue, mainframe: ttk.Frame, row_itr: Itera
 
             if "scan" in work_package:
                 # validate UDI
+                #print("SCAN:", work_package["scan"])  # DEBUG
                 _valid_udi = False
                 for item in udi_to_scan:
                     if item.decode is not None:
@@ -569,7 +570,8 @@ def io_thread_run(aio_initiate_shutdown: threading.Event, q_to_tk: queue.Queue, 
                 pass  # ignore Timeout
         finally:
             pass
-
+    if scanner:
+        scanner.close_connection(force=True)
 
 #--------------------------------------------------------------------------------------------------
 
@@ -662,7 +664,7 @@ if __name__ == '__main__':
     #     UDIScanCtrlItem("CELL", decode_rrc_udi_label, validate_rrc_udi),
     # ]
 
-    RESOURCE_STR = "172.21.101.30:2000"
+    RESOURCE_STR = "172.21.101.31:2000"
     #RESOURCE_STR = "COM3,9600,8N1"  # Handheld scanner
     #RESOURCE_STR = "SIMULATION"  # select a timed simulation
 

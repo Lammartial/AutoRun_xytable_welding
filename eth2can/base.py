@@ -2,7 +2,6 @@
 Provides basic ETH to CAN conversion handling the socket communication by simple API.
 """
 
-from typing import Literal
 from time import perf_counter, sleep
 from binascii import hexlify
 import socket
@@ -26,7 +25,7 @@ API_ERROR_BYTE: int = 0xEE
 #--------------------------------------------------------------------------------------------------
 
 
-def get_ipv4() -> socket.Any | Literal['127.0.0.1']:
+def get_ipv4():
     """
     Helper function that determines the own IPv4 address on the primary interface.
     Falls back to localhost if no IP available.
@@ -47,8 +46,8 @@ def get_ipv4() -> socket.Any | Literal['127.0.0.1']:
     return _ip
 
 
-# initialize on load
-OWN_PRIMARY_IP = get_ipv4()
+## initialize on load
+#OWN_PRIMARY_IP = get_ipv4()
 
 
 #--------------------------------------------------------------------------------------------------
@@ -70,7 +69,7 @@ def is_socket_closed(sock: socket.socket) -> bool:
 #--------------------------------------------------------------------------------------------------
 
 
-class Eth2CanbusDevice(object):
+class Eth2CanPort(object):
 
     def __init__(self, resource_str: str, termination: str = "\r\n", open_connection: bool = True, pause_on_retry: int | None = 10):
         """Initialize the object with IP address and port number given by URL style resource string.
@@ -250,10 +249,12 @@ if __name__ == "__main__":
     tic = perf_counter()
 
     _log.info("Test synchronus receive (10s timeout):")
-    c = Eth2CanbusDevice("192.168.69.77:9003")
+    #c = Eth2CanbusDevice("192.168.69.77:3303")
+    c = Eth2CanPort("172.21.101.30:3303")  # HOM Manufacturing
 
-    flags = int(0x0000)
-    acceptmask = int(0x1234)
+
+    flags = int(0x00000000)
+    acceptmask = int(0x12345678)
     timeout = 50  # ms
     r = c.request(b'W' + flags.to_bytes(4, "little") +
                         acceptmask.to_bytes(4, "little") +
@@ -263,8 +264,7 @@ if __name__ == "__main__":
     print(f"RESULT: {r!r}, {hexlify(r).decode()}")
 
     r = c.request(b'R' + flags.to_bytes(4, "little") +
-                        acceptmask.to_bytes(4, "little") +
-                        timeout.to_bytes(2, "little"),
+                        acceptmask.to_bytes(4, "little") +timeout.to_bytes(2, "little"),
                         timeout=2.0, encoding=False)
     print(f"RESULT: {r!r}, {hexlify(r).decode()}")
 

@@ -2,7 +2,6 @@
 Provides basic ETH to SERIAL conversion handling the socket communication.
 """
 
-from typing import Literal
 import socket
 import errno
 import asyncio
@@ -23,7 +22,7 @@ from rrc.custom_logging import getLogger, logger_init
 
 #--------------------------------------------------------------------------------------------------
 
-def get_ipv4() -> socket.Any | Literal['127.0.0.1']:
+def get_ipv4():
     """
     Helper function that determines the own IPv4 address on the primary interface.
     Falls back to localhost if no IP available.
@@ -43,8 +42,8 @@ def get_ipv4() -> socket.Any | Literal['127.0.0.1']:
         _s.close()
     return _ip
 
-# initialize on load
-OWN_PRIMARY_IP = get_ipv4()
+## initialize on load
+#OWN_PRIMARY_IP = get_ipv4()
 
 
 #--------------------------------------------------------------------------------------------------
@@ -408,7 +407,7 @@ if __name__ == "__main__":
     _log = getLogger(__name__, DEBUG)
 
     tic = perf_counter()
-    _log.info("Own IP: %s", OWN_PRIMARY_IP)
+    _log.info("Own IP: %s", get_ipv4())
 
     _log.info("Test synchronus receive (10s timeout):")
     #c = Eth2SerialDevice("192.168.1.90:23", termination="\n")

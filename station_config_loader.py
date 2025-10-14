@@ -1,3 +1,4 @@
+
 import yaml
 import json
 import socket
@@ -40,7 +41,7 @@ class StationConfiguration:
         self._hostname = socket.gethostname()
         self._primary_ip = socket.gethostbyname(socket.gethostname())
         # analyze the IP a bit:
-        self._own_network = [int(s) for s in self._primary_ip.split(".")]        
+        self._own_network = [int(s) for s in self._primary_ip.split(".")]
         self._CONFIG = None
         self.test_type = test_type
         self._filename = Path(filename)
@@ -61,18 +62,18 @@ class StationConfiguration:
             self._CONFIG["test_type"] = self.test_type
             #
             # do some mods after reading which makes debugging much easier
-            #                        
+            #
             if "line_id" in self._CONFIG and int(self._CONFIG["line_id"]) < 1:
                 # included 0 and -1 to trigger calculation by own IP address
-                # -> calculate from IP octet #3       
+                # -> calculate from IP octet #3
                 if int(self._own_network[2]) > 100:
                     self._line_id = abs(self._own_network[2] - 100)
-                else:                                        
+                else:
                     self._line_id = 0  # UNKNOWN
             else:
                 # use line ID as given in YAML -> used in DEBUG with TSDEV to assign a Production Line
                 self._line_id = int(self._CONFIG["line_id"])
-                        
+
             if "TSDEV" in self._hostname:
                 # TS development PC -> calculate target network line
                 _nw =[
@@ -80,11 +81,11 @@ class StationConfiguration:
                     self._own_network[1],
                     (100 + self._line_id) if self._line_id < 10 else self._line_id,
                     0
-                ]                        
+                ]
                 _net_replace = ".".join((str(c) for c in _nw[:3])) + "."
             else:
                 _net_replace = ".".join((str(c) for c in self._own_network[:3])) + "."
-            
+
             match self._own_network[1]:
                 case 71 | 168:
                     # RRC Germany
@@ -92,16 +93,16 @@ class StationConfiguration:
                 case 75:
                     # RRC VN
                     pass
-            
+
             # if line_network is defined it is used to replace the first three octets
             # by the own IPs first three octets. This allows decoupling YAML from line
             if "line_network" in self._CONFIG:
                 # do a text replacement loop
-                _sub = self._CONFIG["line_network"]                
+                _sub = self._CONFIG["line_network"]
                 _txt = json.dumps(self._CONFIG).replace(_sub, _net_replace)
                 self._CONFIG = OrderedDict(json.loads(_txt))
-        
-        
+
+
 
 
     #---- Interface for SPS -----------------------------------------------------------------------
@@ -163,8 +164,8 @@ class StationConfiguration:
                 _api_base_url = ":".join(_ar)
                 # do NOT modify the base content!
             except ValueError:
-                pass  # do not change the api base url 
-            
+                pass  # do not change the api base url
+
         if "station_id" not in d:
             _station_id = self._hostname  # we are using the hostname
         else:

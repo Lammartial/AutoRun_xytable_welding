@@ -1,4 +1,4 @@
-from rrc.eth2serial.base import Eth2SerialDevice, OWN_PRIMARY_IP
+from rrc.eth2serial.base import Eth2SerialDevice, get_ipv4
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     _log = getLogger(__name__, DEBUG)
 
     tic = perf_counter()
-    _log.info("Own IP: %s", OWN_PRIMARY_IP)
+    _log.info("Own IP: %s", get_ipv4())
 
     RESOURCE_STRING = "192.168.69.77:2222"
 

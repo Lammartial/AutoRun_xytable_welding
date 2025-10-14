@@ -6,7 +6,7 @@ PETA Design PCBA Adapter.
 from typing import Tuple
 from time import sleep
 from pathlib import Path
-from rrc.eth2i2c import I2CPort
+from rrc.eth2can import CANBus
 from rrc.eth2i2c import I2CPort
 from rrc.i2cbus import BusMux, I2CMuxedBus
 from rrc.smbus import BusMaster
@@ -137,16 +137,19 @@ if __name__ == "__main__":
     # following assumes own IF-OLIMEX breakout adapter
     if SOCKET == 0:
         scanner = create_barcode_scanner(f"{LINE_NETWORK}.30:2000")  # socket 0
-        i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101")  # socket 0
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:3000")  # PCBA test, socket 0
+        i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101")  # socket 0
+        can = CANBus(f"{LINE_NETWORK}.30:3303")  # socket 0
     if SOCKET == 1:
         scanner = create_barcode_scanner(f"{LINE_NETWORK}.32:2000")  # socket 1
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.32:3000")  # PCBA test, socket 1
         i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101")  # socket 1
+        can = CANBus(f"{LINE_NETWORK}.32:3303")  # socket 1
     if SOCKET == 2:
         scanner = create_barcode_scanner(f"{LINE_NETWORK}.34:2000")  # socket 2
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.34:3000")  # PCBA test, socket 2
         i2cbus = I2CPort(f"{LINE_NETWORK}.34:2101")  # socket 2
+        can = CANBus(f"{LINE_NETWORK}.34:3303")  # socket 2
 
 
     print("Change clock frequency and timeout - RRC: ",
@@ -167,6 +170,11 @@ if __name__ == "__main__":
 
     cart = CartridgePETA(dutcom)
     test_cartridge_only(cart)
+
+    #cart.select_bus_to_micro("can")
+    #can.send(0x11, (1,2,3,4,5,6,7,8))
+    #print(can.receive(0x11))
+
     # double MUX'd
     # dut_micro = BusMaster(I2CMuxedBus(dutcom, mux_on_cartridge, 1), retry_limit=7, verify_rounds=3, pause_us=50)
     # dut_gasgauge = BQ34Z100(I2CMuxedBus(dutcom, mux_on_cartridge, 2))
