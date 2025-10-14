@@ -1,5 +1,5 @@
 """
-Provides basic ETH to GPIO conversion handling the socket communication by simple API.
+Provides basic ETH to CAN conversion handling the socket communication by simple API.
 """
 
 from typing import Literal
@@ -70,7 +70,7 @@ def is_socket_closed(sock: socket.socket) -> bool:
 #--------------------------------------------------------------------------------------------------
 
 
-class Eth2GPIODevice(object):
+class Eth2CanbusDevice(object):
 
     def __init__(self, resource_str: str, termination: str = "\r\n", open_connection: bool = True, pause_on_retry: int | None = 10):
         """Initialize the object with IP address and port number given by URL style resource string.
@@ -95,10 +95,10 @@ class Eth2GPIODevice(object):
             self.connect_socket()
 
     def __str__(self) -> str:
-        return f"ETH to GPIO bridge at {self.host}:{self.port}"
+        return f"ETH to CAN bridge at {self.host}:{self.port}"
 
     def __repr__(self) -> str:
-        return f"Eth2GPIODevice('{self.host}:{self.port}', termination='{hexlify(self._termination_as_bytes)}')"
+        return f"Eth2CanbusDevice('{self.host}:{self.port}', termination='{hexlify(self._termination_as_bytes)}')"
 
     #----------------------------------------------------------------------------------------------
 
@@ -250,25 +250,33 @@ if __name__ == "__main__":
     tic = perf_counter()
 
     _log.info("Test synchronus receive (10s timeout):")
-    #c = Eth2GPIODevice("192.168.69.77:2000")
-    c = Eth2GPIODevice("192.168.69.77:9003")
+    c = Eth2CanbusDevice("192.168.69.77:9003")
 
-    r = c.request(b'W' + bytes([1]), timeout=5, encoding=False)  # OK TEST 1
+    flags = int(0x0000)
+    acceptmask = int(0x1234)
+    timeout = 50  # ms
+    r = c.request(b'W' + flags.to_bytes(4, "little") +
+                        acceptmask.to_bytes(4, "little") +
+                        timeout.to_bytes(2, "little") +
+                        bytes([4, 1,2,3,4]),
+                        timeout=2.0, encoding=False)  # OK TEST 1
     print(f"RESULT: {r!r}, {hexlify(r).decode()}")
-    r = c.request(b'R', timeout=5, encoding=False)
+
+    r = c.request(b'R' + flags.to_bytes(4, "little") +
+                        acceptmask.to_bytes(4, "little") +
+                        timeout.to_bytes(2, "little"),
+                        timeout=2.0, encoding=False)
     print(f"RESULT: {r!r}, {hexlify(r).decode()}")
+
     r = c.request(b'W' + bytes([0]), timeout=5, encoding=False)  # OK TEST 0
     print(f"RESULT: {r!r}, {hexlify(r).decode()}")
-    r = c.request(b'W', timeout=5, encoding=False)  # FAIL test
-    print(f"RESULT: {r!r}, {hexlify(r).decode()}")
-    #r = c.request(b'W' + bytes([1]), timeout=5, encoding="utf-8")
-    #print(f"RESULT: {r}")
 
-    r = c.request(b'R', timeout=5, encoding=False)
+    r = c.request(b'W', timeout=5, encoding=False)  # FAIL test
     print(f"RESULT: {r!r}, {hexlify(r).decode()}")
 
 
     toc = perf_counter()
     _log.info(f"DONE in {toc - tic:0.4f} seconds.")
+
 
 # END OF FILE

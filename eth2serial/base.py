@@ -2,6 +2,7 @@
 Provides basic ETH to SERIAL conversion handling the socket communication.
 """
 
+from typing import Literal
 import socket
 import errno
 import asyncio
@@ -22,7 +23,7 @@ from rrc.custom_logging import getLogger, logger_init
 
 #--------------------------------------------------------------------------------------------------
 
-def get_ipv4():
+def get_ipv4() -> socket.Any | Literal['127.0.0.1']:
     """
     Helper function that determines the own IPv4 address on the primary interface.
     Falls back to localhost if no IP available.
