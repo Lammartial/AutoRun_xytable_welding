@@ -117,12 +117,28 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
 
     afe = BQ76942(cartridge.backyard_bus, slvAddress=0x08, pec=True)
-    print(afe.read_cell_voltages())
-    print(afe.read_temperatures())
+
+    print(afe.write_subcommand(0x29e7))
+    afe.pec = False
+
+    base_path = Path(__file__).parent / "../../Battery-PCBA-Test/filestore"
+
+    ff = BQStudioFileFlasher(afe, base_path / "FS_3412185A-02_A_draft1_unsealed_Petalite_AFE_settings.gm.fs" )
+    ff.validate_file()
+    ff.program_fw_file()
+
+    sleep(1.0)
+
     print(afe.read_control_status())
     print(afe.read_battery_status())
 
     print(afe.read_subcommand(0x00a0))
+
+    print(afe.read_subcommand(0x9234))
+
+    print(afe.read_cell_voltages())
+    print(afe.read_temperatures())
+
     gg = BQ34Z100(cartridge.backyard_bus, slvAddress=0x55, pec=False)
     print(gg.get_voltage_scale())
     print(gg.get_current_scale())
@@ -143,6 +159,7 @@ if __name__ == "__main__":
     ## Initialize the logging
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
+
 
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
@@ -183,7 +200,7 @@ if __name__ == "__main__":
 
 
     print("Change clock frequency and timeout - RRC: ",
-          str(i2cbus.i2c_change_clock_frequency(400000, timeout_ms=20)))
+          str(i2cbus.i2c_change_clock_frequency(100000, timeout_ms=20)))
     print("MASTER:", i2cbus.i2c_bus_scan())
 
     mux = BusMux(i2cbus, address=0x77)

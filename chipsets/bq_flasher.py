@@ -268,12 +268,16 @@ class BQStudioFileFlasher:
                         else:
                             break
                     register = data[0]
-                    length = data[1]
-                    expected_data = data[2:]
+                    if current_line.startswith("C:"):
+                        length = len(data) - 1
+                        expected_data = data[1:]
+                    else:
+                        length = data[1]
+                        expected_data = data[2:]
 
                     _log.debug(f"RB: {register}, {length}")
                     if not is_file_validation:
-                        response = self.battery.readBlock(register, 33)
+                        response = self.battery.readBlock(register, length)  # , 33)
                         if response[1]:
                             received_data = list(response[0])
                         else:

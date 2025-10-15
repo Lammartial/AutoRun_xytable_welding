@@ -145,7 +145,7 @@ class Eth2SerialDevice(object):
 
     #----------------------------------------------------------------------------------------------
 
-    def send(self, msg: str,
+    def send(self, msg: str | bytes | bytearray,
              timeout: float = 3.0,
              pause_after_write: int | None = None,
              encoding: str | None = "utf-8",
@@ -166,7 +166,10 @@ class Eth2SerialDevice(object):
 
         try:
             self.connect_socket(timeout=timeout)
-            self.socket.sendall(bytes(msg, encoding) + self._termination_as_bytes)
+            if encoding is None:
+                self.socket.sendall(bytes(msg))  # send it raw
+            else:
+                self.socket.sendall(bytes(msg, encoding) + self._termination_as_bytes)
             if pause_after_write:
                 time.sleep(pause_after_write/1000)
         except TimeoutError as ex:
