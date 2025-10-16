@@ -22,8 +22,8 @@ class CartridgePETA:
 
         self._i2c = i2c
         self._onboard_mux = BusMux(self._i2c, address=mux_address)  # important to have only ONE instance here
-        self.smbus_to_mirco = BusMaster(self.get_muxed_i2c_bus_for(1))  # needs a switch to CAN or I2C !
-        self.backyard_bus = BusMaster(self.get_muxed_i2c_bus_for(2))
+        self.bus_to_mirco = self.get_muxed_i2c_bus_for(1)         # needs a switch to CAN or I2C !
+        self.backyard_bus = self.get_muxed_i2c_bus_for(2)
         self.gpio = GPIOExtender(self.get_muxed_i2c_bus_for(8), i2c_address_7bit=0x20)  # Extender on channel 8 of the cartridge MUX
         # configure GPIO
         self.gpio.configure_pins("1111111100000000", "0000000000000000", preset_output="0000000000000000")  # all pins output, no polarity inversion,

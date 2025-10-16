@@ -3,6 +3,7 @@ PETA Design PCBA Adapter.
 """
 
 #import unittest
+from re import A
 from typing import Tuple
 from time import sleep
 from pathlib import Path
@@ -72,8 +73,8 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
     # verify that PSU does not trigger battery protection
     print("PSU Output on")
-    psu1.configure_supply(25.090, 0.080, 50, 0)
-    psu2.configure_supply(25.090, 0.080, 50, 0)
+    psu1.configure_supply(22.090, 0.080, 50, 0)
+    psu2.configure_supply(22.090, 0.080, 50, 0)
     #psu2.configure_cc_mode(0.05, 10.8*1.15, (10.8*1.15) * 0.8, 50, 1)
 
     sleep(0.5)  # wait PSU powered up
@@ -85,7 +86,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     #sleep(0.2)
     vsim.enable_all_cell_channels()
     for cell_no in range(1, 7):
-        vsim.set_cell_n_voltage(cell_no, 3.6)
+        vsim.set_cell_n_voltage(cell_no, 3.0)
 
     # switch cell side on first
     psu2.set_output_state(1)
@@ -96,9 +97,11 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     print("Measure PSU1", psu1.get_all_measurements())
     print("Measure PSU2", psu2.get_all_measurements())
 
+    cartridge.switch_some_io(7, 0)  # enable GG
+
     #cartridge.select_bus_to_micro("i2c")
-    print("BACKYARD:", cartridge.backyard_bus.i2c.i2c_bus_scan())
-    print("MICRO:", cartridge.smbus_to_mirco.i2c.i2c_bus_scan())
+    print("BACKYARD:", cartridge.backyard_bus.i2c_bus_scan())
+    print("MICRO:", cartridge.bus_to_mirco.i2c_bus_scan())
     #for n in range(1,9):
     #    print(cartridge.get_muxed_i2c_bus_for(n).i2c_bus_scan())
 
@@ -117,12 +120,9 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
 
     afe = BQ76942(cartridge.backyard_bus, slvAddress=0x08, pec=True)
-
-    print(afe.write_subcommand(0x29e7))
-    afe.pec = False
+    afe.disable_checksum()
 
     base_path = Path(__file__).parent / "../../Battery-PCBA-Test/filestore"
-
     ff = BQStudioFileFlasher(afe, base_path / "FS_3412185A-02_A_draft1_unsealed_Petalite_AFE_settings.gm.fs" )
     ff.validate_file()
     ff.program_fw_file()
@@ -139,7 +139,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     print(afe.read_cell_voltages())
     print(afe.read_temperatures())
 
-    gg = BQ34Z100(cartridge.backyard_bus, slvAddress=0x55, pec=False)
+    gg = BQ34Z100(BusMaster(cartridge.backyard_bus), slvAddress=0x55, pec=False)
     print(gg.get_voltage_scale())
     print(gg.get_current_scale())
     print(gg.get_energy_scale())
@@ -200,7 +200,7 @@ if __name__ == "__main__":
 
 
     print("Change clock frequency and timeout - RRC: ",
-          str(i2cbus.i2c_change_clock_frequency(100000, timeout_ms=20)))
+          str(i2cbus.i2c_change_clock_frequency(400000, timeout_ms=20)))
     print("MASTER:", i2cbus.i2c_bus_scan())
 
     mux = BusMux(i2cbus, address=0x77)

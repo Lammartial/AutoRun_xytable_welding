@@ -18,7 +18,7 @@ from struct import pack, unpack
 from collections import OrderedDict
 from matplotlib import use
 from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
-from rrc.smbus import BusMaster
+from rrc.eth2i2c import I2CBase
 
 from rrc.smbus_pec import calc as pec_calc
 
@@ -88,7 +88,7 @@ class BQ76942:
     includes a long-term timeout if the SCL pin is detected low for more than 2 seconds, which applies whether or
     not the timeouts above are enabled.
     """
-    def __init__(self, smbus: BusMaster, slvAddress: int = 0x08, pec: bool = True) -> None:
+    def __init__(self, i2c: I2CBase, slvAddress: int = 0x08, pec: bool = True, retry_limit: int = 1, verify_rounds: int = 3, pause_us: int = 50) -> None:
         """_summary_
 
         Args:
@@ -98,37 +98,179 @@ class BQ76942:
             pec (bool, optional): _description_. Defaults to False.
         """
 
-        self.bus = smbus
+        self.i2c = i2c
         self.address = int(slvAddress)
         self.pec = bool(pec)
-        _bat = self
+        self.pause_us = int(pause_us)  # in micro seconds
+        self.retry_limit = int(retry_limit)  # number of read repetitions, must be integer in range 1 .. 10
+        self.verify_rounds = int(verify_rounds)  # number of read repetitions, must be 1,3,5,7,9, etc. (odd numbers > 0)
 
     # --------------------------------------------
 
     def __str__(self) -> str:
-        return f"BQ76942 AFE at 0x{self.address} on {self.bus}"
+        return f"BQ76942 AFE at 0x{self.address} on {self.i2c}"
 
     def __repr__(self) -> str:
-        return f"BQ76942({repr(self.bus)}, slvAddress={self.address}, pec={self.pec})"
+        return f"BQ76942({repr(self.i2c)}, slvAddress={self.address}, pec={self.pec})"
 
     # --------------------------------------------
 
+    # ----------------------------------------------------------------------------------------------
+    @property
+    def retry_limit(self) -> int:
+        return self._retry_limit
 
-    def _read_word_helper(self, reg: int, use_pec: bool = True) -> Tuple[bytearray, bool]:
-        """Helper to read a word from the BQ76942 with PEC if enabled.
+    @retry_limit.setter
+    def retry_limit(self, value: int):
+        if not (isinstance(value, int) and (value >= 1) and (value <= 1000)):
+            raise ValueError("Retry count limit must be an integer 1 ... 1000")
+        self._retry_limit = value
+
+    # ----------------------------------------------------------------------------------------------
+    @property
+    def verify_rounds(self) -> int:
+        return self._verify_rounds
+
+    @verify_rounds.setter
+    def verify_rounds(self, value: int):
+        if not (isinstance(value, int) and (value >= 1) and ((value & 1) == 1)):
+            raise ValueError("Retry count limit must be an odd number > 0 like 1,3,5,7,9,...")
+        self._verify_rounds = value
+
+    # ----------------------------------------------------------------------------------------------
+    # core functions (all others a reusing these ones)
+    def writeBytes(self, slvAddress: int, cmd: int, buffer: bytes | bytearray, use_pec: bool = False) -> bool:
+        """Writes a given sequence of bytes to a slave device addressed by slvAddress and command.
 
         Args:
-            reg (int): The register address to read from.
+            slvAddress (byte | int): 8 bit slave address (0..255)
+            cmd (byte | int): command code (0..255)
+            buffer (bytes | bytearray): payload bytes to be written to slave
+            use_pec (bool, optional): Use a PEC checksum to verify the transfer if True. Defaults to False.
+
         Returns:
-            int: The word read from the register.
+            bool: True if write transfer was successfully completed including PEC if given.
         """
-        buf1, ok1 = self.bus.readBytes(self.address, reg,     1, use_pec=use_pec)
-        buf2, ok2 = self.bus.readBytes(self.address, reg + 1, 1, use_pec=use_pec)
-        buf = buf1 + buf2
-        return buf, (ok1 and ok2)
+
+        if use_pec:
+            # calculate the PEC and insert it
+            buf_with_pec = [cmd]
+            _cs = pec_calc(bytearray([(slvAddress << 1), cmd]))
+            for b in buffer:
+                _cs = pec_calc((b).to_bytes(1, "little"), _cs)
+                buf_with_pec.append(b)
+                buf_with_pec.append(_cs)
+                _cs = 0x00  # reset PEC seed
+            bufc = bytearray(bytes(buf_with_pec))  # should have double the size of buffer + 1
+        else:
+            bufc = bytearray(bytes([cmd]) + bytes(buffer))
+        print("BQ76 write bytes", hexlify(bufc).decode())  # DEBUG
+        for n in range(0, self._retry_limit):
+            try:
+                # wlen = self.i2c.writeto_mem(slvAddress,cmd,buf)
+                wlen = self.i2c.writeto(slvAddress, bufc)
+                # ok = (wlen > 0)
+                ok: bool = len(bufc) == wlen
+                return ok
+            except OSError:
+                if n == self._retry_limit - 1:
+                    raise
+            except Exception:
+                raise
+            sleep(self.pause_us / 1000000)
+        # may never get here!
+        raise Exception("Programming Error")
 
 
-    def _write_word_helper(self, reg: int, value: int, use_pec: bool = True) -> bool:
+    def _retry_read_helper(self, slvAddress: int, cmd: int, count: int) -> bytearray:
+        for n in range(0, self._retry_limit):
+            try:
+                buf = self.i2c.readfrom_mem(slvAddress, cmd, count)
+                return buf
+            except OSError:
+                if n == self._retry_limit - 1:
+                    raise
+            except Exception:
+                raise
+            sleep(self.pause_us / 1000000)
+        # may never get here!
+        raise Exception("Programming Error")
+
+
+    def readBytes(self, slvAddress: int, cmd: int, count: int, use_pec: bool = False) -> Tuple[bytearray, bool]:
+        """Read bytes from a BQ76942 device by given address with given command code written after slave address.
+        It handles the crappy PEC implementation correct or ignores it f disabled.
+
+        Args:
+            slvAddress (byte | int): 8 bit slave address (0..255)
+            cmd (byte | int): command code (0..255)
+            count (int): number of bytes to read
+            use_pec (bool, optional): Use a PEC checksum to verify the transfer if True. Defaults to False.
+
+        Returns:
+            bytearray: bytes buffer that has been read.
+            bool: True, if count bytes have been read and checksum was correct (if given), False else.
+        """
+        if use_pec:
+            # crappy shit of the BQ device: it sends an PEC over adress, cmd, (address | 1) and first byte after first byte,
+            # then it resets the PEC seed and sends an PEC oafter every next byte for just this byte -> we need to double
+            # the amount of data to read
+            if count > 1024:
+                count = 1024  # meaningful limit
+            count_with_pec = count * 2
+            buf_with_pec = self._retry_read_helper(slvAddress, cmd, count_with_pec)
+            # first byte PEC
+            checksum_ok = True
+            _cs = pec_calc(bytes([(slvAddress << 1), cmd, ((slvAddress << 1) | 1)]))
+            for i in range(0, len(buf_with_pec), 2):
+                _cs = pec_calc(buf_with_pec[i].to_bytes(1, "little"), _cs)  # calc the PEC for the data byte
+                if _cs != buf_with_pec[i + 1]:  # compare with its PEC
+                    checksum_ok = False
+                _cs = 0x00  # reset the _cs seed for next bytes
+            buf = buf_with_pec[::2]  # extract the real data bytes
+            rlen = len(buf)
+            ok = (rlen == count) and checksum_ok
+            return buf, ok  # remove the checksum from the data
+        else:
+            buf = self._retry_read_helper(slvAddress, cmd, count)
+            rlen = len(buf)
+            ok = (rlen == count)
+            return buf, ok
+
+    # ----------------------------------------------------------------------------------------------
+
+    def readWord(self, reg: int, signed: bool = False) -> Tuple[int, bool]:
+        """read a word from the BQ76942 with PEC if enabled.
+
+        Args:
+            reg (int): _description_
+            signed (bool, optional): _description_. Defaults to False.
+
+        Returns:
+            Tuple[int, bool]: _description_
+        """
+
+        if 1:
+            buf, ok = self.readBytes(self.address, int(reg), 2, use_pec=self.pec)
+            print(_maybe_hexlify(buf, hexi=True))  # DEBUG
+            if ok:
+                response = unpack(("<h" if signed else "<H"), buf)[0]
+            else:
+                response = None
+            return response, ok
+        else:
+            buf1, ok1 = self.readBytes(self.address, reg,     1, use_pec=self.pec)
+            buf2, ok2 = self.readBytes(self.address, reg + 1, 1, use_pec=self.pec)
+            buf = buf1 + buf2
+            print(_maybe_hexlify(buf, hexi=True))  # DEBUG
+            if ok1 and ok2:
+                response = unpack(("<h" if signed else "<H"), buf)[0]
+            else:
+                response = None
+            return response, (ok1 and ok2)
+
+
+    def writeWord(self, reg: int, value: int) -> bool:
         """Helper to write a word to the BQ76942 with PEC if enabled.
 
         Args:
@@ -138,15 +280,31 @@ class BQ76942:
             bool: True if the write was successful, False otherwise.
         """
 
-        buf = value.to_bytes(2, "little" )
-        if not self.bus.writeBytes(self.address, reg,     bytearray(buf[:1]), use_pec=use_pec):
-            return False
-        if not self.bus.writeBytes(self.address, reg + 1, bytearray(buf[1:]), use_pec=use_pec):
-            return False
+        if 1:
+            buf = int(value).to_bytes(2, "little" )
+            return self.writeBytes(self.address, int(reg), bytearray(buf), use_pec=self.pec)
+        else:
+            if not self.writeBytes(self.address, reg,     bytearray(buf[:1]), use_pec=self.pec):
+                 return False
+            if not self.writeBytes(self.address, reg + 1, bytearray(buf[1:]), use_pec=self.pec):
+                return False
         return True
 
 
-    # for flasher
+    def disable_checksum(self) -> bool:
+        buf = int(0x29e7).to_bytes(2, "little" )
+        #return self.writeBytes(self.address, int(reg), bytearray(buf), use_pec=True)
+        if not self.writeBytes(self.address, 0x3E, bytearray(buf[:1]), use_pec=True):
+             return False
+        if not self.writeBytes(self.address, 0x3F, bytearray(buf[1:]), use_pec=True):
+            return False
+        self.pec = False
+        return True
+
+
+
+    # ----------------------------------------------------------------------------------------------
+    # Interface for bq_flasher module
 
     def enable_full_access(self) -> bool:
         # ...
@@ -154,26 +312,27 @@ class BQ76942:
 
     def device_name(self):
         c = ("PETALITE AFE", 1, 2)
-        return c[0], "", "Name", c
+        return (c[0], "", "Name", c)
 
     def readBlock(self, cmd: int, byte_count: int = -1) -> Tuple[bytearray, bool]:
-        return self.bus.readBytes(self.address, int(cmd), int(byte_count), self.pec)  # NO read-back (verify)
-        #print(cmd, byte_count)
-        #return bytearray([1,2,3,4]), True
+        return self.readBytes(self.address, int(cmd), int(byte_count), use_pec=self.pec)
 
     def writeBlock(self, cmd: int, buffer: bytearray | bytes) -> bool:
-        return self.bus.writeBytes(self.address, int(cmd), bytearray(buffer), self.pec)  # NO read-back (verify)
-        #print(cmd, buffer)
-        #return True
+        return self.writeBytes(self.address, int(cmd), bytearray(buffer), use_pec=self.pec)
+
+    # ----------------------------------------------------------------------------------------------
+
 
     def read_control_status(self) -> Tuple[int, str]:
-        buf, ok = self._read_word_helper(0x00)
+        #buf, ok = self._read_word_helper(0x00)
+        buf, ok = self.readBytes(self.address, 0x00, 2)
         if ok:
             return unpack("<H", buf)[0], hexlify(buf).decode()
 
 
     def read_battery_status(self) -> Tuple[int, str]:
-        buf, ok = self._read_word_helper(0x12)
+        #buf, ok = self._read_word_helper(0x12)
+        buf, ok = self.readBytes(self.address, 0x12, 2)
         if ok:
             return unpack("<H", buf)[0], hexlify(buf).decode()
 
@@ -188,33 +347,33 @@ class BQ76942:
 
         if not (0 <= subcmd <= 0xFFFF):
             raise ValueError("Subcommand must be a 16-bit value (0-65535).")
-        if not self._write_word_helper(0x3E, subcmd, use_pec=self.pec):  # write Subcommand to the registers 0x3E and 0x3F
+        #if not self._write_word_helper(0x3E, subcmd, use_pec=self.pec):  # write Subcommand to the registers 0x3E and 0x3F
+        if not self.writeWord(0x3E, subcmd):  # write Subcommand to the registers 0x3E and 0x3F
             return False
 
         t0 = monotonic_ns()  # common timeout over the rest of the function
         response = 0xFFFF
         while (response != subcmd) and (response != 0x0000):  # the latter is for NO DATA commands
-            buf, ok = self._read_word_helper(0x3E, use_pec=self.pec)
-            response = unpack("<H", buf)[0]
+            #buf, ok = self._read_word_helper(0x3E, use_pec=self.pec)
+            #response = unpack("<H", buf)[0]
+            response, ok = self.readWord(0x3E)
             #response = self.bus.readWord(self.address, 0x3E, use_pec=self.pec)  # read back the subcommand register
             t1 = monotonic_ns()
             if (t1 - t0) > timeout * 1e+9:  # scale timeout to ns
                raise TimeoutError("While wait for subcommand to complete.")
             sleep(0.005)
 
-        #combi_buf, ok = self.bus.readBytes(self.address, 0x40, 32 * 2, use_pec=False)  # don't use PEC direct
-        #print(list(combi_buf))
-
         if data:
             checksum = (subcmd & 0xFF) | ((subcmd >> 8) & 0xFF)
             for b in data:
                 checksum += b   # generate the checksum by simple addition
             checksum = ~checksum & 0xFF  # bitwise inverse
-            if not self.bus.writeBytes(self.address, 0x40, data, pec=self.pec):  # write data to the data registers starting at 0x40
+            #bufc = data + checksum.to_bytes(1, "little") + (len(data) + 4).to_bytes(1, "little")
+            if not self.writeBytes(self.address, 0x40, data, pec=self.pec):  # write data to the data registers starting at 0x40
                 return False
             # activate the data transfer of the command
-            value = checksum | ((len(data) + 4) << 8)  # length of data + checksum byte + length byte + the two subcommandbytes
-            if not self._write_word_helper(0x60, value, use_pec=self.pec):  # write checksum to the checksum register 0x60
+            ctrl = (checksum | ((len(data) + 4) << 8)).to_bytes(2, "little")  # length of data + checksum byte + length byte + the two subcommandbytes
+            if not self.writeWord(0x60, ctrl):  # write checksum to the checksum register 0x60
                 return False
         return True
 
@@ -234,28 +393,31 @@ class BQ76942:
 
         if not (0 <= subcmd <= 0xFFFF):
             raise ValueError("Subcommand must be a 16-bit value (0-65535).")
-        if not self._write_word_helper(0x3E, subcmd, use_pec=self.pec):  # write Subcommand to the registers 0x3E and 0x3F
+        #if not self._write_word_helper(0x3E, subcmd, use_pec=self.pec):  # write Subcommand to the registers 0x3E and 0x3F
+        if not self.writeWord(0x3E, subcmd):  # write Subcommand to the registers 0x3E and 0x3F
             return False
 
         t0 = monotonic_ns()  # common timeout over the rest of the function
         response = 0xFFFF
         while response != subcmd:
-            buf, ok = self._read_word_helper(0x3E, use_pec=self.pec)
-            response = unpack("<H", buf)[0]
-            #response = self.bus.readWord(self.address, 0x3E, use_pec=self.pec)  # read back the subcommand register
+            #buf, ok = self._read_word_helper(0x3E, use_pec=self.pec)
+            #buf, ok = self.readBytes(self.address, 0x3E, 2, use_pec=self.pec)
+            #response = unpack("<H", buf)[0]
+            response, ok = self.readWord(0x3E)
             t1 = monotonic_ns()
             if (t1 - t0) > (timeout * 1e+9):  # scale timeout to ns
                 raise TimeoutError("While wait for subcommand to complete.")
             sleep(0.005)
         # data is ready now
-        ctrl_buf, ok = self._read_word_helper(0x60, use_pec=self.pec)
+        ctrl, ok = self.readWord(0x60)
+        #ctrl_buf, ok = self._read_word_helper(0x60, use_pec=self.pec)
         #ctrl, ok = self.bus.readBytes(self.address, 0x60, 2, use_pec=self.pec)  # read checksum and length
         if not ok:
             raise IOError("Failed to read checksum and length from BQ76942.")
-        testbuf, ok2 = self.bus.readBytes(self.address, 0x60, 3, use_pec=False)
-        incoming_cs = ctrl_buf[0]
-        count = ctrl_buf[1]
-        num_read = count - 4 + 1
+        # testbuf, ok2 = self.i2c.readBytes(self.address, 0x60, 3, use_pec=False)
+        incoming_cs = ctrl & 0xFF
+        count = ((ctrl >> 8) & 0xFF)
+        num_read = count - 4
         if num_read < 0:
             num_read = 0
         # bb = []
@@ -268,21 +430,23 @@ class BQ76942:
         # command register, while from the 2nd byte on, the PEC seed is being reset for each byte.
         # -> we need to do a check independently and compare each byte
 
-        if self.pec:
-            combi_buf, ok = self.bus.readBytes(self.address, 0x40, num_read * 2, use_pec=False)  # don't use PEC direct
-            buf_cs = list(combi_buf[1::2])  # get the checksum bytes only
-            buf = list(combi_buf[::2])  # get the data only
-            _cs = pec_calc([self.address << 1, 0x40, self.address << 1 | 1])
-            for n in range(0, len(buf), 1):
-                #x = combi_buf[n]
-                #y = combi_buf[n+1]
-                x = buf[n]
-                y = buf_cs[n]
-                _cs = pec_calc(int(x).to_bytes(1, "little"), _cs)
-                print(x, _cs, y)
-                _cs = 0  # reset seed of PEC
-        else:
-            buf, ok = self.bus.readBytes(self.address, 0x40, num_read, use_pec=False)  # don't use PEC direct
+        # if self.pec:
+        #     combi_buf, ok = self.i2c.readBytes(self.address, 0x40, num_read * 2, use_pec=False)  # don't use PEC direct
+        #     buf_cs = list(combi_buf[1::2])  # get the checksum bytes only
+        #     buf = list(combi_buf[::2])  # get the data only
+        #     _cs = pec_calc([self.address << 1, 0x40, self.address << 1 | 1])
+        #     for n in range(0, len(buf), 1):
+        #         #x = combi_buf[n]
+        #         #y = combi_buf[n+1]
+        #         x = buf[n]
+        #         y = buf_cs[n]
+        #         _cs = pec_calc(int(x).to_bytes(1, "little"), _cs)
+        #         print(x, _cs, y)
+        #         _cs = 0  # reset seed of PEC
+        # else:
+        #     buf, ok = self.i2c.readBytes(self.address, 0x40, num_read, use_pec=False)  # don't use PEC direct
+
+        buf, ok = self.readBytes(self.address, 0x40, num_read, use_pec=self.pec)
 
         #valid_buf = list(buf[:1] + buf[2:])
         #valid_buf = list(buf)
@@ -297,6 +461,9 @@ class BQ76942:
         #    raise IOError("Checksum mismatch reading from BQ76942.")
         # success
         return tuple(buf)
+
+
+    #----------------------------------------------------------------------------------------------
 
 
     def read_cell_voltages(self, hexi: None | bool | str = bool) -> Tuple[Tuple[float], Tuple[str]]:
@@ -314,16 +481,14 @@ class BQ76942:
         _user_scale = 1e-3  # user defined scale for the last three voltages: Stack Voltage (VC10 pin), PACK pin voltage, LD pin voltage
         scale = [_standard_scale] * 10 + [_user_scale] * 3
         voltages = ()
-        raw = ()
         regadr = 0x14 # base register address for Cell 1 Voltage
         for i in range(13):  # 10 cells + 3 special Voltages:
-            buf, ok = self._read_word_helper(regadr)
-            volt = unpack("<H", buf)[0] * scale[i]  # scale returned value into Volts
+            raw, ok = self.readWord(regadr)
+            volt = raw * scale[i]  # scale returned value into Volts
             voltages += (volt,)
-            raw += (_maybe_hexlify(buf, hexi),)
             regadr += 2
             sleep(0.005)
-        return voltages, raw
+        return voltages
 
 
     def read_temperatures(self, hexi: None | bool | str = bool) -> Tuple[Tuple[float], Tuple[str]]:
@@ -340,13 +505,13 @@ class BQ76942:
         _user_scale = 1.0  # user defined scale for the temperature on the TS pin
         scale = [_standard_scale] * 10
         temperatures = ()
-        raw = ()
+        #raw = ()
         regadr = 0x68 # base register address for Temperature 1
         for i in range(10):  # 3 internal + 1 external temperature:
-            buf, ok = self._read_word_helper(regadr)
-            temp = (unpack("<h", buf)[0] * scale[i]) - KELVIN_ZERO_DEGC  # scale returned value into °C
+            raw, ok = self.readWord(regadr, signed=True)
+            temp = (raw * scale[i]) - KELVIN_ZERO_DEGC  # scale returned value into °C
             temperatures += (temp,)
-            raw += (_maybe_hexlify(buf, hexi),)
+            #raw += (_maybe_hexlify(tckelvin.to_bytes(2, "little"), hexi),)
             regadr += 2
             sleep(0.005)
         return temperatures, raw
