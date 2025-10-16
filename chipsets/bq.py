@@ -10,6 +10,7 @@ __author__ = "Markus Ruth"
 # pylint: disable=line-too-long,C0103,C0321,C0413,W0703,W0107,R1702,R0904
 
 #import errno
+from typing import Tuple
 from time import sleep
 from binascii import unhexlify
 from os import urandom
@@ -143,8 +144,8 @@ class ChipsetTexasInstruments(Chipset):
         self.manufacturer_access = (ikey & 0xffff)         # low word first
         self.manufacturer_access = ((ikey >> 16) & 0xffff) # high word then
 
-    def unseal(self, 
-               unseal_key: int | bytes | bytearray | str, 
+    def unseal(self,
+               unseal_key: int | bytes | bytearray | str,
                fullaccess_key: int | bytes | bytearray | str = None,
                force: bool = False) -> bool:
         """Unseals the battery using a key given in hexadecimal format.
@@ -158,7 +159,7 @@ class ChipsetTexasInstruments(Chipset):
                 (string): unseal_key
                 (string): fullaccess_key
                 (bool): True do NOT check if unseald. Defaults to False.
-            
+
             Returns:
                 (boolean)
         """
@@ -205,5 +206,20 @@ class ChipsetTexasInstruments(Chipset):
     def seal(self):
         """Seals the battery if it is unsealed. Must be provided together with unseal() function."""
         pass
+
+
+    #----------------------------------------------------------------------------------------------
+    # Interface for bq_flasher module to use the new W, C and X commands
+
+    def readBlockFlasher(self, address_from_file: int, cmd: int, byte_count: int = -1) -> Tuple[bytearray, bool]:
+        # we ignore the provided address_from_file here !
+        return self.readBlock(int(cmd), byte_count=int(byte_count))
+
+    def writeBlockFlasher(self, address_from_file: int, cmd: int, buffer: bytearray | bytes) -> bool:
+        # we ignore the provided address_from_file here !
+        return self.writeBlock(int(cmd), bytearray(buffer))
+
+    #----------------------------------------------------------------------------------------------
+
 
 # END OF FILE

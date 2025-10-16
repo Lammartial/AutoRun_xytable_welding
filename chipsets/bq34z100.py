@@ -149,6 +149,7 @@ class BQ34Z100:
         return self.bus.readBytes(address_from_file, int(cmd), int(byte_count), use_pec=self.pec)
 
     def writeBlockFlasher(self, address_from_file: int, cmd: int, buffer: bytearray | bytes) -> bool:
+        print("BQZ100 write bytes", address_from_file, cmd, hexlify(buffer).decode())  # DEBUG
         return self.bus.writeBytes(address_from_file, int(cmd), bytearray(buffer), use_pec=self.pec)
 
     # ----------------------------------------------------------------------------------------------

@@ -10,13 +10,12 @@ __version__ = "0.5.0"
 
 # pylint: disable=line-too-long,C0103,C0321,C0413,W0703,W0107,R1702,R0904
 
-from itertools import combinations
+from itertools import combinations, chain
 from typing import List, Tuple
 from time import sleep, monotonic_ns
 from binascii import hexlify
-from struct import pack, unpack
+from struct import pack, unpack, unpack_from, iter_unpack
 from collections import OrderedDict
-from matplotlib import use
 from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
 from rrc.eth2i2c import I2CBase
 
@@ -164,7 +163,7 @@ class BQ76942:
             bufc = bytearray(bytes(buf_with_pec))  # should have double the size of buffer + 1
         else:
             bufc = bytearray(bytes([cmd]) + bytes(buffer))
-        print("BQ76 write bytes", hexlify(bufc).decode())  # DEBUG
+        #print("BQ76 write bytes", hexlify(bufc).decode())  # DEBUG
         for n in range(0, self._retry_limit):
             try:
                 # wlen = self.i2c.writeto_mem(slvAddress,cmd,buf)
@@ -252,7 +251,7 @@ class BQ76942:
 
         if 1:
             buf, ok = self.readBytes(self.address, int(reg), 2, use_pec=self.pec)
-            print(_maybe_hexlify(buf, hexi=True))  # DEBUG
+            #print(_maybe_hexlify(buf, hexi=True))  # DEBUG
             if ok:
                 response = unpack(("<h" if signed else "<H"), buf)[0]
             else:
@@ -262,7 +261,7 @@ class BQ76942:
             buf1, ok1 = self.readBytes(self.address, reg,     1, use_pec=self.pec)
             buf2, ok2 = self.readBytes(self.address, reg + 1, 1, use_pec=self.pec)
             buf = buf1 + buf2
-            print(_maybe_hexlify(buf, hexi=True))  # DEBUG
+            #print(_maybe_hexlify(buf, hexi=True))  # DEBUG
             if ok1 and ok2:
                 response = unpack(("<h" if signed else "<H"), buf)[0]
             else:
@@ -302,7 +301,6 @@ class BQ76942:
         return True
 
 
-
     # ----------------------------------------------------------------------------------------------
     # Interface for bq_flasher module
 
@@ -318,6 +316,7 @@ class BQ76942:
         return self.readBytes(address_from_file, int(cmd), int(byte_count), use_pec=self.pec)
 
     def writeBlockFlasher(self, address_from_file: int, cmd: int, buffer: bytearray | bytes) -> bool:
+        print("BQ76 write bytes", address_from_file, cmd, hexlify(buffer).decode())  # DEBUG
         return self.writeBytes(address_from_file, int(cmd), bytearray(buffer), use_pec=self.pec)
 
     # ----------------------------------------------------------------------------------------------
@@ -550,6 +549,18 @@ class BQ76942:
         buf3 = self.read_subcommand(0x0073)  # DASTATUS3
         buf4 = self.read_subcommand(0x0074)  # DASTATUS4
 
+        _fmt = "<L"  # unsigned long, 4 bytes
+        all_items = [n[0] for n in list(chain.from_iterable([iter_unpack(_fmt, bytes(buffer)) for buffer in [buf1, buf2, buf3, buf4]]))]
+        self.cell_voltage_counts = all_items[::2]  # every 2nd is a voltage count, starting from first element
+        self.cell_current_counts = all_items[1::2]  # every 2nd is a current count, starting from 2nd element
+        #print(self.cell_voltage_counts)
+        #print(self.cell_current_counts)
+        # for buffer in [buf1, buf2, buf3, buf4]:
+        #      self.cell_voltage_counts += tuple([unpack_from(_fmt, bytes(buffer), 0 + i * 4)[0] for i in range(4)])  # cells 1 - 16
+        #      self.cell_current_counts += tuple([unpack_from(_fmt, bytes(buffer), 4 + i * 4)[0] for i in range(4)])  # cells 1 - 16
+        # print(self.cell_voltage_counts)
+        # print(self.cell_current_counts)
+        return self.cell_voltage_counts, self.cell_current_counts
 
 
     def disable_sleepmode(self) -> bool:
