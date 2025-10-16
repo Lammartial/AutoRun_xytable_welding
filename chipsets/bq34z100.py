@@ -132,6 +132,28 @@ class BQ34Z100:
         # return value
 
 
+
+    # ----------------------------------------------------------------------------------------------
+    # Interface for bq_flasher module
+
+    def enable_full_access(self) -> bool:
+        # ...
+        return True
+
+    def device_name(self):
+        c = ("PETALITE GASGAUGE", 1, 2)
+        return (c[0], "", "Name", c)
+
+
+    def readBlockFlasher(self, address_from_file: int, cmd: int, byte_count: int = -1) -> Tuple[bytearray, bool]:
+        return self.bus.readBytes(address_from_file, int(cmd), int(byte_count), use_pec=self.pec)
+
+    def writeBlockFlasher(self, address_from_file: int, cmd: int, buffer: bytearray | bytes) -> bool:
+        return self.bus.writeBytes(address_from_file, int(cmd), bytearray(buffer), use_pec=self.pec)
+
+    # ----------------------------------------------------------------------------------------------
+
+
     def get_voltage_scale(self, force_refresh: bool = False) -> int:
         """
         This command returns the scale factor for the voltage measurement.

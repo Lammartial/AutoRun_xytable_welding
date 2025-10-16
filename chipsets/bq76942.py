@@ -314,11 +314,11 @@ class BQ76942:
         c = ("PETALITE AFE", 1, 2)
         return (c[0], "", "Name", c)
 
-    def readBlock(self, cmd: int, byte_count: int = -1) -> Tuple[bytearray, bool]:
-        return self.readBytes(self.address, int(cmd), int(byte_count), use_pec=self.pec)
+    def readBlockFlasher(self, address_from_file: int, cmd: int, byte_count: int = -1) -> Tuple[bytearray, bool]:
+        return self.readBytes(address_from_file, int(cmd), int(byte_count), use_pec=self.pec)
 
-    def writeBlock(self, cmd: int, buffer: bytearray | bytes) -> bool:
-        return self.writeBytes(self.address, int(cmd), bytearray(buffer), use_pec=self.pec)
+    def writeBlockFlasher(self, address_from_file: int, cmd: int, buffer: bytearray | bytes) -> bool:
+        return self.writeBytes(address_from_file, int(cmd), bytearray(buffer), use_pec=self.pec)
 
     # ----------------------------------------------------------------------------------------------
 
@@ -347,28 +347,23 @@ class BQ76942:
 
         if not (0 <= subcmd <= 0xFFFF):
             raise ValueError("Subcommand must be a 16-bit value (0-65535).")
-        #if not self._write_word_helper(0x3E, subcmd, use_pec=self.pec):  # write Subcommand to the registers 0x3E and 0x3F
         if not self.writeWord(0x3E, subcmd):  # write Subcommand to the registers 0x3E and 0x3F
             return False
 
         t0 = monotonic_ns()  # common timeout over the rest of the function
         response = 0xFFFF
         while (response != subcmd) and (response != 0x0000):  # the latter is for NO DATA commands
-            #buf, ok = self._read_word_helper(0x3E, use_pec=self.pec)
-            #response = unpack("<H", buf)[0]
             response, ok = self.readWord(0x3E)
-            #response = self.bus.readWord(self.address, 0x3E, use_pec=self.pec)  # read back the subcommand register
             t1 = monotonic_ns()
             if (t1 - t0) > timeout * 1e+9:  # scale timeout to ns
                raise TimeoutError("While wait for subcommand to complete.")
             sleep(0.005)
 
         if data:
-            checksum = (subcmd & 0xFF) | ((subcmd >> 8) & 0xFF)
-            for b in data:
-                checksum += b   # generate the checksum by simple addition
+            checksum = (subcmd & 0xFF) + ((subcmd >> 8) & 0xFF) + sum(data)
+            #for b in data:
+            #    checksum += b   # generate the checksum by simple addition
             checksum = ~checksum & 0xFF  # bitwise inverse
-            #bufc = data + checksum.to_bytes(1, "little") + (len(data) + 4).to_bytes(1, "little")
             if not self.writeBytes(self.address, 0x40, data, pec=self.pec):  # write data to the data registers starting at 0x40
                 return False
             # activate the data transfer of the command
@@ -393,16 +388,12 @@ class BQ76942:
 
         if not (0 <= subcmd <= 0xFFFF):
             raise ValueError("Subcommand must be a 16-bit value (0-65535).")
-        #if not self._write_word_helper(0x3E, subcmd, use_pec=self.pec):  # write Subcommand to the registers 0x3E and 0x3F
         if not self.writeWord(0x3E, subcmd):  # write Subcommand to the registers 0x3E and 0x3F
             return False
 
         t0 = monotonic_ns()  # common timeout over the rest of the function
         response = 0xFFFF
         while response != subcmd:
-            #buf, ok = self._read_word_helper(0x3E, use_pec=self.pec)
-            #buf, ok = self.readBytes(self.address, 0x3E, 2, use_pec=self.pec)
-            #response = unpack("<H", buf)[0]
             response, ok = self.readWord(0x3E)
             t1 = monotonic_ns()
             if (t1 - t0) > (timeout * 1e+9):  # scale timeout to ns
@@ -410,8 +401,6 @@ class BQ76942:
             sleep(0.005)
         # data is ready now
         ctrl, ok = self.readWord(0x60)
-        #ctrl_buf, ok = self._read_word_helper(0x60, use_pec=self.pec)
-        #ctrl, ok = self.bus.readBytes(self.address, 0x60, 2, use_pec=self.pec)  # read checksum and length
         if not ok:
             raise IOError("Failed to read checksum and length from BQ76942.")
         # testbuf, ok2 = self.i2c.readBytes(self.address, 0x60, 3, use_pec=False)
@@ -420,41 +409,11 @@ class BQ76942:
         num_read = count - 4
         if num_read < 0:
             num_read = 0
-        # bb = []
-        # for i in range(count - 4 + 1):
-        #     buf, ok = self.bus.readBytes(self.address, 0x40 + i, 1, use_pec=True)
-        #     bb.append(buf[0])
-        # valid_buf = bytes(bytearray(bb))
-        # we need to read twice the amount of bytes as a PEC is sent after each byte with
-        # a slightly changed detail: first byte's PEC checksum includes the addresses and
-        # command register, while from the 2nd byte on, the PEC seed is being reset for each byte.
-        # -> we need to do a check independently and compare each byte
-
-        # if self.pec:
-        #     combi_buf, ok = self.i2c.readBytes(self.address, 0x40, num_read * 2, use_pec=False)  # don't use PEC direct
-        #     buf_cs = list(combi_buf[1::2])  # get the checksum bytes only
-        #     buf = list(combi_buf[::2])  # get the data only
-        #     _cs = pec_calc([self.address << 1, 0x40, self.address << 1 | 1])
-        #     for n in range(0, len(buf), 1):
-        #         #x = combi_buf[n]
-        #         #y = combi_buf[n+1]
-        #         x = buf[n]
-        #         y = buf_cs[n]
-        #         _cs = pec_calc(int(x).to_bytes(1, "little"), _cs)
-        #         print(x, _cs, y)
-        #         _cs = 0  # reset seed of PEC
-        # else:
-        #     buf, ok = self.i2c.readBytes(self.address, 0x40, num_read, use_pec=False)  # don't use PEC direct
-
         buf, ok = self.readBytes(self.address, 0x40, num_read, use_pec=self.pec)
-
-        #valid_buf = list(buf[:1] + buf[2:])
-        #valid_buf = list(buf)
-        # calc expected checksum
-        checksum = (subcmd & 0xff) | ((subcmd >> 8) & 0xff)
+        checksum = (subcmd & 0xFF) + ((subcmd >> 8) & 0xFF) + sum(buf)
         #checksum = (checksum + count) & 0xFF
-        for b in buf:  # omit the checksum of first byte!
-             checksum = (checksum + int(b)) & 0xFF   # generate the checksum by simple addition
+        #for b in buf:  # omit the checksum of first byte!
+        #     checksum = (checksum + int(b)) & 0xFF   # generate the checksum by simple addition
         checksum = ~checksum & 0xFF # bitwise inverse
         # verify checksum
         #if checksum != incoming_cs:
@@ -515,6 +474,91 @@ class BQ76942:
             regadr += 2
             sleep(0.005)
         return temperatures, raw
+
+
+    #----------------------------------------------------------------------------------------------
+
+    def _decode_safety_status(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:
+
+        def _b_to_dict_A(b: bytearray) -> OrderedDict[str, bytes | bytearray | str | int]:
+            os = unpack("<B", b)[0]
+            return OrderedDict({
+                "block": _maybe_hexlify(b, hexi),
+                # data come little endian
+                "SCD": ((os>>7) & 1),  #
+                "OCD2": ((os>>6) & 1),  #
+                "OCD1": ((os>>5) & 1),  #
+                "OCC": ((os>>4) & 1),  #
+                "COV": ((os>>3) & 1),  #
+                "CUV": ((os>>2) & 1),  #
+                "RSVD1": ((os>>1) & 1),  # Reserved. Do not use.
+                "RSVD2": ((os>>0) & 1),  # Reserved. Do not use.
+            })
+
+        def _b_to_dict_B(b: bytearray) -> OrderedDict[str, bytes | bytearray | str | int]:
+            os = unpack("<B", b)[0]
+            return OrderedDict({
+                "block": _maybe_hexlify(b, hexi),
+                # data come little endian
+                "OTF": ((os>>7) & 1),  #
+                "OTINT": ((os>>6) & 1),  #
+                "OTD": ((os>>5) & 1),  #
+                "OTC": ((os>>4) & 1),  #
+                "RSVD1": ((os>>3) & 1),  # Reserved. Do not use.
+                "UTINT": ((os>>2) & 1),  #
+                "UTD": ((os>>1) & 1),  #
+                "UTC": ((os>>0) & 1),  #
+            })
+
+        def _b_to_dict_C(b: bytearray) -> OrderedDict[str, bytes | bytearray | str | int]:
+            os = unpack("<B", b)[0]
+            return OrderedDict({
+                "block": _maybe_hexlify(b, hexi),
+                # data come little endian
+                "OCD3": ((os>>7) & 1),  #
+                "SCDL": ((os>>6) & 1),  #
+                "OCDL": ((os>>5) & 1),  #
+                "COVL": ((os>>4) & 1),  #
+                "RSVD1": ((os>>3) & 1),  # Reserved. Do not use.
+                "PTO": ((os>>2) & 1),  #
+                "HWDF": ((os>>1) & 1),  #
+                "RSVD2": ((os>>0) & 1),  # Reserved. Do not use.
+            })
+
+        da_A = _b_to_dict_A(buf[0:1])
+        ds_A = _b_to_dict_A(buf[1:2])
+        da_B = _b_to_dict_B(buf[2:3])
+        ds_B = _b_to_dict_B(buf[3:4])
+        da_C = _b_to_dict_C(buf[4:5])
+        ds_C = _b_to_dict_C(buf[5:6])
+
+        # combine the ordered dicts
+        d = da_A | ds_A | da_B | ds_B | da_C | ds_C
+        return d
+
+
+    def read_safety_status(self, hexi: bool | str | None = None) -> tuple:
+        buf, ok = self.readBytes(self.address, 0x02, 6, use_pec=self.pec)
+        self._safety_status = self._decode_safety_status(buf, hexi=hexi)
+        #return _od2t(self._safety_status)  # Teststand interface
+        return self._safety_status
+
+
+    def read_dastatus(self, hexi: bool | str | None = None) -> tuple:
+        buf1 = self.read_subcommand(0x0071)  # DASTATUS1
+        buf2 = self.read_subcommand(0x0072)  # DASTATUS2
+        buf3 = self.read_subcommand(0x0073)  # DASTATUS3
+        buf4 = self.read_subcommand(0x0074)  # DASTATUS4
+
+
+
+    def disable_sleepmode(self) -> bool:
+        return self.write_subcommand(0x009a)
+
+
+    def enable_sleepmode(self) -> bool:
+        return self.write_subcommand(0x0099)
+
 
 
 #--------------------------------------------------------------------------------------------------

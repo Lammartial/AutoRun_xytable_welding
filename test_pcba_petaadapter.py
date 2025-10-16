@@ -122,11 +122,15 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     afe = BQ76942(cartridge.backyard_bus, slvAddress=0x08, pec=True)
     afe.disable_checksum()
 
+    print(afe.read_safety_status(hexi=True))
+    print(afe.read_dastatus(hexi=True))
+
     base_path = Path(__file__).parent / "../../Battery-PCBA-Test/filestore"
-    ff = BQStudioFileFlasher(afe, base_path / "FS_3412185A-02_A_draft1_unsealed_Petalite_AFE_settings.gm.fs" )
+    ff = BQStudioFileFlasher(afe, base_path / "FS_3412185A-02_A_draft1_unsealed_PF_Fet_disable_Petalite_AFE_settings.gm.fs" )
     ff.validate_file()
     ff.program_fw_file()
 
+    #psu1.set_output_state(0)
     sleep(1.0)
 
     print(afe.read_control_status())
@@ -145,6 +149,11 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     print(gg.get_energy_scale())
     print(gg.voltage())
     print(gg.temperature())
+
+
+    ff2 = BQStudioFileFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.bq.fs" )
+    ff2.validate_file()
+    ff2.program_fw_file()
 
 
     cartridge.reset_mux()
