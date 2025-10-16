@@ -5,7 +5,7 @@ PETA Design PCBA Adapter.
 #import unittest
 from re import A
 from typing import Tuple
-from time import sleep
+from time import sleep, perf_counter
 from pathlib import Path
 from rrc.eth2can import CANBus
 from rrc.eth2i2c import I2CPort
@@ -128,7 +128,10 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     base_path = Path(__file__).parent / "../../Battery-PCBA-Test/filestore"
     ff = BQStudioFileFlasher(afe, base_path / "FS_3412185A-02_A_draft1_unsealed_PF_Fet_disable_Petalite_AFE_settings.gm.fs" )
     ff.validate_file()
+    tic = perf_counter()
     ff.program_fw_file()
+    toc = perf_counter()
+    _log.info(f"DONE in {toc - tic:0.4f} seconds.")
 
     #psu1.set_output_state(0)
     sleep(1.0)
@@ -143,18 +146,20 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     print(afe.read_cell_voltages())
     print(afe.read_temperatures())
 
-    gg = BQ34Z100(BusMaster(cartridge.backyard_bus), slvAddress=0x55, pec=False)
-    print(gg.get_voltage_scale())
-    print(gg.get_current_scale())
-    print(gg.get_energy_scale())
-    print(gg.voltage())
-    print(gg.temperature())
+    # gg = BQ34Z100(BusMaster(cartridge.backyard_bus), slvAddress=0x55, pec=False)
+    # print(gg.get_voltage_scale())
+    # print(gg.get_current_scale())
+    # print(gg.get_energy_scale())
+    # print(gg.voltage())
+    # print(gg.temperature())
 
 
-    ff2 = BQStudioFileFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.bq.fs" )
-    ff2.validate_file()
-    ff2.program_fw_file()
-
+    # ff2 = BQStudioFileFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.bq.fs" )
+    # ff2.validate_file()
+    # tic = perf_counter()
+    # ff2.program_fw_file()
+    # toc = perf_counter()
+    # _log.info(f"DONE in {toc - tic:0.4f} seconds.")
 
     cartridge.reset_mux()
     vsim.power_down_all_cell_channels()

@@ -27,7 +27,7 @@ class BusmasterVerificationError(BusmasterError):
 
 #--------------------------------------------------------------------------------------------------
 class BusMaster:
-    
+
     def __init__(self, i2c: I2CBase, retry_limit: int = 1, verify_rounds: int = 3, pause_us: int = 50) -> None:
         """Class providing the SMBus master protocols.
 
@@ -380,6 +380,7 @@ class BusMaster:
         # buffer = [w & 0xff, (w >> 8) & 0xff] # this is platform independent (w could be little or big endian)
         ok = self.vWriteBytes(slvAddress, cmd, buffer, use_pec=use_pec)  # includes the read-back verify
         return ok
+
 
 
 #--------------------------------------------------------------------------------------------------

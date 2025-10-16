@@ -373,6 +373,8 @@ def test_crc():
         answer = exe_command(sock, command).rstrip('\n')
         print(f"Command \"{command}\" executed with response: {answer}\n")
 
+#--------------------------------------------------------------------------------------------------
+
 if __name__ == "__main__":
 
     #main()
@@ -384,3 +386,5 @@ if __name__ == "__main__":
     #ap.send_all_files()
     ap.verify_all_files_on_programmer("HEINZ", "3AA53EA21D5071EEB02D283137009616")
     #
+
+# END OF FILE
