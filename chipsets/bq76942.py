@@ -11,6 +11,7 @@ __version__ = "0.5.0"
 # pylint: disable=line-too-long,C0103,C0321,C0413,W0703,W0107,R1702,R0904
 
 from itertools import combinations, chain
+from multiprocessing import Value
 from typing import List, Tuple
 from time import sleep, monotonic_ns
 from binascii import hexlify
@@ -87,7 +88,7 @@ class BQ76942:
     includes a long-term timeout if the SCL pin is detected low for more than 2 seconds, which applies whether or
     not the timeouts above are enabled.
     """
-    def __init__(self, i2c: I2CBase, slvAddress: int = 0x08, pec: bool = True, retry_limit: int = 1, verify_rounds: int = 3, pause_us: int = 50) -> None:
+    def __init__(self, i2c: I2CBase, slvAddress: int = 0x08, pec: bool = True, retry_limit: int = 3, verify_rounds: int = 3, pause_us: int = 50) -> None:
         """_summary_
 
         Args:
@@ -279,8 +280,8 @@ class BQ76942:
             bool: True if the write was successful, False otherwise.
         """
 
+        buf = int(value).to_bytes(2, "little" )
         if 1:
-            buf = int(value).to_bytes(2, "little" )
             return self.writeBytes(self.address, int(reg), bytearray(buf), use_pec=self.pec)
         else:
             if not self.writeBytes(self.address, reg,     bytearray(buf[:1]), use_pec=self.pec):
@@ -322,18 +323,55 @@ class BQ76942:
     # ----------------------------------------------------------------------------------------------
 
 
-    def read_control_status(self) -> Tuple[int, str]:
-        #buf, ok = self._read_word_helper(0x00)
+    def _control_status_to_dict(self, buf: bytearray, hexi: None | bool | str = None) -> OrderedDict[str, bytes | bytearray | str | int]:
+        os = unpack("<H", buf)[0]
+        return OrderedDict({
+            "block": _maybe_hexlify(buf, hexi),
+            # data come little endian
+            "RSVD":      ((os>>3) & (1<<12)-1),
+            "DEEPSLEEP":  ((os>>2) & 1),
+            "LD_TIMEOUT": ((os>>1) & 1),
+            "LD_ON":      ((os>>0) & 1),
+        })
+
+    def read_control_status(self) -> Tuple[int, bool]:
         buf, ok = self.readBytes(self.address, 0x00, 2)
         if ok:
-            return unpack("<H", buf)[0], hexlify(buf).decode()
+            return self._control_status_to_dict(buf), True
+        else:
+            None, False
 
 
-    def read_battery_status(self) -> Tuple[int, str]:
+    def _battery_status_to_dict(self, buf: bytearray, hexi: None | bool | str = None) -> OrderedDict[str, bytes | bytearray | str | int]:
+        os = unpack("<H", buf)[0]
+        return OrderedDict({
+            "block": _maybe_hexlify(buf, hexi),
+            # data come little endian
+            "SLEEP":     ((os>>15) & 1),
+            "RSVD1":     ((os>>14) & 1),
+            "SDM":       ((os>>13) & 1),
+            "PF":        ((os>>12) & 1),
+            "SS":        ((os>>11) & 1),
+            "FUSE":      ((os>>10) & 1),
+            "SEC1":      ((os>>9) & 1),
+            "SEC0":      ((os>>8) & 1),
+            "OTPB":      ((os>>7) & 1),
+            "OTPW":      ((os>>6) & 1),
+            "COW_CHK":   ((os>>5) & 1),
+            "WD":        ((os>>4) & 1),
+            "POR":       ((os>>3) & 1),
+            "SLEEP_EN":  ((os>>2) & 1),
+            "PCHG_MODE": ((os>>1) & 1),
+            "CFGUPDATE": ((os>>0) & 1),
+        })
+
+    def read_battery_status(self) -> Tuple[int, bool]:
         #buf, ok = self._read_word_helper(0x12)
         buf, ok = self.readBytes(self.address, 0x12, 2)
         if ok:
-            return unpack("<H", buf)[0], hexlify(buf).decode()
+            return self._battery_status_to_dict(buf), True
+        else:
+            return None, False
 
 
     def write_subcommand(self, subcmd: int, data: bytes | bytearray = None, timeout: float = 3.0) -> bool:
@@ -359,11 +397,11 @@ class BQ76942:
             sleep(0.005)
 
         if data:
-            checksum = (subcmd & 0xFF) + ((subcmd >> 8) & 0xFF) + sum(data)
+            checksum = (subcmd & 0xFF) + ((subcmd >> 8) & 0xFF) + data if isinstance(data, int) else sum(data)
             #for b in data:
             #    checksum += b   # generate the checksum by simple addition
             checksum = ~checksum & 0xFF  # bitwise inverse
-            if not self.writeBytes(self.address, 0x40, data, pec=self.pec):  # write data to the data registers starting at 0x40
+            if not self.writeBytes(self.address, 0x40, data, use_pec=self.pec):  # write data to the data registers starting at 0x40
                 return False
             # activate the data transfer of the command
             ctrl = (checksum | ((len(data) + 4) << 8)).to_bytes(2, "little")  # length of data + checksum byte + length byte + the two subcommandbytes
@@ -418,7 +456,7 @@ class BQ76942:
         #if checksum != incoming_cs:
         #    raise IOError("Checksum mismatch reading from BQ76942.")
         # success
-        return tuple(buf)
+        return buf
 
 
     #----------------------------------------------------------------------------------------------
@@ -467,6 +505,8 @@ class BQ76942:
         regadr = 0x68 # base register address for Temperature 1
         for i in range(10):  # 3 internal + 1 external temperature:
             raw, ok = self.readWord(regadr, signed=True)
+            if raw is None:
+                raise IOError("Could not read from IC.")
             temp = (raw * scale[i]) - KELVIN_ZERO_DEGC  # scale returned value into °C
             temperatures += (temp,)
             #raw += (_maybe_hexlify(tckelvin.to_bytes(2, "little"), hexi),)
@@ -543,7 +583,16 @@ class BQ76942:
         return self._safety_status
 
 
-    def read_dastatus(self, hexi: bool | str | None = None) -> tuple:
+    def read_dastatus(self, hexi: bool | str | None = None) -> Tuple[List[int], List[int]]:
+        """Reads all DAStatus 1 to 4
+
+        Args:
+            hexi (bool | str | None, optional): _description_. Defaults to None.
+
+        Returns:
+            Tuple[List[int], List[int]]: _description_
+        """
+
         buf1 = self.read_subcommand(0x0071)  # DASTATUS1
         buf2 = self.read_subcommand(0x0072)  # DASTATUS2
         buf3 = self.read_subcommand(0x0073)  # DASTATUS3
@@ -555,12 +604,263 @@ class BQ76942:
         self.cell_current_counts = all_items[1::2]  # every 2nd is a current count, starting from 2nd element
         #print(self.cell_voltage_counts)
         #print(self.cell_current_counts)
-        # for buffer in [buf1, buf2, buf3, buf4]:
-        #      self.cell_voltage_counts += tuple([unpack_from(_fmt, bytes(buffer), 0 + i * 4)[0] for i in range(4)])  # cells 1 - 16
-        #      self.cell_current_counts += tuple([unpack_from(_fmt, bytes(buffer), 4 + i * 4)[0] for i in range(4)])  # cells 1 - 16
-        # print(self.cell_voltage_counts)
-        # print(self.cell_current_counts)
         return self.cell_voltage_counts, self.cell_current_counts
+
+
+    def read_cal1(self, hexi: bool | str | None = None) -> dict:
+        """READ_CAL1 - Mix of different calibration values.
+
+        Args:
+            hexi (bool | str | None, optional): _description_. Defaults to None.
+
+        Returns:
+            dict: _description_
+        """
+        buf = self.read_subcommand(0xF081)
+        self.calibration_counts = OrderedDict({
+                "block": _maybe_hexlify(buf, hexi),
+                # data come little endian
+                "calibration_data_counter": unpack_from("<H", buf, 0),  #
+                "cc2_counts": unpack_from("<l", buf, 2),  #
+                "pack_pin_adc_counts": unpack_from("<h", buf, 6),  #
+                "tos_adc_counts": unpack_from("<h", buf, 8),  #
+                "ld_pin_adc_counts": unpack_from("<h", buf, 10),  #
+            })
+        return self.calibration_counts
+
+
+    def read_cell_gain(self) -> list:
+        buf = bytearray()
+        for i in range(18):
+            buf += self.read_subcommand(0x9180 + i*2)
+        _fmt = "<h"  # signed short, 2 bytes
+        self.cell_gain = [n[0] for n in list(chain.from_iterable(iter_unpack(_fmt, buf)))]
+        return self.cell_gain
+
+
+    def write_cell_gain(self, cell_gain_list: list = None) -> bool:
+        if cell_gain_list is None:
+            if self.cell_gain is None:
+                raise ValueError("Need to provide a cell gain calibration list to write.")
+            cell_gain_list = self.cell_gain
+        if len(cell_gain_list) > 17:
+            raise ValueError(f"A maximum if 17 values is allowed, but presented {len(cell_gain_list)}.")
+        _fmt = "<h"  # signed short, 2 bytes
+        for i in range(len(cell_gain_list)):
+            buf = pack(_fmt, cell_gain_list[i])
+            if not self.write_subcommand(0x9180 + i*2, data=buf):
+                return False
+        return True
+
+
+    def read_pack_gain(self) -> int:
+        buf = self.read_subcommand(0x91A0)
+        return unpack("<H", buf)[0]
+
+    def write_pack_gain(self, value: int) -> bool:
+        buf = pack("<H", value)
+        return self.write_subcommand(0x91A0, data=buf)
+
+
+    def read_tos_gain(self) -> int:
+        buf = self.read_subcommand(0x91A2)
+        return unpack("<H", buf)[0]
+
+    def write_tos_gain(self, value: int) -> bool:
+        buf = pack("<H", value)
+        return self.write_subcommand(0x91A2, data=buf)
+
+
+    def read_ld_gain(self) -> int:
+        buf = self.read_subcommand(0x91A4)
+        return unpack("<H", buf)[0]
+
+    def write_ld_gain(self, value: int) -> bool:
+        buf = pack("<H", value)
+        return self.write_subcommand(0x91A4, data=buf)
+
+
+    def read_vdiv_gain(self) -> int:
+        buf = self.read_subcommand(0x91B2)
+        return unpack("<h", buf)[0]  # signed
+
+    def write_vdiv_gain(self, value: int) -> bool:
+        buf = pack("<H", value)
+        return self.write_subcommand(0x91B2, data=buf)
+
+
+    def read_adc_gain(self) -> int:
+        buf = self.read_subcommand(0x91A6)
+        return unpack("<h", buf)[0]  # signed
+
+    def write_adc_gain(self, value: int) -> bool:
+        buf = pack("<H", value)
+        return self.write_subcommand(0x91A6, data=buf)
+
+
+    def read_cc_gain(self) -> float:
+        buf = self.read_subcommand(0x91A8)
+        return unpack("<f", buf)[0]  # float
+
+    def write_cc_gain(self, cc_gain: float) -> bool:
+        buf = pack("<f", cc_gain)
+        return self.write_subcommand(0x91A8, data=buf)
+
+
+    def read_capacity_gain(self) -> int:
+        buf = self.read_subcommand(0x91AC)
+        return unpack("<h", buf)[0]  # signed
+
+    def write_capacity_gain(self, value: int) -> bool:
+        buf = pack("<h", value)
+        return self.write_subcommand(0x91AC, data=buf)
+
+
+    def read_coulomb_counter_offset_samples(self) -> int:
+        buf = self.read_subcommand(0x91C6)
+        return unpack("<H", buf)[0]  # unsigned
+
+    def write_coulomb_counter_offset_samples(self, value: int) -> bool:
+        buf = pack("<H", value)
+        return self.write_subcommand(0x91C6, data=buf)
+
+
+    def read_board_offset(self) -> int:
+        buf = self.read_subcommand(0x91C8)
+        return unpack("<h", buf)[0]  # signed
+
+    def write_board_offset(self, value: int) -> bool:
+        buf = pack("<h", value)
+        return self.write_subcommand(0x91C8, data=buf)
+
+
+    def read_temperature_calibration_offsets(self, hexi: bool | str | None = None) -> tuple:
+        buf = bytearray()
+        for i in range(10):
+            buf += self.read_subcommand(0x91CA + i)
+        self.temperature_calibration_offsets = OrderedDict({
+                "block": _maybe_hexlify(buf, hexi),
+                # data come little endian
+                "internal_temperature_offset": unpack_from("<b", buf, 0)[0],
+                "cfetoff_temp_offset": unpack_from("<b", buf, 1)[0],
+                "dfetoff_temp_offset": unpack_from("<b", buf, 2)[0],
+                "ts1_temp_offset": unpack_from("<b", buf, 3)[0],
+                "ts2_temp_offset": unpack_from("<b", buf, 4)[0],
+                "ts3_temp_offset": unpack_from("<b", buf, 5)[0],
+                "hdq_temp_offset": unpack_from("<b", buf, 6)[0],
+                "dchg_temp_offset": unpack_from("<b", buf, 7)[0],
+                "ddsg_temp_offset": unpack_from("<b", buf, 8)[0],
+            })
+        return self.temperature_calibration_offsets
+
+
+    def write_temperature_calibration_offsets(self, hexi: bool | str | None = None, temperature_calibration_offsets: dict | List[float] = None) -> tuple:
+        """_summary_
+
+        Args:
+            hexi (bool | str | None, optional): _description_. Defaults to None.
+            temperature_calibration_offsets (dict | List[float], optional): Expects a list of celsius offsets as floats. Defaults to None.
+
+        Raises:
+            ValueError: _description_
+            ValueError: _description_
+            ValueError: _description_
+
+        Returns:
+            tuple: _description_
+        """
+
+        def _celsius_to_tenth_of_kelvin_as_int(value) -> int:
+            """converts a Celsius degree float value into an offset of 0.1 KELVIN or Celsius scaled integer.
+
+            Args:
+                value (_type_): _description_
+
+            Returns:
+                int: _description_
+            """
+            v = int(round((value * 10), 0))
+            if v > 127: v = 127
+            if v < -128: v = -128
+            return v
+
+
+        if temperature_calibration_offsets is None:
+            if self.temperature_calibration_offsets is None:
+                raise ValueError("Need to provide a temperature offset calibration dict to write.")
+            temperature_calibration_offsets = self.temperature_calibration_offsets
+        if isinstance(temperature_calibration_offsets, (tuple, list)):
+            if len(temperature_calibration_offsets) > 10:
+                raise ValueError("Length of list 'temperature_calibration_offsets' must be maximum of 10.")
+            buf = bytearray([pack("<b", _celsius_to_tenth_of_kelvin_as_int(n))[0] for n in temperature_calibration_offsets])
+        elif isinstance(temperature_calibration_offsets, dict):
+            buf = bytearray([pack("<b", _celsius_to_tenth_of_kelvin_as_int(temperature_calibration_offsets[n]))[0]
+                             for n in
+                ["internal_temperature_offset",
+                "cfetoff_temp_offset",
+                "dfetoff_temp_offset",
+                "ts1_temp_offset",
+                "ts2_temp_offset",
+                "ts3_temp_offset",
+                "hdq_temp_offset",
+                "dchg_temp_offset",
+                "ddsg_temp_offset"]
+            ])
+        else:
+            raise ValueError("Argument 'temperature_calibration_offsets' must be either a list or a dict")
+        for i in range(10):
+            if not self.write_subcommand(0x91CA + i, data=buf[i]):
+                return False
+        return True
+
+
+
+    def calibrate_cell_over_voltage(self) -> bool:
+        """COV Calibration.
+        Apply the desired value for the cell over-voltage threshold to device cell inputs.
+        Calibration will use the voltage applied to the top cell of the device.
+        For example, Apply 4350mV
+
+        Returns:
+            bool: _description_
+        """
+
+        ok = True
+        ok = ok and self.enter_config_update_mode()
+        ok = ok and self.write_subcommand(0xF091)  # execute CAL_COV()
+        ok = ok and self.exit_config_update_mode()
+        return ok
+
+    def calibrate_cell_under_voltage(self) -> bool:
+        """CUV Calibration
+        Apply the desired value for the cell under-voltage threshold to device cell inputs.
+        Calibration will use the voltage applied to the top cell of the device.
+        For example, Apply 2400mV.
+
+        Returns:
+            bool: _description_
+        """
+        ok = True
+        ok = ok and self.enter_config_update_mode()
+        ok = ok and self.write_subcommand(0xF090)  # execute CAL_CUV()
+        ok = ok and self.exit_config_update_mode()
+        return ok
+
+
+
+    def enter_config_update_mode(self) -> bool:
+        if not self.writeWord(0x3E, 0x0090):  # write Subcommand to the registers 0x3E and 0x3F
+            return False
+        ready = False
+        while not ready:
+            bs, _ = self.read_battery_status()
+            ready = bs["CFGUPDATE"]
+            #ready = (bs & 1)
+        return True
+
+
+    def exit_config_update_mode(self) -> bool:
+        return self.write_subcommand(0x0092)
 
 
     def disable_sleepmode(self) -> bool:

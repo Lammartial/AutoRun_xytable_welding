@@ -7,6 +7,7 @@ from re import A
 from typing import Tuple
 from time import sleep, perf_counter
 from pathlib import Path
+from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
 from rrc.eth2can import CANBus
 from rrc.eth2i2c import I2CPort
 from rrc.i2cbus import BusMux, I2CMuxedBus
@@ -120,10 +121,16 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
 
     afe = BQ76942(cartridge.backyard_bus, slvAddress=0x08, pec=True)
-    afe.disable_checksum()
+    #afe.disable_checksum()
+
+    print(afe.read_control_status())
+    print(afe.read_battery_status())
 
     print(afe.read_safety_status(hexi=True))
     print(afe.read_dastatus(hexi=True))
+
+    afe.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets
+
 
     base_path = Path(__file__).parent / "../../Battery-PCBA-Test/filestore"
     ff = BQStudioFileFlasher(afe, base_path / "FS_3412185A-02_A_draft1_unsealed_PF_Fet_disable_Petalite_AFE_settings.gm.fs" )
@@ -136,15 +143,44 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     #psu1.set_output_state(0)
     sleep(1.0)
 
-    print(afe.read_control_status())
-    print(afe.read_battery_status())
 
     print(afe.read_subcommand(0x00a0))
-
     print(afe.read_subcommand(0x9234))
-
     print(afe.read_cell_voltages())
     print(afe.read_temperatures())
+
+
+    # === calibrate temperature ===
+    # 1) apply known temperature TEMP(cal)
+    temp_cal = 21.4
+    # 2) measure the temperatures
+    t_meas = [0.0] * 10
+    for n in range(5):
+        t0, _ = afe.read_temperatures()
+        for i in range(len(t_meas)):
+            t_meas[i] += t0[i]
+        sleep(0.050)
+    t_meas = [t/5 for t in t_meas]
+    # 3) calculate the offsets
+    #temp_offsets = [round((((temp_cal - t) + KELVIN_ZERO_DEGC) * 10), 0) for t in t_meas]
+    temp_offsets = [(temp_cal - t)  for t in t_meas]
+    # write the calibration values
+    afe.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets
+    afe.enter_config_update_mode()
+    afe.write_temperature_calibration_offsets(temp_offsets)
+    afe.exit_config_update_mode()
+    print(afe.read_temperature_calibration_offsets(hexi=True))
+    print(afe.read_temperatures())  # re-check temperature measurement
+
+
+    # === Current calibration ===
+
+    afe.disable_sleepmode()
+    # Apply a known current I_CAL of 0mA
+    # ...
+    sleep(0.1) # wait 100ms
+    cc = afe.read_cal1()
+
 
     # gg = BQ34Z100(BusMaster(cartridge.backyard_bus), slvAddress=0x55, pec=False)
     # print(gg.get_voltage_scale())
@@ -194,7 +230,6 @@ if __name__ == "__main__":
     psu1.set_output_state(0)
     psu2.set_output_state(0)
 
-
     if SOCKET == 0:
         scanner = create_barcode_scanner(f"{LINE_NETWORK}.31:2000")  # socket 0
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:3000")  # PCBA test, socket 0
@@ -221,6 +256,8 @@ if __name__ == "__main__":
     vsim = CellVoltageSimulation(I2CMuxedBus(i2cbus, mux, 4))
     vsim.initialize()
     vsim.power_down_all_cell_channels()
+
+    sleep(0.5)
 
     for c in range(8,0,-1):
         mux.setChannel(c)
