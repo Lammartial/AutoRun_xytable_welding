@@ -120,7 +120,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     print("DAQ - channel 9", daq.get_VDC(9))  # should be +1.8v
 
 
-    afe = BQ76942(cartridge.backyard_bus, slvAddress=0x08, pec=True)
+    afe = BQ76942(cartridge.backyard_bus, slvAddress=0x08, pec=True, retry_limit=5)
     #afe.disable_checksum()
 
     print(afe.read_control_status())
@@ -144,8 +144,8 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     sleep(1.0)
 
 
-    print(afe.read_subcommand(0x00a0))
-    print(afe.read_subcommand(0x9234))
+    #print(afe.read_subcommand(0x00a0))
+    #print(afe.read_subcommand(0x9234))
     print(afe.read_cell_voltages())
     print(afe.read_temperatures())
 
@@ -179,8 +179,61 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     # Apply a known current I_CAL of 0mA
     # ...
     sleep(0.1) # wait 100ms
-    cc = afe.read_cal1()
+    value = 0
+    for i in range(10):        
+        cc = afe.read_cal1()
+        value += cc["tos_adc_counts"]
+        sleep(0.1)
+    print(cc)
+    value = 64 * int(round(value / 10))
+    print(value)
+    board_offset = -(value & 0x8000) | (value & 0x7fff)
+    if board_offset < 0:
+        board_offset = 0xFFFF + board_offset
+    print(board_offset)
 
+    # Apply 1A discharge current through sense resistor
+    # ...
+     
+    value = 0
+    for i in range(10):
+        cc = afe.read_cal1()
+        value += cc["tos_adc_counts"]
+        sleep(0.1)
+    print(cc)
+    value = int(round(value / 10))
+    cc_counts_a = -(value & 0x8000) | (value & 0x7fff)
+    print(cc_counts_a)
+
+    # Apply 2A discharge current through sense resistor
+    # ...
+    
+    value = 0
+    for i in range(10):
+        cc = afe.read_cal1()
+        value += cc["tos_adc_counts"]
+        sleep(0.1)
+    print(cc)
+    value = int(round(value / 10))
+    cc_counts_b = -(value & 0x8000) | (value & 0x7fff)
+    print(cc_counts_b)
+
+    cc_gain_float = (-2.0 + 1.0 ) * 1e+3 / (cc_counts_b - cc_counts_a)
+    capacity_gain = afe.dec2flash(298261.6178 * cc_gain_float)
+
+    # === COV/CUV calibration ===
+    # apply desired COV voltage value to device cell inputs
+    # psu2... vsim...
+    #afe.enter_config_update_mode()
+    #afe.calibrate_cell_over_voltage()
+    #afe.exit_config_update_mode()
+
+
+    # apply desired CUV voltage value to device cell inputs
+    # psu2... vsim...
+    #afe.enter_config_update_mode()
+    #afe.calibrate_cell_under_voltage()
+    #afe.exit_config_update_mode()
 
     # gg = BQ34Z100(BusMaster(cartridge.backyard_bus), slvAddress=0x55, pec=False)
     # print(gg.get_voltage_scale())

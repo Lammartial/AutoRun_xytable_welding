@@ -10,6 +10,7 @@ __version__ = "0.5.0"
 
 # pylint: disable=line-too-long,C0103,C0321,C0413,W0703,W0107,R1702,R0904
 
+import math 
 from itertools import combinations, chain
 from multiprocessing import Value
 from typing import List, Tuple
@@ -88,7 +89,7 @@ class BQ76942:
     includes a long-term timeout if the SCL pin is detected low for more than 2 seconds, which applies whether or
     not the timeouts above are enabled.
     """
-    def __init__(self, i2c: I2CBase, slvAddress: int = 0x08, pec: bool = True, retry_limit: int = 3, verify_rounds: int = 3, pause_us: int = 50) -> None:
+    def __init__(self, i2c: I2CBase, slvAddress: int = 0x08, pec: bool = True, retry_limit: int = 1, pause_us: int = 50) -> None:
         """_summary_
 
         Args:
@@ -103,8 +104,7 @@ class BQ76942:
         self.pec = bool(pec)
         self.pause_us = int(pause_us)  # in micro seconds
         self.retry_limit = int(retry_limit)  # number of read repetitions, must be integer in range 1 .. 10
-        self.verify_rounds = int(verify_rounds)  # number of read repetitions, must be 1,3,5,7,9, etc. (odd numbers > 0)
-
+    
     # --------------------------------------------
 
     def __str__(self) -> str:
@@ -126,17 +126,7 @@ class BQ76942:
             raise ValueError("Retry count limit must be an integer 1 ... 1000")
         self._retry_limit = value
 
-    # ----------------------------------------------------------------------------------------------
-    @property
-    def verify_rounds(self) -> int:
-        return self._verify_rounds
-
-    @verify_rounds.setter
-    def verify_rounds(self, value: int):
-        if not (isinstance(value, int) and (value >= 1) and ((value & 1) == 1)):
-            raise ValueError("Retry count limit must be an odd number > 0 like 1,3,5,7,9,...")
-        self._verify_rounds = value
-
+    
     # ----------------------------------------------------------------------------------------------
     # core functions (all others a reusing these ones)
     def writeBytes(self, slvAddress: int, cmd: int, buffer: bytes | bytearray, use_pec: bool = False) -> bool:
@@ -366,10 +356,10 @@ class BQ76942:
         })
 
     def read_battery_status(self) -> Tuple[int, bool]:
-        #buf, ok = self._read_word_helper(0x12)
         buf, ok = self.readBytes(self.address, 0x12, 2)
         if ok:
-            return self._battery_status_to_dict(buf), True
+            self._battery_status = self._battery_status_to_dict(buf)
+            return self._battery_status, True
         else:
             return None, False
 
@@ -387,16 +377,17 @@ class BQ76942:
         if not self.writeWord(0x3E, subcmd):  # write Subcommand to the registers 0x3E and 0x3F
             return False
 
-        t0 = monotonic_ns()  # common timeout over the rest of the function
-        response = 0xFFFF
-        while (response != subcmd) and (response != 0x0000):  # the latter is for NO DATA commands
-            response, ok = self.readWord(0x3E)
-            t1 = monotonic_ns()
-            if (t1 - t0) > timeout * 1e+9:  # scale timeout to ns
-               raise TimeoutError("While wait for subcommand to complete.")
-            sleep(0.005)
-
         if data:
+            # need to wait untile the chip is ready to take the data
+            t0 = monotonic_ns()  # common timeout over the rest of the function
+            response = 0xFFFF
+            while (response != subcmd) and (response != 0x0000):  # the latter is for NO DATA commands
+                response, ok = self.readWord(0x3E)
+                t1 = monotonic_ns()
+                if (t1 - t0) > timeout * 1e+9:  # scale timeout to ns
+                    raise TimeoutError("While wait for subcommand to complete.")
+                sleep(0.005)
+        
             checksum = (subcmd & 0xFF) + ((subcmd >> 8) & 0xFF) + data if isinstance(data, int) else sum(data)
             #for b in data:
             #    checksum += b   # generate the checksum by simple addition
@@ -404,13 +395,17 @@ class BQ76942:
             if not self.writeBytes(self.address, 0x40, data, use_pec=self.pec):  # write data to the data registers starting at 0x40
                 return False
             # activate the data transfer of the command
-            ctrl = (checksum | ((len(data) + 4) << 8)).to_bytes(2, "little")  # length of data + checksum byte + length byte + the two subcommandbytes
+            ctrl = (checksum | ((len(data) + 4) << 8))  # length of data + checksum byte + length byte + the two subcommandbytes
             if not self.writeWord(0x60, ctrl):  # write checksum to the checksum register 0x60
                 return False
+        else:
+            pass  # do not wait for anything
         return True
 
 
-    def read_subcommand(self, subcmd: int, length: int = 0, timeout: float = 5.0, hexi: None | bool | str = None) -> bytes | bytearray | str:
+    def read_subcommand(self, subcmd: int, length: int = 0, timeout: float = 5.0, 
+                        pause_before_data_available: float = None, 
+                        hexi: None | bool | str = None) -> bytes | bytearray | str:
         """Read data from a subcommand.
 
         Args:
@@ -427,6 +422,9 @@ class BQ76942:
             raise ValueError("Subcommand must be a 16-bit value (0-65535).")
         if not self.writeWord(0x3E, subcmd):  # write Subcommand to the registers 0x3E and 0x3F
             return False
+
+        if pause_before_data_available is not None:
+            sleep(pause_before_data_available)
 
         t0 = monotonic_ns()  # common timeout over the rest of the function
         response = 0xFFFF
@@ -808,9 +806,11 @@ class BQ76942:
             ])
         else:
             raise ValueError("Argument 'temperature_calibration_offsets' must be either a list or a dict")
-        for i in range(10):
-            if not self.write_subcommand(0x91CA + i, data=buf[i]):
-                return False
+        #for i in range(10):
+            # if not self.write_subcommand(0x91CA + i, data=buf[i:i+1]):  # pass singe byte as bytearray
+            #     return False
+        if not self.write_subcommand(0x91CA, data=buf):
+            return False
         return True
 
 
@@ -847,28 +847,101 @@ class BQ76942:
         return ok
 
 
+    def wait_for_battery_status_flag(self, bs_key: str, state: bool | int, retries: int = 20, pause_on_retry: float = 0.1) -> bool:
+        """Wait for battery status flags == state."""
+        retries = int(retries)
+        while (retries >= 0):
+            try:
+                _, ok = self.read_battery_status()  # => update the self._operation_status attribute
+                if bool(self._battery_status[bs_key]) == bool(state):
+                    break
+                sleep(pause_on_retry)
+            except OSError as ex:
+                sleep(pause_on_retry)
+            finally:
+                retries -= 1
+        return bool(self._battery_status[bs_key]) == bool(state)
+
 
     def enter_config_update_mode(self) -> bool:
-        if not self.writeWord(0x3E, 0x0090):  # write Subcommand to the registers 0x3E and 0x3F
+        if not self.write_subcommand(0x0090):  # write Subcommand to the registers 0x3E and 0x3F
             return False
-        ready = False
-        while not ready:
-            bs, _ = self.read_battery_status()
-            ready = bs["CFGUPDATE"]
-            #ready = (bs & 1)
-        return True
+        return self.wait_for_battery_status_flag("CFGUPDATE", 1)
 
 
     def exit_config_update_mode(self) -> bool:
-        return self.write_subcommand(0x0092)
+        if not self.write_subcommand(0x0092):
+            return False
+        return self.wait_for_battery_status_flag("CFGUPDATE", 0)
 
 
+    
     def disable_sleepmode(self) -> bool:
         return self.write_subcommand(0x009a)
 
 
     def enable_sleepmode(self) -> bool:
         return self.write_subcommand(0x0099)
+
+
+    def read_otp_wr_check(self) -> Tuple[int, int]:
+        buf = self.read_subcommand(0x00a0)
+        results = unpack("<B", buf)[0]
+        data_fail_addr = unpack_from("<H", buf, 1)[0]
+        return results, data_fail_addr
+    
+
+    def write_otp(self) -> Tuple[int, int]:
+        """This writes to the OTP. 
+        
+        !! PAY ATTENTION NOT TO CALL WITH UNREADY DATA !!
+
+        Returns:
+            Tuple[int, int]: _description_
+        """
+        
+        buf = self.read_subcommand(0x00a0, pause_before_data_available=0.1)  # simulation
+        #buf = self.read_subcommand(0x00a1, pause_before_data_available=0.1)  # hot function
+        results = unpack("<B", buf)[0]
+        data_fail_addr = unpack_from("<H", buf, 1)[0]
+        return results, data_fail_addr
+    
+
+    
+    def dec2flash(self, value):    
+        if value == 0:
+            value += 0.0000001    # avoid log of zero
+        if value < 0: 
+            bNegative = 1
+            value *= -1
+        else:
+            bNegative = 0
+        exponent = int( (math.log(value)/math.log(2)) ) 
+        MSB = exponent + 127        # exponent bits 
+        mantissa = value / (2**exponent)
+        mantissa = (mantissa - 1) / (2**-23)
+        if (bNegative == 0):
+            mantissa = int(mantissa) & 0x7fffff   # remove sign bit if number is positive
+        result = hex(int(round(mantissa + MSB * 2**23))) 
+        return result
+
+
+    def flash2dec(value):        
+        exponent = exponent = 0xff & (value/(2**23))  # exponent is most significant byte after sign bit 
+        mantissa = value % (2**23)
+        if (0x80000000 & value == 0):   # check if number is positive
+            isPositive = 1
+        else:
+            isPositive = 0
+        mantissa_f = 1.0 
+        mask = 0x400000
+        for i in range(0,23):
+            if ((mask >> i) & mantissa):
+                mantissa_f += 2**(-1*(i+1)) 
+        result = mantissa_f * 2**(exponent-127) 
+        if not(isPositive):
+            result *= -1
+        return result
 
 
 
