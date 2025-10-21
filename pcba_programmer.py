@@ -24,7 +24,7 @@ from rrc.chipsets.bq40z50 import BQ40Z50R1, BQ40Z50R2
 from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
 from rrc.dsp.interface import DspInterface, DspInterface_SIMULATION, DSPInterfaceError
 from rrc.ui.progress_bar import center as center_of_window
-from rrc.chipsets.bq_flasher import BQStudioFileFlasher
+from rrc.chipsets.bq_flasher import BQStudioFileFlexFlasher
 
 # multi tasking
 import asyncio
@@ -124,7 +124,7 @@ PG_COLOR_PROCESS = "blue"
 PG_COLOR_PASS = "green"
 PG_COLOR_FAIL = "red"
 
-class MultiBQStudioFileFlasher(BQStudioFileFlasher):
+class MultiBQStudioFileFlasher(BQStudioFileFlexFlasher):
 
     def __init__(self, resource_str: str, socket: int, chipset: str = "BQ40Z50R1",  simulate_programming: bool = False) -> None:
         bat = None

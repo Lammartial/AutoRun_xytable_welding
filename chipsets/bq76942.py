@@ -10,7 +10,7 @@ __version__ = "0.5.0"
 
 # pylint: disable=line-too-long,C0103,C0321,C0413,W0703,W0107,R1702,R0904
 
-import math 
+import math
 from itertools import combinations, chain
 from multiprocessing import Value
 from typing import List, Tuple
@@ -104,7 +104,7 @@ class BQ76942:
         self.pec = bool(pec)
         self.pause_us = int(pause_us)  # in micro seconds
         self.retry_limit = int(retry_limit)  # number of read repetitions, must be integer in range 1 .. 10
-    
+
     # --------------------------------------------
 
     def __str__(self) -> str:
@@ -126,7 +126,7 @@ class BQ76942:
             raise ValueError("Retry count limit must be an integer 1 ... 1000")
         self._retry_limit = value
 
-    
+
     # ----------------------------------------------------------------------------------------------
     # core functions (all others a reusing these ones)
     def writeBytes(self, slvAddress: int, cmd: int, buffer: bytes | bytearray, use_pec: bool = False) -> bool:
@@ -387,7 +387,7 @@ class BQ76942:
                 if (t1 - t0) > timeout * 1e+9:  # scale timeout to ns
                     raise TimeoutError("While wait for subcommand to complete.")
                 sleep(0.005)
-        
+
             checksum = (subcmd & 0xFF) + ((subcmd >> 8) & 0xFF) + data if isinstance(data, int) else sum(data)
             #for b in data:
             #    checksum += b   # generate the checksum by simple addition
@@ -403,8 +403,8 @@ class BQ76942:
         return True
 
 
-    def read_subcommand(self, subcmd: int, length: int = 0, timeout: float = 5.0, 
-                        pause_before_data_available: float = None, 
+    def read_subcommand(self, subcmd: int, length: int = 0, timeout: float = 5.0,
+                        pause_before_data_available: float = None,
                         hexi: None | bool | str = None) -> bytes | bytearray | str:
         """Read data from a subcommand.
 
@@ -618,11 +618,11 @@ class BQ76942:
         self.calibration_counts = OrderedDict({
                 "block": _maybe_hexlify(buf, hexi),
                 # data come little endian
-                "calibration_data_counter": unpack_from("<H", buf, 0),  #
-                "cc2_counts": unpack_from("<l", buf, 2),  #
-                "pack_pin_adc_counts": unpack_from("<h", buf, 6),  #
-                "tos_adc_counts": unpack_from("<h", buf, 8),  #
-                "ld_pin_adc_counts": unpack_from("<h", buf, 10),  #
+                "calibration_data_counter": unpack_from("<H", buf, 0)[0],
+                "cc2_counts": unpack_from("<l", buf, 2)[0],
+                "pack_pin_adc_counts": unpack_from("<h", buf, 6)[0],
+                "tos_adc_counts": unpack_from("<h", buf, 8)[0],
+                "ld_pin_adc_counts": unpack_from("<h", buf, 10)[0],
             })
         return self.calibration_counts
 
@@ -875,7 +875,7 @@ class BQ76942:
         return self.wait_for_battery_status_flag("CFGUPDATE", 0)
 
 
-    
+
     def disable_sleepmode(self) -> bool:
         return self.write_subcommand(0x009a)
 
@@ -889,56 +889,56 @@ class BQ76942:
         results = unpack("<B", buf)[0]
         data_fail_addr = unpack_from("<H", buf, 1)[0]
         return results, data_fail_addr
-    
+
 
     def write_otp(self) -> Tuple[int, int]:
-        """This writes to the OTP. 
-        
+        """This writes to the OTP.
+
         !! PAY ATTENTION NOT TO CALL WITH UNREADY DATA !!
 
         Returns:
             Tuple[int, int]: _description_
         """
-        
+
         buf = self.read_subcommand(0x00a0, pause_before_data_available=0.1)  # simulation
         #buf = self.read_subcommand(0x00a1, pause_before_data_available=0.1)  # hot function
         results = unpack("<B", buf)[0]
         data_fail_addr = unpack_from("<H", buf, 1)[0]
         return results, data_fail_addr
-    
 
-    
-    def dec2flash(self, value):    
+
+
+    def dec2flash(self, value):
         if value == 0:
             value += 0.0000001    # avoid log of zero
-        if value < 0: 
+        if value < 0:
             bNegative = 1
             value *= -1
         else:
             bNegative = 0
-        exponent = int( (math.log(value)/math.log(2)) ) 
-        MSB = exponent + 127        # exponent bits 
+        exponent = int( (math.log(value)/math.log(2)) )
+        MSB = exponent + 127        # exponent bits
         mantissa = value / (2**exponent)
         mantissa = (mantissa - 1) / (2**-23)
         if (bNegative == 0):
             mantissa = int(mantissa) & 0x7fffff   # remove sign bit if number is positive
-        result = hex(int(round(mantissa + MSB * 2**23))) 
+        result = hex(int(round(mantissa + MSB * 2**23)))
         return result
 
 
-    def flash2dec(value):        
-        exponent = exponent = 0xff & (value/(2**23))  # exponent is most significant byte after sign bit 
+    def flash2dec(value):
+        exponent = exponent = 0xff & (value/(2**23))  # exponent is most significant byte after sign bit
         mantissa = value % (2**23)
         if (0x80000000 & value == 0):   # check if number is positive
             isPositive = 1
         else:
             isPositive = 0
-        mantissa_f = 1.0 
+        mantissa_f = 1.0
         mask = 0x400000
         for i in range(0,23):
             if ((mask >> i) & mantissa):
-                mantissa_f += 2**(-1*(i+1)) 
-        result = mantissa_f * 2**(exponent-127) 
+                mantissa_f += 2**(-1*(i+1))
+        result = mantissa_f * 2**(exponent-127)
         if not(isPositive):
             result *= -1
         return result

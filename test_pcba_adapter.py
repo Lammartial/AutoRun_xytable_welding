@@ -7,7 +7,7 @@ from rrc.i2cbus import BusMux
 from rrc.eth2i2c import I2CPort
 from rrc.i2cbus import BusMux, I2CMuxedBus
 from rrc.smbus import BusMaster
-from rrc.chipsets import BQ40Z50R1, BQStudioFileFlasher
+from rrc.chipsets import BQ40Z50R1, BQStudioFileFlexFlasher
 from rrc.relayboard_i2cio4r4xdpdt import RelayBoard4Relay4GPIO
 from rrc.cell_voltage_simulation import CellVoltageSimulation
 from rrc.calibration_storage import CalibrationStorage
@@ -300,13 +300,13 @@ def bat_flash_test(bat: BQ40Z50R1, psu1: M3400, psu2: M3400) -> None:
 
     filestore = Path("C:/Production/Battery-PCBA-Test/filestore")
 
-    recover = BQStudioFileFlasher(bat, firmware_file=filestore / "SCD_3412036-02_B_Tansanit-B_RRC2040_Recovery.bq.fs", show_progressbar=True, test_socket=0)
+    recover = BQStudioFileFlexFlasher(bat, firmware_file=filestore / "SCD_3412036-02_B_Tansanit-B_RRC2040_Recovery.bq.fs", show_progressbar=True, test_socket=0)
 
     #flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "BQFS_3411842-05_A_Ametrie_RRC2040-2S.bq.fs", show_progressbar=True, test_socket=0)
     # Need 63.0579 seconds @100kHz with OLIMEX
     # Need 59.1005 seconds @100kHz with NCD.io
 
-    flasher = BQStudioFileFlasher(bat, firmware_file=filestore / "DFFS_3411842-05_A_Ametrie_RRC2040-2S.df.fs", show_progressbar=True, test_socket=0)
+    flasher = BQStudioFileFlexFlasher(bat, firmware_file=filestore / "DFFS_3411842-05_A_Ametrie_RRC2040-2S.df.fs", show_progressbar=True, test_socket=0)
     # Need 13.0589 seconds @100kHz with OLIMEX
     # Need 13.1763 seconds @100kHz with NCD.io
 
@@ -336,7 +336,7 @@ def bat_flash_test_debug(bat: BQ40Z50R1) -> None:
     #filestore = Path("C:/Production/Battery-PCBA-Test/filestore")
     filestore = Path("../../Battery-PCBA-Test/filestore")
 
-    recover = BQStudioFileFlasher(bat, firmware_file=filestore / "SCD_3412036-02_B_Tansanit-B_RRC2040_Recovery.bq.fs", show_progressbar=True, test_socket=0)
+    recover = BQStudioFileFlexFlasher(bat, firmware_file=filestore / "SCD_3412036-02_B_Tansanit-B_RRC2040_Recovery.bq.fs", show_progressbar=True, test_socket=0)
     tic = perf_counter()
     print(f"Start: {strftime('%H:%M:%S', localtime())}")
     #res = recover.recover_fw_file()
@@ -572,8 +572,8 @@ if __name__ == "__main__":
 
     if SOCKET == 0:
         #feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:2000", termination="\n")  # PCBA test, socket 0
-        i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101") # socket 0        
-        feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:3000")  # PCBA test, socket 0        
+        i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101") # socket 0
+        feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:3000")  # PCBA test, socket 0
         #i2cbus = I2CPort("192.168.69.77:2101") # HOMEGROW
     if SOCKET == 1:
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.33:3000")  # PCBA test, socket 1

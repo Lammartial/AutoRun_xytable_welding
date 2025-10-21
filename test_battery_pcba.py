@@ -15,7 +15,7 @@ DEBUG = 0
 from rrc.custom_logging import getLogger, logger_init
 # --------------------------------------------------------------------------- #
 
-def test_start_battery_pcba(i2cbus: I2CPort, psu1: M3400, psu2: M3400) -> Tuple[BQ40Z50R1, CellVoltageSimulation]:    
+def test_start_battery_pcba(i2cbus: I2CPort, psu1: M3400, psu2: M3400) -> Tuple[BQ40Z50R1, CellVoltageSimulation]:
     mux = BusMux(i2cbus, 0x77)
     cellsim = CellVoltageSimulation(I2CMuxedBus(i2cbus, mux, 4), 0x48)
     cellsim.initialize()
@@ -32,7 +32,7 @@ def test_start_battery_pcba(i2cbus: I2CPort, psu1: M3400, psu2: M3400) -> Tuple[
     cell_count = 3
 
     cellsim.enable_all_cell_channels()
-    
+
     # psu1.set_voltage(pack_voltage)
     # psu1.set_current_limit_negative(-current_limit)
     # psu1.set_current_limit_positive(current_limit)
@@ -61,7 +61,7 @@ def test_start_battery_pcba(i2cbus: I2CPort, psu1: M3400, psu2: M3400) -> Tuple[
         #cellsim.power_down_all_cell_channels()
         #raise Exception(_msg)
         # output off
-        psu1.set_output_state(0)            
+        psu1.set_output_state(0)
         print(_msg)
         return bat, cellsim
     # output off
@@ -92,7 +92,7 @@ def test_something(bat: BQ40Z50R1, cellsim: CellVoltageSimulation):
     sleep(1)
     bat.manufacturing_status()
     print(bat._manufacturing_status)
-    
+
     psu1.configure_sink(-0.05, 300.0, -0.08, 9.0, power_limit, 1)
     #psu1.set_output_state(1)
 
@@ -104,14 +104,14 @@ def test_something(bat: BQ40Z50R1, cellsim: CellVoltageSimulation):
     print(bat._manufacturing_status)
 
     print("AFTER FET TOGGLE:", bat.manufacturing_dastatus1())
-    
+
     #psu2.set_current_limit_negative(0)
     #psu2.set_current_limit_positive(2.0)
 
     # now we should see a voltage as Input for PSU1 in the next steps.
     print(psu1.get_all_measurements())
     print(psu2.get_all_measurements())
- 
+
     sleep(2)
     # measure battery
     print(bat.manufacturing_dastatus1())
@@ -122,7 +122,7 @@ def test_something(bat: BQ40Z50R1, cellsim: CellVoltageSimulation):
     # psu1.set_current_limit_negative(-2.0)
     # psu1.set_current_limit_positive(2.0)
     # psu1.set_current(-0.2)
-    # psu1.set_function("CC") 
+    # psu1.set_function("CC")
     # psu1.set_output_state(1)
     #psu1.configure_sink(-0.02, 50.0, -0.05, 12.0, power_limit, 1)
 
@@ -137,7 +137,7 @@ def test_something(bat: BQ40Z50R1, cellsim: CellVoltageSimulation):
     # measure
     print(bat.manufacturing_dastatus1())
 
-   
+
     sleep(2)
     psu1.set_output_state(0)
     psu2.set_output_state(0)
@@ -146,9 +146,9 @@ def test_something(bat: BQ40Z50R1, cellsim: CellVoltageSimulation):
 #--------------------------------------------------------------------------------------------------
 
 def test_program_firmware(bat: BQ40Z50R1, filename: str):
-    from rrc.chipsets.bq_flasher import BQStudioFileFlasher
+    from rrc.chipsets.bq_flasher import BQStudioFileFlexFlasher
 
-    flasher = BQStudioFileFlasher(bat, filename)
+    flasher = BQStudioFileFlexFlasher(bat, filename)
     flasher.program_fw_file()
 
 
@@ -171,7 +171,7 @@ if __name__ == "__main__":
 
     rm = ResourceManager()
     print(rm.list_resources())
-    
+
     # there is one ETH bridge for 6 PSUs
     E1206_IP_STR = "TCPIP0::172.25.101.37::inst0::INSTR"
     m3412 = [M3400(E1206_IP_STR, i) for i in range(1,7)]
@@ -192,7 +192,7 @@ if __name__ == "__main__":
         #test_something(bat, cellsim)
     except Exception as ex:
         print(ex)
-    
+
 
     for m in m3412:
         m.set_output_state(0)  # switch all outputs OFF

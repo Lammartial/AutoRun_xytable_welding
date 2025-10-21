@@ -12,7 +12,7 @@ from rrc.eth2can import CANBus
 from rrc.eth2i2c import I2CPort
 from rrc.i2cbus import BusMux, I2CMuxedBus
 from rrc.smbus import BusMaster
-from rrc.chipsets import BQ40Z50R1, BQStudioFileFlasher, BQ34Z100, BQ76942
+from rrc.chipsets import BQ40Z50R1, BQStudioFileFlexFlasher, BQ34Z100, BQ76942
 from rrc.gpio_tcal6416 import TCAL6416
 from rrc.cartridge_peta import CartridgePETA
 from rrc.relayboard_i2cio4r4xdpdt import RelayBoard4Relay4GPIO
@@ -119,6 +119,17 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     print("DAQ - channel 8", daq.get_VDC(8))  # should be +3.3v
     print("DAQ - channel 9", daq.get_VDC(9))  # should be +1.8v
 
+    cartridge.gpio.set_pin(7)  # disable gg
+
+    gg = BQ34Z100(BusMaster(cartridge.backyard_bus), slvAddress=0x55, pec=False)
+    print(gg.get_voltage_scale())
+    print(gg.get_current_scale())
+    print(gg.get_energy_scale())
+    print(gg.voltage())
+    print(gg.temperature())
+
+
+
 
     afe = BQ76942(cartridge.backyard_bus, slvAddress=0x08, pec=True, retry_limit=5)
     #afe.disable_checksum()
@@ -133,7 +144,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
 
     base_path = Path(__file__).parent / "../../Battery-PCBA-Test/filestore"
-    ff = BQStudioFileFlasher(afe, base_path / "FS_3412185A-02_A_draft1_unsealed_PF_Fet_disable_Petalite_AFE_settings.gm.fs" )
+    ff = BQStudioFileFlexFlasher(afe, base_path / "FS_3412185A-02_A_draft1_unsealed_PF_Fet_disable_Petalite_AFE_settings.gm.fs" )
     ff.validate_file()
     tic = perf_counter()
     ff.program_fw_file()
@@ -176,13 +187,16 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     # === Current calibration ===
 
     afe.disable_sleepmode()
+
     # Apply a known current I_CAL of 0mA
-    # ...
+    # psu1 and psu2 already in mode that no current is flowing
+    #
     sleep(0.1) # wait 100ms
     value = 0
-    for i in range(10):        
+    for i in range(10):
         cc = afe.read_cal1()
-        value += cc["tos_adc_counts"]
+        x = cc["tos_adc_counts"]
+        value += x
         sleep(0.1)
     print(cc)
     value = 64 * int(round(value / 10))
@@ -191,10 +205,12 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     if board_offset < 0:
         board_offset = 0xFFFF + board_offset
     print(board_offset)
+    print(afe.write_board_offset(board_offset))
 
     # Apply 1A discharge current through sense resistor
-    # ...
-     
+    psu2.configure_supply(22.090, 1.500, 50, 1)
+    psu1.configure_sink(1.000, None, 1.5, 22.0, 50, 1)
+
     value = 0
     for i in range(10):
         cc = afe.read_cal1()
@@ -206,8 +222,9 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     print(cc_counts_a)
 
     # Apply 2A discharge current through sense resistor
-    # ...
-    
+    psu2.configure_supply(22.090, 2.500, 60, 1)
+    psu1.configure_sink(2.000, None, 2.5, 22.0, 60, 1)
+
     value = 0
     for i in range(10):
         cc = afe.read_cal1()
@@ -218,6 +235,8 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     cc_counts_b = -(value & 0x8000) | (value & 0x7fff)
     print(cc_counts_b)
 
+    if (cc_counts_a == cc_counts_b) or (cc_counts_a == 0) or (cc_counts_b == 0):
+        raise ValueError(f"Current calibration results will cause div by zero error: {cc_counts_a}, {cc_counts_b}")
     cc_gain_float = (-2.0 + 1.0 ) * 1e+3 / (cc_counts_b - cc_counts_a)
     capacity_gain = afe.dec2flash(298261.6178 * cc_gain_float)
 
@@ -243,7 +262,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     # print(gg.temperature())
 
 
-    # ff2 = BQStudioFileFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.bq.fs" )
+    # ff2 = BQStudioFileFlexFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.bq.fs" )
     # ff2.validate_file()
     # tic = perf_counter()
     # ff2.program_fw_file()
@@ -302,7 +321,7 @@ if __name__ == "__main__":
 
 
     print("Change clock frequency and timeout - RRC: ",
-          str(i2cbus.i2c_change_clock_frequency(400000, timeout_ms=20)))
+          str(i2cbus.i2c_change_clock_frequency(100000, timeout_ms=20)))
     print("MASTER:", i2cbus.i2c_bus_scan())
 
     mux = BusMux(i2cbus, address=0x77)
