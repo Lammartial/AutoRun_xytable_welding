@@ -10,6 +10,7 @@ __version__ = "0.5.0"
 
 # pylint: disable=line-too-long,C0103,C0321,C0413,W0703,W0107,R1702,R0904
 
+from io import BufferedIOBase
 import math
 from itertools import combinations, chain
 from multiprocessing import Value
@@ -579,6 +580,59 @@ class BQ76942:
         self._safety_status = self._decode_safety_status(buf, hexi=hexi)
         #return _od2t(self._safety_status)  # Teststand interface
         return self._safety_status
+
+
+    def _decode_fet_status(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:
+        os = unpack_from("<B", buf, 0)[0]
+        return OrderedDict({
+            "block": _maybe_hexlify(buf, hexi),
+            # data come little endian
+            "RSVD0": ((os>>7) & 1),
+            "ALRT_PIN": ((os>>6) & 1),
+            "DDSG_PIN": ((os>>5) & 1),
+            "DCHG_PIN": ((os>>4) & 1),
+            "PDSG_FET": ((os>>3) & 1),
+            "DSG_FET": ((os>>2) & 1),
+            "PCHG_FET": ((os>>1) & 1),
+            "CHG_FET": ((os>>0) & 1),
+        })
+
+    def read_fet_status(self, hexi: bool | str| None = None) -> int:
+        buf, ok = self.readBytes(self.address, 0x7F, 1, use_pec=self.pec)
+        self._fet_status = self._decode_fet_status(buf, hexi=hexi)
+        return self._fet_status
+
+
+    def _decode_manufacturing_status(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:
+        os = unpack_from("<B", buf, 0)[0]
+        return OrderedDict({
+            "block": _maybe_hexlify(buf, hexi),
+            # data come little endian
+            "OTPW_EN": ((os>>7) & 1),
+            "PF_EN": ((os>>6) & 1),
+            "PDSG_TEST": ((os>>5) & 1),
+            "FET_EN": ((os>>4) & 1),
+            "RSVD": ((os>>3) & 1),
+            "DSG_TEST": ((os>>2) & 1),
+            "CHG_TEST": ((os>>1) & 1),
+            "PCHG_TEST": ((os>>0) & 1),
+        })
+
+    def read_manufacturing_status(self, hexi: bool | str| None = None) -> int:
+        buf = self.read_subcommand(0x0057)
+        self._fet_status = self._decode_manufacturing_status(buf, hexi=hexi)
+        return self._fet_status
+
+
+    def all_fets_on(self, hexi: bool | str| None = None) -> bool:
+        return self.write_subcommand(0x0096)
+
+    def all_fets_off(self, hexi: bool | str| None = None) -> bool:
+        return self.write_subcommand(0x0095)
+
+
+    def toggle_fet_enable(self, hexi: bool | str| None = None) -> bool:
+        return self.write_subcommand(0x0022)
 
 
     def read_dastatus(self, hexi: bool | str | None = None) -> Tuple[List[int], List[int]]:

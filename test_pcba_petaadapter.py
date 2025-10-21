@@ -119,20 +119,20 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     print("DAQ - channel 8", daq.get_VDC(8))  # should be +3.3v
     print("DAQ - channel 9", daq.get_VDC(9))  # should be +1.8v
 
-    cartridge.gpio.set_pin(7)  # disable gg
+    # cartridge.gpio.reset_pin(7)  # disable gg
+    # cartridge.gpio.reset_pin(4)  # disable micro
+    # cartridge.switch_mosfet(0, 0)  # disable micro
 
-    gg = BQ34Z100(BusMaster(cartridge.backyard_bus), slvAddress=0x55, pec=False)
-    print(gg.get_voltage_scale())
-    print(gg.get_current_scale())
-    print(gg.get_energy_scale())
-    print(gg.voltage())
-    print(gg.temperature())
-
-
+    # gg = BQ34Z100(BusMaster(cartridge.backyard_bus), slvAddress=0x55, pec=False)
+    # print(gg.get_voltage_scale())
+    # print(gg.get_current_scale())
+    # print(gg.get_energy_scale())
+    # print(gg.voltage())
+    # print(gg.temperature())
 
 
     afe = BQ76942(cartridge.backyard_bus, slvAddress=0x08, pec=True, retry_limit=5)
-    #afe.disable_checksum()
+    afe.disable_checksum()
 
     print(afe.read_control_status())
     print(afe.read_battery_status())
@@ -186,7 +186,16 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
     # === Current calibration ===
 
-    afe.disable_sleepmode()
+    # Make sure FETs are closed for PACK and LD measurements
+    afe.disable_sleepmode()  # Sleep Disable 0x009A to prevent CHG FET from opening
+
+    print(afe.read_manufacturing_status())
+    print(afe.all_fets_on())
+    status = afe.read_fet_status()
+    print(status)
+    if (status["DDSG_PIN"] == 0):
+        print(afe.toggle_fet_enable())
+        sleep(0.5)
 
     # Apply a known current I_CAL of 0mA
     # psu1 and psu2 already in mode that no current is flowing
@@ -208,8 +217,9 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     print(afe.write_board_offset(board_offset))
 
     # Apply 1A discharge current through sense resistor
-    psu2.configure_supply(22.090, 1.500, 50, 1)
-    psu1.configure_sink(1.000, None, 1.5, 22.0, 50, 1)
+    psu2.configure_supply(22.090, 1.500, 60, 1)
+    #psu1.configure_cc_mode(-1.000, None, 22.09, 10.0, -60, 1)
+    psu1.configure_sink(-1.0, None, -1.1, 22.09, -60, 1)
 
     value = 0
     for i in range(10):
@@ -223,7 +233,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
     # Apply 2A discharge current through sense resistor
     psu2.configure_supply(22.090, 2.500, 60, 1)
-    psu1.configure_sink(2.000, None, 2.5, 22.0, 60, 1)
+    psu1.configure_sink(-2.000, None, -2.5, 22.09, -60, 1)
 
     value = 0
     for i in range(10):
@@ -321,7 +331,7 @@ if __name__ == "__main__":
 
 
     print("Change clock frequency and timeout - RRC: ",
-          str(i2cbus.i2c_change_clock_frequency(100000, timeout_ms=20)))
+          str(i2cbus.i2c_change_clock_frequency(400000, timeout_ms=20)))
     print("MASTER:", i2cbus.i2c_bus_scan())
 
     mux = BusMux(i2cbus, address=0x77)

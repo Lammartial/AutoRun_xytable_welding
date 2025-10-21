@@ -338,6 +338,9 @@ def main():
         sock.connect((host, port))
         print("Connected.\n")
 
+
+        sock.write("#prog -o cmd -c erase -m <mem type> -t <tgt addr> -l <len>")
+
         # Transfer the project file to WriteNow! programmer
         _base_path = Path(__file__).parent / "../../Battery-PCBA-Test/filestore/"
         file_path = _base_path / "petalite-test.wnp"           # Path to local project file
@@ -382,9 +385,17 @@ if __name__ == "__main__":
     RESOURCE_STR = "172.21.101.38:2101"
     ap = AlgocraftProgrammer(RESOURCE_STR, Path(__file__).parent / "../../Battery-PCBA-Test/filestore/")
     ap.set_filenames("petalite-test.wnp", "petalite-test-image.wni")
-    print(ap.execute_command(f"#fs -o get -f images/petalite-test-image.wni -p info -r MD5"))
-    #ap.send_all_files()
+
+    #print(ap.execute_command(f"#fs -o get -f images/petalite-test-image.wni -p info -r MD5"))
+    ap.send_all_files()
     ap.verify_all_files_on_programmer("HEINZ", "3AA53EA21D5071EEB02D283137009616")
-    #
+
+    print(ap.execute_command(f"#prog -o cmd -c erase -m all"))
+
+
+    command = f"#fs -o get -f projects/{ap.project_file.name} -p info -r MD5"
+    answer = ap.execute_command(command)
+    print(answer)
+
 
 # END OF FILE
