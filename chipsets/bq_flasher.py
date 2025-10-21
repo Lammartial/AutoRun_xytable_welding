@@ -121,8 +121,7 @@ class BQStudioFileFlasher:
                 return False, [0]
             else:
                 output.append(s_int)
-        #return True, output[1:]  # Leave out the first byte. That is just the battery's I2C address.
-        return True, output  # include I2C address in first byte
+        return True, output[1:]  # Leave out the first byte. That is just the battery's I2C address.
 
     #----------------------------------------------------------------------------------------------
     def set_firmware_file(self, _firmware_file: str | Path, show_progressbar: bool = False, color: str = None) -> None:
@@ -204,11 +203,6 @@ class BQStudioFileFlasher:
                 elif current_line.startswith("SWB:") or current_line.startswith("W:"):
                     # Write block/bytes
                     result, data = self._handle_line(current_line[2:], line_number) if current_line.startswith("W:") else self._handle_line(current_line[4:], line_number)
-                    _slv_address = data[0] >> 1
-                    data = data[1:]
-                    if current_line.startswith("W:"):
-                        # need to take the address also from the file
-                        pass
                     if not result:
                         validation_result = False
                         if is_file_validation:
@@ -217,7 +211,7 @@ class BQStudioFileFlasher:
                             break
                     _log.debug(f"WB: {data}")
                     if not is_file_validation:
-                        if self.battery.writeBlockFlasher(_slv_address, data[0], bytearray(data[1:])):
+                        if self.battery.writeBlock(data[0], bytearray(data[1:])):
                             continue
                         else:
                             prg_result = False
@@ -228,8 +222,6 @@ class BQStudioFileFlasher:
                 elif current_line.startswith("SWW:"):
                     # Write word
                     result, data = self._handle_line(current_line[4:], line_number)
-                    _slv_address = data[0] >> 1
-                    data = data[1:]
                     if not result:
                         validation_result = False
                         if is_file_validation:
@@ -249,9 +241,7 @@ class BQStudioFileFlasher:
 
                 elif current_line.startswith("SWC:"):
                     # Write command
-                    result, data = self._handle_line(current_line[4:], line_number)
-                    _slv_address = data[0] >> 1
-                    data = data[1:]
+                    address, data = self._handle_line(current_line[4:], line_number)
                     if not result:
                         if is_file_validation:
                             validation_result = False
@@ -270,9 +260,7 @@ class BQStudioFileFlasher:
 
                 elif current_line.startswith("SCL:") or current_line.startswith("C:"):
                     # Read and compare block
-                    result, data = self._handle_line(current_line[2:], line_number) if current_line.startswith("C:") else self._handle_line(current_line[4:], line_number)
-                    _slv_address = data[0] >> 1
-                    data = data[1:]
+                    address, data = self._handle_line(current_line[2:], line_number) if current_line.startswith("C:") else self._handle_line(current_line[4:], line_number)
                     if not result:
                         if is_file_validation:
                             validation_result = False
@@ -280,16 +268,12 @@ class BQStudioFileFlasher:
                         else:
                             break
                     register = data[0]
-                    if current_line.startswith("C:"):
-                        length = len(data) - 1
-                        expected_data = data[1:]
-                    else:
-                        length = data[1]
-                        expected_data = data[2:]
+                    length = data[1]
+                    expected_data = data[2:]
 
                     _log.debug(f"RB: {register}, {length}")
                     if not is_file_validation:
-                        response = self.battery.readBlockFlasher(_slv_address, register, length)  # , 33)
+                        response = self.battery.readBlock(register, 33)
                         if response[1]:
                             received_data = list(response[0])
                         else:
@@ -309,9 +293,7 @@ class BQStudioFileFlasher:
 
                 elif current_line.startswith("SCW:"):
                     # Read and compare word
-                    result, data = self._handle_line(current_line[4:], line_number)
-                    _slv_address = data[0] >> 1
-                    data = data[1:]
+                    address, data = self._handle_line(current_line[4:], line_number)
                     if not result:
                         if is_file_validation:
                             validation_result = False
