@@ -436,11 +436,7 @@ if __name__ == "__main__":
     print("Integrity check MD5:", ap.verify_all_files_on_programmer("821C93A15324CC4E05E839E8D04521AE", "322D36DAE4DBA54A1B06164744D266E4", erase_project_file_hash="3A64ED4D9619D8CD6F644B537FA4196E"))
     print("Integrity check CRC32:", ap.verify_all_files_on_programmer("h8440C68D", "hF5F0CA30", erase_project_file_hash="h90CEA5BB", hash_type="CRC32"))
     print("Erase FLASH:", ap.erase_flash())
-    #print(ap.get_system_error(site=1))
-    #print(ap.get_system_error(site=0))
     print("Program FLASH:", ap.program_flash())
-    #print(ap.get_system_error(site=1))
-    #print(ap.get_system_error(site=0))
-
+   
 
 # END OF FILE
