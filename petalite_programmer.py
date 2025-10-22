@@ -26,7 +26,7 @@ class AlgocraftProgrammer(Eth2SerialDevice):
         self._filestore_path = Path(filestore_path)
 
 
-    def set_filenames(self, project_file: str | Path, image_file: str | Path) -> None:
+    def set_filenames(self, project_file: str | Path, image_file: str | Path, erase_flash_project_file: str | Path = None) -> None:
         """
         Set the project and image filenames for the programmer.
 
@@ -38,6 +38,7 @@ class AlgocraftProgrammer(Eth2SerialDevice):
 
         self.project_file = self._filestore_path / project_file
         self.image_file = self._filestore_path / image_file
+        self.erase_flash_project_file = (self._filestore_path / erase_flash_project_file) if erase_flash_project_file else None
 
 
     def execute_command(self, command: str) -> str:
@@ -50,16 +51,19 @@ class AlgocraftProgrammer(Eth2SerialDevice):
 
 
     def send_file(self, file_path, destination_path) -> bool:
-        print(f"Send file {file_path} to {destination_path} on programmer...")
+        print(f"Send file {file_path} to ")
         try:
             # Get file name and size
             if os.path.exists(file_path):
                 file_name = os.path.basename(file_path)
                 file_size = os.path.getsize(file_path)
             else:
-                print("Invalid file path.\n")
+                print("ERROR: Invalid file path.\n")
                 return False
 
+            _prgdev_path = os.path.join(destination_path, file_name)
+            print(f" {_prgdev_path} on programmer...")
+            
             # Ping the programmer
             command = "#status -o ping"
             answer = self.execute_command(command)
@@ -67,7 +71,7 @@ class AlgocraftProgrammer(Eth2SerialDevice):
                 return False
 
             # Send '#fs -o send' command and check the answer
-            command = f"#fs -o send -f {os.path.join(destination_path, file_name)} -p direct01"
+            command = f"#fs -o send -f {_prgdev_path} -p direct01"
             answer = self.execute_command(command)
             if answer != ">":
                 return False
@@ -111,7 +115,7 @@ class AlgocraftProgrammer(Eth2SerialDevice):
                 print(f"CRC error: read = h{crc_read:x}, expected = h{crc_calc:x}.\n")
                 return False
 
-            print(f"File \"{file_name}\" sent to WriteNow! programmer.\n")
+            print(f"File \"{file_name}\" sent to WriteNow! programmer with CRC='{crc_calc}'.\n")
 
             # Wait 100 ms and ping the programmer for checking communication
             time.sleep(0.1)
@@ -129,23 +133,63 @@ class AlgocraftProgrammer(Eth2SerialDevice):
     def send_all_files(self) -> bool:
         self.send_file(self.project_file, "projects/")
         self.send_file(self.image_file, "images/")
+        if self.erase_flash_project_file:
+            self.send_file(self.erase_flash_project_file, "projects/")
 
 
-    def verify_all_files_on_programmer(self, project_file_hash: str, image_file_hash: str) -> bool:
+    def verify_all_files_on_programmer(self, project_file_hash: str, image_file_hash: str, erase_project_file_hash: str = None) -> bool:
+        ok = True
+       
+        if image_file_hash.startswith("h"):
+            # CRC32 check
+            command = f"#fs -o get -f images/{self.image_file.name} -p info -r CRC32"
+            answer = self.execute_command(command)
+            if not answer.startswith(f"{image_file_hash}>"):
+                print(f"Image file hash mismatch: {answer} (expected: CRC={image_file_hash})")
+                ok = False
+        else:
+            command = f"#fs -o get -f images/{self.image_file.name} -p info -r MD5"
+            answer = self.execute_command(command)
+            if not answer.startswith(f"MD5={image_file_hash}>"):
+                print(f"Image file hash mismatch: {answer} (expected: MD5={image_file_hash})")
+                ok = False
+       
         command = f"#fs -o get -f projects/{self.project_file.name} -p info -r MD5"
         answer = self.execute_command(command)
         if not answer.startswith(f"MD5={project_file_hash}>"):
-            print(f"Project file hash mismatch: {answer} (expected: MD5={project_file_hash})")
-            return False
+            ok = False
+      
+        if erase_project_file_hash:
+            command = f"#fs -o get -f projects/{self.erase_flash_project_file.name} -p info -r MD5"
+            answer = self.execute_command(command)
+            if not answer.startswith(f"MD5={erase_project_file_hash}>"):
+                print(f"Erase project file hash mismatch: {answer} (expected: MD5={erase_project_file_hash})")
+                ok = False
 
-        command = f"#fs -o get -f images/{self.image_file.name} -p info -r MD5"
+        if ok:
+            print("All files verified on programmer.")
+        return ok
+
+
+
+    def erase_flash(self) -> str:
+        if self.erase_flash_project_file is None:
+            raise ValueError("Missing erase flash project.")
+        sites = "h01"  # Bit mask of the sites to enable
+        command = f"#exec -o prj -f {self.erase_flash_project_file} -s {sites}"
         answer = self.execute_command(command)
-        if not answer.startswith(f"MD5={image_file_hash}>"):
-            print(f"Image file hash mismatch: {answer} (expected: MD5={image_file_hash})")
-            return False
+        return answer
 
-        print("All files verified on programmer.")
-        return True
+
+    def program_flash(self) -> str:
+        sites = "h01"  # Bit mask of the sites to enable
+        command = f"#exec -o prj -f {self.project_file} -s {sites}"
+        answer = self.execute_command(command)
+        return answer
+
+
+
+
 
 
 
@@ -337,10 +381,7 @@ def main():
         print(f"\nConnection to {host}:{port}...")
         sock.connect((host, port))
         print("Connected.\n")
-
-
-        sock.write("#prog -o cmd -c erase -m <mem type> -t <tgt addr> -l <len>")
-
+      
         # Transfer the project file to WriteNow! programmer
         _base_path = Path(__file__).parent / "../../Battery-PCBA-Test/filestore/"
         file_path = _base_path / "petalite-test.wnp"           # Path to local project file
@@ -361,6 +402,8 @@ def main():
         # answer = exe_command(sock, command).rstrip('\n')
         # print(f"Command \"{command}\" executed with response: {answer}\n")
 
+    
+
 def test_crc():
     host = "172.21.101.38"
     port = 2101
@@ -368,13 +411,14 @@ def test_crc():
         print(f"\nConnection to {host}:{port}...")
         sock.connect((host, port))
         print("Connected.\n")
-        command = f"#fs -o get -f images/petalite-test-image.wni -s h01"
+        command = f"#fs -o get -f images/petalite-test-image.wni -s h01 -r CRC32"
         answer = exe_command(sock, command).rstrip('\n')
         print(f"Command \"{command}\" executed with response: {answer}\n")
 
         command = f"#fs -o get -f images/petalite-test-image.wni -p info -r MD5"
         answer = exe_command(sock, command).rstrip('\n')
         print(f"Command \"{command}\" executed with response: {answer}\n")
+
 
 #--------------------------------------------------------------------------------------------------
 
@@ -384,15 +428,12 @@ if __name__ == "__main__":
     test_crc()
     RESOURCE_STR = "172.21.101.38:2101"
     ap = AlgocraftProgrammer(RESOURCE_STR, Path(__file__).parent / "../../Battery-PCBA-Test/filestore/")
-    ap.set_filenames("petalite-test.wnp", "petalite-test-image.wni")
-
-    #print(ap.execute_command(f"#fs -o get -f images/petalite-test-image.wni -p info -r MD5"))
+    ap.set_filenames("petalite-test.wnp", "petalite-test-image.wni", erase_flash_project_file="petalite-flash-erase.wnp")
+    print(ap.execute_command(f"#fs -o get -f images/petalite-test-image.wni -p info -r MD5"))
     ap.send_all_files()
-    ap.verify_all_files_on_programmer("HEINZ", "3AA53EA21D5071EEB02D283137009616")
-
-    print(ap.execute_command(f"#prog -o cmd -c erase -m all"))
-
-
+    print("Integrity check:", ap.verify_all_files_on_programmer("3AA53EA21D5071EEB02D283137009616", "h5ACDA312", erase_project_file_hash="HEINZ"))
+    print("Erase FLASH:", ap.erase_flash())
+    
     command = f"#fs -o get -f projects/{ap.project_file.name} -p info -r MD5"
     answer = ap.execute_command(command)
     print(answer)
