@@ -222,13 +222,24 @@ class BQ34Z100:
         """
 
         # 1st: write the subcommand to the control register (0x00/0x01)
-        buf = pack("<H", subcmd)
-        for i in range(2):
-            self.bus.writeBytes(self.address, 0x00 + i, buf[i], pec=self.pec)
+        # buf = pack("<H", subcmd)
+        # for i in range(2):
+        #     self.bus.writeBytes(self.address, 0x00 + i, buf[i], pec=self.pec)
+        if not self.write_control_command(subcmd):
+            raise IOError(f"Could not write subcommand {subcmd}")
         # 2nd: read the result as 2-byte value from the control register (0x00/0x01)
         data = self._read(0x00, 2)
         value = unpack("<H", data)[0]
         return value, data  # return also raw data
+
+
+    def write_control_command(self, w: int) -> bool:
+        # write the subcommand to the control register (0x00/0x01)
+        ok = True
+        buf = pack("<H", w)
+        for i in range(2):
+            ok = ok and self.bus.writeBytes(self.address, 0x00 + i, buf[i], pec=self.pec)
+        return ok
 
 
     def voltage(self) -> float:
@@ -536,6 +547,103 @@ class BQ34Z100:
         buf = self._read(0x12, 2)
         self._flags_b = self._decode_flags_b(buf, hexi)
         return _od2t(self.flags_a), _od2t(self.flags_b)
+
+
+    def toggle_cal_enable(self) -> bool:
+        """Instructs the fuel gauge to enable entry and exit to CALIBRATION mode.
+
+        Returns:
+            bool: _description_
+        """
+        return self.write_control_command(0x002d)
+
+
+    def enter_calibration(self) -> bool:
+        """Enter CALIBRATION mode.
+
+        Returns:
+            bool: _description_
+        """
+        return self.write_control_command(0x0081)
+
+
+    def exit_calibration(self) -> bool:
+        """Exit CALIBRATION mode.
+
+        Returns:
+            bool: _description_
+        """
+        ok = self.write_control_command(0x0080)
+        return self.enter_calibration() and ok
+
+
+    def reset_device(self) -> bool:
+        return self.write_control_command(0x0041)
+
+
+    def offset_cal(self) -> bool:
+        """Reports internal CC offset in CALIBRATION mode.
+
+        Returns:
+            bool: _description_
+        """
+        ok = self.write_control_command(0x0082)
+        return self.write_control_command(0x0000) and ok
+
+
+    def calibrate_cc_offset(self) -> bool:
+        """Instructs the fuel gauge to calibrate the coulomb counter offset.
+        During calibration the [CCA] bit is set.
+
+        Returns:
+            bool: _description_
+        """
+        ok = self.write_control_command(0x000a)
+        return self.write_control_command(0x0000) and ok
+
+
+    def calibrate_board_offset(self) -> bool:
+        """Instructs the fuel gauge to calibrate board offset.
+        During board offset calibration the [BCA] bit is set.
+
+        Returns:
+            bool: _description_
+        """
+        ok = self.write_control_command(0x0009)
+        return self.write_control_command(0x0000) and ok
+
+
+    def cc_offset_save(self) -> bool:
+        """Instructs the fuel gauge to save the coulomb counter offset after calibration.
+
+        Returns:
+            bool: _description_
+        """
+        ok = self.write_control_command(0x000b)
+        return self.write_control_command(0x0000) and ok
+
+
+    def read_df_version(self) -> int:
+        version, raw = self._read_control(0x000c)
+        return version
+
+
+    def calc_static_chem_df_checksum(self) -> int:
+        chk, raw = self._read_control(0x0017)
+        return chk
+
+
+    def wait_cca_clear(self) -> bool:
+        n = 60*2
+        while n:
+            cs = self.read_control_status()
+            if cs["CCA"] == 0:
+                return True
+            sleep(0.5)
+            n -= 1
+        return False
+
+
 
 #--------------------------------------------------------------------------------------------------
 
