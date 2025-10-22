@@ -103,7 +103,11 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     print("Measure PSU1", psu1.get_all_measurements())
     print("Measure PSU2", psu2.get_all_measurements())
 
-    cartridge.switch_some_io(7, 0)  # enable GG
+    cartridge.switch_some_io(7, 1)  # enable GG
+    # push button
+    gpio.set_gpio_n_as_output(6)  # pin 6 as output
+    gpio.set_gpio_n_low(6)  # push button enabled
+    #gpio.set_gpio_n_high(6)
 
     #cartridge.select_bus_to_micro("i2c")
     print("BACKYARD:", cartridge.backyard_bus.i2c_bus_scan())
@@ -194,12 +198,17 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     afe.disable_sleepmode()  # Sleep Disable 0x009A to prevent CHG FET from opening
 
     print(afe.read_manufacturing_status())
-    print(afe.all_fets_on())
+    print(afe.read_alarm_status())
+    #print(afe.all_fets_on())
+    print(afe.discharge_test())
+    print(afe.read_manufacturing_status())
+    print(afe.read_alarm_status())
     status = afe.read_fet_status()
     print(status)
     if (status["DDSG_PIN"] == 0):
         print(afe.toggle_fet_enable())
-    sleep(0.5)
+        sleep(0.5)
+
 
     # === Voltage calibration ===
     # Apply 2.5V to all cells.
@@ -211,14 +220,27 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
         vsim.set_cell_n_voltage(cell_no, u_cell)
     psu2.configure_supply(u_supply, 0.080, 50, 1)
     sleep(1.0)
+    print("Measure PSU1", psu1.get_all_measurements())
+    print("Measure PSU2", psu2.get_all_measurements())
 
     cell_voltage_counts_a = [0] * 10
+    tos_voltage_counts_a = 0
+    pack_voltage_counts_a = 0
+    ld_voltage_counts_a = 0
     for i in range(10):
         _v_counts = afe.read_cell_voltages()
+        _cal1 = afe.read_cal1()
         for j, u in enumerate(_v_counts):
             cell_voltage_counts_a[j] += u
+        tos_voltage_counts_a += _cal1["tos_adc_counts"]
+        pack_voltage_counts_a += _cal1["pack_pin_adc_counts"]
+        ld_voltage_counts_a += _cal1["ld_pin_adc_counts"]
+
     # calc average
     cell_voltage_counts_a = [n / 10 for n in cell_voltage_counts_a]
+    tos_adc_counts_a /= 10
+    pack_pin_adc_counts_a /= 10
+    ld_pin_adc_counts_a /= 10
 
     # Apply 4.2V to all cells.
     psu1.configure_supply(4.2*num_cells, 0.080, 50, 1)
@@ -227,14 +249,49 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     psu2.configure_supply(4.2*num_cells, 0.080, 50, 1)
 
     sleep(1.0)
+    print("Measure PSU1", psu1.get_all_measurements())
+    print("Measure PSU2", psu2.get_all_measurements())
+
 
     cell_voltage_counts_b = [0] * 10
+    tos_voltage_counts_b = 0
+    pack_voltage_counts_b = 0
+    ld_voltage_counts_b = 0
     for i in range(10):
         _v_counts = afe.read_cell_voltages()
+        _cal1 = afe.read_cal1()
         for j, u in enumerate(_v_counts):
-            cell_voltage_counts_a[j] += u
-    # calc average
-    cell_voltage_counts_b = [n / 10 for n in cell_voltage_counts_a]
+            cell_voltage_counts_b[j] += u
+        tos_voltage_counts_b += _cal1["tos_adc_counts"]
+        pack_voltage_counts_b += _cal1["pack_pin_adc_counts"]
+        ld_voltage_counts_b += _cal1["ld_pin_adc_counts"]
+
+    # # Take the average of the 10 measurements and calculate gains
+    cell_voltage_counts_b = [n / 10 for n in cell_voltage_counts_b]
+    tos_adc_counts_b /= 10
+    pack_pin_adc_counts_b /= 10
+    ld_pin_adc_counts_b /= 10
+
+    # Take the average of the 10 measurements and calculate gains
+    _test_voltags_diff = (4.2 - 2.5)
+    cell_gain = [0] * num_cells
+    for i in range(0, num_cells):
+        gain = 2**24 * (_test_voltags_diff * 1e+3) / (cell_voltage_counts_b[i] - cell_voltage_counts_a[i])
+        cell_gain[i] = int(round(gain))
+
+
+    # Calculate Cell Offset based on Cell1
+    cell_offset = ((cell_gain[0] * (cell_voltage_counts_a[0] / 10)) / 2**24) - 2500
+    print("Cell Offset:", cell_offset)
+    if cell_offset < 0:
+        cell_offset = 0xFFFF + cell_offset
+    TOS_Gain = int(round(2**16 * (_test_voltags_diff * 1e+3) / (tos_voltage_counts_b - tos_voltage_counts_a)))
+    PACK_Gain = int(round(2**16 * (_test_voltags_diff * 1e+3) / (pack_voltage_counts_b - pack_voltage_counts_a)))
+    LD_Gain = int(round(2**16 * (_test_voltags_diff * 1e+3) / (ld_voltage_counts_b - ld_voltage_counts_a)))
+
+    print(TOS_Gain)
+    print(PACK_Gain)
+    print(LD_Gain)
 
 
     # === Current calibration ===
@@ -268,6 +325,9 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     psu2.configure_supply(u_supply, a_pack*1.25, 60, 1)
     #psu1.configure_cc_mode(-1.000, None, 22.09, 10.0, -60, 1)
     psu1.configure_sink(-a_pack, None, -(a_pack*1.05), u_supply, -60, 1)
+    print("Measure PSU1", psu1.get_all_measurements())
+    print("Measure PSU2", psu2.get_all_measurements())
+
 
     value = 0
     for i in range(10):
@@ -285,7 +345,8 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     psu2.configure_supply(u_supply, a_pack*1.25, 60, 1)
     #psu1.configure_cc_mode(-1.000, None, 22.09, 10.0, -60, 1)
     psu1.configure_sink(-a_pack, None, -(a_pack*1.05), u_supply, -60, 1)
-
+    print("Measure PSU1", psu1.get_all_measurements())
+    print("Measure PSU2", psu2.get_all_measurements())
 
     value = 0
     for i in range(10):
@@ -299,7 +360,9 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
     if (cc_counts_a == cc_counts_b) or (cc_counts_a == 0) or (cc_counts_b == 0):
         raise ValueError(f"Current calibration results will cause div by zero error: {cc_counts_a}, {cc_counts_b}")
-    cc_gain_float = (-2.0 + 1.0 ) * 1e+3 / (cc_counts_b - cc_counts_a)
+
+    current_diff = (-2.0 + 1.0)
+    cc_gain_float = current_diff * 1e+3 / (cc_counts_b - cc_counts_a)
     capacity_gain = afe.dec2flash(298261.6178 * cc_gain_float)
 
     # === COV/CUV calibration ===

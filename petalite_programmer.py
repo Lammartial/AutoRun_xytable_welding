@@ -26,7 +26,7 @@ class AlgocraftProgrammer(Eth2SerialDevice):
         self._filestore_path = Path(filestore_path)
 
 
-    def set_filenames(self, project_file: str | Path, image_file: str | Path, erase_flash_project_file: str | Path = None) -> None:
+    def set_filenames(self, image_file: str | Path, project_file: str | Path, erase_flash_project_file: str | Path = None) -> None:
         """
         Set the project and image filenames for the programmer.
 
@@ -42,12 +42,17 @@ class AlgocraftProgrammer(Eth2SerialDevice):
 
 
     def execute_command(self, command: str) -> str:
+        print(command)
         while True:
             answer = self.request(command, timeout=5.0, encoding="utf-8")
             if answer.endswith(('>','!')):
                 return answer  # done
             elif answer.endswith('*'):
                 print("busy...")
+
+
+    def get_system_error(self, site: int = 0, level: int = 3) -> str:
+        return self.execute_command(f"#status -o get -p err -v {site} -l {level}")
 
 
     def send_file(self, file_path, destination_path) -> bool:
@@ -63,7 +68,7 @@ class AlgocraftProgrammer(Eth2SerialDevice):
 
             _prgdev_path = os.path.join(destination_path, file_name)
             print(f" {_prgdev_path} on programmer...")
-            
+
             # Ping the programmer
             command = "#status -o ping"
             answer = self.execute_command(command)
@@ -137,52 +142,40 @@ class AlgocraftProgrammer(Eth2SerialDevice):
             self.send_file(self.erase_flash_project_file, "projects/")
 
 
-    def verify_all_files_on_programmer(self, project_file_hash: str, image_file_hash: str, erase_project_file_hash: str = None) -> bool:
-        ok = True
-       
-        if image_file_hash.startswith("h"):
-            # CRC32 check
-            command = f"#fs -o get -f images/{self.image_file.name} -p info -r CRC32"
-            answer = self.execute_command(command)
-            if not answer.startswith(f"{image_file_hash}>"):
-                print(f"Image file hash mismatch: {answer} (expected: CRC={image_file_hash})")
-                ok = False
-        else:
-            command = f"#fs -o get -f images/{self.image_file.name} -p info -r MD5"
-            answer = self.execute_command(command)
-            if not answer.startswith(f"MD5={image_file_hash}>"):
-                print(f"Image file hash mismatch: {answer} (expected: MD5={image_file_hash})")
-                ok = False
-       
-        command = f"#fs -o get -f projects/{self.project_file.name} -p info -r MD5"
-        answer = self.execute_command(command)
-        if not answer.startswith(f"MD5={project_file_hash}>"):
-            ok = False
-      
-        if erase_project_file_hash:
-            command = f"#fs -o get -f projects/{self.erase_flash_project_file.name} -p info -r MD5"
-            answer = self.execute_command(command)
-            if not answer.startswith(f"MD5={erase_project_file_hash}>"):
-                print(f"Erase project file hash mismatch: {answer} (expected: MD5={erase_project_file_hash})")
-                ok = False
+    def verify_all_files_on_programmer(self, image_file_hash: str, project_file_hash: str, erase_project_file_hash: str = None, hash_type: str = "MD5") -> bool:
 
+        _files_to_check = [
+            (f"images/{self.image_file.name}", "Image", image_file_hash),
+            (f"projects/{self.project_file.name}", "Program FLASH project", project_file_hash),
+            (f"projects/{self.erase_flash_project_file.name}", "Erase FLASH project", erase_project_file_hash) if self.erase_flash_project_file else (None, None, None)
+        ]
+
+        ok = True
+        for _target, _info, _hash in _files_to_check:
+            if _target is None:
+                continue
+            command = f"#fs -o get -f {_target} -p calc -r {hash_type.upper()}"
+            answer = "".join([c for c in self.execute_command(command) if c not in ["\"", "'", ">"]])
+            if not _hash in answer:
+                print(f"{_info} file hash mismatch: {answer} (expected: {hash_type.upper()}={_hash})")
+                ok = False
         if ok:
             print("All files verified on programmer.")
         return ok
 
 
 
-    def erase_flash(self) -> str:
+    def erase_flash(self, site_flags: int = 1) -> str:
         if self.erase_flash_project_file is None:
             raise ValueError("Missing erase flash project.")
-        sites = "h01"  # Bit mask of the sites to enable
-        command = f"#exec -o prj -f {self.erase_flash_project_file} -s {sites}"
+        sites = f"h{site_flags:02X}"  # Bit mask of the sites to enable
+        command = f"#exec -o prj -f projects/{self.erase_flash_project_file.name} -s {sites}"
         answer = self.execute_command(command)
         return answer
 
 
-    def program_flash(self) -> str:
-        sites = "h01"  # Bit mask of the sites to enable
+    def program_flash(self, site_flags: int = 1) -> str:
+        sites = f"h{site_flags:02X}"  # Bit mask of the sites to enable
         command = f"#exec -o prj -f {self.project_file} -s {sites}"
         answer = self.execute_command(command)
         return answer
@@ -381,7 +374,7 @@ def main():
         print(f"\nConnection to {host}:{port}...")
         sock.connect((host, port))
         print("Connected.\n")
-      
+
         # Transfer the project file to WriteNow! programmer
         _base_path = Path(__file__).parent / "../../Battery-PCBA-Test/filestore/"
         file_path = _base_path / "petalite-test.wnp"           # Path to local project file
@@ -402,7 +395,7 @@ def main():
         # answer = exe_command(sock, command).rstrip('\n')
         # print(f"Command \"{command}\" executed with response: {answer}\n")
 
-    
+
 
 def test_crc():
     host = "172.21.101.38"
@@ -428,15 +421,17 @@ if __name__ == "__main__":
     test_crc()
     RESOURCE_STR = "172.21.101.38:2101"
     ap = AlgocraftProgrammer(RESOURCE_STR, Path(__file__).parent / "../../Battery-PCBA-Test/filestore/")
-    ap.set_filenames("petalite-test.wnp", "petalite-test-image.wni", erase_flash_project_file="petalite-flash-erase.wnp")
-    print(ap.execute_command(f"#fs -o get -f images/petalite-test-image.wni -p info -r MD5"))
-    ap.send_all_files()
-    print("Integrity check:", ap.verify_all_files_on_programmer("3AA53EA21D5071EEB02D283137009616", "h5ACDA312", erase_project_file_hash="HEINZ"))
+    ap.set_filenames("petalite-test-image.wni", "petalite-test.wnp", erase_flash_project_file="petalite-flash-erase.wnp")
+    #print(ap.execute_command(f"#fs -o get -f images/petalite-test-image.wni -p calc -r MD5"))
+    #ap.send_all_files()
+    print("Integrity check MD5:", ap.verify_all_files_on_programmer("821C93A15324CC4E05E839E8D04521AE", "322D36DAE4DBA54A1B06164744D266E4", erase_project_file_hash="20D6C9BE2B8701DDAEC2A91C287641E4"))
+    print("Integrity check CRC32:", ap.verify_all_files_on_programmer("h8440C68D", "hF5F0CA30", erase_project_file_hash="hC0232FC1", hash_type="CRC32"))
     print("Erase FLASH:", ap.erase_flash())
-    
-    command = f"#fs -o get -f projects/{ap.project_file.name} -p info -r MD5"
-    answer = ap.execute_command(command)
-    print(answer)
+    print(ap.get_system_error(site=1))
+
+    #command = f"#fs -o get -f projects/{ap.project_file.name} -p info -r MD5"
+    #answer = ap.execute_command(command)
+    #print(answer)
 
 
 # END OF FILE
