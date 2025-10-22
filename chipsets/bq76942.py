@@ -365,6 +365,40 @@ class BQ76942:
             return None, False
 
 
+    def _alarm_status_to_dict(self, buf: bytearray, hexi: None | bool | str = None) -> OrderedDict[str, bytes | bytearray | str | int]:
+        os = unpack("<H", buf)[0]
+        return OrderedDict({
+            "block": _maybe_hexlify(buf, hexi),
+            # data come little endian
+            "SSBC":     ((os>>15) & 1),
+            "SSA":      ((os>>14) & 1),
+            "PF":       ((os>>13) & 1),
+            "MSK_SFALERT": ((os>>12) & 1),
+            "MSK_PFALERT": ((os>>11) & 1),
+            "INITSTART": ((os>>10) & 1),
+            "INITCOMP": ((os>>9) & 1),
+            "RSVD1":    ((os>>8) & 1),
+            "FULLSCAN": ((os>>7) & 1),
+            "XCHG":     ((os>>6) & 1),
+            "XDSG":     ((os>>5) & 1),
+            "SHUTV":    ((os>>4) & 1),
+            "FUSE":     ((os>>3) & 1),
+            "CB":       ((os>>2) & 1),
+            "ADSCAN":   ((os>>1) & 1),
+            "WAKE":     ((os>>0) & 1),
+        })
+
+    def read_alarm_status(self) -> Tuple[int, bool]:
+        buf, ok = self.readBytes(self.address, 0x62, 2)
+        if ok:
+            self._alarm_status = self._alarm_status_to_dict(buf)
+            return self._alarm_status, True
+        else:
+            return None, False
+
+
+
+
     def write_subcommand(self, subcmd: int, data: bytes | bytearray = None, timeout: float = 3.0) -> bool:
         """Write a subcommand with optional data to the BQ76942.
 
@@ -623,6 +657,13 @@ class BQ76942:
         self._fet_status = self._decode_manufacturing_status(buf, hexi=hexi)
         return self._fet_status
 
+
+    def charge_test(self, hexi: bool | str| None = None) -> bool:
+        return self.write_subcommand(0x001F)
+
+    def discharge_test(self, hexi: bool | str| None = None) -> bool:
+        return self.write_subcommand(0x0020)
+    
 
     def all_fets_on(self, hexi: bool | str| None = None) -> bool:
         return self.write_subcommand(0x0096)
