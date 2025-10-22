@@ -106,8 +106,9 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     cartridge.switch_some_io(7, 1)  # enable GG
     # push button
     gpio.set_gpio_n_as_output(6)  # pin 6 as output
-    gpio.set_gpio_n_low(6)  # push button enabled
-    #gpio.set_gpio_n_high(6)
+    #gpio.set_gpio_n_low(6)  # push button enabled
+    gpio.set_gpio_n_high(6)
+    #gpio.set_gpio_n_low(6)
 
     #cartridge.select_bus_to_micro("i2c")
     print("BACKYARD:", cartridge.backyard_bus.i2c_bus_scan())
@@ -223,7 +224,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     print("Measure PSU1", psu1.get_all_measurements())
     print("Measure PSU2", psu2.get_all_measurements())
 
-    cell_voltage_counts_a = [0] * 10
+    cell_voltage_counts_a = [0] * 16
     tos_voltage_counts_a = 0
     pack_voltage_counts_a = 0
     ld_voltage_counts_a = 0
@@ -238,9 +239,9 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
     # calc average
     cell_voltage_counts_a = [n / 10 for n in cell_voltage_counts_a]
-    tos_adc_counts_a /= 10
-    pack_pin_adc_counts_a /= 10
-    ld_pin_adc_counts_a /= 10
+    tos_voltage_counts_a /= 10
+    pack_voltage_counts_a /= 10
+    ld_voltage_counts_a /= 10
 
     # Apply 4.2V to all cells.
     psu1.configure_supply(4.2*num_cells, 0.080, 50, 1)
@@ -253,7 +254,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     print("Measure PSU2", psu2.get_all_measurements())
 
 
-    cell_voltage_counts_b = [0] * 10
+    cell_voltage_counts_b = [0] * 16
     tos_voltage_counts_b = 0
     pack_voltage_counts_b = 0
     ld_voltage_counts_b = 0
@@ -268,9 +269,9 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
     # # Take the average of the 10 measurements and calculate gains
     cell_voltage_counts_b = [n / 10 for n in cell_voltage_counts_b]
-    tos_adc_counts_b /= 10
-    pack_pin_adc_counts_b /= 10
-    ld_pin_adc_counts_b /= 10
+    tos_voltage_counts_b /= 10
+    pack_voltage_counts_b /= 10
+    ld_voltage_counts_b /= 10
 
     # Take the average of the 10 measurements and calculate gains
     _test_voltags_diff = (4.2 - 2.5)
@@ -446,7 +447,7 @@ if __name__ == "__main__":
 
 
     print("Change clock frequency and timeout - RRC: ",
-          str(i2cbus.i2c_change_clock_frequency(400000, timeout_ms=20)))
+          str(i2cbus.i2c_change_clock_frequency(100000, timeout_ms=20)))
     print("MASTER:", i2cbus.i2c_bus_scan())
 
     mux = BusMux(i2cbus, address=0x77)
