@@ -155,7 +155,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
 
     base_path = Path(__file__).parent / "../../Battery-PCBA-Test/filestore"
-    ff = BQStudioFileFlexFlasher(afe, base_path / "FS_3412185A-02_A_draft1_unsealed_PF_Fet_disable_Petalite_AFE_settings.gm.fs" )
+    ff = BQStudioFileFlexFlasher(afe, base_path / "GG_3412185A-02_A_draft4_unsealed_PF_Fet_dis_CDFETOFF_PDwn_Petalite_AFE_settings.gm.fs" )
     ff.validate_file()
     tic = perf_counter()
     ff.program_fw_file()
