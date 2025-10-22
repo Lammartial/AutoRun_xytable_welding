@@ -481,13 +481,14 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             print(gg.voltage())
             print(gg.temperature())
 
-            # ff2 = BQStudioFileFlexFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.bq.fs" )
-            # ff2.validate_file()
-            # tic = perf_counter()
-            # ff2.program_fw_file()
-            # toc = perf_counter()
-            # _log.info(f"DONE in {toc - tic:0.4f} seconds.")
-
+            if 0:
+                # write FLASH
+                ff2 = BQStudioFileFlexFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.bq.fs" )
+                ff2.validate_file()
+                tic = perf_counter()
+                ff2.program_fw_file()
+                toc = perf_counter()
+                print(f"DONE in {toc - tic:0.4f} seconds.")
 
             cs = gg.read_control_status()
             if cs["CALEN"] == 0:
