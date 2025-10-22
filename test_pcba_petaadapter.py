@@ -63,6 +63,7 @@ def test_cartridge_only(cart: CartridgePETA) -> None:
     #print("I2C to GPIO: ", cart.get_muxed_i2c_bus_for(8).i2c_bus_scan())
     cart.select_bus_to_micro("i2c")
 
+#--------------------------------------------------------------------------------------------------
 
 def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
               vsim: CellVoltageSimulation, calib: CalibrationStorage,
@@ -185,13 +186,17 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     # 3) calculate the offsets
     #temp_offsets = [round((((temp_cal - t) + KELVIN_ZERO_DEGC) * 10), 0) for t in t_meas]
     temp_offsets = [(temp_cal - t)  for t in t_meas]
-    # write the calibration values
+    print(temp_offsets)
+    
+    # write the temperature calibration values
     afe.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets
     afe.enter_config_update_mode()
     afe.write_temperature_calibration_offsets(temp_offsets)
     afe.exit_config_update_mode()
+    
+    # re-check temperature measurement (repeat the calibration if not successful!)
     print(afe.read_temperature_calibration_offsets(hexi=True))
-    print(afe.read_temperatures())  # re-check temperature measurement
+    print(afe.read_temperatures())  
 
 
     # This step will enable the FETs to calibrate Top-of-Stack, PACK, and LD voltages.
@@ -277,6 +282,9 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     _test_voltags_diff = (4.2 - 2.5)
     cell_gain = [0] * num_cells
     for i in range(0, num_cells):
+        if cell_voltage_counts_b[i] - cell_voltage_counts_a[i] == 0:
+            # aboid div by zero
+            continue
         gain = 2**24 * (_test_voltags_diff * 1e+3) / (cell_voltage_counts_b[i] - cell_voltage_counts_a[i])
         cell_gain[i] = int(round(gain))
 
@@ -284,8 +292,8 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     # Calculate Cell Offset based on Cell1
     cell_offset = ((cell_gain[0] * (cell_voltage_counts_a[0] / 10)) / 2**24) - 2500
     print("Cell Offset:", cell_offset)
-    if cell_offset < 0:
-        cell_offset = 0xFFFF + cell_offset
+    #if cell_offset < 0:
+    #    cell_offset = 0xFFFF + cell_offset
     TOS_Gain = int(round(2**16 * (_test_voltags_diff * 1e+3) / (tos_voltage_counts_b - tos_voltage_counts_a)))
     PACK_Gain = int(round(2**16 * (_test_voltags_diff * 1e+3) / (pack_voltage_counts_b - pack_voltage_counts_a)))
     LD_Gain = int(round(2**16 * (_test_voltags_diff * 1e+3) / (ld_voltage_counts_b - ld_voltage_counts_a)))
@@ -293,6 +301,19 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     print(TOS_Gain)
     print(PACK_Gain)
     print(LD_Gain)
+
+    # write voltage calibration into RAM
+    afe.enter_config_update_mode()
+    # Cell Voltage Gains
+    afe.write_cell_gain(cell_gain)
+    # PACK, LD, TOS Gains
+    afe.write_pack_gain(PACK_Gain)
+    afe.write_ld_gain(LD_Gain)
+    afe.write_tos_gain(TOS_Gain)
+    afe.exit_config_update_mode()
+
+    # recheck voltage measurement 
+    # ...
 
 
     # === Current calibration ===
@@ -315,10 +336,12 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     value = 64 * int(round(value / 10))
     print(value)
     board_offset = -(value & 0x8000) | (value & 0x7fff)
-    if board_offset < 0:
-        board_offset = 0xFFFF + board_offset
+    #if board_offset < 0:
+    #    board_offset = (0xFFFF + board_offset) & 0xFFFF
     print(board_offset)
-    print(afe.write_board_offset(board_offset))
+    afe.enter_config_update_mode()
+    afe.write_board_offset(board_offset)
+    afe.exit_config_update_mode()
 
     # Apply 1A discharge current through sense resistor
     a_pack = 1.0
@@ -364,10 +387,26 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
     current_diff = (-2.0 + 1.0)
     cc_gain_float = current_diff * 1e+3 / (cc_counts_b - cc_counts_a)
-    capacity_gain = afe.dec2flash(298261.6178 * cc_gain_float)
+    capacity_gain = afe.dec2flash(298261.6178 * cc_gain_float)  # Note: constant 298261.6178 comes from TI doc
+
+
+    # write calibration into RAM
+    afe.enter_config_update_mode()
+    # CC Offset, CC Gain, Capacity Gain
+    afe.write_board_offset(board_offset)
+    afe.write_cc_gain(cc_gain_float)
+    afe.write_capacity_gain(capacity_gain)
+    afe.exit_config_update_mode()
+
+    # recheck current measurement -> repeat if necessary
+
+
 
     # === COV/CUV calibration ===
-    # apply desired COV voltage value to device cell inputs
+    # Apply the desired value for the cell over-voltage threshold to device cell inputs.
+    # Calibration will use the voltage applied to the top cell of the device.
+    # For example, Apply 4350mV: measure cells 1-6 voltage, then set psu2 to this +4.350v
+    #
     # psu2... vsim...
     #afe.enter_config_update_mode()
     #afe.calibrate_cell_over_voltage()
@@ -375,10 +414,45 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
 
     # apply desired CUV voltage value to device cell inputs
+    # Apply the desired value for the cell under-voltage threshold to device cell inputs.
+    # Calibration will use the voltage applied to the top cell of the device.
+    # For example, Apply 2400mV: measure cells 1-6 voltage, then set psu2 to this +2.4v
+
+
     # psu2... vsim...
     #afe.enter_config_update_mode()
     #afe.calibrate_cell_under_voltage()
     #afe.exit_config_update_mode()
+
+    # # === write all calibration into RAM ===
+    # afe.enter_config_update_mode()
+    # # Cell Voltage Gains
+    # afe.write_cell_gain(cell_gain)
+    # # PACK, LD, TOS Gains
+    # afe.write_pack_gain(PACK_Gain)
+    # afe.write_ld_gain(LD_Gain)
+    # afe.write_tos_gain(TOS_Gain)
+    # # CC Offset, CC Gain, Capacity Gain
+    # afe.write_board_offset(board_offset)
+    # afe.write_cc_gain(cc_gain_float)
+    # afe.write_capacity_gain(capacity_gain)
+    # # Temperature offsets
+    # afe.write_temperature_calibration_offsets(temp_offsets)   
+    # afe.exit_config_update_mode()
+
+
+
+    # === write to OTP ===
+    results, data_fail_addr = afe.read_otp_wr_check()
+    if results == 0x80:
+        # all ok -> write to OTP
+        afe.write_otp()
+        sleep(0.5)
+
+
+
+    # ---------------------------------------------------------------------------------------------
+
 
     # gg = BQ34Z100(BusMaster(cartridge.backyard_bus), slvAddress=0x55, pec=False)
     # print(gg.get_voltage_scale())
@@ -394,6 +468,11 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     # ff2.program_fw_file()
     # toc = perf_counter()
     # _log.info(f"DONE in {toc - tic:0.4f} seconds.")
+
+
+
+
+
 
     cartridge.reset_mux()
     vsim.power_down_all_cell_channels()
@@ -447,7 +526,7 @@ if __name__ == "__main__":
 
 
     print("Change clock frequency and timeout - RRC: ",
-          str(i2cbus.i2c_change_clock_frequency(100000, timeout_ms=20)))
+          str(i2cbus.i2c_change_clock_frequency(400000, timeout_ms=20)))
     print("MASTER:", i2cbus.i2c_bus_scan())
 
     mux = BusMux(i2cbus, address=0x77)
