@@ -2,6 +2,7 @@ import socket
 import os
 import zlib
 import time
+from typing import Tuple
 from pathlib import Path
 from rrc.eth2serial import Eth2SerialDevice
 
@@ -164,21 +165,30 @@ class AlgocraftProgrammer(Eth2SerialDevice):
         return ok
 
 
-
-    def erase_flash(self, site_flags: int = 1) -> str:
+    def erase_flash(self, site_flags: int = 1) -> Tuple[bool, str]:
         if self.erase_flash_project_file is None:
             raise ValueError("Missing erase flash project.")
         sites = f"h{site_flags:02X}"  # Bit mask of the sites to enable
         command = f"#exec -o prj -f projects/{self.erase_flash_project_file.name} -s {sites}"
         answer = self.execute_command(command)
-        return answer
+        ok = answer.endswith(">")
+        if not ok:
+            _error = self.get_system_error(site=site_flags)
+        else:
+            _error = None
+        return ok, _error
 
 
-    def program_flash(self, site_flags: int = 1) -> str:
+    def program_flash(self, site_flags: int = 1) -> Tuple[bool, str]:
         sites = f"h{site_flags:02X}"  # Bit mask of the sites to enable
-        command = f"#exec -o prj -f {self.project_file} -s {sites}"
+        command = f"#exec -o prj -f projects/{self.project_file.name} -s {sites}"
         answer = self.execute_command(command)
-        return answer
+        ok = answer.endswith(">")
+        if not ok:
+            _error = self.get_system_error(site=site_flags)
+        else:
+            _error = None
+        return ok, _error
 
 
 
@@ -426,11 +436,11 @@ if __name__ == "__main__":
     print("Integrity check MD5:", ap.verify_all_files_on_programmer("821C93A15324CC4E05E839E8D04521AE", "322D36DAE4DBA54A1B06164744D266E4", erase_project_file_hash="3A64ED4D9619D8CD6F644B537FA4196E"))
     print("Integrity check CRC32:", ap.verify_all_files_on_programmer("h8440C68D", "hF5F0CA30", erase_project_file_hash="h90CEA5BB", hash_type="CRC32"))
     print("Erase FLASH:", ap.erase_flash())
-    print(ap.get_system_error(site=1))
-    print(ap.get_system_error(site=0))
+    #print(ap.get_system_error(site=1))
+    #print(ap.get_system_error(site=0))
     print("Program FLASH:", ap.program_flash())
-    print(ap.get_system_error(site=1))
-    print(ap.get_system_error(site=0))
+    #print(ap.get_system_error(site=1))
+    #print(ap.get_system_error(site=0))
 
 
 # END OF FILE
