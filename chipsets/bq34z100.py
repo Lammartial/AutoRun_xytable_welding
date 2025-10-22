@@ -237,9 +237,12 @@ class BQ34Z100:
         # write the subcommand to the control register (0x00/0x01)
         ok = True
         buf = pack("<H", w)
-        for i in range(2):
-            ok = ok and self.bus.writeBytes(self.address, 0x00 + i, buf[i], pec=self.pec)
-        return ok
+        if 0:
+            for i in range(2):
+                ok = ok and self.bus.writeBytes(self.address, 0x00 + i, buf[i:i+1], use_pec=self.pec)
+            return ok
+        else:
+            return self.bus.writeBytes(self.address, 0x00, buf, use_pec=self.pec)
 
 
     def voltage(self) -> float:
@@ -470,10 +473,11 @@ class BQ34Z100:
             "SS": ((os>>13) & 1),      # Status bit that indicates the BQ34Z100-R2 is in the SEALED State. Active when set.
             "CALEN": ((os>>12) & 1),   # Status bit that indicates the BQ34Z100-R2 calibration function is active. True when set. Default is 0.
             "CCA": ((os>>11) & 1),     # Status bit that indicates the BQ34Z100-R2 Coulomb Counter Calibration routine is active. Active when set.
+            "BCA": ((os>>10) & 1),     # Status bit that indicates the BQ34Z100-R2 Board Calibration routine is active. Active when set.
             "CSV": ((os>>9) & 1),      # Status bit that indicates a valid data flash checksum has been generated. Active when set.
             "RSVD2": ((os>>8) & 1),    # Reserved
             "RSVD3": ((os>>7) & 1),    # Reserved
-            "RSVD4": ((os>>6) & 1),    # Reserved
+            "RSVD4": ((os>>6) & 1),    # Reserved            
             "FULLSLEEP": ((os>>5) & 1), # Status bit that indicates the BQ34Z100-R2 is in FULL SLEEP mode. True when set. The state can only be detected by monitoring the power used by the BQ34Z100-R2 because any communication will automatically clear it.
             "SLEEP": ((os>>4) & 1),    # Status bit that indicates the BQ34Z100-R2 is in SLEEP mode. True when set.
             "LDMD": ((os>>3) & 1),     # Status bit that indicates the BQ34Z100-R2 Impedance Track algorithm using constant-power mode. True when set. Default is 0 (CONSTANT CURRENT mode).
@@ -493,7 +497,7 @@ class BQ34Z100:
         _, buf = self._read_control(0x0000)
         # convert to bitflags field
         self._control_status = self._decode_control_status(buf, hexi)
-        return _od2t(self._control_status)
+        return self._control_status
 
 
     def _decode_flags_a(self, buf: bytearray| bytes, hexi: bool | str | None) -> OrderedDict:
@@ -619,8 +623,11 @@ class BQ34Z100:
         Returns:
             bool: _description_
         """
-        ok = self.write_control_command(0x000b)
-        return self.write_control_command(0x0000) and ok
+        if 0:
+            ok = self.write_control_command(0x000b)
+            return self.write_control_command(0x0000) and ok
+        else:
+            return self.write_control_command(0x000b)
 
 
     def read_df_version(self) -> int:

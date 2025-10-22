@@ -141,7 +141,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     
     try:
 
-        if 1:
+        if 0:
             afe = BQ76942(cartridge.backyard_bus, slvAddress=0x08, pec=True, retry_limit=5)
             #afe.disable_checksum()
 
