@@ -77,12 +77,12 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     # verify that PSU does not trigger battery protection
     num_cells = 7
     print("PSU Output on")
-    u_cell = 3.15
+    u_cell = 3.5
     u_supply = u_cell*num_cells
     print(u_supply, u_cell)
     psu1.configure_supply(u_supply, 0.080, 50, 0)
     psu2.configure_supply(u_supply, 0.080, 50, 0)
-    u_supply = 3.15 * num_cells
+    u_supply = u_cell * num_cells
     #psu2.configure_cc_mode(0.05, 10.8*1.15, (10.8*1.15) * 0.8, 50, 1)
 
     sleep(0.5)  # wait PSU powered up
@@ -136,12 +136,12 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     # cartridge.gpio.reset_pin(7)  # disable gg
     # cartridge.gpio.reset_pin(4)  # disable micro
     # cartridge.switch_mosfet(0, 0)  # disable micro
-    
+
     base_path = Path(__file__).parent / "../../Battery-PCBA-Test/filestore"
-    
+
     try:
 
-        if 0:
+        if 1:
             afe = BQ76942(cartridge.backyard_bus, slvAddress=0x08, pec=True, retry_limit=5)
             #afe.disable_checksum()
 
@@ -200,20 +200,19 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             # This step will enable the FETs to calibrate Top-of-Stack, PACK, and LD voltages.
             # Make sure FETs are closed for PACK and LD measurements
             afe.disable_sleepmode()  # Sleep Disable 0x009A to prevent CHG FET from opening
-            afe.disable_sleepmode()
-            afe.disable_sleepmode()
-
+            #psu1.set_output_state(0)
 
             print(afe.read_manufacturing_status())
             print(afe.read_alarm_status())
             #print(afe.all_fets_on())
-            print(afe.discharge_test())
+            #print(afe.discharge_test())
+            #print(afe.charge_test())
             print(afe.read_manufacturing_status())
             print(afe.read_alarm_status())
-
+            print("FET status: ", afe.read_fet_status())
             n = 200
             while n > 0:
-                status = afe.read_fet_status()                
+                status = afe.read_fet_status()
                 if (status["DDSG_PIN"] == 0):
                     break
                 print(afe.toggle_fet_enable())
@@ -226,12 +225,12 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             if 1:
                 # === Voltage calibration ===
                 # Apply 2.5V to all cells.
-                u_cell = 2.5
-                u_supply = u_cell*num_cells
-                print(u_supply, u_cell)
+                u_cell_a = 2.5
+                u_supply = u_cell_a * num_cells
+                print(u_supply, u_cell_a)
                 psu1.configure_supply(u_supply, 0.080, 50, 1)
                 for cell_no in range(1, num_cells):
-                    vsim.set_cell_n_voltage(cell_no, u_cell)
+                    vsim.set_cell_n_voltage(cell_no, u_cell_a)
                 psu2.configure_supply(u_supply, 0.080, 50, 1)
                 sleep(1.0)
                 print("Measure PSU1", psu1.get_all_measurements())
@@ -257,10 +256,12 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                 ld_voltage_counts_a /= 10
 
                 # Apply 4.2V to all cells.
-                psu1.configure_supply(4.2*num_cells, 0.080, 50, 1)
+                u_cell_b = 4.2
+                print(u_supply, u_cell_b)
+                psu1.configure_supply(u_supply, 0.080, 50, 1)
                 for cell_no in range(1, num_cells):
-                    vsim.set_cell_n_voltage(cell_no, 4.2)
-                psu2.configure_supply(4.2*num_cells, 0.080, 50, 1)
+                    vsim.set_cell_n_voltage(cell_no, u_cell_b)
+                psu2.configure_supply(u_supply, 0.080, 50, 1)
 
                 sleep(1.0)
                 print("Measure PSU1", psu1.get_all_measurements())
@@ -287,7 +288,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                 ld_voltage_counts_b /= 10
 
                 # Take the average of the 10 measurements and calculate gains
-                _test_voltags_diff = (4.2 - 2.5)
+                _test_voltags_diff = (u_cell_b - u_cell_a)  # in Volts
                 cell_gain = [0] * len(cell_voltage_counts_a)
                 for i in range(0, len(cell_gain)):
                     _d = cell_voltage_counts_b[i] - cell_voltage_counts_a[i]
@@ -298,7 +299,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                     #gain = 2**24 * (_test_voltags_diff * 1e+3) / (cell_voltage_counts_b[i] - cell_voltage_counts_a[i])
                     gain = (2**24 * (_test_voltags_diff * 1e+3)) / (cell_voltage_counts_b[i] - cell_voltage_counts_a[i])
                     if gain < -32768 or gain > 32767:
-                        gain = 0     
+                        gain = 0
                     cell_gain[i] = int(round(gain))
                     print("Cell ",i+1," Gain = ", cell_gain[i])
 
@@ -337,11 +338,20 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             # Apply a known current I_CAL of 0mA
             # psu1 and psu2 already in mode that no current is flowing
             u_cell = 3.2
-            u_supply = u_cell*num_cells
+            u_supply = u_cell * num_cells
             i_pack = 0.0
+            print("Apply 0A discharge current")
             print(u_supply, u_cell, i_pack)
+            print("FET status: ", afe.read_fet_status())
 
-            sleep(0.1) # wait 100ms
+            psu1.configure_supply(u_supply, 0.080, 50, 1)
+            for cell_no in range(1, num_cells):
+                vsim.set_cell_n_voltage(cell_no, u_cell)
+            psu2.configure_supply(u_supply, 0.080, 50, 1)
+            sleep(1.0)
+            print("Measure PSU1", psu1.get_all_measurements())
+            print("Measure PSU2", psu2.get_all_measurements())
+
             value = 0
             for i in range(10):
                 cc = afe.read_cal1()
@@ -359,19 +369,28 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             afe.exit_config_update_mode()
 
             # Apply 1A discharge current through sense resistor
-            i_pack = 1.0
-            print(u_supply, u_cell, i_pack)
+            print("FET status: ", afe.read_fet_status())
             psu1.set_output_state(0)
-            psu1.configure_sink(-i_pack, None, -(i_pack*1.05), u_supply, -60, 0)
-            psu2.configure_supply(u_supply, i_pack*1.25, 60, 1)
+            print("FET status: ", afe.read_fet_status())
+            print(afe.discharge_test())
+            print(afe.charge_test())
+            print("FET status: ", afe.read_fet_status())
+
+            i_pack_a = 1.0
+            print(f"Apply {i_pack_a}A discharge current")
+            p_pack_a = (u_supply * i_pack_a)
+            print(u_supply, u_cell, i_pack_a, p_pack_a)
+            #psu1.set_output_state(0)
+            psu1.configure_sink(-i_pack_a, None, -(i_pack_a*1.05), u_supply, -(p_pack_a * 1.05), 0)
+            psu2.configure_supply(u_supply, i_pack_a*1.25, (p_pack_a * 1.10), 1)
             for cell_no in range(1, num_cells):
                 vsim.set_cell_n_voltage(cell_no, u_cell)
-            sleep(0.1)   
+            sleep(0.1)
             psu1.set_output_state(1)
-            sleep(0.2)
+            sleep(0.5)
             print("Measure PSU1", psu1.get_all_measurements())
             print("Measure PSU2", psu2.get_all_measurements())
-
+            sleep(2.0)
 
             value = 0
             for i in range(10):
@@ -383,15 +402,18 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             cc_counts_a = -(value & 0x8000) | (value & 0x7fff)
             print(cc_counts_a)
 
-            # Apply 2A discharge current through sense resistor
-            i_pack = 2.0
-            print(u_supply, u_cell, i_pack)
-            psu2.configure_supply(u_supply, i_pack*1.25, 60, 1)
+            # Apply HIGH discharge current through sense resistor
+            i_pack_b = 10.0
+            print(f"Apply {i_pack_b}A discharge current")
+            p_pack_b = (u_supply * i_pack_b)
+            print(u_supply, u_cell, i_pack_b, p_pack_b)
+            psu2.configure_supply(u_supply, i_pack_b*1.25, p_pack_b * 1.10, 1)
             #psu1.configure_cc_mode(-1.000, None, 22.09, 10.0, -60, 1)
-            psu1.configure_sink(-i_pack, None, -(i_pack*1.05), u_supply, -60, 1)
-            sleep(0.2)
+            psu1.configure_sink(-i_pack_b, None, -(i_pack_b*1.05), u_supply, -(p_pack_b * 1.05), 1)
+            sleep(0.5)
             print("Measure PSU1", psu1.get_all_measurements())
             print("Measure PSU2", psu2.get_all_measurements())
+            sleep(2.0)
 
             value = 0
             for i in range(10):
@@ -406,18 +428,17 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             if (cc_counts_a == cc_counts_b) or (cc_counts_a == 0) or (cc_counts_b == 0):
                 raise ValueError(f"Current calibration results will cause div by zero error: {cc_counts_a}, {cc_counts_b}")
 
-            current_diff = (-2.0 + 1.0)
+            current_diff = (i_pack_b - i_pack_a)  # in Amps
             cc_gain_float = current_diff * 1e+3 / (cc_counts_b - cc_counts_a)
-            capacity_gain = afe.dec2flash(298261.6178 * cc_gain_float)  # Note: constant 298261.6178 comes from TI doc
+            capacity_gain, cap_gain_hex = afe.dec2flash(298261.6178 * cc_gain_float)  # Note: constant 298261.6178 comes from TI doc
 
-
-            # # write calibration into RAM
-            # afe.enter_config_update_mode()
-            # # CC Offset, CC Gain, Capacity Gain
-            # afe.write_board_offset(board_offset)
-            # afe.write_cc_gain(cc_gain_float)
-            # afe.write_capacity_gain(capacity_gain)
-            # afe.exit_config_update_mode()
+            # write calibration into RAM
+            afe.enter_config_update_mode()
+            # CC Offset, CC Gain, Capacity Gain
+            afe.write_board_offset(board_offset)
+            afe.write_cc_gain(cc_gain_float)
+            afe.write_capacity_gain(capacity_gain)
+            afe.exit_config_update_mode()
 
             # recheck current measurement -> repeat if necessary
 
@@ -462,14 +483,16 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             # afe.exit_config_update_mode()
 
 
-
             # === write to OTP ===
+            afe.enter_config_update_mode()
             results, data_fail_addr = afe.read_otp_wr_check()
             if results == 0x80:
                 # all ok -> write to OTP
                 afe.write_otp()
                 sleep(0.5)
-
+            else:
+                raise RuntimeError(f"OTP write check failed at address {data_fail_addr:02X} with result {results:02X}")
+            afe.exit_config_update_mode()
         # ---------------------------------------------------------------------------------------------
         else:
         # ---------------------------------------------------------------------------------------------

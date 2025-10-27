@@ -663,7 +663,7 @@ class BQ76942:
 
     def discharge_test(self, hexi: bool | str| None = None) -> bool:
         return self.write_subcommand(0x0020)
-    
+
 
     def all_fets_on(self, hexi: bool | str| None = None) -> bool:
         return self.write_subcommand(0x0096)
@@ -805,7 +805,7 @@ class BQ76942:
         return unpack("<h", buf)[0]  # signed
 
     def write_capacity_gain(self, value: int) -> bool:
-        buf = pack("<h", value)
+        buf = pack("<L", value)
         return self.write_subcommand(0x91AC, data=buf)
 
 
@@ -981,7 +981,7 @@ class BQ76942:
 
     def read_otp_wr_check(self) -> Tuple[int, int]:
         buf = self.read_subcommand(0x00a0)
-        results = unpack("<B", buf)[0]
+        results = unpack_from("<B", buf, 0)[0]
         data_fail_addr = unpack_from("<H", buf, 1)[0]
         return results, data_fail_addr
 
@@ -1017,8 +1017,9 @@ class BQ76942:
         mantissa = (mantissa - 1) / (2**-23)
         if (bNegative == 0):
             mantissa = int(mantissa) & 0x7fffff   # remove sign bit if number is positive
-        result = hex(int(round(mantissa + MSB * 2**23)))
-        return result
+        #result = hex(int(round(mantissa + MSB * 2**23)))
+        result = int(round(mantissa + MSB * 2**23))
+        return result, hex(result)
 
 
     def flash2dec(value):
