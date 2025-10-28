@@ -413,29 +413,33 @@ class BQ76942:
             return False
 
         if data:
-            # need to wait untile the chip is ready to take the data
-            t0 = monotonic_ns()  # common timeout over the rest of the function
-            response = 0xFFFF
-            while (response != subcmd) and (response != 0x0000):  # the latter is for NO DATA commands
-                response, ok = self.readWord(0x3E)
-                t1 = monotonic_ns()
-                if (t1 - t0) > timeout * 1e+9:  # scale timeout to ns
-                    raise TimeoutError("While wait for subcommand to complete.")
-                sleep(0.005)
+            # # need to wait untile the chip is ready to take the data
+            # t0 = monotonic_ns()  # common timeout over the rest of the function
+            # response = 0xFFFF
+            # while (response != subcmd) and (response != 0x0000):  # the latter is for NO DATA commands
+            #     response, ok = self.readWord(0x3E)
+            #     t1 = monotonic_ns()
+            #     if (t1 - t0) > timeout * 1e+9:  # scale timeout to ns
+            #         raise TimeoutError("While wait for subcommand to complete.")
+            #     sleep(0.005)
 
-            checksum = (subcmd & 0xFF) + ((subcmd >> 8) & 0xFF) + data if isinstance(data, int) else sum(data)
-            #for b in data:
-            #    checksum += b   # generate the checksum by simple addition
-            checksum = ~checksum & 0xFF  # bitwise inverse
-            if not self.writeBytes(self.address, 0x40, data, use_pec=self.pec):  # write data to the data registers starting at 0x40
+            wholeblock = [subcmd & 0xFF, ((subcmd >> 8) & 0xFF)] + ([data & 0xff] if isinstance(data, int) else list(data))
+            checksum = ~sum(wholeblock) & 0xFF # bitwise inverse
+            if not self.writeBytes(self.address, 0x3E, bytearray(wholeblock), use_pec=self.pec):  # write data to the data registers starting at 0x3E including the address
                 return False
+            return self.writeBytes(self.address, 0x60, bytearray([checksum, len(wholeblock) + 2]), use_pec=self.pec)  # write data to the data registers starting at 0x60
+            #if not self.writeBytes(self.address, 0x40, data, use_pec=self.pec):  # write data to the data registers starting at 0x40
+            #    return False
             # activate the data transfer of the command
-            ctrl = (checksum | ((len(data) + 4) << 8))  # length of data + checksum byte + length byte + the two subcommandbytes
-            if not self.writeWord(0x60, ctrl):  # write checksum to the checksum register 0x60
+            if not self.writeBytes(self.address, 0x60, bytearray([checksum, len(data) + 4]), use_pec=self.pec):  # write data to the data registers starting at 0x40
                 return False
+            #ctrl = (checksum | ((len(data) + 4) << 8))  # length of data + checksum byte + length byte + the two subcommandbytes
+            #if not self.writeWord(0x60, ctrl):  # write checksum to the checksum register 0x60
+            #    return False
         else:
-            pass  # do not wait for anything
-        return True
+            #pass  # do not wait for anything
+            return self.writeWord(0x3E, subcmd)  # write Subcommand to the registers 0x3E and 0x3F
+        #return True
 
 
     def read_subcommand(self, subcmd: int, length: int = 0, timeout: float = 5.0,
@@ -480,11 +484,11 @@ class BQ76942:
         if num_read < 0:
             num_read = 0
         buf, ok = self.readBytes(self.address, 0x40, num_read, use_pec=self.pec)
-        checksum = (subcmd & 0xFF) + ((subcmd >> 8) & 0xFF) + sum(buf)
-        #checksum = (checksum + count) & 0xFF
-        #for b in buf:  # omit the checksum of first byte!
-        #     checksum = (checksum + int(b)) & 0xFF   # generate the checksum by simple addition
-        checksum = ~checksum & 0xFF # bitwise inverse
+        #
+        # NOTE: the checksum verification  is disabled because the BQ76942 seems to send wrong checksums sometimes
+        #
+        #wholeblock = [subcmd & 0xFF, ((subcmd >> 8) & 0xFF)] + list(buf)
+        #checksum = ~sum(wholeblock) & 0xFF  # bitwise inverse
         # verify checksum
         #if checksum != incoming_cs:
         #    raise IOError("Checksum mismatch reading from BQ76942.")
@@ -495,29 +499,98 @@ class BQ76942:
     #----------------------------------------------------------------------------------------------
 
 
-    def read_cell_voltages(self, hexi: None | bool | str = bool) -> Tuple[Tuple[float], Tuple[str]]:
+    def read_cell_voltages(self) -> Tuple[float]:
         """Read cell voltages from the BQ76942.
 
         Args:
             count (int): Number of cell voltages to read (3 to 10).
-            hexi (None | bool | str, optional): If set to True or a string separator, the returned bytes will be hexlified.
-                                                Defaults to None.
         Returns:
             List[float], List[str]: List of voltages read, all values in raw as hex format str.
         """
 
         _standard_scale = 1e-3 # mV -> V
-        _user_scale = 1e-3  # user defined scale for the last three voltages: Stack Voltage (VC10 pin), PACK pin voltage, LD pin voltage
-        scale = [_standard_scale] * 10 + [_user_scale] * 3
+        scale = [_standard_scale] * 10
         voltages = ()
         regadr = 0x14 # base register address for Cell 1 Voltage
-        for i in range(13):  # 10 cells + 3 special Voltages:
+        for i in range(10):  # 10 cells
             raw, ok = self.readWord(regadr)
             volt = raw * scale[i]  # scale returned value into Volts
             voltages += (volt,)
             regadr += 2
             sleep(0.005)
         return voltages
+
+
+    #----------------------------------------------------------------------------------------------
+
+    def read_pack_voltage(self) -> float:
+        """Read the pack voltage from the BQ76942.
+
+        Returns:
+            float, bool: The pack voltage in volts and a boolean indicating success.
+        """
+
+        _user_scale = 1e-3  # user defined scale for the last three voltages: Stack Voltage (VC10 pin), PACK pin voltage, LD pin voltage
+        raw, ok = self.readWord(0x36)  # PACK Voltage register
+        if not ok:
+            return None
+        volt = raw * _user_scale  # scale returned value into Volts
+        return volt
+
+    #----------------------------------------------------------------------------------------------
+
+    def read_tos_voltage(self) -> float:
+        """Read the TOS voltage from the BQ76942.
+
+        Returns:
+            float, bool: The TOST voltage in volts and a boolean indicating success.
+        """
+
+        _user_scale = 1e-3  # user defined scale for the last three voltages: Stack Voltage (VC10 pin), PACK pin voltage, LD pin voltage
+        raw, ok = self.readWord(0x34)  # TOS Voltage register
+        if not ok:
+            return None
+        volt = raw * _user_scale  # scale returned value into Volts
+        return volt
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def read_ld_voltage(self) -> float:
+        """Read the LD voltage from the BQ76942.
+
+        Returns:
+            float, bool: The LD voltage in volts and a boolean indicating success.
+        """
+
+        _user_scale = 1e-3  # user defined scale for the last three voltages: Stack Voltage (VC10 pin), PACK pin voltage, LD pin voltage
+        raw, ok = self.readWord(0x38)  # LD Voltage register
+        if not ok:
+            return None
+        volt = raw * _user_scale  # scale returned value into Volts
+        return volt
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def read_cc2_current(self) -> Tuple[float, bool]:
+        """Read the CC2 current from the BQ76942.
+
+        Returns:
+            float, bool: The CC2 current in Amperes and a boolean indicating success.
+        """
+
+        _standard_scale = 1e-3 # mA -> A
+        raw, ok = self.readWord(0x3A, signed=True)  # CC2 Current register
+        if not ok:
+            return None, False
+        curr = raw * _standard_scale  # scale returned value into Amperes
+        return curr, True
+
+
+    #----------------------------------------------------------------------------------------------
 
 
     def read_temperatures(self, hexi: None | bool | str = bool) -> Tuple[Tuple[float], Tuple[str]]:
@@ -746,9 +819,14 @@ class BQ76942:
         return True
 
 
+    def write_cell_offset(self, cell_offset: int) -> bool:
+        buf = pack("<h", cell_offset)
+        return self.write_subcommand(0x91B0, data=buf)
+
+
     def read_pack_gain(self) -> int:
         buf = self.read_subcommand(0x91A0)
-        return unpack("<H", buf)[0]
+        return unpack_from("<H", buf, 0)[0]
 
     def write_pack_gain(self, value: int) -> bool:
         buf = pack("<H", value)
@@ -757,7 +835,7 @@ class BQ76942:
 
     def read_tos_gain(self) -> int:
         buf = self.read_subcommand(0x91A2)
-        return unpack("<H", buf)[0]
+        return unpack_from("<H", buf, 0)[0]
 
     def write_tos_gain(self, value: int) -> bool:
         buf = pack("<H", value)
@@ -766,7 +844,7 @@ class BQ76942:
 
     def read_ld_gain(self) -> int:
         buf = self.read_subcommand(0x91A4)
-        return unpack("<H", buf)[0]
+        return unpack_from("<H", buf, 0)[0]
 
     def write_ld_gain(self, value: int) -> bool:
         buf = pack("<H", value)
@@ -775,7 +853,7 @@ class BQ76942:
 
     def read_vdiv_gain(self) -> int:
         buf = self.read_subcommand(0x91B2)
-        return unpack("<h", buf)[0]  # signed
+        return unpack_from("<h", buf, 0)[0]  # signed
 
     def write_vdiv_gain(self, value: int) -> bool:
         buf = pack("<H", value)
@@ -784,7 +862,7 @@ class BQ76942:
 
     def read_adc_gain(self) -> int:
         buf = self.read_subcommand(0x91A6)
-        return unpack("<h", buf)[0]  # signed
+        return unpack_from("<h", buf, 0)[0]  # signed
 
     def write_adc_gain(self, value: int) -> bool:
         buf = pack("<H", value)
@@ -793,7 +871,7 @@ class BQ76942:
 
     def read_cc_gain(self) -> float:
         buf = self.read_subcommand(0x91A8)
-        return unpack("<f", buf)[0]  # float
+        return unpack_from("<f", buf, 0)[0]  # float
 
     def write_cc_gain(self, cc_gain: float) -> bool:
         buf = pack("<f", cc_gain)
@@ -802,7 +880,7 @@ class BQ76942:
 
     def read_capacity_gain(self) -> int:
         buf = self.read_subcommand(0x91AC)
-        return unpack("<h", buf)[0]  # signed
+        return unpack_from("<h", buf, 0)[0]  # signed
 
     def write_capacity_gain(self, value: int) -> bool:
         buf = pack("<L", value)
@@ -820,7 +898,7 @@ class BQ76942:
 
     def read_board_offset(self) -> int:
         buf = self.read_subcommand(0x91C8)
-        return unpack("<h", buf)[0]  # signed
+        return unpack_from("<h", buf, 0)[0]  # signed
 
     def write_board_offset(self, value: int) -> bool:
         buf = pack("<h", value)
@@ -995,9 +1073,9 @@ class BQ76942:
             Tuple[int, int]: _description_
         """
 
-        buf = self.read_subcommand(0x00a0, pause_before_data_available=0.1)  # simulation
-        #buf = self.read_subcommand(0x00a1, pause_before_data_available=0.1)  # hot function
-        results = unpack("<B", buf)[0]
+        buf = self.read_subcommand(0x00a0, pause_before_data_available=0.1)  # SIMULATION
+        #buf = self.read_subcommand(0x00a1, pause_before_data_available=0.1)  # !!! HOT FUNCTION !!!
+        results = unpack_from("<B", buf, 0)[0]
         data_fail_addr = unpack_from("<H", buf, 1)[0]
         return results, data_fail_addr
 

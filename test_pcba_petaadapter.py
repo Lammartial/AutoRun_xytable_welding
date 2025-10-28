@@ -5,7 +5,7 @@ PETA Design PCBA Adapter.
 #import unittest
 from traceback import print_exception
 from re import A
-from typing import Tuple
+from typing import Never, Tuple
 from time import sleep, perf_counter
 from pathlib import Path
 from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
@@ -120,18 +120,36 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     #for n in range(1,9):
     #    print(cartridge.get_muxed_i2c_bus_for(n).i2c_bus_scan())
 
-    print("DAQ - channel 11", daq.get_VDC(11))
-    print("DAQ - channel 12", daq.get_VDC(12))
-    print("DAQ - channel 14", daq.get_VDC(14))
-    print("DAQ - channel 10", daq.get_VDC(10))
-    print("DAQ - channel 18", daq.get_VDC(18))
-    print("DAQ - channel 19", daq.get_VDC(19))
-    print("DAQ - channel 5", daq.get_VDC(5))
 
-    print("DAQ - channel 15", daq.get_VDC(15))  # full pack voltage
+    def read_voltages_from_daq() -> Tuple[Tuple[Never] | Tuple[float] | Tuple[float]]:
+        u_cell = ()
+        for channel in [11, 12, 14, 10, 18, 19, 5]:
+            u_cell += (daq.get_VDC(channel),)
+        u_xtra = ()
+        u_xtra += (daq.get_VDC(15),)  # full pack voltage
+        u_xtra += (daq.get_VDC(8),)   # should be +3.3v
+        u_xtra += (daq.get_VDC(9),)   # should be +1.8v
+        return u_cell, u_xtra
 
-    print("DAQ - channel 8", daq.get_VDC(8))  # should be +3.3v
-    print("DAQ - channel 9", daq.get_VDC(9))  # should be +1.8v
+    print("Read voltages from DAQ:")
+    u_cells, u_xtras = read_voltages_from_daq()
+    print("Cells: ", u_cells)
+    print("Pack: ", u_xtras[0])
+    print("+3.3v VCC: ", u_xtras[1])
+    print("+1.8v VCC: ", u_xtras[2])
+
+    # print("DAQ - channel 11", daq.get_VDC(11))
+    # print("DAQ - channel 12", daq.get_VDC(12))
+    # print("DAQ - channel 14", daq.get_VDC(14))
+    # print("DAQ - channel 10", daq.get_VDC(10))
+    # print("DAQ - channel 18", daq.get_VDC(18))
+    # print("DAQ - channel 19", daq.get_VDC(19))
+    # print("DAQ - channel 5", daq.get_VDC(5))
+
+    # print("DAQ - channel 15", daq.get_VDC(15))  # full pack voltage
+
+    # print("DAQ - channel 8", daq.get_VDC(8))  # should be +3.3v
+    # print("DAQ - channel 9", daq.get_VDC(9))  # should be +1.8v
 
     # cartridge.gpio.reset_pin(7)  # disable gg
     # cartridge.gpio.reset_pin(4)  # disable micro
@@ -210,36 +228,84 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             print(afe.read_manufacturing_status())
             print(afe.read_alarm_status())
             print("FET status: ", afe.read_fet_status())
-            n = 200
-            while n > 0:
-                status = afe.read_fet_status()
-                if (status["DDSG_PIN"] == 0):
-                    break
-                print(afe.toggle_fet_enable())
-                sleep(0.1)
-                n -= 1
-            print(status)
-            if n == 0:
-                raise RuntimeError("Could not enable FET")
+
+            # ENABLE FETs
+            def _enable_fets(timeout: float = 10.0) -> None:
+                n = int(round(timeout * 10))
+                while n > 0:
+                    status = afe.read_fet_status()
+                    if (status["DDSG_PIN"] == 0) and (status["CHG_FET"] == 1) and (status["DSG_FET"] == 1):
+                        return
+                    print(status)  # DEBUG
+                    #if (status["DDSG_PIN"] == 0):
+                    _ok = afe.toggle_fet_enable()
+                    sleep(0.1)
+                    n -= 1
+                raise RuntimeError(f"Could not enable FET {status}")
+
+            # DISABLE FETs
+            def _disable_fets(timeout: float = 10.0) -> None:
+                n = int(round(timeout * 10))
+                while n > 0:
+                    status = afe.read_fet_status()
+                    if (status["DDSG_PIN"] == 1) and (status["CHG_FET"] == 0) and (status["DSG_FET"] == 0):
+                        return
+                    print(status)  # DEBUG
+                    #if (status["DDSG_PIN"] == 1):
+                    _ok = afe.toggle_fet_enable()
+                    sleep(0.1)
+                    n -= 1
+                raise RuntimeError(f"Could not disable FET {status}")
+
+            _enable_fets()
+            print("FET status: ", afe.read_fet_status())
+            _disable_fets()
+            print("FET status: ", afe.read_fet_status())
+
+
+            print("TOS Gain stored:", afe.read_tos_gain())
+            print("PACK Gain stored:", afe.read_pack_gain())
+            print("LD Gain stored:", afe.read_ld_gain())
 
             if 1:
                 # === Voltage calibration ===
-                # Apply 2.5V to all cells.
-                u_cell_a = 2.5
+                # Apply 3.0V to all cells -----------
+                u_cell_a = 3.0
                 u_supply = u_cell_a * num_cells
+                print("Apply 2.5v (LOW) cell voltages for voltage calibration")
                 print(u_supply, u_cell_a)
-                psu1.configure_supply(u_supply, 0.080, 50, 1)
+                psu1.configure_supply(u_supply, 0.080, 50, 1)  # wakeup AFE
                 for cell_no in range(1, num_cells):
                     vsim.set_cell_n_voltage(cell_no, u_cell_a)
                 psu2.configure_supply(u_supply, 0.080, 50, 1)
                 sleep(1.0)
                 print("Measure PSU1", psu1.get_all_measurements())
                 print("Measure PSU2", psu2.get_all_measurements())
+                print(read_voltages_from_daq())
 
+                # psu1.set_output_state(0)  # disable PACK supply and enable the FETs to use the DAQ measurement for PACK and LD voltages too
+                # # print(afe.discharge_test())
+                # # print(afe.charge_test())
+                # #print(afe.toggle_fet_enable())
+                # _enable_fets()
+                # print("FET status: ", afe.read_fet_status())
+
+                cell_voltage_daq_a = [0] * 16
+                pack_voltage_daq_a = 0
                 cell_voltage_counts_a = [0] * 16
                 tos_voltage_counts_a = 0
                 pack_voltage_counts_a = 0
                 ld_voltage_counts_a = 0
+                u_daq, u_xtra = read_voltages_from_daq()
+                u_psu1 = psu1.get_voltage()
+                # transform DAQ voltages to counts positions
+                for i in range(6):
+                    cell_voltage_daq_a[i] = u_daq[i]
+                cell_voltage_daq_a[9] = u_daq[6]
+                tos_voltage_daq_a = u_xtra[0]
+                pack_voltage_daq_a = u_psu1
+                ld_voltage_daq_a = u_xtra[0]
+                # get the ADC reading from the AFE
                 for i in range(10):
                     _u_counts, _i_counts = afe.read_dastatus()
                     _cal1 = afe.read_cal1()
@@ -248,15 +314,16 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                     tos_voltage_counts_a += _cal1["tos_adc_counts"]
                     pack_voltage_counts_a += _cal1["pack_pin_adc_counts"]
                     ld_voltage_counts_a += _cal1["ld_pin_adc_counts"]
-
                 # calc average
                 cell_voltage_counts_a = [n / 10 for n in cell_voltage_counts_a]
                 tos_voltage_counts_a /= 10
                 pack_voltage_counts_a /= 10
                 ld_voltage_counts_a /= 10
 
-                # Apply 4.2V to all cells.
+                # Apply 4.2V to all cells -----------
                 u_cell_b = 4.2
+                u_supply = u_cell_b * num_cells
+                print("Apply 4.2v (HIGH) cell voltages for voltage calibration")
                 print(u_supply, u_cell_b)
                 psu1.configure_supply(u_supply, 0.080, 50, 1)
                 for cell_no in range(1, num_cells):
@@ -266,12 +333,24 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                 sleep(1.0)
                 print("Measure PSU1", psu1.get_all_measurements())
                 print("Measure PSU2", psu2.get_all_measurements())
+                print(read_voltages_from_daq())
 
-
+                cell_voltage_daq_b = [0] * 16
+                pack_voltage_daq_b = 0
                 cell_voltage_counts_b = [0] * 16
                 tos_voltage_counts_b = 0
                 pack_voltage_counts_b = 0
                 ld_voltage_counts_b = 0
+                u_daq, u_xtra = read_voltages_from_daq()
+                u_psu1 = psu1.get_voltage()
+                # transform DAQ voltages to counts positions
+                for i in range(6):
+                    cell_voltage_daq_b[i] = u_daq[i]
+                cell_voltage_daq_b[9] = u_daq[6]
+                tos_voltage_daq_b = u_xtra[0]
+                pack_voltage_daq_b = u_psu1
+                ld_voltage_daq_b = u_xtra[0]
+                # get the ADC reading from the AFE
                 for i in range(10):
                     _u_counts, _i_counts = afe.read_dastatus()
                     _cal1 = afe.read_cal1()
@@ -280,7 +359,6 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                     tos_voltage_counts_b += _cal1["tos_adc_counts"]
                     pack_voltage_counts_b += _cal1["pack_pin_adc_counts"]
                     ld_voltage_counts_b += _cal1["ld_pin_adc_counts"]
-
                 # # Take the average of the 10 measurements and calculate gains
                 cell_voltage_counts_b = [n / 10 for n in cell_voltage_counts_b]
                 tos_voltage_counts_b /= 10
@@ -288,50 +366,78 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                 ld_voltage_counts_b /= 10
 
                 # Take the average of the 10 measurements and calculate gains
-                _test_voltags_diff = (u_cell_b - u_cell_a)  # in Volts
+                _dummy_gain = 0  # 12100
                 cell_gain = [0] * len(cell_voltage_counts_a)
                 for i in range(0, len(cell_gain)):
+                    _test_voltage_diff = (cell_voltage_daq_b[i] - cell_voltage_daq_a[i])  # in Volts
                     _d = cell_voltage_counts_b[i] - cell_voltage_counts_a[i]
+                    print(_test_voltage_diff, _d)
                     if _d == 0:
                         # avoid div by zero
-                        cell_gain[i] = 0
+                        cell_gain[i] = _dummy_gain
                         continue
                     #gain = 2**24 * (_test_voltags_diff * 1e+3) / (cell_voltage_counts_b[i] - cell_voltage_counts_a[i])
-                    gain = (2**24 * (_test_voltags_diff * 1e+3)) / (cell_voltage_counts_b[i] - cell_voltage_counts_a[i])
+                    gain = 2**24 * ((_test_voltage_diff * 1e+3) / _d)
                     if gain < -32768 or gain > 32767:
-                        gain = 0
+                        gain = _dummy_gain
                     cell_gain[i] = int(round(gain))
                     print("Cell ",i+1," Gain = ", cell_gain[i])
 
+
+                # PSU1 and PSU2 are in safe state which avoid damadge on DUT
+
                 print(cell_gain)
+                print("FET status: ", afe.read_fet_status())
 
                 # Calculate Cell Offset based on Cell1
                 #cell_offset = ((cell_gain[0] * cell_voltage_counts_a[0]) / 2**24) - 2500
-                cell_offset = ((cell_gain[0] * cell_voltage_counts_a[0]) / 2**24) - (2.5 * 1e+3)
-                print("Cell Offset:", cell_offset)
+                cell_offset_float = ((cell_gain[0] * cell_voltage_counts_a[0]) / 2**24) - (cell_voltage_daq_a[0] * 1e+3)
+                cell_offset = int(round(cell_offset_float))
                 #if cell_offset < 0:
-                #    cell_offset = 0xFFFF + cell_offset
-                TOS_Gain = int(round(2**16 * (_test_voltags_diff * 1e+3) / (tos_voltage_counts_b - tos_voltage_counts_a)))
-                PACK_Gain = int(round(2**16 * (_test_voltags_diff * 1e+3) / (pack_voltage_counts_b - pack_voltage_counts_a)))
-                LD_Gain = int(round(2**16 * (_test_voltags_diff * 1e+3) / (ld_voltage_counts_b - ld_voltage_counts_a)))
+                #    cell_offset_x = 0xFFFF + cell_offset
+                #print("Cell Offset:", cell_offset, cell_offset_x)
+                print("Cell Offset:", cell_offset_float, "->", cell_offset)
 
-                print("TOS Gain", TOS_Gain)
-                print("Pack Gain", PACK_Gain)
-                print("LD Gain", LD_Gain)
+                TOS_Gain = int(round(2**16 * (((tos_voltage_daq_b - tos_voltage_daq_a) * 1e+2) / (tos_voltage_counts_b - tos_voltage_counts_a))))
+                PACK_Gain = int(round(2**16 * (((pack_voltage_daq_b - pack_voltage_daq_a) * 1e+2) / (pack_voltage_counts_b - pack_voltage_counts_a))))
+                LD_Gain = int(round(2**16 * (((ld_voltage_daq_b - ld_voltage_daq_a) * 1e+2) / (ld_voltage_counts_b - ld_voltage_counts_a))))
+
+                print("TOS new Gain", TOS_Gain)
+                print("Pack new Gain", PACK_Gain)
+                print("LD new Gain", LD_Gain)
+
+                # _disable_fets()
+                # print("FET status: ", afe.read_fet_status())
+                # psu1.set_output_state(1)
+                # sleep(0.5)
 
                 # write voltage calibration into RAM
                 afe.enter_config_update_mode()
+
+                afe.write_cell_offset(cell_offset)
                 # Cell Voltage Gains
                 afe.write_cell_gain(cell_gain)
                 # PACK, LD, TOS Gains
                 afe.write_pack_gain(PACK_Gain)
                 afe.write_ld_gain(LD_Gain)
                 afe.write_tos_gain(TOS_Gain)
+
                 afe.exit_config_update_mode()
 
-                # recheck voltage measurement
-                # ...
 
+                # recheck voltage measurement
+                print("Recheck cell voltages after voltage calibration:")
+                sleep(1.0)
+                print("TOS Gain stored:", afe.read_tos_gain())
+                print("PACK Gain stored:", afe.read_pack_gain())
+                print("LD Gain stored:", afe.read_ld_gain())
+                u_recheck = afe.read_cell_voltages()
+                for i, v in enumerate(u_recheck):
+                    print(f"Cell {i+1}: {round(v, 3)}V")
+                print("TOS:", afe.read_tos_voltage())
+                print("PACK:", afe.read_pack_voltage())
+                print("LD:", afe.read_ld_voltage())
+                print(read_voltages_from_daq())
 
             # === Current calibration ===
 
@@ -343,7 +449,6 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             print("Apply 0A discharge current")
             print(u_supply, u_cell, i_pack)
             print("FET status: ", afe.read_fet_status())
-
             psu1.configure_supply(u_supply, 0.080, 50, 1)
             for cell_no in range(1, num_cells):
                 vsim.set_cell_n_voltage(cell_no, u_cell)
@@ -371,10 +476,11 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             # Apply 1A discharge current through sense resistor
             print("FET status: ", afe.read_fet_status())
             psu1.set_output_state(0)
+            _enable_fets()
             print("FET status: ", afe.read_fet_status())
-            print(afe.discharge_test())
-            print(afe.charge_test())
-            print("FET status: ", afe.read_fet_status())
+            #print(afe.discharge_test())
+            #print(afe.charge_test())
+            #print("FET status: ", afe.read_fet_status())
 
             i_pack_a = 1.0
             print(f"Apply {i_pack_a}A discharge current")
@@ -386,6 +492,8 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             for cell_no in range(1, num_cells):
                 vsim.set_cell_n_voltage(cell_no, u_cell)
             sleep(0.1)
+            _enable_fets()
+            print("FET status: ", afe.read_fet_status())
             psu1.set_output_state(1)
             sleep(0.5)
             print("Measure PSU1", psu1.get_all_measurements())
@@ -424,6 +532,23 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             value = int(round(value / 10))
             cc_counts_b = -(value & 0x8000) | (value & 0x7fff)
             print(cc_counts_b)
+
+
+
+            # bq34Z100 calculation of CC Gain and Capacity Gain
+
+
+
+
+            #
+            # set PSU1 and PSU2 to safe state avoiding damadge on DUT
+            #
+            psu1.set_output_state(0)  # SINK OFF
+            psu2.configure_supply(u_supply, 0.080, 50, 1)  # SUPPLY SAFE STATE
+            _disable_fets()
+            print("FET status: ", afe.read_fet_status())
+            print("Measure PSU1", psu1.get_all_measurements())
+            print("Measure PSU2", psu2.get_all_measurements())
 
             if (cc_counts_a == cc_counts_b) or (cc_counts_a == 0) or (cc_counts_b == 0):
                 raise ValueError(f"Current calibration results will cause div by zero error: {cc_counts_a}, {cc_counts_b}")
@@ -484,15 +609,33 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
 
             # === write to OTP ===
+
+            u_supply = 11.0  # target stack voltage for OTP programming
+            u_cell = round(u_supply / num_cells, 2)
+            print(f"Apply {u_supply}v stack voltage for OTP programming")
+            print(u_supply, u_cell)
+            psu1.configure_supply(u_supply, 0.080, 50, 1)
+            for cell_no in range(1, num_cells):
+                vsim.set_cell_n_voltage(cell_no, u_cell)
+            psu2.configure_supply(u_supply, 0.080, 50, 1)
+            _disable_fets()
+            print("FET status: ", afe.read_fet_status())
+            sleep(1.0)
+            print("Measure PSU1", psu1.get_all_measurements())
+            print("Measure PSU2", psu2.get_all_measurements())
+
             afe.enter_config_update_mode()
             results, data_fail_addr = afe.read_otp_wr_check()
             if results == 0x80:
                 # all ok -> write to OTP
+                print(f"AFE ready: 0x{results:02X} -> write to OTP")
                 afe.write_otp()
                 sleep(0.5)
+                afe.exit_config_update_mode()
             else:
-                raise RuntimeError(f"OTP write check failed at address {data_fail_addr:02X} with result {results:02X}")
-            afe.exit_config_update_mode()
+                afe.exit_config_update_mode()
+                raise RuntimeError(f"OTP write check failed at address 0x{data_fail_addr:04X} with result 0x{results:02X}")
+
         # ---------------------------------------------------------------------------------------------
         else:
         # ---------------------------------------------------------------------------------------------
@@ -601,6 +744,17 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
+    print("expected: 150")
+    _test = [113, 0, 118, 0, 74, 0, 152, 247, 255, 255, 220, 255, 73, 0, 222, 247, 255, 255, 186, 165, 73, 0, 207, 248, 255, 255, 107, 60, 73, 0, 69, 249, 255, 255]
+    _test2 = bytearray(b'v\x00J\x00\x98\xf7\xff\xff\xdc\xffI\x00\xde\xf7\xff\xff\xba\xa5I\x00\xcf\xf8\xff\xffk<I\x00E\xf9\xff\xff')
+    _test3 = bytearray([113, 0]) + bytearray(b'v\x00J\x00\x98\xf7\xff\xff\xdc\xffI\x00\xde\xf7\xff\xff\xba\xa5I\x00\xcf\xf8\xff\xffk<I\x00E\xf9\xff\xff')
+    print(sum(_test) & 0xFF)
+    print(~sum(_test) & 0xFF)
+    print(sum(_test2) & 0xff)
+    print(~sum(_test2) & 0xff)
+    print(sum(_test3) & 0xff)
+    print(~sum(_test3) & 0xff)
+    #exit()
 
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
