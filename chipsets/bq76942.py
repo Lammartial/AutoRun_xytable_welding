@@ -397,6 +397,7 @@ class BQ76942:
             return None, False
 
 
+    #----------------------------------------------------------------------------------------------
 
 
     def write_subcommand(self, subcmd: int, data: bytes | bytearray = None, timeout: float = 3.0) -> bool:
@@ -409,8 +410,8 @@ class BQ76942:
 
         if not (0 <= subcmd <= 0xFFFF):
             raise ValueError("Subcommand must be a 16-bit value (0-65535).")
-        if not self.writeWord(0x3E, subcmd):  # write Subcommand to the registers 0x3E and 0x3F
-            return False
+        #if not self.writeWord(0x3E, subcmd):  # write Subcommand to the registers 0x3E and 0x3F
+        #    return False
 
         if data:
             # # need to wait untile the chip is ready to take the data
@@ -440,6 +441,9 @@ class BQ76942:
             #pass  # do not wait for anything
             return self.writeWord(0x3E, subcmd)  # write Subcommand to the registers 0x3E and 0x3F
         #return True
+
+
+    #----------------------------------------------------------------------------------------------
 
 
     def read_subcommand(self, subcmd: int, length: int = 0, timeout: float = 5.0,
@@ -905,6 +909,11 @@ class BQ76942:
         return self.write_subcommand(0x91C8, data=buf)
 
 
+    def read_coulomb_counter_offset_sample(self) -> int:
+        buf = self.read_subcommand( 0x91C6)
+        return unpack_from("<H", buf, 0)[0]  # unsigned
+
+
     def read_temperature_calibration_offsets(self, hexi: bool | str | None = None) -> tuple:
         buf = bytearray()
         for i in range(10):
@@ -1073,8 +1082,8 @@ class BQ76942:
             Tuple[int, int]: _description_
         """
 
-        buf = self.read_subcommand(0x00a0, pause_before_data_available=0.1)  # SIMULATION
-        #buf = self.read_subcommand(0x00a1, pause_before_data_available=0.1)  # !!! HOT FUNCTION !!!
+        buf = self.read_subcommand(0x00a0, pause_before_data_available=0.15)  # SIMULATION
+        #buf = self.read_subcommand(0x00a1, pause_before_data_available=0.15)  # !!! HOT FUNCTION !!!
         results = unpack_from("<B", buf, 0)[0]
         data_fail_addr = unpack_from("<H", buf, 1)[0]
         return results, data_fail_addr

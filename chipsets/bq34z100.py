@@ -155,6 +155,94 @@ class BQ34Z100:
     # ----------------------------------------------------------------------------------------------
 
 
+    def write_subcommand(self, subcmd: int, data: bytes | bytearray = None, timeout: float = 3.0) -> bool:
+        """Write a subcommand with optional data to the BQ76942.
+
+        Args:
+            subcmd (int): The subcommand to write.
+            data (bytes | bytearray, optional): Optional data to send with the subcommand. Defaults to b''.
+        """
+
+        if not (0 <= subcmd <= 0xFFFF):
+            raise ValueError("Subcommand must be a 16-bit value (0-65535).")
+        if data:
+            if len(data) > 32:
+                raise ValueError("Data length must not exceed 32 bytes.")
+            wholeblock = [subcmd & 0xFF, ((subcmd >> 8) & 0xFF)] + ([data & 0xff] if isinstance(data, int) else list(data))
+            checksum = ~sum(wholeblock) & 0xFF # bitwise inverse
+            if not self.bus.writeBytes(self.address, 0x3E, bytearray(wholeblock), use_pec=self.pec):  # write data to the data registers starting at 0x3E including the address
+                return False
+            return self.bus.writeBytes(self.address, 0x60, bytearray([checksum, len(wholeblock) + 2]), use_pec=self.pec)  # write data to the data registers starting at 0x60
+        else:
+            # command without data
+            return self.writeWord(0x3E, subcmd)
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def read_subcommand(self, subcmd: int, timeout: float = 5.0,
+                        pause_before_data_available: float = None,
+                        hexi: None | bool | str = None) -> bytes | bytearray | str:
+        """Read data from a subcommand.
+
+        Args:
+            subcmd (int): The subcommand to read from.
+            length (int, optional): The number of bytes to read. Defaults to 0.
+            timeout (float, optional): Timeout in seconds for the operation. Defaults to 2.0.
+            hexi (None | bool | str, optional): If set to True or a string separator, the returned bytes will be hexlified.
+                                                Defaults to None.
+        Returns:
+            bytes | bytearray | str: The data read from the subcommand, possibly hexlified.
+        """
+
+        if not (0 <= subcmd <= 0xFFFF):
+            raise ValueError("Subcommand must be a 16-bit value (0-65535).")
+        if not self.bus.writeWord(0x3E, subcmd):  # write Subcommand to the registers 0x3E and 0x3F
+            return False
+
+        if pause_before_data_available is not None:
+            sleep(pause_before_data_available)
+
+        t0 = monotonic_ns()  # common timeout over the rest of the function
+        response = 0xFFFF
+        while response != subcmd:
+            response, ok = self.bus.readWord(0x3E)
+            t1 = monotonic_ns()
+            if (t1 - t0) > (timeout * 1e+9):  # scale timeout to ns
+                raise TimeoutError("While wait for subcommand to complete.")
+            sleep(0.005)
+        # data is ready now
+        ctrl, ok = self.bus.readBytes(self.address, 0x60, 2, use_pec=self.pec)
+        if not ok:
+            raise IOError("Failed to read checksum and length from BQ76942.")
+        # testbuf, ok2 = self.i2c.readBytes(self.address, 0x60, 3, use_pec=False)
+        incoming_cs = int(ctrl[0])
+        count = int(ctrl[1])
+        num_read = count - 4
+        if num_read < 0:
+            num_read = 0
+        if num_read > 32:
+            num_read = 32
+            #raise ValueError(f"Number of bytes to read {num_read} exceeds maximum of 32.")
+        num_read = 32 + 2
+        buf, ok = self.bus.readBytes(self.address, 0x3E, num_read, use_pec=self.pec)
+
+        # NOTE: the checksum always is for 32 bytes
+        wholeblock = [subcmd & 0xFF, ((subcmd >> 8) & 0xFF)] + list(buf)
+        checksum = ~sum(wholeblock) & 0xFF  # bitwise inverse
+        # verify checksum
+        #if checksum != incoming_cs:
+        #    raise IOError("Checksum mismatch reading from BQ76942.")
+        # success
+        return buf[2:]
+
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+
     def get_voltage_scale(self, force_refresh: bool = False) -> int:
         """
         This command returns the scale factor for the voltage measurement.
@@ -477,7 +565,7 @@ class BQ34Z100:
             "CSV": ((os>>9) & 1),      # Status bit that indicates a valid data flash checksum has been generated. Active when set.
             "RSVD2": ((os>>8) & 1),    # Reserved
             "RSVD3": ((os>>7) & 1),    # Reserved
-            "RSVD4": ((os>>6) & 1),    # Reserved            
+            "RSVD4": ((os>>6) & 1),    # Reserved
             "FULLSLEEP": ((os>>5) & 1), # Status bit that indicates the BQ34Z100-R2 is in FULL SLEEP mode. True when set. The state can only be detected by monitoring the power used by the BQ34Z100-R2 because any communication will automatically clear it.
             "SLEEP": ((os>>4) & 1),    # Status bit that indicates the BQ34Z100-R2 is in SLEEP mode. True when set.
             "LDMD": ((os>>3) & 1),     # Status bit that indicates the BQ34Z100-R2 Impedance Track algorithm using constant-power mode. True when set. Default is 0 (CONSTANT CURRENT mode).
