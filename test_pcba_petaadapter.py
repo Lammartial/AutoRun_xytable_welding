@@ -781,6 +781,12 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
 
 
+            # ------ SECURITY CODES -------
+
+            auth_buf = gg.read_subcommand(112)
+            # ...
+
+
             gg.exit_calibration()
             print("Done.")
 
