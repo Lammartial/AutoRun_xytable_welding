@@ -8,6 +8,7 @@ __version__ = "0.5.0"
 
 # pylint: disable=line-too-long,C0103,C0321,C0413,W0703,W0107,R1702,R0904
 
+import math
 from typing import Tuple
 from time import sleep, monotonic_ns
 from binascii import hexlify
@@ -174,6 +175,7 @@ class BQ34Z100:
                 raise IOError(f"Could not read page {subclass_and_offset}from BQ34Z100.")
             
             wholeblock = bytearray(data + rd_buf)[:32]
+            print(list(wholeblock))
             checksum = ~sum(wholeblock) & 0xFF # bitwise inverse
             if not self.bus.writeBytes(self.address, 0x40, wholeblock, use_pec=self.pec):  # write data to the data registers starting at 0x3E including the address
                 return False
@@ -202,11 +204,11 @@ class BQ34Z100:
 
         if not (0 <= subclass_and_offset <= 0xFFFF):
             raise ValueError("Subcommand must be a 16-bit value (0-65535).")
-        if not self.bus.writeBytes(self.address, 0x61, bytearray([0x00]), use_pec=self.pec):  # enable block data flash conttol
+        if not self.bus.writeBytes(self.address, 0x61, bytearray([0x00]), use_pec=self.pec):  # enable block data flash control
             return False
         if not self.bus.writeWord(self.address, 0x3E, subclass_and_offset, use_pec=self.pec):  # write Subcommand to the registers 0x3E and 0x3F
             return False
-
+        
         if pause_before_data_available is not None:
             sleep(pause_before_data_available)
 
@@ -219,28 +221,24 @@ class BQ34Z100:
                 raise TimeoutError("While wait for subcommand to complete.")
             sleep(0.005)
         # data is ready now
-         # data is ready now
-        buf, ok = self.bus.readBytes(self.address, 0x40, 36, use_pec=self.pec)
+        buf, ok = self.bus.readBytes(self.address, 0x40, 34, use_pec=self.pec)
         if not ok:
             raise IOError("Could not read from BQ76942.")
         print(list(buf))  # DEBUG
-        if length == 0:
-            length = 32
         incoming_cs, count = list(buf[-2:])  # get expected checksum and length
         checksum = ~sum(buf[:-2]) & 0xFF  # bitwise inverse
-        # # verify checksum
-        # if checksum != incoming_cs:
-        #    raise IOError("Checksum mismatch reading from BQ76942.")
-        # # success
-        # if length > 0:
-        #     if length > 32:
-        #         length = 32
-        #     else:
-        #         pass
-        # else:
-        #     length = (count - 4) if (count > 4) else 0   # exclude overhead
-        # print(subclass_and_offset, "->", list(buf[2:(2 + length)]))  # DEBUG
-        return buf[2:(2 + length)]
+        # verify checksum
+        if checksum != incoming_cs:
+           raise IOError("Checksum mismatch reading from BQ76942.")
+        # success
+        if length <= 0:
+            length = 32
+        else:
+            if length > 32:
+                length = 32
+            else:
+                pass
+        return buf[:length]
 
 
 
@@ -442,10 +440,12 @@ class BQ34Z100:
         return value, data  # return also raw data
 
 
-    def write_control_command(self, w: int) -> bool:
+    def write_control_command(self, w: int, data: bytearray | bytes | int = None) -> bool:
         # write the subcommand to the control register (0x00/0x01)
         ok = True
-        buf = pack("<H", w)
+        buf = pack("<H", w) 
+        if data:
+            buf += bytearray(data)
         if 0:
             for i in range(2):
                 ok = ok and self.bus.writeBytes(self.address, 0x00 + i, buf[i:i+1], use_pec=self.pec)
@@ -824,7 +824,7 @@ class BQ34Z100:
 
 
     def reset_device(self) -> bool:
-        return self.write_control_command(0x0041)
+        return self.write_control_command(0x0041, data=[0x00])
 
 
     def offset_cal(self) -> bool:
@@ -892,6 +892,44 @@ class BQ34Z100:
             n -= 1
         return False
 
+
+
+    def float2flash(self, value: float) -> int:
+        if value == 0:
+            value += 0.0000001    # avoid log of zero
+        if value < 0:
+            bNegative = 1
+            value *= -1
+        else:
+            bNegative = 0
+        exponent = int( (math.log(value)/math.log(2)) )
+        MSB = exponent + 127        # exponent bits
+        mantissa = value / (2**exponent)
+        mantissa = (mantissa - 1) / (2**-23)
+        if (bNegative == 0):
+            mantissa = int(mantissa) & 0x7fffff   # remove sign bit if number is positive
+        #result = hex(int(round(mantissa + MSB * 2**23)))
+        result = int(round(mantissa + MSB * 2**23))
+        #print(hex(result))  # DEBUG
+        return result
+
+
+    def flash2float(self, value: int) -> float:
+        exponent = 0xff & int(value / (2**23))  # exponent is most significant byte after sign bit
+        mantissa = value % (2**23)
+        if (0x80000000 & value == 0):   # check if number is positive
+            isPositive = 1
+        else:
+            isPositive = 0
+        mantissa_f = 1.0
+        mask = 0x400000
+        for i in range(0,23):
+            if ((mask >> i) & mantissa):
+                mantissa_f += 2**(-1*(i+1))
+        result = mantissa_f * 2**(exponent-127)
+        if not(isPositive):
+            result *= -1
+        return float(result)
 
 
 #--------------------------------------------------------------------------------------------------

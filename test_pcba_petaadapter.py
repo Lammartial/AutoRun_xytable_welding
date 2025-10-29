@@ -744,12 +744,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
         # ---------------------------------------------------------------------------------------------
 
             gg = BQ34Z100(BusMaster(cartridge.backyard_bus, retry_limit=5), slvAddress=0x55, pec=False)
-            print(gg.get_voltage_scale())
-            print(gg.get_current_scale())
-            print(gg.get_energy_scale())
-            print(gg.voltage())
-            print(gg.temperature())
-
+            
             if 0:
                 # write FLASH -----------
                 ff2 = BQStudioFileFlexFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.bq.fs" )
@@ -759,6 +754,12 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                 toc = perf_counter()
                 print(f"DONE in {toc - tic:0.4f} seconds.")
 
+            print(gg.get_voltage_scale())
+            print(gg.get_current_scale())
+            print(gg.get_energy_scale())
+            print(gg.voltage())
+            print(gg.temperature())
+
             # enter calibration mode ----------
 
             cs = gg.read_control_status()
@@ -766,41 +767,70 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                 gg.enable_enter_and_exit_of_calibration_mode()
                 sleep(0.1)
 
-            gg.enter_calibration()
-            calibration_buf = gg.read_dataflash_class(104)
-            cc_gain = unpack_from("<f", calibration_buf, 0)[0]
-            cc_delta = unpack_from("<f", calibration_buf, 4)[0]
-            cc_offset = unpack_from("<h", calibration_buf, 8)[0]
-            board_offset = unpack_from("<b", calibration_buf, 10)[0]
-            int_temperature_offset = unpack_from("<b", calibration_buf, 11)[0]
-            ext_temperature_offset = unpack_from("<b", calibration_buf, 12)[0]
-            voltage_divider = unpack_from("<H", calibration_buf, 14)[0]
 
+            def ti_f4_to_float(z: int) -> float:
+                exponent = (z >> 24) - 128 - 24  # both numbers are from ??? TI
+                mantissa = z & 0xFFFFFF
+                sign = -1 if (z & 0x800000) != 0 else 1
+                mantissa = mantissa | 0x800000  # set back the hidden 1 of mantissa
+                result = sign * mantissa * 2**exponent
+                return result
+            print(ti_f4_to_float(0x7F71205C))
+            
+
+            gg.enter_calibration()
+
+            calibration_buf = gg.read_dataflash_class(104)
+            xx = unpack_from(">L", calibration_buf, 0)[0]
+            cc_gain = ti_f4_to_float(xx)
+            # cc_gain = unpack_from(">f", calibration_buf, 0)[0]
+            # cc_delta = unpack_from(">f", calibration_buf, 4)[0]
+            # cc_gain = unpack_from("<f", calibration_buf, 0)[0]
+            #cc_delta = unpack_from("<f", calibration_buf, 4)[0]
+            xx = unpack_from(">L", calibration_buf, 4)[0]
+            cc_delta = ti_f4_to_float(xx)
+            cc_offset = unpack_from("h", calibration_buf, 8)[0]
+            board_offset = unpack_from(">b", calibration_buf, 10)[0]
+            int_temperature_offset = unpack_from(">b", calibration_buf, 11)[0]
+            ext_temperature_offset = unpack_from(">b", calibration_buf, 12)[0]
+            voltage_divider = unpack_from(">H", calibration_buf, 14)[0]
+
+            power_config_buf = gg.read_dataflash_class(68)
+            flash_update_ok_cell_volt = unpack_from(">h", power_config_buf, 0)[0]
+            sleep_current = unpack_from(">h", power_config_buf, 2)[0]
+            fs_wait = unpack_from(">B", power_config_buf, 11)[0]
 
             temperature = gg.temperature()
 
-
             # Calibrate Voltage DIVIDER ---------
-
-            _fixed_voltage = 29400
-            pack_into("<H", calibration_buf, 0, _fixed_voltage)
+            gg_voltage = gg.voltage()
+            u_cells, u_xtras = read_voltages_from_daq()
+            known_voltage = u_xtras[0]
+            #_fixed_voltage = int(round(29400 / 7))
+            _fixed_voltage = 1556
+            _fixed_voltage = voltage_divider
+            #_fixed_voltage = int(round(_fixed_voltage / num_cells))
+            new_voltage_divider = voltage_divider * known_voltage / gg_voltage
+            #_fixed_voltage = int(round(new_voltage_divider))
+            pack_into("<H", calibration_buf, 14, _fixed_voltage)
             gg.write_dataflash_class(104, calibration_buf)
-            sleep(1.5)
+            print(list(gg.read_dataflash_class(104)))
+            sleep(0.5)
             voltage = gg.voltage()
             stack_daq = daq.get_VDC(15)  # full pack voltage
-            voltage_divider_cal = stack_daq / voltage * _fixed_voltage
-
-            pack_into("<H", calibration_buf, 0, voltage_divider_cal)
+            voltage_divider_cal = _fixed_voltage * stack_daq / voltage
+            pack_into("<H", calibration_buf, 14, int(round(voltage_divider_cal)))
             pack_into("<f", calibration_buf, 0, 0.001)  # write 1mOhm as prep for CC Gain calibration
             gg.write_dataflash_class(104, calibration_buf)
 
-            power_config = gg.read_dataflash_class(68)
-            flash_update_ok_cell_volt = unpack_from("<h", calibration_buf, 0)[0]
+            power_config_buf = gg.read_dataflash_class(68)
+            flash_update_ok_cell_volt = unpack_from("<h", power_config_buf, 0)[0]
             # according to TI doc, set to 2800mV at min for flash update ok
             flash_update_ok_cell_volt = 2800 * num_cells * 5000 / voltage_divider_cal / gg.get_voltage_scale()
-            pack_into("<h", power_config, 0, flash_update_ok_cell_volt)
-            gg.write_dataflash_class(68, power_config)
-
+            pack_into("<h", power_config_buf, 0, int(round(flash_update_ok_cell_volt)))
+            gg.write_dataflash_class(68, power_config_buf)
+            gg.exit_calibration()            
+            gg.reset_device()
             print("Voltage divider calibration done:", voltage_divider_cal)
 
             # CC Gain Calibration ---------------
@@ -925,6 +955,41 @@ if __name__ == "__main__":
     # print(sum(_test3) & 0xff)
     # print(~sum(_test3) & 0xff)
     # #exit()
+
+
+    def ti_f4_to_float(z: int) -> float:
+        exponent = (z >> 24) - 128 - 24  # both numbers are from ??? TI
+        print(hex(exponent))
+        mantissa = z & 0xFFFFFF
+        sign = -1 if (z & 0x800000) != 0 else 1
+        mantissa = mantissa | 0x800000  # set back the hidden 1 of mantissa
+        result = sign * mantissa * 2**exponent
+        return result
+    
+    print(ti_f4_to_float(0x7F71205C))
+
+    z = 0x7F71205C
+    z = 0x940898c0
+    n = (z & 0x7FFFFF) | (((((z >> 24) & 0xFF) - 2) & 0xFF) << 23) | ((z & 0x00800000) << 8)
+    print(hex(n))
+    b = pack("<L", n)
+    print(hexlify(b))
+    f = unpack("<f", b)
+    print(f)
+    f0 = unpack("<f", bytearray([0x5c,0x20, 0xf1,0x3e]))
+    print(f0)
+
+    f1 = 0.47095000743865967
+    b1 = pack("<f", f1)
+    print(hexlify(b1))
+    print(unpack("f", b1))
+
+    f1 = 559500
+    b1 = pack("<f", f1)
+    print(hexlify(b1))
+    print(unpack("f", b1))
+
+    exit()
 
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
