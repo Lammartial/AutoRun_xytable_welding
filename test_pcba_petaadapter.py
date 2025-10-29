@@ -5,7 +5,7 @@ PETA Design PCBA Adapter.
 #import unittest
 from traceback import print_exception
 from re import A
-from typing import Never, Tuple
+from typing import Tuple
 from struct import pack, unpack, unpack_from, pack_into
 from time import sleep, perf_counter
 from pathlib import Path
@@ -122,7 +122,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
     #    print(cartridge.get_muxed_i2c_bus_for(n).i2c_bus_scan())
 
 
-    def read_voltages_from_daq() -> Tuple[Tuple[Never] | Tuple[float] | Tuple[float]]:
+    def read_voltages_from_daq() -> Tuple[Tuple[float], Tuple[float]]:
         u_cell = ()
         for channel in [11, 12, 14, 10, 18, 19, 5]:
             u_cell += (daq.get_VDC(channel),)
@@ -164,7 +164,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
         if 1:
             afe = BQ76942(cartridge.backyard_bus, slvAddress=0x08, pec=True, retry_limit=5)
-            #afe.disable_checksum()
+            afe.disable_checksum()
 
             print(afe.read_control_status())
             print(afe.read_battery_status())
@@ -193,7 +193,9 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
             # === calibrate temperature ===
             # 1) apply known temperature TEMP(cal)
-            temp_cal = 21.4
+            #temp_cal = 21.4
+            temp_cal = daq.get_temp(3, "RTD", 1000, 0, "")  # channel 3 + 13
+            print("T_ambient:", temp_cal)            
             # 2) measure the temperatures
             t_meas = [0.0] * 10
             for n in range(5):
@@ -203,21 +205,21 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                 sleep(0.050)
             t_meas = [t/5 for t in t_meas]
             # 3) calculate the offsets
-            #temp_offsets = [round((((temp_cal - t) + KELVIN_ZERO_DEGC) * 10), 0) for t in t_meas]
-            temp_offsets = [(temp_cal - t)  for t in t_meas]
-            print(temp_offsets)
+            temp_offsets = [((temp_cal - t) if t > -100 else 0) for t in t_meas]
+            print("T-OFFSETS:", temp_offsets)
 
             # write the temperature calibration values
             afe.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets
             afe.enter_config_update_mode()
             afe.write_temperature_calibration_offsets(temp_offsets)
             afe.exit_config_update_mode()
-
+            sleep(1.0)
             # re-check temperature measurement (repeat the calibration if not successful!)
             print("Recheck temperature measurement after temperature calibration:")
-            print(afe.read_temperature_calibration_offsets(hexi=True))
             print(afe.read_temperatures())
-
+            afe.enter_config_update_mode()
+            print(afe.read_temperature_calibration_offsets(hexi=True))
+            afe.exit_config_update_mode()
 
             # This step will enable the FETs to calibrate Top-of-Stack, PACK, and LD voltages.
             # Make sure FETs are closed for PACK and LD measurements

@@ -410,35 +410,13 @@ class BQ76942:
 
         if not (0 <= subcmd <= 0xFFFF):
             raise ValueError("Subcommand must be a 16-bit value (0-65535).")
-        #if not self.writeWord(0x3E, subcmd):  # write Subcommand to the registers 0x3E and 0x3F
-        #    return False
-
-        if data:
-            # # need to wait untile the chip is ready to take the data
-            # t0 = monotonic_ns()  # common timeout over the rest of the function
-            # response = 0xFFFF
-            # while (response != subcmd) and (response != 0x0000):  # the latter is for NO DATA commands
-            #     response, ok = self.readWord(0x3E)
-            #     t1 = monotonic_ns()
-            #     if (t1 - t0) > timeout * 1e+9:  # scale timeout to ns
-            #         raise TimeoutError("While wait for subcommand to complete.")
-            #     sleep(0.005)
-
+        if data:      
             wholeblock = [subcmd & 0xFF, ((subcmd >> 8) & 0xFF)] + ([data & 0xff] if isinstance(data, int) else list(data))
             checksum = ~sum(wholeblock) & 0xFF # bitwise inverse
             if not self.writeBytes(self.address, 0x3E, bytearray(wholeblock), use_pec=self.pec):  # write data to the data registers starting at 0x3E including the address
                 return False
             return self.writeBytes(self.address, 0x60, bytearray([checksum, len(wholeblock) + 2]), use_pec=self.pec)  # write data to the data registers starting at 0x60
-            #if not self.writeBytes(self.address, 0x40, data, use_pec=self.pec):  # write data to the data registers starting at 0x40
-            #    return False
-            # activate the data transfer of the command
-            if not self.writeBytes(self.address, 0x60, bytearray([checksum, len(data) + 4]), use_pec=self.pec):  # write data to the data registers starting at 0x40
-                return False
-            #ctrl = (checksum | ((len(data) + 4) << 8))  # length of data + checksum byte + length byte + the two subcommandbytes
-            #if not self.writeWord(0x60, ctrl):  # write checksum to the checksum register 0x60
-            #    return False
         else:
-            #pass  # do not wait for anything
             return self.writeWord(0x3E, subcmd)  # write Subcommand to the registers 0x3E and 0x3F
         #return True
 
@@ -478,26 +456,40 @@ class BQ76942:
                 raise TimeoutError("While wait for subcommand to complete.")
             sleep(0.005)
         # data is ready now
-        ctrl, ok = self.readWord(0x60)
-        if not ok:
-            raise IOError("Failed to read checksum and length from BQ76942.")
-        # testbuf, ok2 = self.i2c.readBytes(self.address, 0x60, 3, use_pec=False)
-        incoming_cs = ctrl & 0xFF
-        count = ((ctrl >> 8) & 0xFF)
-        num_read = count - 4
-        if num_read < 0:
-            num_read = 0
-        buf, ok = self.readBytes(self.address, 0x40, num_read, use_pec=self.pec)
-        #
-        # NOTE: the checksum verification  is disabled because the BQ76942 seems to send wrong checksums sometimes
-        #
-        #wholeblock = [subcmd & 0xFF, ((subcmd >> 8) & 0xFF)] + list(buf)
-        #checksum = ~sum(wholeblock) & 0xFF  # bitwise inverse
+        buf, ok = self.readBytes(self.address, 0x3E, 36, use_pec=self.pec)
+        print(list(buf))
+        incoming_cs, count = list(buf[-2:])
+        checksum = ~sum(buf[:-2]) & 0xFF  # bitwise inverse
         # verify checksum
-        #if checksum != incoming_cs:
-        #    raise IOError("Checksum mismatch reading from BQ76942.")
+        if checksum != incoming_cs:
+           raise IOError("Checksum mismatch reading from BQ76942.")
         # success
-        return buf
+        count_wo_overhead = count - 4  # exclude overhead
+        if length == 0:
+            length = count_wo_overhead
+        else:
+            if length > 32:
+                length = 32
+        return buf[2:(2 + length)]
+        # ctrl, ok = self.readWord(0x60)
+        # if not ok:
+        #     raise IOError("Failed to read checksum and length from BQ76942.")
+        # # testbuf, ok2 = self.i2c.readBytes(self.address, 0x60, 3, use_pec=False)
+        # incoming_cs = ctrl & 0xFF
+        # count = ((ctrl >> 8) & 0xFF)
+        # num_read = (count - 2) if length == 0 else (length + 2)
+        # if num_read < 0 + 2:
+        #     num_read = 0 + 2
+        # if num_read > 32 + 2:
+        #     num_read = 32 + 2
+        # buf, ok = self.readBytes(self.address, 0x3E, num_read, use_pec=self.pec)
+        # print(list(buf))
+        # #
+        # # NOTE: the checksum verification  is disabled because the BQ76942 seems to send wrong checksums sometimes
+        # #        
+        # #checksum = ~sum(buf) & 0xFF  # bitwise inverse
+        
+        # return buf[2:]
 
 
     #----------------------------------------------------------------------------------------------
@@ -915,9 +907,10 @@ class BQ76942:
 
 
     def read_temperature_calibration_offsets(self, hexi: bool | str | None = None) -> tuple:
-        buf = bytearray()
-        for i in range(10):
-            buf += self.read_subcommand(0x91CA + i)
+        # buf = bytearray()
+        # for i in range(10):
+        #     buf += self.read_subcommand(0x91CA + i)
+        buf = self.read_subcommand(0x91CA, length=9, pause_before_data_available=0.1)
         self.temperature_calibration_offsets = OrderedDict({
                 "block": _maybe_hexlify(buf, hexi),
                 # data come little endian
@@ -934,7 +927,7 @@ class BQ76942:
         return self.temperature_calibration_offsets
 
 
-    def write_temperature_calibration_offsets(self, hexi: bool | str | None = None, temperature_calibration_offsets: dict | List[float] = None) -> tuple:
+    def write_temperature_calibration_offsets(self, temperature_calibration_offsets: dict | List[float], hexi: bool | str | None = None) -> tuple:
         """_summary_
 
         Args:
@@ -959,9 +952,12 @@ class BQ76942:
             Returns:
                 int: _description_
             """
+
             v = int(round((value * 10), 0))
             if v > 127: v = 127
             if v < -128: v = -128
+
+            print(value, v)
             return v
 
 
@@ -991,6 +987,8 @@ class BQ76942:
         #for i in range(10):
             # if not self.write_subcommand(0x91CA + i, data=buf[i:i+1]):  # pass singe byte as bytearray
             #     return False
+        print(temperature_calibration_offsets)
+        print(hexlify(buf))  # DEBUG
         if not self.write_subcommand(0x91CA, data=buf):
             return False
         return True
