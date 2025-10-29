@@ -11,7 +11,7 @@ __version__ = "0.5.0"
 from typing import Tuple
 from time import sleep, monotonic_ns
 from binascii import hexlify
-from struct import pack, unpack
+from struct import pack, unpack, unpack_from, pack_into
 from collections import OrderedDict
 from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
 from rrc.smbus import BusMaster
@@ -155,50 +155,51 @@ class BQ34Z100:
     # ----------------------------------------------------------------------------------------------
 
 
-    def write_subcommand(self, subcmd: int, data: bytes | bytearray = None, timeout: float = 3.0) -> bool:
-        """Write a subcommand with optional data to the BQ76942.
+    def write_dataflash_class(self, subclass_and_offset: int, data: bytes | bytearray = None, timeout: float = 3.0) -> bool:
+        """Write a data flash subclass to the FLASH of GG, using the subclass ID and offset.
+        Data can be ommitted for commands without data.
 
         Args:
-            subcmd (int): The subcommand to write.
+            subclass_and_offset (int): The subclass (LOW) and offset (HIGH) combined into a single 16-bit value.
             data (bytes | bytearray, optional): Optional data to send with the subcommand. Defaults to b''.
         """
 
-        if not (0 <= subcmd <= 0xFFFF):
+        if not (0 <= subclass_and_offset <= 0xFFFF):
             raise ValueError("Subcommand must be a 16-bit value (0-65535).")
         if data:
             if len(data) > 32:
                 raise ValueError("Data length must not exceed 32 bytes.")
-            wholeblock = [subcmd & 0xFF, ((subcmd >> 8) & 0xFF)] + ([data & 0xff] if isinstance(data, int) else list(data))
+            wholeblock = [subclass_and_offset & 0xFF, ((subclass_and_offset >> 8) & 0xFF)] + ([data & 0xff] if isinstance(data, int) else list(data))
             checksum = ~sum(wholeblock) & 0xFF # bitwise inverse
             if not self.bus.writeBytes(self.address, 0x3E, bytearray(wholeblock), use_pec=self.pec):  # write data to the data registers starting at 0x3E including the address
                 return False
             return self.bus.writeBytes(self.address, 0x60, bytearray([checksum, len(wholeblock) + 2]), use_pec=self.pec)  # write data to the data registers starting at 0x60
         else:
             # command without data
-            return self.writeWord(0x3E, subcmd)
+            return self.writeWord(0x3E, subclass_and_offset)
 
 
     #----------------------------------------------------------------------------------------------
 
 
-    def read_subcommand(self, subcmd: int, timeout: float = 5.0,
+    def read_dataflash_class(self, subclass_and_offset: int, timeout: float = 5.0,
                         pause_before_data_available: float = None,
                         hexi: None | bool | str = None) -> bytes | bytearray | str:
         """Read data from a subcommand.
 
         Args:
-            subcmd (int): The subcommand to read from.
-            length (int, optional): The number of bytes to read. Defaults to 0.
+            subclass_and_offset (int): The subclass (LOW) and offset (HIGH) combined into a single 16-bit value.
             timeout (float, optional): Timeout in seconds for the operation. Defaults to 2.0.
+            pause_before_data_available (float, optional): Pause time in seconds before checking for data availability. Defaults to None.
             hexi (None | bool | str, optional): If set to True or a string separator, the returned bytes will be hexlified.
                                                 Defaults to None.
         Returns:
             bytes | bytearray | str: The data read from the subcommand, possibly hexlified.
         """
 
-        if not (0 <= subcmd <= 0xFFFF):
+        if not (0 <= subclass_and_offset <= 0xFFFF):
             raise ValueError("Subcommand must be a 16-bit value (0-65535).")
-        if not self.bus.writeWord(0x3E, subcmd):  # write Subcommand to the registers 0x3E and 0x3F
+        if not self.bus.writeWord(0x3E, subclass_and_offset):  # write Subcommand to the registers 0x3E and 0x3F
             return False
 
         if pause_before_data_available is not None:
@@ -206,7 +207,7 @@ class BQ34Z100:
 
         t0 = monotonic_ns()  # common timeout over the rest of the function
         response = 0xFFFF
-        while response != subcmd:
+        while response != subclass_and_offset:
             response, ok = self.bus.readWord(0x3E)
             t1 = monotonic_ns()
             if (t1 - t0) > (timeout * 1e+9):  # scale timeout to ns
@@ -229,7 +230,7 @@ class BQ34Z100:
         buf, ok = self.bus.readBytes(self.address, 0x3E, num_read, use_pec=self.pec)
 
         # NOTE: the checksum always is for 32 bytes
-        wholeblock = [subcmd & 0xFF, ((subcmd >> 8) & 0xFF)] + list(buf)
+        wholeblock = [subclass_and_offset & 0xFF, ((subclass_and_offset >> 8) & 0xFF)] + list(buf)
         checksum = ~sum(wholeblock) & 0xFF  # bitwise inverse
         # verify checksum
         #if checksum != incoming_cs:
@@ -237,6 +238,119 @@ class BQ34Z100:
         # success
         return buf[2:]
 
+
+    #----------------------------------------------------------------------------------------------
+    # calibration helpers
+
+    def read_calibration_flash_data(self, hexi: None | bool | str = None) -> bytes | str:
+
+        self._powerconfig_buf = self.read_dataflash_class(68)
+        return self._calibration_buf, self._powerconfig_buf if hexi is None else (_maybe_hexlify(self._calibration_buf, hexi), _maybe_hexlify(self._powerconfig_buf, hexi))
+
+
+    def read_calibration_flash_data(self) -> OrderedDict:
+        """Get calibration information from the calibration data flash class.
+
+        Returns:
+            OrderedDict: Calibration information.
+        """
+
+        self._calibration_buf = self.read_dataflash_class(104)
+        buf = self._calibration_buf
+        self.calibration_data = OrderedDict({
+            "cc_gain": unpack_from("<f", buf, 0)[0],
+            "cc_delta": unpack_from("<f", buf, 4)[0],
+            "cc_offset": unpack_from("<h", buf, 8)[0],
+            "board_offset": unpack_from("<b", buf, 10)[0],
+            "int_temperature_offset": unpack_from("<b", buf, 11)[0],
+            "ext_temperature_offset": unpack_from("<b", buf, 12)[0],
+            "voltage_divider": unpack_from("<H", buf, 14)[0],
+        })
+        return self.calibration_data
+
+
+    def write_calibration_flash_data(self, data: dict | OrderedDict | Tuple) -> bool:
+        """Write calibration information to the calibration data flash class.
+
+        Args:
+            data (dict | OrderedDict | Tuple): Calibration information to write.
+
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+
+        if isinstance(data, dict) or isinstance(data, OrderedDict):
+            buf = bytearray(32)
+            pack_into("<f", buf, 0, data.get("cc_gain", 1.0))
+            pack_into("<f", buf, 4, data.get("cc_delta", 1.0))
+            pack_into("<h", buf, 8, data.get("cc_offset", 0))
+            pack_into("<b", buf, 10, data.get("board_offset", 0))
+            pack_into("<b", buf, 11, data.get("int_temperature_offset", 0))
+            pack_into("<b", buf, 12, data.get("ext_temperature_offset", 0))
+            pack_into("<H", buf, 14, data.get("voltage_divider", 0))
+        elif isinstance(data, tuple) or isinstance(data, list):
+            if len(data) < 7:
+                raise ValueError("Data tuple/list must have at least 7 elements.")
+            buf = bytearray(32)
+            pack_into("<f", buf, 0, data[0])
+            pack_into("<f", buf, 4, data[1])
+            pack_into("<h", buf, 8, data[2])
+            pack_into("<b", buf, 10, data[3])
+            pack_into("<b", buf, 11, data[4])
+            pack_into("<b", buf, 12, data[5])
+            pack_into("<H", buf, 14, data[6])
+        else:
+            raise TypeError("Data must be a dict, OrderedDict, tuple or list.")
+
+        return self.write_dataflash_class(104, data=buf)
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def read_powerconfig_flash_data(self) -> OrderedDict:
+        """Get power configuration information from the power configuration data flash class.
+
+        Returns:
+            OrderedDict: Power configuration information.
+        """
+
+        self._powerconfig_buf = self.read_dataflash_class(68)
+        buf = self._powerconfig_buf
+        self.powerconfig_data = OrderedDict({
+            "flash_update_ok_cell_volt": unpack_from("<h", buf, 0)[0],
+            "sleep_current": unpack_from("<h", buf, 2)[0],
+            "fs_wait": unpack_from("<B", buf, 11)[0],
+        })
+        return self.powerconfig_data
+
+
+    def write_powerconfig_flash_data(self, data: dict | OrderedDict | Tuple) -> bool:
+        """Write power configuration information to the power configuration data flash class.
+
+        Args:
+            data (dict | OrderedDict | Tuple): Power configuration information to write.
+
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+
+        if isinstance(data, dict) or isinstance(data, OrderedDict):
+            buf = bytearray(32)
+            pack_into("<h", buf, 0, data.get("flash_update_ok_cell_volt", 0))
+            pack_into("<h", buf, 2, data.get("sleep_current", 0))
+            pack_into("<B", buf, 11, data.get("fs_wait", 0))
+        elif isinstance(data, tuple) or isinstance(data, list):
+            if len(data) < 3:
+                raise ValueError("Data tuple/list must have at least 3 elements.")
+            buf = bytearray(32)
+            pack_into("<h", buf, 0, data[0])
+            pack_into("<h", buf, 2, data[1])
+            pack_into("<B", buf, 11, data[2])
+        else:
+            raise TypeError("Data must be a dict, OrderedDict, tuple or list.")
+
+        return self.write_dataflash_class(68, data=buf)
 
 
     #----------------------------------------------------------------------------------------------
@@ -299,6 +413,8 @@ class BQ34Z100:
 
         return self._energy_scale
 
+    #----------------------------------------------------------------------------------------------
+
 
     def _read_control(self, subcmd: int) -> Tuple[int, bytes]:
         """Read a 2-byte value from the control register.
@@ -331,6 +447,8 @@ class BQ34Z100:
             return ok
         else:
             return self.bus.writeBytes(self.address, 0x00, buf, use_pec=self.pec)
+
+    #----------------------------------------------------------------------------------------------
 
 
     def voltage(self) -> float:
@@ -550,6 +668,7 @@ class BQ34Z100:
         value = unpack("<B", data)[0]
         return float(value)  # already in %
 
+    #----------------------------------------------------------------------------------------------
 
     def _decode_control_status(self, buf: bytearray| bytes, hexi: bool | str | None) -> OrderedDict:
         os = unpack("<H", buf)[0]  # word expected
@@ -586,6 +705,9 @@ class BQ34Z100:
         # convert to bitflags field
         self._control_status = self._decode_control_status(buf, hexi)
         return self._control_status
+
+
+    #----------------------------------------------------------------------------------------------
 
 
     def _decode_flags_a(self, buf: bytearray| bytes, hexi: bool | str | None) -> OrderedDict:
@@ -627,6 +749,7 @@ class BQ34Z100:
             "RSVD_BYTE": (os & 0xFF),  # Reserved Byte
         })
 
+
     def read_flags(self, hexi: bool | str | None = None) -> Tuple[OrderedDict, OrderedDict]:
         """Get the flags registers.
 
@@ -641,13 +764,38 @@ class BQ34Z100:
         return _od2t(self.flags_a), _od2t(self.flags_b)
 
 
-    def toggle_cal_enable(self) -> bool:
+    #----------------------------------------------------------------------------------------------
+
+    def reset_fuel_gauge(self) -> bool:
+        """Instructs the fuel gauge to perform a full reset. This command is only available when the fuel gauge is
+        UNSEALED.
+
+        Returns:
+            bool: _description_
+        """
+        return self.write_control_command(0x0041)
+
+
+    def enable_impedance_track(self) -> bool:
+        """Forces the fuel gauge to begin the Impedance Track algorithm, sets Bit 2 of UpdateStatus and causes the
+        [VOK] and [QEN] flags to be set in the CONTROL STATUS register. [VOK] is cleared if the voltages are not
+        suitable for a Qmax update. Once set, [QEN] cannot be cleared. This command is only available when the fuel
+        gauge is UNSEALED and is typically enabled at the last step of production after the system test is completed.
+
+        Returns:
+            bool: _description_
+        """
+        return self.write_control_command(0x0021)
+
+
+    def enable_enter_and_exit_of_calibration_mode(self) -> bool:
         """Instructs the fuel gauge to enable entry and exit to CALIBRATION mode.
 
         Returns:
             bool: _description_
         """
         return self.write_control_command(0x002d)
+
 
 
     def enter_calibration(self) -> bool:
@@ -657,6 +805,7 @@ class BQ34Z100:
             bool: _description_
         """
         return self.write_control_command(0x0081)
+
 
 
     def exit_calibration(self) -> bool:
