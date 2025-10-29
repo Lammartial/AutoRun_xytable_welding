@@ -167,22 +167,25 @@ class BQ34Z100:
         if not (0 <= subclass_and_offset <= 0xFFFF):
             raise ValueError("Subcommand must be a 16-bit value (0-65535).")
         if data:
-            if len(data) > 32:
-                raise ValueError("Data length must not exceed 32 bytes.")
-            wholeblock = [subclass_and_offset & 0xFF, ((subclass_and_offset >> 8) & 0xFF)] + ([data & 0xff] if isinstance(data, int) else list(data))
-            checksum = ~sum(wholeblock) & 0xFF # bitwise inverse
-            if not self.bus.writeBytes(self.address, 0x3E, bytearray(wholeblock), use_pec=self.pec):  # write data to the data registers starting at 0x3E including the address
+            if not self.bus.writeWord(self.address, 0x3E, subclass_and_offset, use_pec=self.pec):
                 return False
-            return self.bus.writeBytes(self.address, 0x60, bytearray([checksum, len(wholeblock) + 2]), use_pec=self.pec)  # write data to the data registers starting at 0x60
+            rd_buf, ok = self.bus.readBytes(self.address, 0x40, 32, use_pec=self.pec)  # read full block
+            if not ok:
+                raise IOError(f"Could not read page {subclass_and_offset}from BQ34Z100.")
+            
+            wholeblock = bytearray(data + rd_buf)[:32]
+            checksum = ~sum(wholeblock) & 0xFF # bitwise inverse
+            if not self.bus.writeBytes(self.address, 0x40, wholeblock, use_pec=self.pec):  # write data to the data registers starting at 0x3E including the address
+                return False
+            return self.bus.writeBytes(self.address, 0x60, bytearray([checksum]), use_pec=self.pec)  # write data to the data registers starting at 0x60
         else:
-            # command without data
-            return self.writeWord(0x3E, subclass_and_offset)
-
+            return self.bus.writeWord(0x3E, subclass_and_offset)  # write Subcommand to the registers 0x3E and 0x3F
+      
 
     #----------------------------------------------------------------------------------------------
 
 
-    def read_dataflash_class(self, subclass_and_offset: int, timeout: float = 5.0,
+    def read_dataflash_class(self, subclass_and_offset: int, length: int = 0, timeout: float = 5.0,
                         pause_before_data_available: float = None,
                         hexi: None | bool | str = None) -> bytes | bytearray | str:
         """Read data from a subcommand.
@@ -199,7 +202,9 @@ class BQ34Z100:
 
         if not (0 <= subclass_and_offset <= 0xFFFF):
             raise ValueError("Subcommand must be a 16-bit value (0-65535).")
-        if not self.bus.writeWord(0x3E, subclass_and_offset):  # write Subcommand to the registers 0x3E and 0x3F
+        if not self.bus.writeBytes(self.address, 0x61, bytearray([0x00]), use_pec=self.pec):  # enable block data flash conttol
+            return False
+        if not self.bus.writeWord(self.address, 0x3E, subclass_and_offset, use_pec=self.pec):  # write Subcommand to the registers 0x3E and 0x3F
             return False
 
         if pause_before_data_available is not None:
@@ -208,35 +213,35 @@ class BQ34Z100:
         t0 = monotonic_ns()  # common timeout over the rest of the function
         response = 0xFFFF
         while response != subclass_and_offset:
-            response, ok = self.bus.readWord(0x3E)
+            response, ok = self.bus.readWord(self.address, 0x3E, use_pec=self.pec)
             t1 = monotonic_ns()
             if (t1 - t0) > (timeout * 1e+9):  # scale timeout to ns
                 raise TimeoutError("While wait for subcommand to complete.")
             sleep(0.005)
         # data is ready now
-        ctrl, ok = self.bus.readBytes(self.address, 0x60, 2, use_pec=self.pec)
+         # data is ready now
+        buf, ok = self.bus.readBytes(self.address, 0x40, 36, use_pec=self.pec)
         if not ok:
-            raise IOError("Failed to read checksum and length from BQ76942.")
-        # testbuf, ok2 = self.i2c.readBytes(self.address, 0x60, 3, use_pec=False)
-        incoming_cs = int(ctrl[0])
-        count = int(ctrl[1])
-        num_read = count - 4
-        if num_read < 0:
-            num_read = 0
-        if num_read > 32:
-            num_read = 32
-            #raise ValueError(f"Number of bytes to read {num_read} exceeds maximum of 32.")
-        num_read = 32 + 2
-        buf, ok = self.bus.readBytes(self.address, 0x3E, num_read, use_pec=self.pec)
-
-        # NOTE: the checksum always is for 32 bytes
-        wholeblock = [subclass_and_offset & 0xFF, ((subclass_and_offset >> 8) & 0xFF)] + list(buf)
-        checksum = ~sum(wholeblock) & 0xFF  # bitwise inverse
-        # verify checksum
-        #if checksum != incoming_cs:
+            raise IOError("Could not read from BQ76942.")
+        print(list(buf))  # DEBUG
+        if length == 0:
+            length = 32
+        incoming_cs, count = list(buf[-2:])  # get expected checksum and length
+        checksum = ~sum(buf[:-2]) & 0xFF  # bitwise inverse
+        # # verify checksum
+        # if checksum != incoming_cs:
         #    raise IOError("Checksum mismatch reading from BQ76942.")
-        # success
-        return buf[2:]
+        # # success
+        # if length > 0:
+        #     if length > 32:
+        #         length = 32
+        #     else:
+        #         pass
+        # else:
+        #     length = (count - 4) if (count > 4) else 0   # exclude overhead
+        # print(subclass_and_offset, "->", list(buf[2:(2 + length)]))  # DEBUG
+        return buf[2:(2 + length)]
+
 
 
     #----------------------------------------------------------------------------------------------

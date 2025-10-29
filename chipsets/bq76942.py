@@ -457,40 +457,24 @@ class BQ76942:
             sleep(0.005)
         # data is ready now
         buf, ok = self.readBytes(self.address, 0x3E, 36, use_pec=self.pec)
-        print(list(buf))
-        incoming_cs, count = list(buf[-2:])
+        if not ok:
+            raise IOError("Could not read from BQ76942.")
+        #print(list(buf))  # DEBUG
+        incoming_cs, count = list(buf[-2:])  # get expected checksum and length
         checksum = ~sum(buf[:-2]) & 0xFF  # bitwise inverse
         # verify checksum
         if checksum != incoming_cs:
            raise IOError("Checksum mismatch reading from BQ76942.")
         # success
-        count_wo_overhead = count - 4  # exclude overhead
-        if length == 0:
-            length = count_wo_overhead
-        else:
+        if length > 0:
             if length > 32:
                 length = 32
+            else:
+                pass
+        else:
+            length = (count - 4) if (count > 4) else 0   # exclude overhead
+        #print(subcmd, "->", list(buf[2:(2 + length)]))  # DEBUG
         return buf[2:(2 + length)]
-        # ctrl, ok = self.readWord(0x60)
-        # if not ok:
-        #     raise IOError("Failed to read checksum and length from BQ76942.")
-        # # testbuf, ok2 = self.i2c.readBytes(self.address, 0x60, 3, use_pec=False)
-        # incoming_cs = ctrl & 0xFF
-        # count = ((ctrl >> 8) & 0xFF)
-        # num_read = (count - 2) if length == 0 else (length + 2)
-        # if num_read < 0 + 2:
-        #     num_read = 0 + 2
-        # if num_read > 32 + 2:
-        #     num_read = 32 + 2
-        # buf, ok = self.readBytes(self.address, 0x3E, num_read, use_pec=self.pec)
-        # print(list(buf))
-        # #
-        # # NOTE: the checksum verification  is disabled because the BQ76942 seems to send wrong checksums sometimes
-        # #        
-        # #checksum = ~sum(buf) & 0xFF  # bitwise inverse
-        
-        # return buf[2:]
-
 
     #----------------------------------------------------------------------------------------------
 
@@ -865,22 +849,41 @@ class BQ76942:
         return self.write_subcommand(0x91A6, data=buf)
 
 
+    #----------------------------------------------------------------------------------------------
+
+
     def read_cc_gain(self) -> float:
         buf = self.read_subcommand(0x91A8)
-        return unpack_from("<f", buf, 0)[0]  # float
+        #return unpack_from("<f", buf, 0)[0]  # float
+        i = unpack_from("<L", buf, 0)[0]  # to int
+        v = self.flash2float(i)
+        return v
 
-    def write_cc_gain(self, cc_gain: float) -> bool:
-        buf = pack("<f", cc_gain)
+
+    def write_cc_gain(self, value: float) -> bool:
+        v = self.float2flash(value)
+        buf = pack("<L", v)  # pack the bytes as 4 bytes little endian
         return self.write_subcommand(0x91A8, data=buf)
 
+    #----------------------------------------------------------------------------------------------
 
-    def read_capacity_gain(self) -> int:
+
+    def read_capacity_gain(self) -> float:
         buf = self.read_subcommand(0x91AC)
-        return unpack_from("<h", buf, 0)[0]  # signed
+        #return unpack_from("<h", buf, 0)[0]  # signed
+        i = unpack_from("<L", buf, 0)[0]  # to int
+        v = self.flash2float(i)
+        return v
 
-    def write_capacity_gain(self, value: int) -> bool:
-        buf = pack("<L", value)
+
+    def write_capacity_gain(self, value: float) -> bool:
+        #buf = pack("f", value)
+        v = self.float2flash(value)
+        buf = pack("<L", v)  # pack the bytes as 4 bytes little endian
         return self.write_subcommand(0x91AC, data=buf)
+
+
+    #----------------------------------------------------------------------------------------------
 
 
     def read_coulomb_counter_offset_samples(self) -> int:
@@ -1088,7 +1091,7 @@ class BQ76942:
 
 
 
-    def dec2flash(self, value):
+    def float2flash(self, value: float) -> int:
         if value == 0:
             value += 0.0000001    # avoid log of zero
         if value < 0:
@@ -1104,11 +1107,12 @@ class BQ76942:
             mantissa = int(mantissa) & 0x7fffff   # remove sign bit if number is positive
         #result = hex(int(round(mantissa + MSB * 2**23)))
         result = int(round(mantissa + MSB * 2**23))
-        return result, hex(result)
+        #print(hex(result))  # DEBUG
+        return result
 
 
-    def flash2dec(value):
-        exponent = exponent = 0xff & (value/(2**23))  # exponent is most significant byte after sign bit
+    def flash2float(self, value: int) -> float:
+        exponent = 0xff & int(value / (2**23))  # exponent is most significant byte after sign bit
         mantissa = value % (2**23)
         if (0x80000000 & value == 0):   # check if number is positive
             isPositive = 1
@@ -1122,7 +1126,7 @@ class BQ76942:
         result = mantissa_f * 2**(exponent-127)
         if not(isPositive):
             result *= -1
-        return result
+        return float(result)
 
 
 
