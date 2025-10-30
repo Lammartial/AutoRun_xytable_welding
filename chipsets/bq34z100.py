@@ -771,6 +771,30 @@ class BQ34Z100:
 
     #----------------------------------------------------------------------------------------------
 
+    def read_version_information(self) -> OrderedDict:
+        """Get the version information of the fuel gauge.
+
+        Returns:
+            Tuple[str]: The version information.
+        """
+
+        device_type, raw = self._read_control(0x0001)
+        fw_version, raw = self._read_control(0x0002)
+        hw_version, raw = self._read_control(0x0003)
+        chem_id, raw = self._read_control(0x0008)
+        df_version, raw = self._read_control(0x000C)
+        chem_checksum, raw = self._read_control(0x0017)
+        return OrderedDict({
+            "device_type": f"{device_type:04X}",
+            "fw_version": f"{fw_version:04X}",
+            "hw_version": f"{hw_version:04X}",
+            "chem_id": f"{chem_id:04X}",
+            "df_version": f"{df_version:04X}",
+            "chem_checksum": f"{chem_checksum:04X}",
+        })
+
+
+
     def reset_fuel_gauge(self) -> bool:
         """Instructs the fuel gauge to perform a full reset. This command is only available when the fuel gauge is
         UNSEALED.

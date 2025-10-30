@@ -124,21 +124,24 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
 
     def setup_daq_range_and_resolution() -> bool:
+
         _config = [
             (c, "10 V", "DEF") for c in (11, 12, 14, 10, 18, 19, 5, 8, 9)] + [
             (15, "100 V", "DEF"), (4, "100 V", "DEF"),  # Stack and PACK+
         ]
         for channel, range, resolution in _config:
             daq.setup_voltage_range_and_resolution_preset(channel, range, resolution)
+        print(daq.read_error_status())
 
         _config_delay = [
-            (11, "AUTO"), (12, "AUTO"), (14, "AUTO"), (10, "AUTO"), (18, "AUTO"), (19, "AUTO"), (5, "AUTO"),  # cells
-            (8, "AUTO"), (9, "AUTO"),  # VCC supplies
-            (15, "AUTO"), (4, "AUTO"), # Stack and PACK+
+            (11, 0.002), (12, 0.002), (14, 0.002), (10, 0.002), (18, 0.002), (19, 0.002), (5, 0.002),  # cells
+            (8, 0.002), (9, 0.002),  # VCC supplies
+            (15, 0.002), (4, 0.002), # Stack and PACK+
         ]
-        #for channel, delay_in_s in _config_delay:
-        #    daq.setup_channel_delay_preset(channel, delay_in_s=delay_in_s)
-
+        for channel, delay_in_s in _config_delay:
+            daq.setup_channel_delay_preset(channel, delay_in_s=delay_in_s)
+        print(daq.read_error_status())
+        return True
 
     def read_voltages_from_daq() -> Tuple[Tuple[float], Tuple[float]]:
         u_cell = ()
@@ -745,7 +748,21 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
             gg = BQ34Z100(BusMaster(cartridge.backyard_bus, retry_limit=5), slvAddress=0x55, pec=False)
 
-            if 0:
+
+            v = gg.read_version_information()
+            print(v)
+
+            if (v["hw_version"] != "0x80") or (v["fw_version"] != "0x202"):
+                # differencial only
+                ff2 = BQStudioFileFlexFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.df.fs" )
+                ff2.validate_file()
+                tic = perf_counter()
+                ff2.program_fw_file()
+                toc = perf_counter()
+                print(f"DONE in {toc - tic:0.4f} seconds.")
+
+            else:
+                # full update necessary
                 # write FLASH -----------
                 ff2 = BQStudioFileFlexFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.bq.fs" )
                 ff2.validate_file()
@@ -768,16 +785,6 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                 sleep(0.1)
 
 
-            def ti_f4_to_float(z: int) -> float:
-                exponent = (z >> 24) - 128 - 24  # both numbers are from ??? TI
-                mantissa = z & 0xFFFFFF
-                sign = -1 if (z & 0x800000) != 0 else 1
-                mantissa = mantissa | 0x800000  # set back the hidden 1 of mantissa
-                result = sign * mantissa * 2**exponent
-                return result
-            print(ti_f4_to_float(0x7F71205C))
-
-
             gg.enter_calibration()
 
             calibration_buf = gg.read_dataflash_class(104)
@@ -785,7 +792,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             cc_gain = gg._flash_f4_to_float(N)
             N = unpack_from(">L", calibration_buf, 4)[0]
             cc_delta = gg._flash_f4_to_float(N)
-            cc_offset = unpack_from("h", calibration_buf, 8)[0]
+            cc_offset = unpack_from(">h", calibration_buf, 8)[0]
             board_offset = unpack_from(">b", calibration_buf, 10)[0]
             int_temperature_offset = unpack_from(">b", calibration_buf, 11)[0]
             ext_temperature_offset = unpack_from(">b", calibration_buf, 12)[0]
@@ -802,35 +809,40 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             gg_voltage = gg.voltage()
             u_cells, u_xtras = read_voltages_from_daq()
             known_voltage = u_xtras[0]
-            #_fixed_voltage = int(round(29400 / 7))
-            _fixed_voltage = 1556
-            _fixed_voltage = voltage_divider
-            #_fixed_voltage = int(round(_fixed_voltage / num_cells))
+            print("GG V meas ERROR vefore:", (known_voltage - gg_voltage), "V")
+            if voltage_divider <= 0:
+                voltage_divider = 5000  # default value
+                #voltage_divider = int(round(29400 / num_cells))
             new_voltage_divider = voltage_divider * known_voltage / gg_voltage
-            #_fixed_voltage = int(round(new_voltage_divider))
-            pack_into(">H", calibration_buf, 14, _fixed_voltage)
+            new_voltage_divider_int = int(round(new_voltage_divider))
+            pack_into(">H", calibration_buf, 14, new_voltage_divider_int)
             gg.write_dataflash_class(104, calibration_buf)
             print(list(gg.read_dataflash_class(104)))
             sleep(0.5)
-            voltage = gg.voltage()
-            stack_daq = daq.get_VDC(15)  # full pack voltage
-            voltage_divider_cal = _fixed_voltage * stack_daq / voltage
-            voltage_divider_cal_int = int(round(voltage_divider_cal))
-            pack_into(">H", calibration_buf, 14, voltage_divider_cal_int)
-            N = gg._float_to_flash_f4(0.001)  # write 1mOhm as prep for CC Gain calibration
-            pack_into(">L", calibration_buf, 0, N)
-            gg.write_dataflash_class(104, calibration_buf)
+            # verify
+            gg_voltage_2 = gg.voltage()
+            u_cells, u_xtras = read_voltages_from_daq()
+            known_voltage_2 = u_xtras[0]  # full pack voltage
+            print("GG V meas ERROR after cal:", (known_voltage_2 - gg_voltage_2), "V")
 
-            power_config_buf = gg.read_dataflash_class(68)
-            flash_update_ok_cell_volt = unpack_from("<h", power_config_buf, 0)[0]
-            # according to TI doc, set to 2800mV at min for flash update ok
-            flash_update_ok_cell_volt = 2800 * num_cells * 5000 / voltage_divider_cal / gg.get_voltage_scale()
-            flash_update_ok_cell_volt_int = int(round(flash_update_ok_cell_volt))
-            pack_into(">h", power_config_buf, 0, flash_update_ok_cell_volt_int)
-            gg.write_dataflash_class(68, power_config_buf)
+            # voltage_divider_cal = new_voltage_divider * stack_daq / gg_voltage_2
+            # voltage_divider_cal_int = int(round(voltage_divider_cal))
+            # pack_into(">H", calibration_buf, 14, voltage_divider_cal_int)
+            # N = gg._float_to_flash_f4(0.001)  # write 1mOhm as prep for CC Gain calibration
+            # pack_into(">L", calibration_buf, 0, N)
+            # gg.write_dataflash_class(104, calibration_buf)
+
+            # # according to TI doc, set to 2800mV at min for flash update ok
+            # new_flash_update_ok_cell_volt = flash_update_ok_cell_volt * num_cells * voltage_divider / voltage_divider_cal / gg.get_voltage_scale()
+            # #new_flash_update_ok_cell_volt = 2800 * num_cells * 5000 / voltage_divider_cal / gg.get_voltage_scale()
+            # flash_update_ok_cell_volt_cal_int = int(round(new_flash_update_ok_cell_volt))
+            # pack_into(">h", power_config_buf, 0, flash_update_ok_cell_volt_cal_int)
+            # gg.write_dataflash_class(68, power_config_buf)
+
+            print("Voltage divider calibration done:", new_voltage_divider)
             gg.exit_calibration()
             gg.reset_device()
-            print("Voltage divider calibration done:", voltage_divider_cal)
+
 
             # CC Gain Calibration ---------------
             # need a current flow
@@ -1050,6 +1062,9 @@ if __name__ == "__main__":
         daq = DAQ970A(f"{LINE_NETWORK}.36:5025", card_slot=3)  # socket 2
 
     print(daq.ident())
+    print(daq.read_error_status())
+    print(daq.selftest())
+    print(daq.read_error_status())
 
     # .... do some tests here ....
 
