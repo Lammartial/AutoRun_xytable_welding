@@ -92,7 +92,8 @@ def rack_test(cartridge: CartridgePETA,
     else:
         print("Need to send Files to the programmer.")
         ap.send_all_files()
-
+    
+    ap.erase_flash()
 
     #psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
     #psu.configure_current_rise_times(pos="DEF", neg="DEF")
@@ -736,17 +737,7 @@ def rack_test(cartridge: CartridgePETA,
             #print(afe.charge_test())
             #print("FET status: ", afe.read_fet_status())
 
-            #------------------------------------------------------------------
-            cartridge.switch_some_io(7, 0)  # enable microcontroller
-            print("Program FLASH:", ap.program_flash())
-            #------------------------------------------------------------------
-            # sleep(1.0)
-            # cartridge.select_bus_to_micro("can")
-            # can.send(0x11, (1,2,3,4,5,6,7,8))
-            # print(can.receive(0x11))
-            # cartridge.select_bus_to_micro("i2c")
-            # sleep(0.5)
-            cartridge.switch_some_io(7, 1)  # diable microcontroller
+
             #------------------------------------------------------------------
             # GG: wait until BCA cleared
             x = False
@@ -1043,6 +1034,22 @@ def rack_test(cartridge: CartridgePETA,
             else:
                 afe.exit_config_update_mode()
                 raise RuntimeError(f"OTP write check failed at address 0x{data_fail_addr:04X} with result 0x{results:02X}")
+
+
+            # NOTE: The µ-controller interacts with AFE and GG so program it 
+            # after all things are set for AFE and GG.
+            #------------------------------------------------------------------
+            cartridge.switch_some_io(7, 0)  # enable microcontroller
+            print("Program FLASH:", ap.program_flash())
+            #------------------------------------------------------------------
+            # sleep(1.0)
+            # cartridge.select_bus_to_micro("can")
+            # can.send(0x11, (1,2,3,4,5,6,7,8))
+            # print(can.receive(0x11))
+            # cartridge.select_bus_to_micro("i2c")
+            # sleep(0.5)
+            cartridge.switch_some_io(7, 1)  # diable microcontroller
+
 
         # ---------------------------------------------------------------------------------------------
         else:
