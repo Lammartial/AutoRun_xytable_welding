@@ -410,7 +410,7 @@ class BQ76942:
 
         if not (0 <= subcmd <= 0xFFFF):
             raise ValueError("Subcommand must be a 16-bit value (0-65535).")
-        if data:      
+        if data:
             wholeblock = [subcmd & 0xFF, ((subcmd >> 8) & 0xFF)] + ([data & 0xff] if isinstance(data, int) else list(data))
             checksum = ~sum(wholeblock) & 0xFF # bitwise inverse
             if not self.writeBytes(self.address, 0x3E, bytearray(wholeblock), use_pec=self.pec):  # write data to the data registers starting at 0x3E including the address
@@ -856,12 +856,12 @@ class BQ76942:
         buf = self.read_subcommand(0x91A8)
         #return unpack_from("<f", buf, 0)[0]  # float
         i = unpack_from("<L", buf, 0)[0]  # to int
-        v = self.flash2float(i)
+        v = self._flash_to_float(i)
         return v
 
 
     def write_cc_gain(self, value: float) -> bool:
-        v = self.float2flash(value)
+        v = self._float_to_flash(value)
         buf = pack("<L", v)  # pack the bytes as 4 bytes little endian
         return self.write_subcommand(0x91A8, data=buf)
 
@@ -872,13 +872,13 @@ class BQ76942:
         buf = self.read_subcommand(0x91AC)
         #return unpack_from("<h", buf, 0)[0]  # signed
         i = unpack_from("<L", buf, 0)[0]  # to int
-        v = self.flash2float(i)
+        v = self._flash_to_float(i)
         return v
 
 
     def write_capacity_gain(self, value: float) -> bool:
         #buf = pack("f", value)
-        v = self.float2flash(value)
+        v = self._float_to_flash(value)
         buf = pack("<L", v)  # pack the bytes as 4 bytes little endian
         return self.write_subcommand(0x91AC, data=buf)
 
@@ -1091,7 +1091,10 @@ class BQ76942:
 
 
 
-    def float2flash(self, value: float) -> int:
+    def _float_to_flash(self, value: float) -> int:
+        """This is the TI version of "IEEE754" float.
+        Something is slightly different.
+        """
         if value == 0:
             value += 0.0000001    # avoid log of zero
         if value < 0:
@@ -1111,7 +1114,7 @@ class BQ76942:
         return result
 
 
-    def flash2float(self, value: int) -> float:
+    def _flash_to_float(self, value: int) -> float:
         exponent = 0xff & int(value / (2**23))  # exponent is most significant byte after sign bit
         mantissa = value % (2**23)
         if (0x80000000 & value == 0):   # check if number is positive

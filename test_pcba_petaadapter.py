@@ -190,7 +190,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             # Verify float conversion (why can't we use IEEE754 of Python pack("f", a_float) ??)
             # i, x = afe.float2flash(47.11)
             # print(i)
-            # f = afe.flash2float(i)
+            # f = afe.flash_to_float(i)
             # print(f)
 
             print(afe.read_control_status())
@@ -241,7 +241,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             # 1) apply known temperature TEMP(cal)
             #temp_cal = 21.4
             temp_cal = daq.get_temp(3, "RTD", 1000, 0, "")  # channel 3 + 13
-            print("T_ambient:", temp_cal)            
+            print("T_ambient:", temp_cal)
             # 2) measure the temperatures
             t_meas = [0.0] * 10
             for n in range(5):
@@ -623,7 +623,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             print("DIFFS:", current_diff, cc_counts_diff)
             cc_gain_float = (current_diff / cc_counts_diff) / 1e-3
             capacity_gain_float = 298261.6178 * cc_gain_float  # Note: constant 298261.6178 comes from TI doc
-            
+
             print("AFE new CC Gain:", cc_gain_float)
             print("AFE new Cap Gain:", capacity_gain_float)
 
@@ -638,7 +638,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
             # recheck current measurement -> repeat if necessary
             print("Recheck current measurement after current calibration:")
-            
+
             u_cell = 3.6
             u_supply = u_cell * num_cells
             i_pack = 7.5
@@ -662,7 +662,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             print("AFE TOS:", afe.read_tos_voltage())
             print("AFE PACK:", afe.read_pack_voltage())
             print("AFE LD:", afe.read_ld_voltage())
-            
+
             psu1.set_output_state(0)  # SINK OFF
             psu1.configure_supply(u_supply, 0.080, 50, 0)  # PACK supply safe state
             psu2.configure_supply(u_supply, 0.080, 50, 1)  # Cell Stack SAFE STATE
@@ -744,7 +744,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
         # ---------------------------------------------------------------------------------------------
 
             gg = BQ34Z100(BusMaster(cartridge.backyard_bus, retry_limit=5), slvAddress=0x55, pec=False)
-            
+
             if 0:
                 # write FLASH -----------
                 ff2 = BQStudioFileFlexFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.bq.fs" )
@@ -776,19 +776,15 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                 result = sign * mantissa * 2**exponent
                 return result
             print(ti_f4_to_float(0x7F71205C))
-            
+
 
             gg.enter_calibration()
 
             calibration_buf = gg.read_dataflash_class(104)
-            xx = unpack_from(">L", calibration_buf, 0)[0]
-            cc_gain = ti_f4_to_float(xx)
-            # cc_gain = unpack_from(">f", calibration_buf, 0)[0]
-            # cc_delta = unpack_from(">f", calibration_buf, 4)[0]
-            # cc_gain = unpack_from("<f", calibration_buf, 0)[0]
-            #cc_delta = unpack_from("<f", calibration_buf, 4)[0]
-            xx = unpack_from(">L", calibration_buf, 4)[0]
-            cc_delta = ti_f4_to_float(xx)
+            N = unpack_from(">L", calibration_buf, 0)[0]
+            cc_gain = gg._flash_f4_to_float(N)
+            N = unpack_from(">L", calibration_buf, 4)[0]
+            cc_delta = gg._flash_f4_to_float(N)
             cc_offset = unpack_from("h", calibration_buf, 8)[0]
             board_offset = unpack_from(">b", calibration_buf, 10)[0]
             int_temperature_offset = unpack_from(">b", calibration_buf, 11)[0]
@@ -812,24 +808,27 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             #_fixed_voltage = int(round(_fixed_voltage / num_cells))
             new_voltage_divider = voltage_divider * known_voltage / gg_voltage
             #_fixed_voltage = int(round(new_voltage_divider))
-            pack_into("<H", calibration_buf, 14, _fixed_voltage)
+            pack_into(">H", calibration_buf, 14, _fixed_voltage)
             gg.write_dataflash_class(104, calibration_buf)
             print(list(gg.read_dataflash_class(104)))
             sleep(0.5)
             voltage = gg.voltage()
             stack_daq = daq.get_VDC(15)  # full pack voltage
             voltage_divider_cal = _fixed_voltage * stack_daq / voltage
-            pack_into("<H", calibration_buf, 14, int(round(voltage_divider_cal)))
-            pack_into("<f", calibration_buf, 0, 0.001)  # write 1mOhm as prep for CC Gain calibration
+            voltage_divider_cal_int = int(round(voltage_divider_cal))
+            pack_into(">H", calibration_buf, 14, voltage_divider_cal_int)
+            N = gg._float_to_flash_f4(0.001)  # write 1mOhm as prep for CC Gain calibration
+            pack_into(">L", calibration_buf, 0, N)
             gg.write_dataflash_class(104, calibration_buf)
 
             power_config_buf = gg.read_dataflash_class(68)
             flash_update_ok_cell_volt = unpack_from("<h", power_config_buf, 0)[0]
             # according to TI doc, set to 2800mV at min for flash update ok
             flash_update_ok_cell_volt = 2800 * num_cells * 5000 / voltage_divider_cal / gg.get_voltage_scale()
-            pack_into("<h", power_config_buf, 0, int(round(flash_update_ok_cell_volt)))
+            flash_update_ok_cell_volt_int = int(round(flash_update_ok_cell_volt))
+            pack_into(">h", power_config_buf, 0, flash_update_ok_cell_volt_int)
             gg.write_dataflash_class(68, power_config_buf)
-            gg.exit_calibration()            
+            gg.exit_calibration()
             gg.reset_device()
             print("Voltage divider calibration done:", voltage_divider_cal)
 
@@ -838,7 +837,8 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
             current = gg.current()
             cc_gain = psu1.get_current() / current * 1  # * 1 Ohm
-            pack_into("<f", calibration_buf, 0, cc_gain)
+            N = gg._float_to_flash_f4(cc_gain)
+            pack_into(">L", calibration_buf, 0, N)
             gg.write_dataflash_class(104, calibration_buf)
 
 
@@ -955,41 +955,6 @@ if __name__ == "__main__":
     # print(sum(_test3) & 0xff)
     # print(~sum(_test3) & 0xff)
     # #exit()
-
-
-    def ti_f4_to_float(z: int) -> float:
-        exponent = (z >> 24) - 128 - 24  # both numbers are from ??? TI
-        print(hex(exponent))
-        mantissa = z & 0xFFFFFF
-        sign = -1 if (z & 0x800000) != 0 else 1
-        mantissa = mantissa | 0x800000  # set back the hidden 1 of mantissa
-        result = sign * mantissa * 2**exponent
-        return result
-    
-    print(ti_f4_to_float(0x7F71205C))
-
-    z = 0x7F71205C
-    z = 0x940898c0
-    n = (z & 0x7FFFFF) | (((((z >> 24) & 0xFF) - 2) & 0xFF) << 23) | ((z & 0x00800000) << 8)
-    print(hex(n))
-    b = pack("<L", n)
-    print(hexlify(b))
-    f = unpack("<f", b)
-    print(f)
-    f0 = unpack("<f", bytearray([0x5c,0x20, 0xf1,0x3e]))
-    print(f0)
-
-    f1 = 0.47095000743865967
-    b1 = pack("<f", f1)
-    print(hexlify(b1))
-    print(unpack("f", b1))
-
-    f1 = 559500
-    b1 = pack("<f", f1)
-    print(hexlify(b1))
-    print(unpack("f", b1))
-
-    exit()
 
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
