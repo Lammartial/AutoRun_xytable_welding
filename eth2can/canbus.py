@@ -22,7 +22,7 @@ class CANBus(Eth2CanPort):
                         flags.to_bytes(4, "little") +
                         identifier.to_bytes(4, "little") +
                         can_timeout.to_bytes(2, "little") +
-                        bytes([len(data)]) + data,
+                        bytes([len(data)]) + bytearray(data),
                         timeout=timeout,
                         encoding=False)
         return r, hexlify(r).decode()

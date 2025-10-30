@@ -89,7 +89,7 @@ class DAQ970A(Eth2SerialDevice):
     # taken from Agilent class - not yet tested!
     def wait_response_ready(self) -> bool:
         return (int(self.request("*OPC?")) == 1)  # this will automatically delay until the response is ready
-    
+
 
     #----------------------------------------------------------------------------------------------
 
@@ -155,6 +155,13 @@ class DAQ970A(Eth2SerialDevice):
         self.card_slot = int(new_slot)
 
     #----------------------------------------------------------------------------------------------
+
+
+    def configure_autozero(self, channel: int = None, state: str = "ONCE") -> None:
+        cmd = f"SENSE:VOLT:ZERO:AUTO {state},(@{channel})"
+        #cmd = f"SENSE:VOLT:ZERO:AUTO {state}"
+        self.send(cmd)
+
 
     def setup_channel_delay_preset(self, channel: int | str, delay_in_s: str | float = "AUTO") -> None:
         """
@@ -318,6 +325,8 @@ class DAQ970A(Eth2SerialDevice):
             _resolution = self._voltage_resolution_map[_ch] if _ch in self._voltage_resolution_map else "DEF"
             cmd = f"CONF:VOLT:DC {_scale},{_resolution},(@{_ch})"
             self.send(cmd)  # this command automatically set the trigger source to IMMediate and RESETS all other measurement settings to DEFAULT (also the delays)
+            #cmd = f"SENSE:VOLT:ZERO:AUTO OFF,(@{_ch})"  # disable autozero for the measurement as it would slow down the measurement a lot
+            #self.send(cmd)
             if _ch in self._channel_delay_map:
                 cmd = f"ROUT:CHAN:DEL {self._channel_delay_map[_ch]},(@{_ch})"
                 # we have a delay setting which needs to be send to the device as it will be reset by the config above
@@ -436,7 +445,7 @@ class DAQ970A(Eth2SerialDevice):
 #--------------------------------------------------------------------------------------------------
 #--------------------------------------------------------------------------------------------------
 
-class AGILENT34972A(Eth2SerialDevice):  
+class AGILENT34972A(Eth2SerialDevice):
     """
     Defines the older Agilent / Keysight AGILENT34972A datalogger interface as a simple socket communication.
 
@@ -454,7 +463,7 @@ class AGILENT34972A(Eth2SerialDevice):
             card_slot (int, optional): Selects a measurement channel card on slot 1..3. Defaults to 1
 
         """
-        
+
         super().__init__(resource_str, termination="\n", open_connection=True)  # The Keysight expects to have connect/disconnect for each command
         self.change_card_slot(card_slot)  # also sets the self.card_slot
         self._channel_delay_map = {}  # this map's values can be adjusted by the setup_channel_delay_preset() function later on
@@ -494,7 +503,7 @@ class AGILENT34972A(Eth2SerialDevice):
 
 
     def wait_response_ready(self) -> bool:
-        return (int(self.request("*OPC?")) == 1)  # this will automatically delay until the response is ready    
+        return (int(self.request("*OPC?")) == 1)  # this will automatically delay until the response is ready
 
     #----------------------------------------------------------------------------------------------
 
@@ -832,14 +841,14 @@ class AGILENT34972A(Eth2SerialDevice):
 
         channel = int(channel)
         rtd_resist = int(rtd_resist)
-        fth_type = int(fth_type)          
+        fth_type = int(fth_type)
         assert ((channel >= 1) and (channel <= 20)), ValueError('Invalid channel. Allowed range is 1 .. 20.')
         _ch = self._meas_chan(0, channel)
         try:
             match tran_type:
                 case 'TC' | 'DEF':
                     assert (tc_type in ["B", "E", "J", "K", "N", "R", "S", "T"]), ValueError('Error, get_temp: incorrect tc_type parameter')
-                    cmd = f"MEAS:TEMP? TC,{tc_type},(@{_ch})" 
+                    cmd = f"MEAS:TEMP? TC,{tc_type},(@{_ch})"
                     return float(self.request(cmd))
                 case 'FTH' | 'THER':
                     assert ((fth_type == 2252) or (fth_type == 5000) or (fth_type == 10000)), ValueError('Error, get_temp: incorrect fth_type parameter')
