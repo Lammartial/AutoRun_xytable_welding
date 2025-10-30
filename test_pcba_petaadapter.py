@@ -92,8 +92,7 @@ def rack_test(cartridge: CartridgePETA,
     else:
         print("Need to send Files to the programmer.")
         ap.send_all_files()
-    
-    ap.erase_flash()
+        
 
     #psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
     #psu.configure_current_rise_times(pos="DEF", neg="DEF")
@@ -129,7 +128,8 @@ def rack_test(cartridge: CartridgePETA,
     print("Measure PSU1", psu1.get_all_measurements())
     print("Measure PSU2", psu2.get_all_measurements())
 
-    #cartridge.switch_some_io(7, 0)  # enable microcontroller
+    cartridge.switch_some_io(7, 0)  # enable microcontroller
+    ap.erase_flash()
     cartridge.switch_some_io(7, 1)  # disable microcontroller
 
     # sleep(0.5)
