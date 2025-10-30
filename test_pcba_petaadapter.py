@@ -238,9 +238,23 @@ def rack_test(cartridge: CartridgePETA,
             print(afe.read_cell_voltages())
             print(afe.read_temperatures())
 
+            # This step will enable the FETs to calibrate Top-of-Stack, PACK, and LD voltages.
+            # Make sure FETs are closed for PACK and LD measurements
+            afe.disable_sleepmode()  # Sleep Disable 0x009A to prevent CHG FET from opening
+            #psu1.set_output_state(0)
 
-            # Gas Gauge FW update
+            print("MFG STATUS:", afe.read_manufacturing_status())
+            print("SAFETY STATUS:", afe.read_safety_status())
+            #print(afe.all_fets_on())
+            #print(afe.discharge_test())
+            #print(afe.charge_test())
+            #print(afe.read_manufacturing_status())
+            print("ALARM STATUS:", afe.read_alarm_status())
+            print("FET status: ", afe.read_fet_status())
 
+
+            #------------------------------------------------------------------
+            # GG: Gas Gauge FW update
             gg = BQ34Z100(BusMaster(cartridge.backyard_bus, retry_limit=5), slvAddress=0x55, pec=False)
             v = gg.read_version_information()
             print(v)
@@ -270,16 +284,36 @@ def rack_test(cartridge: CartridgePETA,
             print(gg.voltage())
             print(gg.temperature())
 
-            # enter calibration mode ----------
+            # GG: enter calibration mode ----------
 
             cs = gg.read_control_status()
             if cs["CALEN"] == 0:
                 gg.enable_enter_and_exit_of_calibration_mode()
                 sleep(0.1)
 
+            gg.enter_calibration()
+            v = gg.read_calibration_flash_data()
+            gg_cc_gain_stored = v["cc_gain"]
+            gg_cc_delta_stored = v["cc_delta"]
+            gg_cc_offset_stored = v["cc_offset"]
+            gg_voltage_divider_stored = v["voltage_divider"]
+            gg_board_offset_stored = v["board_offset"]
+            gg_int_temperature_offset_stored = v["int_temperature_offset"]
+            gg_ext_temperature_offset_stored = v["ext_temperature_offset"]
+            print("GG: stored calibration values:")
+            print(" Voltage divider:", gg_voltage_divider_stored)
+            print(" Board offset:", gg_board_offset_stored)
+            print(" Int. temp. offset:", gg_int_temperature_offset_stored)
+            print(" Ext. temp. offset:", gg_ext_temperature_offset_stored)
+            print(" CC Gain:", gg_cc_gain_stored)
+            print(" CC Delta:", gg_cc_delta_stored)
+            print(" CC Offset:", gg_cc_offset_stored)
+            print(" Magic constant:", gg_cc_delta_stored / gg_cc_gain_stored, " = 1193046.0 ?")
 
-
+            # =====================================================================================
             # === calibrate temperature ===
+            # =====================================================================================
+
             # 1) apply known temperature TEMP(cal)
             #temp_cal = 21.4
             temp_cal = daq.get_temp(3, "RTD", 1000, 0, "")  # channel 3 + 13
@@ -309,19 +343,15 @@ def rack_test(cartridge: CartridgePETA,
             print(afe.read_temperature_calibration_offsets(hexi=True))
             afe.exit_config_update_mode()
 
-            # This step will enable the FETs to calibrate Top-of-Stack, PACK, and LD voltages.
-            # Make sure FETs are closed for PACK and LD measurements
-            afe.disable_sleepmode()  # Sleep Disable 0x009A to prevent CHG FET from opening
-            #psu1.set_output_state(0)
 
-            print("MFG STATUS:", afe.read_manufacturing_status())
-            print("SAFETY STATUS:", afe.read_safety_status())
-            #print(afe.all_fets_on())
-            #print(afe.discharge_test())
-            #print(afe.charge_test())
-            #print(afe.read_manufacturing_status())
-            print("ALARM STATUS:", afe.read_alarm_status())
-            print("FET status: ", afe.read_fet_status())
+            gg_temperature = gg.temperature()  # in degC
+            gg_ext_temperature_offset = temp_cal - gg_temperature
+            print("T_ambient GG:", temp_cal , "meas:", gg_temperature, "offset to store:", gg_ext_temperature_offset)
+            gg.write_calibration_flash_data({
+                "ext_temperature_offset": int(round(gg_ext_temperature_offset * 1e+1)),  # -> 0.1C
+            })
+            gg.exit_calibration()
+
 
             # ENABLE FETs
             def _enable_fets(timeout: float = 10.0) -> None:
@@ -362,29 +392,10 @@ def rack_test(cartridge: CartridgePETA,
             print("LD Gain stored:", afe.read_ld_gain())
 
             if 1:
-                # GG: enter calibration mode ----------
-                gg.enter_calibration()
-                v = gg.read_calibration_flash_data()
-                gg_cc_gain_stored = v["cc_gain"]
-                gg_cc_delta_stored = v["cc_delta"]
-                gg_cc_offset_stored = v["cc_offset"]
-                gg_voltage_divider_stored = v["voltage_divider"]
-                gg_board_offset_stored = v["board_offset"]
-                gg_int_temperature_offset_stored = v["int_temperature_offset"]
-                gg_ext_temperature_offset_stored = v["ext_temperature_offset"]
-                print("GG: stored calibration values:")
-                print(" Voltage divider:", gg_voltage_divider_stored)
-                print(" Board offset:", gg_board_offset_stored)
-                print(" Int. temp. offset:", gg_int_temperature_offset_stored)
-                print(" Ext. temp. offset:", gg_ext_temperature_offset_stored)
-                print(" CC Gain:", gg_cc_gain_stored)
-                print(" CC Delta:", gg_cc_delta_stored)
-                print(" CC Offset:", gg_cc_offset_stored)
-                print(" Magic constant:", gg_cc_delta_stored / gg_cc_gain_stored, " = 1193046.0 ?")
 
-                # =================================================================
+                # =================================================================================
                 # === Voltage calibration ===
-                # =================================================================
+                # =================================================================================
 
                 # Apply 3.0V to all cells -----------
                 u_cell_a = 3.0
@@ -630,9 +641,9 @@ def rack_test(cartridge: CartridgePETA,
 
                 print("GG: Voltage", gg.voltage())
 
-            # =================================================================
+            # =====================================================================================
             # === Current calibration ===
-            # =================================================================
+            # =====================================================================================
 
 
 
