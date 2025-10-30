@@ -555,7 +555,7 @@ class BQ76942:
     #----------------------------------------------------------------------------------------------
 
 
-    def read_cc2_current(self) -> Tuple[float, bool]:
+    def read_cc2_current(self) -> float:
         """Read the CC2 current from the BQ76942.
 
         Returns:
@@ -565,9 +565,9 @@ class BQ76942:
         _standard_scale = 1e-3 # mA -> A
         raw, ok = self.readWord(0x3A, signed=True)  # CC2 Current register
         if not ok:
-            return None, False
+            return None
         curr = raw * _standard_scale  # scale returned value into Amperes
-        return curr, True
+        return curr
 
 
     #----------------------------------------------------------------------------------------------

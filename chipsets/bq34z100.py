@@ -175,7 +175,7 @@ class BQ34Z100:
                 raise IOError(f"Could not read page {subclass_and_offset}from BQ34Z100.")
 
             wholeblock = bytearray(data + rd_buf)[:32]
-            print(list(wholeblock))
+            #print(list(wholeblock))  # DEBUG
             checksum = ~sum(wholeblock) & 0xFF # bitwise inverse
             if not self.bus.writeBytes(self.address, 0x40, wholeblock, use_pec=self.pec):  # write data to the data registers starting at 0x3E including the address
                 return False
@@ -224,7 +224,7 @@ class BQ34Z100:
         buf, ok = self.bus.readBytes(self.address, 0x40, 34, use_pec=self.pec)
         if not ok:
             raise IOError("Could not read from BQ76942.")
-        print(list(buf))  # DEBUG
+        #print(list(buf))  # DEBUG
         incoming_cs, count = list(buf[-2:])  # get expected checksum and length
         checksum = ~sum(buf[:-2]) & 0xFF  # bitwise inverse
         # verify checksum
@@ -245,10 +245,39 @@ class BQ34Z100:
     #----------------------------------------------------------------------------------------------
     # calibration helpers
 
-    def read_calibration_flash_data(self, hexi: None | bool | str = None) -> bytes | str:
+    def _helper_parameter_to_dict(self, data: bytes | bytearray, target: OrderedDict | dict) -> OrderedDict:
+        if len(data) == 0:
+            return target  # nothing to do
+        if isinstance(data, dict) or isinstance(data, OrderedDict):
+            # transfer into local dict
+            for k,v in data.items():
+                if k in target:
+                    target[k] = v
+                else:
+                    pass  # ignore unknown keys
+        elif isinstance(data, tuple) or isinstance(data, list):
+            if isinstance(data[0], (tuple, list)):
+                if len(data[0]) != 2:
+                    raise ValueError("If data is a list of key-value pairs, each element must have exactly 2 items.")
+                # elements are key-value pairs: ('keystr', value)
+                for k,v in data:
+                    if k in target:
+                        target[k] = v
+                    else:
+                        pass  # ignore unknown keys
+            else:
+                # simple list of values: transfer them as they come
+                if len(data) > len(target):
+                    raise ValueError(f"Data tuple/list must have at most {len(target)} elements.")
+                keys = list(target.keys())
+                for i in range(len(data)):
+                    if not isinstance(data[i], (int, float)):
+                        raise TypeError("If data is a simple tuple/list of values, each element must be int or float.")
+                    target[keys[i]] = data[i]
+        else:
+            raise TypeError("Data must be a dict, OrderedDict, tuple or list.")
 
-        self._powerconfig_buf = self.read_dataflash_class(68)
-        return self._calibration_buf, self._powerconfig_buf if hexi is None else (_maybe_hexlify(self._calibration_buf, hexi), _maybe_hexlify(self._powerconfig_buf, hexi))
+        return target
 
 
     def read_calibration_flash_data(self) -> OrderedDict:
@@ -261,18 +290,18 @@ class BQ34Z100:
         self._calibration_buf = self.read_dataflash_class(104)
         buf = self._calibration_buf
         self.calibration_data = OrderedDict({
-            "cc_gain": unpack_from("<f", buf, 0)[0],
-            "cc_delta": unpack_from("<f", buf, 4)[0],
-            "cc_offset": unpack_from("<h", buf, 8)[0],
-            "board_offset": unpack_from("<b", buf, 10)[0],
-            "int_temperature_offset": unpack_from("<b", buf, 11)[0],
-            "ext_temperature_offset": unpack_from("<b", buf, 12)[0],
-            "voltage_divider": unpack_from("<H", buf, 14)[0],
+            "cc_gain": self._flash_f4_to_float(unpack_from(">L", buf, 0)[0]),  # need to convert from TI float stunt...
+            "cc_delta": self._flash_f4_to_float(unpack_from(">L", buf, 4)[0]),  # need to convert from TI float stunt...
+            "cc_offset": unpack_from(">h", buf, 8)[0],
+            "board_offset": unpack_from(">b", buf, 10)[0],
+            "int_temperature_offset": unpack_from(">b", buf, 11)[0],
+            "ext_temperature_offset": unpack_from(">b", buf, 12)[0],
+            "voltage_divider": unpack_from(">H", buf, 14)[0],
         })
         return self.calibration_data
 
 
-    def write_calibration_flash_data(self, data: dict | OrderedDict | Tuple) -> bool:
+    def write_calibration_flash_data(self, data: dict | OrderedDict | Tuple = None) -> bool:
         """Write calibration information to the calibration data flash class.
 
         Args:
@@ -282,29 +311,23 @@ class BQ34Z100:
             bool: True if successful, False otherwise.
         """
 
-        if isinstance(data, dict) or isinstance(data, OrderedDict):
-            buf = bytearray(32)
-            pack_into("<f", buf, 0, data.get("cc_gain", 1.0))
-            pack_into("<f", buf, 4, data.get("cc_delta", 1.0))
-            pack_into("<h", buf, 8, data.get("cc_offset", 0))
-            pack_into("<b", buf, 10, data.get("board_offset", 0))
-            pack_into("<b", buf, 11, data.get("int_temperature_offset", 0))
-            pack_into("<b", buf, 12, data.get("ext_temperature_offset", 0))
-            pack_into("<H", buf, 14, data.get("voltage_divider", 0))
-        elif isinstance(data, tuple) or isinstance(data, list):
-            if len(data) < 7:
-                raise ValueError("Data tuple/list must have at least 7 elements.")
-            buf = bytearray(32)
-            pack_into("<f", buf, 0, data[0])
-            pack_into("<f", buf, 4, data[1])
-            pack_into("<h", buf, 8, data[2])
-            pack_into("<b", buf, 10, data[3])
-            pack_into("<b", buf, 11, data[4])
-            pack_into("<b", buf, 12, data[5])
-            pack_into("<H", buf, 14, data[6])
-        else:
-            raise TypeError("Data must be a dict, OrderedDict, tuple or list.")
+        if self.calibration_data is None:
+            self.read_calibration_flash_data()  # make sure we have the dict with all keys
 
+        if data is None:
+            #if self.calibration_data is None:
+            #    raise ValueError("No calibration data available to write.")
+            data = self.calibration_data
+        self.calibration_data = self._helper_parameter_to_dict(data, self.calibration_data)
+
+        buf = bytearray(32)
+        pack_into(">L", buf, 0, self._float_to_flash_f4(self.calibration_data.get("cc_gain", 4.684778213500977)))
+        pack_into(">L", buf, 4, self._float_to_flash_f4(self.calibration_data.get("cc_delta", 5589155.0)))
+        pack_into(">h", buf, 8, self.calibration_data.get("cc_offset", -1432))
+        pack_into(">b", buf, 10, self.calibration_data.get("board_offset", -12))
+        pack_into(">b", buf, 11, self.calibration_data.get("int_temperature_offset", 0))
+        pack_into(">b", buf, 12, self.calibration_data.get("ext_temperature_offset", 0))
+        pack_into(">H", buf, 14, self.calibration_data.get("voltage_divider", 5031))
         return self.write_dataflash_class(104, data=buf)
 
 
@@ -321,14 +344,14 @@ class BQ34Z100:
         self._powerconfig_buf = self.read_dataflash_class(68)
         buf = self._powerconfig_buf
         self.powerconfig_data = OrderedDict({
-            "flash_update_ok_cell_volt": unpack_from("<h", buf, 0)[0],
-            "sleep_current": unpack_from("<h", buf, 2)[0],
-            "fs_wait": unpack_from("<B", buf, 11)[0],
+            "flash_update_ok_cell_volt": unpack_from(">h", buf, 0)[0],
+            "sleep_current": unpack_from(">h", buf, 2)[0],
+            "fs_wait": unpack_from(">B", buf, 11)[0],
         })
         return self.powerconfig_data
 
 
-    def write_powerconfig_flash_data(self, data: dict | OrderedDict | Tuple) -> bool:
+    def write_powerconfig_flash_data(self, data: dict | OrderedDict | Tuple = None) -> bool:
         """Write power configuration information to the power configuration data flash class.
 
         Args:
@@ -338,21 +361,20 @@ class BQ34Z100:
             bool: True if successful, False otherwise.
         """
 
-        if isinstance(data, dict) or isinstance(data, OrderedDict):
-            buf = bytearray(32)
-            pack_into("<h", buf, 0, data.get("flash_update_ok_cell_volt", 0))
-            pack_into("<h", buf, 2, data.get("sleep_current", 0))
-            pack_into("<B", buf, 11, data.get("fs_wait", 0))
-        elif isinstance(data, tuple) or isinstance(data, list):
-            if len(data) < 3:
-                raise ValueError("Data tuple/list must have at least 3 elements.")
-            buf = bytearray(32)
-            pack_into("<h", buf, 0, data[0])
-            pack_into("<h", buf, 2, data[1])
-            pack_into("<B", buf, 11, data[2])
-        else:
-            raise TypeError("Data must be a dict, OrderedDict, tuple or list.")
+        if self.powerconfig_data is None:
+            self.read_powerconfig_flash_data()  # make sure we have the dict with all keys
 
+        if data is None:
+            # if self.powerconfig_data is None:
+            #     raise ValueError("No power configuration data available to write.")
+            data = self.powerconfig_data
+
+        self.powerconfig_data = self._helper_parameter_to_dict(data, self.powerconfig_data)
+        # Transfer into buffer then into GG
+        buf = bytearray(32)
+        pack_into(">h", buf, 0, self.powerconfig_data.get("flash_update_ok_cell_volt", 2800))
+        pack_into(">h", buf, 2, self.powerconfig_data.get("sleep_current", 10))
+        pack_into(">B", buf, 11, self.powerconfig_data.get("fs_wait", 10))
         return self.write_dataflash_class(68, data=buf)
 
 
@@ -771,7 +793,7 @@ class BQ34Z100:
 
     #----------------------------------------------------------------------------------------------
 
-    def read_version_information(self) -> OrderedDict:
+    def read_version_information(self, as_hex_str: bool = True) -> OrderedDict:
         """Get the version information of the fuel gauge.
 
         Returns:
@@ -785,12 +807,12 @@ class BQ34Z100:
         df_version, raw = self._read_control(0x000C)
         chem_checksum, raw = self._read_control(0x0017)
         return OrderedDict({
-            "device_type": f"{device_type:04X}",
-            "fw_version": f"{fw_version:04X}",
-            "hw_version": f"{hw_version:04X}",
-            "chem_id": f"{chem_id:04X}",
-            "df_version": f"{df_version:04X}",
-            "chem_checksum": f"{chem_checksum:04X}",
+            "device_type": f"0x{device_type:04X}" if as_hex_str else device_type,
+            "fw_version": f"0x{fw_version:04X}" if as_hex_str else fw_version,
+            "hw_version": f"0x{hw_version:04X}" if as_hex_str else hw_version,
+            "chem_id": f"0x{chem_id:04X}" if as_hex_str else chem_id,
+            "df_version": f"0x{df_version:04X}" if as_hex_str else df_version,
+            "chem_checksum": f"0x{chem_checksum:04X}" if as_hex_str else chem_checksum,
         })
 
 

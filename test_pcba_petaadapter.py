@@ -26,6 +26,7 @@ from rrc.barcode_scanner import create_barcode_scanner
 from rrc.feasa import FEASA_CH9121
 from rrc.itech import M3400
 from rrc.keysight import DAQ970A
+from rrc.petalite_programmer import AlgocraftProgrammer
 
 
 # --------------------------------------------------------------------------- #
@@ -68,11 +69,29 @@ def test_cartridge_only(cart: CartridgePETA) -> None:
 
 #--------------------------------------------------------------------------------------------------
 
-def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
-              vsim: CellVoltageSimulation, calib: CalibrationStorage,
+def rack_test(cartridge: CartridgePETA,
+              gpio: RelayBoard4Relay4GPIO,
+              vsim: CellVoltageSimulation,
+              calib: CalibrationStorage,
               feasa: FEASA_CH9121,
               psu1: M3400, psu2: M3400,
-              daq: DAQ970A) -> None:
+              daq: DAQ970A,
+              ap: AlgocraftProgrammer,
+            ) -> None:
+
+    # prepare the microcontroller programming
+    ap.set_filenames("petalite-test-image.wni", "petalite-test.wnp", erase_flash_project_file="petalite-flash-erase.wnp")
+    print("Integrity check MD5: ")
+    if ap.verify_all_files_on_programmer(
+        "821C93A15324CC4E05E839E8D04521AE",
+        "322D36DAE4DBA54A1B06164744D266E4",
+        erase_project_file_hash="0711D04EFD02FA4E3317F3D6829FDA0D"):
+        print("Ok.")
+    else:
+        print("Need to send Files to the programmer.")
+        ap.send_all_files()
+
+
     #psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
     #psu.configure_current_rise_times(pos="DEF", neg="DEF")
 
@@ -147,11 +166,16 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
         u_cell = ()
         for channel in [11, 12, 14, 10, 18, 19, 5]:
             u_cell += (daq.get_VDC(channel),)
+            sleep(0.025)
         u_xtra = ()
         u_xtra += (daq.get_VDC(15),)  # full pack voltage at cellstack side
+        sleep(0.025)
         u_xtra += (daq.get_VDC(8),)   # should be +3.3v
+        sleep(0.025)
         u_xtra += (daq.get_VDC(9),)   # should be +1.8v
+        sleep(0.025)
         u_xtra += (daq.get_VDC(4),)   # pack+ voltage at connector side
+        sleep(0.025)
         return u_cell, u_xtra
 
 
@@ -186,24 +210,18 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
     try:
 
-        if 0:
+        if 1:
             afe = BQ76942(cartridge.backyard_bus, slvAddress=0x08, pec=True, retry_limit=5)
-            #afe.disable_checksum()
-
-            # Verify float conversion (why can't we use IEEE754 of Python pack("f", a_float) ??)
-            # i, x = afe.float2flash(47.11)
-            # print(i)
-            # f = afe.flash_to_float(i)
-            # print(f)
+            afe.disable_checksum()
 
             print(afe.read_control_status())
             print(afe.read_battery_status())
-
             print(afe.read_safety_status(hexi=True))
             print(afe.read_dastatus(hexi=True))
 
             afe.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets
 
+            # AFE need always transfer into RAM
             ff = BQStudioFileFlexFlasher(afe, base_path / "GG_3412185A-02_A_draft4_unsealed_PF_Fet_dis_CDFETOFF_PDwn_Petalite_AFE_settings.gm.fs" )
             ff.validate_file()
             tic = perf_counter()
@@ -221,15 +239,23 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             print(afe.read_temperatures())
 
 
+            # Gas Gauge FW update
 
             gg = BQ34Z100(BusMaster(cartridge.backyard_bus, retry_limit=5), slvAddress=0x55, pec=False)
-            print(gg.get_voltage_scale())
-            print(gg.get_current_scale())
-            print(gg.get_energy_scale())
-            print(gg.voltage())
-            print(gg.temperature())
+            v = gg.read_version_information()
+            print(v)
 
-            if 0:
+            if (v["hw_version"] == "0x0080") and (v["fw_version"] == "0x0202") and (v["device_type"] == "0x0100"):
+                # differencial only
+                ff2 = BQStudioFileFlexFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.df.fs" )
+                ff2.validate_file()
+                tic = perf_counter()
+                ff2.program_fw_file()
+                toc = perf_counter()
+                print(f"DONE in {toc - tic:0.4f} seconds.")
+
+            else:
+                # full update necessary
                 # write FLASH -----------
                 ff2 = BQStudioFileFlexFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.bq.fs" )
                 ff2.validate_file()
@@ -237,6 +263,19 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                 ff2.program_fw_file()
                 toc = perf_counter()
                 print(f"DONE in {toc - tic:0.4f} seconds.")
+
+            print(gg.get_voltage_scale())
+            print(gg.get_current_scale())
+            print(gg.get_energy_scale())
+            print(gg.voltage())
+            print(gg.temperature())
+
+            # enter calibration mode ----------
+
+            cs = gg.read_control_status()
+            if cs["CALEN"] == 0:
+                gg.enable_enter_and_exit_of_calibration_mode()
+                sleep(0.1)
 
 
 
@@ -323,7 +362,30 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             print("LD Gain stored:", afe.read_ld_gain())
 
             if 1:
+                # GG: enter calibration mode ----------
+                gg.enter_calibration()
+                v = gg.read_calibration_flash_data()
+                gg_cc_gain_stored = v["cc_gain"]
+                gg_cc_delta_stored = v["cc_delta"]
+                gg_cc_offset_stored = v["cc_offset"]
+                gg_voltage_divider_stored = v["voltage_divider"]
+                gg_board_offset_stored = v["board_offset"]
+                gg_int_temperature_offset_stored = v["int_temperature_offset"]
+                gg_ext_temperature_offset_stored = v["ext_temperature_offset"]
+                print("GG: stored calibration values:")
+                print(" Voltage divider:", gg_voltage_divider_stored)
+                print(" Board offset:", gg_board_offset_stored)
+                print(" Int. temp. offset:", gg_int_temperature_offset_stored)
+                print(" Ext. temp. offset:", gg_ext_temperature_offset_stored)
+                print(" CC Gain:", gg_cc_gain_stored)
+                print(" CC Delta:", gg_cc_delta_stored)
+                print(" CC Offset:", gg_cc_offset_stored)
+                print(" Magic constant:", gg_cc_delta_stored / gg_cc_gain_stored, " = 1193046.0 ?")
+
+                # =================================================================
                 # === Voltage calibration ===
+                # =================================================================
+
                 # Apply 3.0V to all cells -----------
                 u_cell_a = 3.0
                 u_supply = u_cell_a * num_cells
@@ -337,6 +399,30 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                 print("Measure PSU1", psu1.get_all_measurements())
                 print("Measure PSU2", psu2.get_all_measurements())
                 print(read_voltages_from_daq())
+
+
+                # GG: Calibrate Voltage DIVIDER ---------
+                gg_voltage = gg.voltage()
+                u_cells, u_xtras = read_voltages_from_daq()
+                known_voltage = u_xtras[0]
+                print("GG V meas ERROR vefore:", (known_voltage - gg_voltage), "V")
+                if gg_voltage_divider_stored <= 0:
+                    gg_voltage_divider_stored = 5000  # default value
+                new_voltage_divider = gg_voltage_divider_stored * known_voltage / gg_voltage
+                new_voltage_divider_int = int(round(new_voltage_divider))
+                gg.write_calibration_flash_data(data={"voltage_divider": new_voltage_divider_int})
+                gg.exit_calibration()
+
+                sleep(0.5)
+                # verify
+                gg_voltage = gg.voltage()
+                u_cells, u_xtras = read_voltages_from_daq()
+                known_voltage = u_xtras[0]  # full pack voltage
+                print("GG V meas ERROR after cal:", (known_voltage - gg_voltage), "V")
+                print("Voltage divider calibration done:", new_voltage_divider)
+
+
+                # AFE: Calibrate Cell, TOS, PACK, LD gains ---------
 
                 # psu1.set_output_state(0)  # disable PACK supply and enable the FETs to use the DAQ measurement for PACK and LD voltages too
                 # # print(afe.discharge_test())
@@ -375,6 +461,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                 pack_voltage_counts_a /= 10
                 ld_voltage_counts_a /= 10
 
+
                 # Apply 4.2V to all cells -----------
                 u_cell_b = 4.2
                 u_supply = u_cell_b * num_cells
@@ -389,6 +476,30 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                 print("Measure PSU1", psu1.get_all_measurements())
                 print("Measure PSU2", psu2.get_all_measurements())
                 print(read_voltages_from_daq())
+
+
+                # GG: CC Offset Calibration GG -----------
+                # (need zero current flow)
+
+                print("CC offset")
+                gg.enter_calibration()
+                is_calibrating = False
+                n = 5*2
+                while not is_calibrating:
+                    # CC offset calibration
+                    gg.calibrate_cc_offset()
+                    cs = gg.read_control_status()
+                    if cs["CCA"] == 1:
+                        is_calibrating = True
+                        break
+                    # here we can insert another calibration task while waiting
+                    # ...
+                    #
+                    sleep(0.5)
+                if not is_calibrating:
+                    raise RuntimeError("CCA bit not set after starting CC offset calibration!")
+
+                #--------------------------------------------
 
                 cell_voltage_daq_b = [0] * 16
                 pack_voltage_daq_b = 0
@@ -479,22 +590,73 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
                 afe.exit_config_update_mode()
 
+                # -------------------------------------------------------------
+                # CC offset calibration: wait until CCA cleared
+                x = False
+                n = 60*2
+                while n:
+                    cs = gg.read_control_status()
+                    if cs["CCA"] == 0:
+                        break
+                    # here we can insert another calibration task while waiting
+                    # ...
+                    #if not x:
+                    #    print("Erase FLASH:", ap.erase_flash())
+                    #    x = True
+                    # ...
+                    sleep(0.5)
+                    n -= 1
+                if n == 0:
+                    raise RuntimeError("CCA bit not cleared after CC offset calibration!")
+                gg.cc_offset_save()
+                gg.exit_calibration()
+                sleep(0.1)
+                #--------------------------------------------------------------
+
 
                 # recheck voltage measurement
                 print("Recheck cell voltages after voltage calibration:")
                 sleep(1.0)
-                print("TOS Gain stored:", afe.read_tos_gain())
-                print("PACK Gain stored:", afe.read_pack_gain())
-                print("LD Gain stored:", afe.read_ld_gain())
+                print("AFE: TOS Gain stored:", afe.read_tos_gain())
+                print("AFE: PACK Gain stored:", afe.read_pack_gain())
+                print("AFE: LD Gain stored:", afe.read_ld_gain())
                 u_recheck = afe.read_cell_voltages()
                 for i, v in enumerate(u_recheck):
-                    print(f"Cell {i+1}: {round(v, 3)}V")
-                print("TOS:", afe.read_tos_voltage())
-                print("PACK:", afe.read_pack_voltage())
-                print("LD:", afe.read_ld_voltage())
+                    print(f"AFE: Cell {i+1}: {round(v, 3)}V")
+                print("AFE: TOS:", afe.read_tos_voltage())
+                print("AFE: PACK:", afe.read_pack_voltage())
+                print("AFE: LD:", afe.read_ld_voltage())
                 print(read_voltages_from_daq())
 
+                print("GG: Voltage", gg.voltage())
+
+            # =================================================================
             # === Current calibration ===
+            # =================================================================
+
+
+
+            # -----------------------------------------------------------------
+            # GG: board offset --
+            print("Board offset")
+            gg.enter_calibration()
+            is_calibrating = False
+            n = 5*2
+            while not is_calibrating:
+                # CC offset calibration
+                gg.calibrate_board_offset()
+                cs = gg.read_control_status()
+                if cs["CCA"] == 1 and cs["BCA"] == 1:
+                    is_calibrating = True
+                    break
+                # here we can insert another calibration task while waiting
+                # ...
+                sleep(0.5)
+            if not is_calibrating:
+                raise RuntimeError("CCA bit not set after starting board offset calibration!")
+
+            #-------------------------------------------------------------
+
 
             # Apply a known current I_CAL of 0mA
             # psu1 and psu2 already in mode that no current is flowing
@@ -522,6 +684,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             print("AFE stored board offset:", afe.read_board_offset())
             _offset_samples = afe.read_coulomb_counter_offset_sample()
             print("OFFSET Samples:", _offset_samples)
+            _offset_samples = 1
             board_offset = _offset_samples * int(round(value / 10))
             #board_offset = -(value & 0x8000) | (value & 0x7fff)
             if board_offset < -32768 or board_offset > 32767:
@@ -544,6 +707,30 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             #print(afe.charge_test())
             #print("FET status: ", afe.read_fet_status())
 
+
+            #-------------------------------------------------------------
+            # GG: wait until BCA cleared
+            x = False
+            n = 60*2
+            while n:
+                cs = gg.read_control_status()
+                if cs["BCA"] == 0:
+                    break
+                # here we can insert another calibration task while waiting
+                # ...
+                if not x:
+                    print("Program FLASH:", ap.program_flash())
+                    x = True
+                # ...
+                sleep(0.5)
+                n -= 1
+            if n == 0:
+                raise RuntimeError("CCA bit not cleared after board offset calibration!")
+            gg.cc_offset_save()
+            gg.exit_calibration()
+            #--------------------------------------------------------------
+
+
             i_pack_a = 1.0
             print(f"Apply {i_pack_a}A discharge current")
             p_pack_a = (u_supply * i_pack_a)
@@ -561,17 +748,21 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             i_psu_a = psu1.get_current()
             print("Measure PSU1", psu1.get_all_measurements())
             print("Measure PSU2", psu2.get_all_measurements())
-            sleep(2.0)
-            print("AFE current:", afe.read_cc2_current())
-            value = 0
-            for i in range(10):
-                cc = afe.read_cal1()
-                value += cc["cc2_counts"]
-                sleep(0.1)
-            print("CC a:", cc, value)
-            cc_counts_a = int(round(value / 10))
-            #cc_counts_a = -(value & 0x8000) | (value & 0x7fff)
-            print(cc_counts_a)
+            #sleep(2.0)
+            cc2_current_a = afe.read_cc2_current()
+            print("PSU1 current:", i_psu_a)
+            print("AFE CC2 current:", cc2_current_a)
+            # check if we have 1A
+
+            # value = 0
+            # for i in range(10):
+            #     cc = afe.read_cal1()
+            #     value += cc["cc2_counts"]
+            #     sleep(0.1)
+            # print("CC a:", cc, value)
+            # cc_counts_a = int(round(value / 10))
+            # #cc_counts_a = -(value & 0x8000) | (value & 0x7fff)
+            # print(cc_counts_a)
 
             # Apply HIGH discharge current through sense resistor
             i_pack_b = 10.0
@@ -586,7 +777,9 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             print("Measure PSU2", psu2.get_all_measurements())
             i_psu_b = psu1.get_current()
             sleep(2.0)
-            print("AFE current:", afe.read_cc2_current())
+            cc2_current_b = afe.read_cc2_current()
+            print("PSU1 current:", i_psu_b)
+            print("AFE CC2 current:", cc2_current_b)
             value = 0
             for i in range(10):
                 cc = afe.read_cal1()
@@ -598,11 +791,22 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             print(cc_counts_b)
 
 
-
-            # bq34Z100 calculation of CC Gain and Capacity Gain
-
-
-
+            # -----------------------------------------------------------------
+            # GG: bq34Z100 calculation of CC Gain and Capacity Gain
+            gg.enter_calibration()
+            gg_current = gg.current()
+            if (gg_current > -0.1) and (gg_current < 0.1):
+                print("No current flow - skip CC Gain calibration")
+            else:
+                gg_cc_gain = gg_cc_gain_stored * i_psu_b / gg_current * 1  # * 1 Ohm
+                gg_cc_delta = gg_cc_gain * 1193046.0  # magic constant
+                print("New CC Gain:", gg_cc_gain)
+                print("New CC Delta:", gg_cc_delta)
+                gg.write_calibration_flash_data(data={"cc_gain": gg_cc_gain, "cc_delta": gg_cc_delta})
+                print("CC Gain calibration done:", gg_cc_gain)
+                sleep(0.1)
+            gg.exit_calibration()
+            #------------------------------------------------------------------
 
             #
             # set PSU1 and PSU2 to safe state avoiding damadge on DUT
@@ -615,16 +819,22 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             print("Measure PSU1", psu1.get_all_measurements())
             print("Measure PSU2", psu2.get_all_measurements())
 
-            if (cc_counts_a == cc_counts_b) or (cc_counts_a == 0) or (cc_counts_b == 0):
-                raise ValueError(f"Current calibration results will cause div by zero error: {cc_counts_a}, {cc_counts_b}")
+            #if (cc_counts_a == cc_counts_b) or (cc_counts_a == 0) or (cc_counts_b == 0):
+            if (cc_counts_b == 0):
+                raise ValueError(f"Current calibration results will cause div by zero error: {cc_counts_b}")
 
-            print("AFE stored CC Gain:", afe.read_cc_gain())
-            print("AFE stored Cap Gain:", afe.read_capacity_gain())
+            stored_cc_gain = afe.read_cc_gain()
+            stored_capacity_gain = afe.read_capacity_gain()
+            print("AFE stored CC Gain:", stored_cc_gain)
+            print("AFE stored Cap Gain:", stored_capacity_gain)
 
-            current_diff = (i_psu_b - i_psu_a)  # in Amps
-            cc_counts_diff = (cc_counts_b - cc_counts_a)
-            print("DIFFS:", current_diff, cc_counts_diff)
-            cc_gain_float = (current_diff / cc_counts_diff) / 1e-3
+            #current_diff = (i_psu_b - i_psu_a)  # in Amps
+            #cc_counts_diff = (cc_counts_b - cc_counts_a)
+            #cc2_current_diff = (cc2_current_b - cc2_current_a)
+            #print("DIFFS:", current_diff, cc_counts_diff, cc2_current_diff)
+            #cc_gain_float = (current_diff / cc_counts_diff) / 1e-3
+            #cc_gain_float = (current_diff / cc2_current_diff) * stored_cc_gain  # alternative calculation using CC2 current directly
+            cc_gain_float = (i_psu_b / cc2_current_b) * stored_cc_gain  # alternative calculation using CC2 current directly
             capacity_gain_float = 298261.6178 * cc_gain_float  # Note: constant 298261.6178 comes from TI doc
 
             print("AFE new CC Gain:", cc_gain_float)
@@ -665,6 +875,12 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             print("AFE TOS:", afe.read_tos_voltage())
             print("AFE PACK:", afe.read_pack_voltage())
             print("AFE LD:", afe.read_ld_voltage())
+
+            # GG test also
+            print("GG voltage:", gg.voltage())
+            print("GG current:", gg.current())
+            print("GG temperature:", gg.temperature())
+
 
             psu1.set_output_state(0)  # SINK OFF
             psu1.configure_supply(u_supply, 0.080, 50, 0)  # PACK supply safe state
@@ -747,12 +963,10 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
         # ---------------------------------------------------------------------------------------------
 
             gg = BQ34Z100(BusMaster(cartridge.backyard_bus, retry_limit=5), slvAddress=0x55, pec=False)
-
-
             v = gg.read_version_information()
             print(v)
 
-            if (v["hw_version"] != "0x80") or (v["fw_version"] != "0x202"):
+            if (v["hw_version"] == "0x0080") and (v["fw_version"] == "0x0202") and (v["device_type"] == "0x0100"):
                 # differencial only
                 ff2 = BQStudioFileFlexFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.df.fs" )
                 ff2.validate_file()
@@ -787,21 +1001,47 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
             gg.enter_calibration()
 
-            calibration_buf = gg.read_dataflash_class(104)
-            N = unpack_from(">L", calibration_buf, 0)[0]
-            cc_gain = gg._flash_f4_to_float(N)
-            N = unpack_from(">L", calibration_buf, 4)[0]
-            cc_delta = gg._flash_f4_to_float(N)
-            cc_offset = unpack_from(">h", calibration_buf, 8)[0]
-            board_offset = unpack_from(">b", calibration_buf, 10)[0]
-            int_temperature_offset = unpack_from(">b", calibration_buf, 11)[0]
-            ext_temperature_offset = unpack_from(">b", calibration_buf, 12)[0]
-            voltage_divider = unpack_from(">H", calibration_buf, 14)[0]
+            v = gg.read_calibration_flash_data()
+            gg_cc_gain = v["cc_gain"]
+            gg_cc_delta = v["cc_delta"]
+            cc_offset = v["cc_offset"]
+            voltage_divider = v["voltage_divider"]
+            board_offset = v["board_offset"]
+            int_temperature_offset = v["int_temperature_offset"]
+            ext_temperature_offset = v["ext_temperature_offset"]
+            print("Current calibration values:")
+            print(" Voltage divider:", voltage_divider)
+            print(" Board offset:", board_offset)
+            print(" Int. temp. offset:", int_temperature_offset)
+            print(" Ext. temp. offset:", ext_temperature_offset)
+            print(" CC Gain:", gg_cc_gain)
+            print(" CC Delta:", gg_cc_delta)
+            print(" CC Offset:", cc_offset)
 
-            power_config_buf = gg.read_dataflash_class(68)
-            flash_update_ok_cell_volt = unpack_from(">h", power_config_buf, 0)[0]
-            sleep_current = unpack_from(">h", power_config_buf, 2)[0]
-            fs_wait = unpack_from(">B", power_config_buf, 11)[0]
+            # calibration_buf = gg.read_dataflash_class(104)
+            # N = unpack_from(">L", calibration_buf, 0)[0]
+            # cc_gain = gg._flash_f4_to_float(N)
+            # N = unpack_from(">L", calibration_buf, 4)[0]
+            # cc_delta = gg._flash_f4_to_float(N)
+            # cc_offset = unpack_from(">h", calibration_buf, 8)[0]
+            # board_offset = unpack_from(">b", calibration_buf, 10)[0]
+            # int_temperature_offset = unpack_from(">b", calibration_buf, 11)[0]
+            # ext_temperature_offset = unpack_from(">b", calibration_buf, 12)[0]
+            # voltage_divider = unpack_from(">H", calibration_buf, 14)[0]
+
+            p = gg.read_powerconfig_flash_data()
+            flash_update_ok_cell_volt = p["flash_update_ok_cell_volt"]
+            sleep_current = p["sleep_current"]
+            fs_wait = p["fs_wait"]
+            print("Power config calibration values:")
+            print(" Flash update ok cell voltage:", flash_update_ok_cell_volt)
+            print(" Sleep current:", sleep_current)
+            print(" FS wait:", fs_wait)
+
+            # power_config_buf = gg.read_dataflash_class(68)
+            # flash_update_ok_cell_volt = unpack_from(">h", power_config_buf, 0)[0]
+            # sleep_current = unpack_from(">h", power_config_buf, 2)[0]
+            # fs_wait = unpack_from(">B", power_config_buf, 11)[0]
 
             temperature = gg.temperature()
 
@@ -815,15 +1055,19 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                 #voltage_divider = int(round(29400 / num_cells))
             new_voltage_divider = voltage_divider * known_voltage / gg_voltage
             new_voltage_divider_int = int(round(new_voltage_divider))
-            pack_into(">H", calibration_buf, 14, new_voltage_divider_int)
-            gg.write_dataflash_class(104, calibration_buf)
-            print(list(gg.read_dataflash_class(104)))
+            #gg.calibration_data["voltage_divider"] = new_voltage_divider_int
+            gg.write_calibration_flash_data(data=[("voltage_divider", new_voltage_divider_int)])
+            gg.write_calibration_flash_data(data={"voltage_divider": new_voltage_divider_int})
+
+            # pack_into(">H", calibration_buf, 14, new_voltage_divider_int)
+            # gg.write_dataflash_class(104, calibration_buf)
+            # print(list(gg.read_dataflash_class(104)))
             sleep(0.5)
             # verify
-            gg_voltage_2 = gg.voltage()
+            gg_voltage = gg.voltage()
             u_cells, u_xtras = read_voltages_from_daq()
-            known_voltage_2 = u_xtras[0]  # full pack voltage
-            print("GG V meas ERROR after cal:", (known_voltage_2 - gg_voltage_2), "V")
+            known_voltage = u_xtras[0]  # full pack voltage
+            print("GG V meas ERROR after cal:", (known_voltage - gg_voltage), "V")
 
             # voltage_divider_cal = new_voltage_divider * stack_daq / gg_voltage_2
             # voltage_divider_cal_int = int(round(voltage_divider_cal))
@@ -840,18 +1084,21 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             # gg.write_dataflash_class(68, power_config_buf)
 
             print("Voltage divider calibration done:", new_voltage_divider)
-            gg.exit_calibration()
-            gg.reset_device()
+            #gg.exit_calibration()
+            #gg.reset_device()
 
 
             # CC Gain Calibration ---------------
             # need a current flow
 
-            current = gg.current()
-            cc_gain = psu1.get_current() / current * 1  # * 1 Ohm
-            N = gg._float_to_flash_f4(cc_gain)
-            pack_into(">L", calibration_buf, 0, N)
-            gg.write_dataflash_class(104, calibration_buf)
+            gg_current = gg.current()
+            if gg_current > -0.1 or gg_current < 0.1:
+                print("No current flow - skip CC Gain calibration")
+            else:
+                gg_cc_gain = psu1.get_current() / gg_current * 1  # * 1 Ohm
+                gg.write_calibration_flash_data(data={"cc_gain": gg_cc_gain})
+                print("CC Gain calibration done:", gg_cc_gain)
+                sleep(0.1)
 
 
             # CC Offset Calibration GG -----------
@@ -875,6 +1122,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
             if not is_calibrating:
                 raise RuntimeError("CCA bit not set after starting CC offset calibration!")
             # wait until CCA cleared
+            x = False
             n = 60*2
             while n:
                 cs = gg.read_control_status()
@@ -882,7 +1130,10 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                     break
                 # here we can insert another calibration task while waiting
                 # ...
-                #
+                if not x:
+                    print("Erase FLASH:", ap.erase_flash())
+                    x = True
+                # ...
                 sleep(0.5)
                 n -= 1
             if n == 0:
@@ -905,12 +1156,12 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                     break
                 # here we can insert another calibration task while waiting
                 # ...
-                #
                 sleep(0.5)
             if not is_calibrating:
                 raise RuntimeError("CCA bit not set after starting board offset calibration!")
 
             # wait until BCA cleared
+            x = False
             n = 60*2
             while n:
                 cs = gg.read_control_status()
@@ -918,7 +1169,10 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
                     break
                 # here we can insert another calibration task while waiting
                 # ...
-                #
+                if not x:
+                    print("Program FLASH:", ap.program_flash())
+                    x = True
+                # ...
                 sleep(0.5)
                 n -= 1
             if n == 0:
@@ -936,6 +1190,7 @@ def rack_test(cartridge: CartridgePETA, gpio: RelayBoard4Relay4GPIO,
 
 
             gg.exit_calibration()
+            gg.reset_device()
             print("Done.")
 
     except Exception as ex:
@@ -973,6 +1228,7 @@ if __name__ == "__main__":
     #LINE_NETWORK = "172.25.102"  # VN line 2
     #LINE_NETWORK = "172.25.103"  # VN line 3
 
+
     SOCKET = 0  # 0, 1 or 2
     # following assumes own IF-OLIMEX breakout adapter
     if SOCKET == 0:
@@ -987,22 +1243,26 @@ if __name__ == "__main__":
     psu1.set_output_state(0)
     psu2.set_output_state(0)
 
+    _filestore_path = Path(__file__).parent / "../../Battery-PCBA-Test/filestore/"
+
     if SOCKET == 0:
         scanner = create_barcode_scanner(f"{LINE_NETWORK}.31:2000")  # socket 0
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:3000")  # PCBA test, socket 0
         i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101")  # socket 0
         #can = CANBus(f"{LINE_NETWORK}.30:3303")  # socket 0
+        ap = AlgocraftProgrammer(f"{LINE_NETWORK}.38:2101", _filestore_path)  # socket 0
     if SOCKET == 1:
         scanner = create_barcode_scanner(f"{LINE_NETWORK}.33:2000")  # socket 1
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.32:3000")  # PCBA test, socket 1
         i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101")  # socket 1
         can = CANBus(f"{LINE_NETWORK}.32:3303")  # socket 1
+        ap = AlgocraftProgrammer(f"{LINE_NETWORK}.39:2101", _filestore_path)  # socket 1
     if SOCKET == 2:
         scanner = create_barcode_scanner(f"{LINE_NETWORK}.35:2000")  # socket 2
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.34:3000")  # PCBA test, socket 2
         i2cbus = I2CPort(f"{LINE_NETWORK}.34:2101")  # socket 2
         can = CANBus(f"{LINE_NETWORK}.34:3303")  # socket 2
-
+        ap = AlgocraftProgrammer(f"{LINE_NETWORK}.29:2101", _filestore_path)  # socket 2
 
 
     print("Change clock frequency and timeout - RRC: ",
@@ -1063,12 +1323,11 @@ if __name__ == "__main__":
 
     print(daq.ident())
     print(daq.read_error_status())
-    print(daq.selftest())
-    print(daq.read_error_status())
+    #print(daq.selftest())
 
     # .... do some tests here ....
 
-    rack_test(cart, gpio, vsim, calib, feasa, psu1, psu2, daq)
+    rack_test(cart, gpio, vsim, calib, feasa, psu1, psu2, daq, ap)
 
     i2cbus.close()
 
