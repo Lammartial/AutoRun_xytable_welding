@@ -249,6 +249,27 @@ def rack_test(cartridge: CartridgePETA,
 
     base_path = Path(__file__).parent / "../../Battery-PCBA-Test/filestore"
 
+
+
+    # # NOTE: The µ-controller interacts with AFE and GG so program it
+    # # after all things are set for AFE and GG.
+    # #------------------------------------------------------------------
+    # cartridge.switch_some_io(7, 0)  # enable microcontroller
+    # #print("Program FLASH:", ap.program_flash())
+    # #------------------------------------------------------------------
+    # sleep(1.0)
+    # cartridge.select_bus_to_micro("can")
+    # print(can.send(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00))) 
+    # print(can.receive(0x5a0))
+    # # expected response: 0x5a0 8 0x4b 0x09 0x20 0x00 0xd2 0x5d 0x00 0x00 (voltage at 4 and 5)
+    # cartridge.select_bus_to_micro("i2c")
+    # sleep(0.5)
+    # cartridge.switch_some_io(7, 1)  # diable microcontroller
+
+
+
+
+
     try:
 
         if 1:
