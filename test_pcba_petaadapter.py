@@ -92,7 +92,7 @@ def rack_test(cartridge: CartridgePETA,
     else:
         print("Need to send Files to the programmer.")
         ap.send_all_files()
-        
+
 
     #psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
     #psu.configure_current_rise_times(pos="DEF", neg="DEF")
@@ -262,6 +262,14 @@ def rack_test(cartridge: CartridgePETA,
 
             afe.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets
 
+
+            print("AFE: SEALED?", afe.is_sealed(refresh=True))
+            print("AFE: FULL ACCESS?", afe.is_unsealed(check_fullaccess=True, refresh=True))
+            #print("AFE: SEALING...", afe.seal())
+            print("AFE: enable full access ...", afe.enable_full_access())
+            print("AFE: FULL ACCESS?", afe.is_unsealed(check_fullaccess=True, refresh=True))
+
+
             # AFE need always transfer into RAM
             ff = BQStudioFileFlexFlasher(afe, base_path / "GG_3412185A-02_A_draft4_unsealed_PF_Fet_dis_CDFETOFF_PDwn_Petalite_AFE_settings.gm.fs" )
             ff.validate_file()
@@ -330,6 +338,12 @@ def rack_test(cartridge: CartridgePETA,
             print(gg.get_energy_scale())
             print(gg.voltage())
             print(gg.temperature())
+
+            print("GG: SEALED?", gg.is_sealed(refresh=True))
+            print("GG: FULL ACCESS?", gg.is_unsealed(check_fullaccess=True, refresh=True))
+            #print("GG: SEALING...", gg.seal())
+            print("GG: enable full access ...", gg.enable_full_access())
+            print("GG: FULL ACCESS?", gg.is_unsealed(check_fullaccess=True, refresh=True))
 
             # GG: enter calibration mode ----------
 
@@ -1036,7 +1050,7 @@ def rack_test(cartridge: CartridgePETA,
                 raise RuntimeError(f"OTP write check failed at address 0x{data_fail_addr:04X} with result 0x{results:02X}")
 
 
-            # NOTE: The µ-controller interacts with AFE and GG so program it 
+            # NOTE: The µ-controller interacts with AFE and GG so program it
             # after all things are set for AFE and GG.
             #------------------------------------------------------------------
             cartridge.switch_some_io(7, 0)  # enable microcontroller

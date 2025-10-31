@@ -16,7 +16,7 @@ from itertools import combinations, chain
 from multiprocessing import Value
 from typing import List, Tuple
 from time import sleep, monotonic_ns
-from binascii import hexlify
+from binascii import hexlify, unhexlify
 from struct import pack, unpack, unpack_from, iter_unpack
 from collections import OrderedDict
 from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
@@ -296,9 +296,9 @@ class BQ76942:
     # ----------------------------------------------------------------------------------------------
     # Interface for bq_flasher module
 
-    def enable_full_access(self) -> bool:
-        # ...
-        return True
+    # def enable_full_access(self) -> bool:
+    #     # ...
+    #     return True
 
     def device_name(self):
         c = ("PETALITE AFE", 1, 2)
@@ -310,6 +310,172 @@ class BQ76942:
     def writeBlockFlasher(self, address_from_file: int, cmd: int, buffer: bytearray | bytes) -> bool:
         print("BQ76 write bytes", address_from_file, cmd, hexlify(buffer).decode())  # DEBUG
         return self.writeBytes(address_from_file, int(cmd), bytearray(buffer), use_pec=self.pec)
+
+
+    # ----------------------------------------------------------------------------------------------
+
+
+    def is_sealed(self, refresh: bool = False) -> bool:
+        """
+        Check if battery is sealed including retries on bus error.
+        Takes up to 1s before throwing finally.
+
+        Args:
+            refresh (bool, optional): if True, the operation_status shadow will be read fresh from battery before analyze its flags. Defaults to False.
+
+        Returns:
+            bool: True, if sealed False otherwise
+        """
+
+        if refresh or self._operation_status is None:
+            # using a more robust implementation to read operation_status at this point
+            # as we had issues on EOL test's shipping mode function here
+            #self.read_battery_status_robust()
+            self.read_battery_status()
+        _sec_bits = tuple(int(self._battery_status[k]) for k in ("SEC1", "SEC0"))
+        return _sec_bits == (1, 1)  # both bits set means sealed
+
+
+    def is_unsealed(self, check_fullaccess: bool = False, refresh: bool = False) -> bool:
+        """Checks if the battery is sealed including retries on bus error.
+
+        Takes up to 1s before throwing finally.
+
+        NOTE: Something is wrong in the manual.
+              Reality: SEC = 10 -> UNSEAL, SEC = 01 -> FULL_ACCESS
+              Manual says 10 -> FULL_ACCESS, SEC = 01 -> UNSEAL
+
+           Args:
+             check_fullaccess (bool): if check_fullaccess is true, it also checks if battery is in full access mode.
+             refresh (bool): if True, the operation_status shadow will be read fresh from battery before analyze its flags
+
+           Returns
+              (bool): true of the device is NOT sealed if check_fullaccess is true,
+                      else only true if battery is unsealed and in full access mode.
+        """
+
+        if refresh or self._battery_status is None:
+            # using a more robust implementation to read operation_status at this point
+            # as we had issues on EOL test's shipping mode function here
+            #self.read_battery_status_robust()
+            self.read_battery_status()
+        # using shadow copy to avoid bus access
+        _sec_bits = tuple(int(self._battery_status[k]) for k in ("SEC1", "SEC0"))
+        if check_fullaccess:
+            return _sec_bits in ((0, 1), (0, 0))  # full access
+        return _sec_bits == (1, 0)  # unsealed
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def _write_key(self, key: int | bytes | bytearray | str) -> None:
+        """Writes a given key of 32bits to the battery by manufacturer_access.
+
+            Used to unseal the battery for TI chipsets.
+
+            Args:
+               key (int | bytes | bytearray | str): either a 32bit integer or bytes, bytearray of 4 bytes or a string of 8 hex characters,
+                            optionally preceded by a colon ":"
+            Exceptions:
+                AttributeError - if key is neither an integer nor string
+                TypeError - if key is not in correct form for unhexlify()
+            Returns
+                None
+        """
+        #hexlify(unseal_key, ':').decode()
+        if isinstance(key, int):
+            ikey = key # already integer
+        elif isinstance(key, bytearray) or isinstance(key, bytes):
+            ikey = int.from_bytes(key, "big")
+        elif isinstance(key, str):
+            if key[0] == ":":
+                b = unhexlify(key[1:])
+            else:
+                b = unhexlify(key)
+            ikey = int.from_bytes(b, "big")
+        else:
+            raise AttributeError("Invalid battery key")
+
+        self.write_subcommand(ikey & 0xffff)         # low word first
+        self.write_subcommand((ikey >> 16) & 0xffff) # high word then
+
+
+    def unseal(self,
+               unseal_key: int | bytes | bytearray | str,
+               fullaccess_key: int | bytes | bytearray | str = None,
+               force: bool = False) -> bool:
+        """Unseals the battery using a key given in hexadecimal format.
+
+           Note: this function needs to have is_unsealed() implemented!
+
+           The key can also be given in key encoded format, prepend a colon
+           in this case (":abcdef...").
+
+            Args:
+                (string): unseal_key
+                (string): fullaccess_key
+                (bool): True do NOT check if unseald. Defaults to False.
+
+            Returns:
+                (boolean)
+        """
+        check_fullaccess=fullaccess_key is not None
+        if (not force) and self.is_unsealed(check_fullaccess=check_fullaccess, refresh=True):
+            return True # already in correct mode
+        # Note: After sealing, the bq will not accept unsealing for about
+        #       3s to 5s, therefore we retry.
+        for _ in range(0, 20):
+            self._write_key(unseal_key)
+            sleep(0.25) # wait a bit (250ms)
+            if self.is_unsealed():
+                #print("bestens")
+                break
+        sleep(0.1)
+        if not self.is_unsealed(refresh=True):
+            return False
+        if fullaccess_key is None:
+            return True # only unseal needed
+        sleep(0.1)
+        if self.is_unsealed(check_fullaccess=True, refresh=True):
+            return True # already full access without dedicated key
+        #print("try full access")
+        # Batteries might need a time between 1s and 4s to accept full access
+        # after the unseal key was written.
+        for _ in range(0, 8):
+            sleep(0.5)
+            self._write_key(fullaccess_key)
+            if self.is_unsealed(check_fullaccess=True, refresh=True):
+                #print("superbestens")
+                return True
+        #print("grrr")
+        return False
+
+
+    # ------------------------------------------------
+    # --- commands that work only in unsealed mode ---
+    # ------------------------------------------------
+
+    def seal(self) -> bool:
+        """Seals the battery."""
+        if self.is_sealed(refresh=True): return True
+        self.write_subcommand(0x0030)  # this is chipset specific! Send SEAL command
+        sleep(0.1)
+        if not self.is_sealed(refresh=True): return False
+        # After sealing quite a few commands are not recognised by the bq.
+        # Therefore we explicitly wait before proceeding with further script
+        # actions.
+        sleep(0.5) # was 5s !!!
+        return True
+
+
+    def enable_full_access(self) -> bool:
+        #
+        # no encrypted keys here!
+        #
+        #return self.unseal(0x8D21FAC3, 0x63DB2CE4)  # low-word goes first to battery
+        return self.unseal(0xEC5D9F23, 0x3E5F75CE)  # low-word goes first to battery
+
 
     # ----------------------------------------------------------------------------------------------
 
@@ -331,6 +497,9 @@ class BQ76942:
             return self._control_status_to_dict(buf), True
         else:
             None, False
+
+
+    #----------------------------------------------------------------------------------------------
 
 
     def _battery_status_to_dict(self, buf: bytearray, hexi: None | bool | str = None) -> OrderedDict[str, bytes | bytearray | str | int]:
@@ -363,6 +532,24 @@ class BQ76942:
             return self._battery_status, True
         else:
             return None, False
+
+
+    def read_battery_status_robust(self, retries: int = 10, pause_on_retry: float = 0.1) -> None:
+        """Reads battery_status() until successfully read or throw after limit of retries."""
+        retries = int(retries)
+        while (retries >= 0):
+            try:
+                _ = self.read_battery_status()  # => update the self._operation_status attribute
+            except OSError as ex:
+                sleep(pause_on_retry)
+                if retries == 0:
+                    raise ex  # no more retries -> propagate failure
+            finally:
+                retries -= 1
+
+
+
+    #----------------------------------------------------------------------------------------------
 
 
     def _alarm_status_to_dict(self, buf: bytearray, hexi: None | bool | str = None) -> OrderedDict[str, bytes | bytearray | str | int]:
