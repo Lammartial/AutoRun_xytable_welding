@@ -315,6 +315,29 @@ class BQ76942:
     # ----------------------------------------------------------------------------------------------
 
 
+    def is_ready(self) -> bool:
+        ok = False
+        try:
+            _, ok = self.readBytes(self.address, 0x00, 1, use_pec=False)  # check if we can get the first byte of CONTROL STATUS without PEC
+        except OSError as ex:
+            pass
+        return ok
+
+
+    def wait_for_ready(self, timeout_ms: int = 250, invert: bool = False, throw: bool = False) -> bool:
+        t0 = monotonic_ns()
+        pause = int(timeout_ms * 100)  # = timeout_ms/10 * 1000
+        while ((monotonic_ns() - t0) / 1000000) < timeout_ms:
+            if not invert and self.is_ready(): return True
+            if invert and not self.is_ready(): return True
+            sleep(pause / 1000000)
+        if throw: 
+            raise IOError("Timeout {}ms while waiting for AFE ready.".format(timeout_ms))
+        return False
+
+
+    # ----------------------------------------------------------------------------------------------
+
     def is_sealed(self, refresh: bool = False) -> bool:
         """
         Check if battery is sealed including retries on bus error.
@@ -760,7 +783,7 @@ class BQ76942:
     #----------------------------------------------------------------------------------------------
 
 
-    def read_temperatures(self, hexi: None | bool | str = bool) -> Tuple[Tuple[float], Tuple[str]]:
+    def read_temperatures(self) -> Tuple[float]:
         """Read temperature values from the BQ76942.
 
         Args:
@@ -785,7 +808,8 @@ class BQ76942:
             #raw += (_maybe_hexlify(tckelvin.to_bytes(2, "little"), hexi),)
             regadr += 2
             sleep(0.005)
-        return temperatures, raw
+        return temperatures
+
 
 
     #----------------------------------------------------------------------------------------------

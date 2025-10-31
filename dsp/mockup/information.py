@@ -89,7 +89,12 @@ PRODUCT_CONFIGURATION_TABLE = [
             ("412159_QSB2054-2B",   "C", "412159-01"),     # PCBA-Test (id,rev,pn)
             ("412159_QSB2054-2B",   "C", "412159-01"),     # Corepack-Test (id,rev,pn)
             ("150002B_QSB2054-2",   "B", "150002B-02")),   # EOL-Test (id,rev,pn)
-
+    ("RRC3570-4", "110338-01", "RRC3570-4", "RRC3570-4",
+            ("412177_RRC3570-4",   "A", "412177-02"),     # Cell-Test (id,rev,pn)
+            (None,                 "A", "412159-01"),     # Cell-Welding (id,rev,pn)
+            ("412185_RRC3570-4",   "A", "412185-03"),     # PCBA-Test (id,rev,pn)
+            ("110338_RRC3570-4",   "A", "110338-01"),     # Corepack-Test (id,rev,pn)
+            ("110338_RRC3570-4",   "A", "110338-01")),    # EOL-Test (id,rev,pn)
 ]
 
 #--------------------------------------------------------------------------------------------------

@@ -313,6 +313,7 @@ def rack_test(cartridge: CartridgePETA,
             gg = BQ34Z100(BusMaster(cartridge.backyard_bus, retry_limit=5), slvAddress=0x55, pec=False)
             v = gg.read_version_information()
             print(v)
+            print(gg.teststand_read_version_information())
 
             if (v["hw_version"] == "0x0080") and (v["fw_version"] == "0x0202") and (v["device_type"] == "0x0100"):
                 # differencial only

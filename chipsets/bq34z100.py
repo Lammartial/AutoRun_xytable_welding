@@ -830,6 +830,38 @@ class BQ34Z100:
         })
 
 
+    def teststand_read_version_information(self, as_hex_str: bool = True) -> str:
+        #return ",".join([f"{k}:{v}" for k,v in self.read_version_information(as_hex_str=as_hex_str).items()])
+        return _od2t(self.read_version_information(as_hex_str=as_hex_str))
+
+
+    # ----------------------------------------------------------------------------------------------
+
+
+    def is_ready(self) -> bool:
+        ok = False
+        try:
+            _, ok = self.bus.readBytes(self.address, 0x00, 1, use_pec=False)  # check if we can get the first byte of CONTROL COMMAND without PEC            
+        except OSError as ex:
+            pass
+        return ok
+
+
+    def wait_for_ready(self, timeout_ms: int = 250, invert: bool = False, throw: bool = False) -> bool:
+        t0 = monotonic_ns()
+        pause = int(timeout_ms * 100)  # = timeout_ms/10 * 1000
+        while ((monotonic_ns() - t0) / 1000000) < timeout_ms:
+            if not invert and self.is_ready(): return True
+            if invert and not self.is_ready(): return True
+            sleep(pause / 1000000)
+        if throw: 
+            raise IOError("Timeout {}ms while waiting for AFE ready.".format(timeout_ms))
+        return False
+
+
+    # ----------------------------------------------------------------------------------------------
+
+
     def is_sealed(self, refresh: bool = False) -> bool:
         """
         Check if battery is sealed including retries on bus error.
@@ -848,7 +880,7 @@ class BQ34Z100:
             # self.read_control_status_robust()
             self.read_control_status()
         _sec_bits = tuple(int(self._control_status[k]) for k in ("SS", "FAS"))
-        return _sec_bits == (1, 1)  # using shadow copy to avoid bus access
+        return bool(_sec_bits == (1, 1))  # using shadow copy to avoid bus access
 
 
     def is_unsealed(self, check_fullaccess: bool = False, refresh: bool = False) -> bool:
