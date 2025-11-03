@@ -811,6 +811,46 @@ class BQ76942:
         return temperatures
 
 
+    def calib_write_temperature(self, temp_cal: float) -> Tuple[float]:
+        """Expects a calibration reference temperature as INPUT and calculates from that
+        the following offsets:
+        
+            Internal Temperature
+            CFETOFF Temperature (CFETOFF pin thermistor) - unused
+            DFETOFF Temperature (DFETOFF pin thermistor) - unused
+            ALERT Temperature (ALERT pin thermistor) - unused
+            TS1 (TS1 pin thermistor)
+            TS2 (TS2 pin thermistor) - unused
+            TS3 (TS3 pin thermistor)
+            HDQ Temperature (HDQ pin thermistor)
+            DCHG Temperature (DCHG pin thermistor)
+            DDSG Temperature (DDSG pin thermistor)
+
+        Args:
+            temp_cal (Tuple[float]): Calibrated reference temperature
+        """
+
+        temp_cal = float(temp_cal)
+        #print("T_ambient:", temp_cal)
+        # 1) measure the temperatures
+        t_meas = [0.0] * 10
+        for n in range(5):
+            t0 = self.read_temperatures()
+            for i in range(len(t_meas)):
+                t_meas[i] += t0[i]
+            sleep(0.050)
+        t_meas = [t/5 for t in t_meas]
+        # 2) calculate the offsets
+        temp_offsets = [(float(temp_cal - t) if t > -100 else 0) for t in t_meas]
+        #print("T-OFFSETS:", temp_offsets)
+        # 3) write the temperature calibration values
+        self.enter_config_update_mode()
+        self.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets        
+        self.write_temperature_calibration_offsets(temp_offsets)
+        self.exit_config_update_mode()        
+        return tuple(temp_offsets)
+
+        
 
     #----------------------------------------------------------------------------------------------
 
@@ -1138,7 +1178,7 @@ class BQ76942:
                 "dchg_temp_offset": unpack_from("<b", buf, 7)[0],
                 "ddsg_temp_offset": unpack_from("<b", buf, 8)[0],
             })
-        return self.temperature_calibration_offsets
+        return _od2t(self.temperature_calibration_offsets)
 
 
     def write_temperature_calibration_offsets(self, temperature_calibration_offsets: dict | List[float], hexi: bool | str | None = None) -> tuple:
@@ -1198,11 +1238,8 @@ class BQ76942:
             ])
         else:
             raise ValueError("Argument 'temperature_calibration_offsets' must be either a list or a dict")
-        #for i in range(10):
-            # if not self.write_subcommand(0x91CA + i, data=buf[i:i+1]):  # pass singe byte as bytearray
-            #     return False
-        print(temperature_calibration_offsets)
-        print(hexlify(buf))  # DEBUG
+        #print(temperature_calibration_offsets)
+        #print(hexlify(buf))  # DEBUG
         if not self.write_subcommand(0x91CA, data=buf):
             return False
         return True

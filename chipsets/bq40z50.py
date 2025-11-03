@@ -1545,6 +1545,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         # return the measurements and offsets for documentation
         return np.array(res), *[unpack_from("<b", new_offset[i:])[0] for i in range(4)]  # signed bytes !
 
+
     def _ms_toggle_helper(self, ms_key: str, enable: bool, ma_cmd: int, retries: int = 5, pause_on_retry: float = 0.1) -> bool:
         """Internal function to set a defined state using toggle and manufacturing_status() reads for control.
 

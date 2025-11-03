@@ -381,6 +381,37 @@ class BQ34Z100:
     #----------------------------------------------------------------------------------------------
 
 
+    def calib_write_temperature(self, temp_cal: float) -> float:
+        temp_cal = float(temp_cal)
+        temperature = self.temperature()  # in degC
+        ext_temperature_offset = temp_cal - temperature
+        ext_temperature_offset_int = int(round(ext_temperature_offset * 1e+1))  # -> 0.1C
+        #print("T_ambient GG:", temp_cal , "meas:", temperature, "offset to store:", ext_temperature_offset)
+        self.enter_calibration()
+        self.read_calibration_flash_data()     
+        self.write_calibration_flash_data({"ext_temperature_offset": ext_temperature_offset_int})
+        self.exit_calibration()
+        return ext_temperature_offset
+
+
+    def calib_voltage_divider(self, calib_bat_voltage: float) -> float:
+        self.enter_calibration()
+        _stored_calib = self.read_calibration_flash_data()
+        _voltage_divider_stored = _stored_calib["voltage_divider"]
+        _voltage_meas = self.voltage()        
+        #print("GG V meas ERROR vefore:", (calib_bat_voltage - _voltage_meas), "V")
+        if _voltage_divider_stored <= 0:
+            _voltage_divider_stored = 5000  # default value
+        new_voltage_divider = _voltage_divider_stored * calib_bat_voltage / _voltage_meas
+        new_voltage_divider_int = int(round(new_voltage_divider))
+        self.write_calibration_flash_data(data={"voltage_divider": new_voltage_divider_int})
+        self.exit_calibration()
+        return new_voltage_divider
+    
+
+    #----------------------------------------------------------------------------------------------
+
+
 
     def get_voltage_scale(self, force_refresh: bool = False) -> int:
         """

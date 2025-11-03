@@ -251,24 +251,26 @@ def rack_test(cartridge: CartridgePETA,
 
 
 
-    # # NOTE: The µ-controller interacts with AFE and GG so program it
-    # # after all things are set for AFE and GG.
-    # #------------------------------------------------------------------
-    # cartridge.switch_some_io(7, 0)  # enable microcontroller
-    # #print("Program FLASH:", ap.program_flash())
-    # #------------------------------------------------------------------
-    # sleep(1.0)
-    # cartridge.select_bus_to_micro("can")
-    # print(can.send(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00))) 
-    # print(can.receive(0x5a0))
-    # # expected response: 0x5a0 8 0x4b 0x09 0x20 0x00 0xd2 0x5d 0x00 0x00 (voltage at 4 and 5)
-    # cartridge.select_bus_to_micro("i2c")
-    # sleep(0.5)
-    # cartridge.switch_some_io(7, 1)  # diable microcontroller
-
-
-
-
+    # NOTE: The µ-controller interacts with AFE and GG so program it
+    # after all things are set for AFE and GG.
+    #------------------------------------------------------------------
+    cartridge.switch_some_io(7, 1)  # disable microcontroller
+    #print("Program FLASH:", ap.program_flash())
+    cartridge.switch_mosfet(0, 0)  # 0ohm
+    cartridge.switch_mosfet(1, 1)  # 20kohm
+    cartridge.switch_mosfet(2, 0)  # 200kohm
+    cartridge.switch_mosfet(3, 0)  # 400kohm
+    #------------------------------------------------------------------
+    cartridge.select_bus_to_micro("can")
+    cartridge.switch_some_io(7, 0)  # enable microcontroller
+    sleep(1.0)
+    print(can.send(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00))) 
+    print(can.receive(0x5a0))
+    # expected response: 0x5a0 8 0x4b 0x09 0x20 0x00 0xd2 0x5d 0x00 0x00 (voltage at 4 and 5)
+    cartridge.select_bus_to_micro("i2c")
+    sleep(0.5)
+    cartridge.switch_some_io(7, 1)  # diable microcontroller
+ 
 
     try:
 
@@ -323,6 +325,21 @@ def rack_test(cartridge: CartridgePETA,
             print("FET status: ", afe.read_fet_status())
 
 
+            # # NOTE: The µ-controller interacts with AFE and GG so program it
+            # # after all things are set for AFE and GG.
+            # #------------------------------------------------------------------
+            # cartridge.switch_some_io(7, 1)  # diable microcontroller
+            # #print("Program FLASH:", ap.program_flash())
+            # #------------------------------------------------------------------
+            # sleep(1.0)
+            # cartridge.select_bus_to_micro("can")
+            # cartridge.switch_some_io(7, 0)  # enable microcontroller
+            # print(can.send(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00))) 
+            # print(can.receive(0x5a0))
+            # # expected response: 0x5a0 8 0x4b 0x09 0x20 0x00 0xd2 0x5d 0x00 0x00 (voltage at 4 and 5)
+            # cartridge.select_bus_to_micro("i2c")
+            # sleep(0.5)
+            # cartridge.switch_some_io(7, 1)  # diable microcontroller
 
 
 
@@ -402,38 +419,50 @@ def rack_test(cartridge: CartridgePETA,
             temp_cal = daq.get_temp(3, "RTD", 1000, 0, "")  # channel 3 + 13
             print("T_ambient:", temp_cal)
             # 2) measure the temperatures
-            t_meas = [0.0] * 10
-            for n in range(5):
-                t0, _ = afe.read_temperatures()
-                for i in range(len(t_meas)):
-                    t_meas[i] += t0[i]
-                sleep(0.050)
-            t_meas = [t/5 for t in t_meas]
-            # 3) calculate the offsets
-            temp_offsets = [((temp_cal - t) if t > -100 else 0) for t in t_meas]
-            print("T-OFFSETS:", temp_offsets)
-
-            # write the temperature calibration values
-            afe.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets
-            afe.enter_config_update_mode()
-            afe.write_temperature_calibration_offsets(temp_offsets)
-            afe.exit_config_update_mode()
-            sleep(1.0)
+            new_t_ofs = afe.calib_write_temperature(temp_cal)
+            print(new_t_ofs)
             # re-check temperature measurement (repeat the calibration if not successful!)
+            sleep(1.0)
             print("Recheck temperature measurement after temperature calibration:")
             print(afe.read_temperatures())
-            afe.enter_config_update_mode()
-            print(afe.read_temperature_calibration_offsets(hexi=True))
-            afe.exit_config_update_mode()
+            
+            # t_meas = [0.0] * 10
+            # for n in range(5):
+            #     t0 = afe.read_temperatures()
+            #     for i in range(len(t_meas)):
+            #         t_meas[i] += t0[i]
+            #     sleep(0.050)
+            # t_meas = [t/5 for t in t_meas]
+            # # 3) calculate the offsets
+            # temp_offsets = [((temp_cal - t) if t > -100 else 0) for t in t_meas]
+            # print("T-OFFSETS:", temp_offsets)
+
+            # # write the temperature calibration values
+            # afe.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets
+            # afe.enter_config_update_mode()
+            # afe.write_temperature_calibration_offsets(temp_offsets)
+            # afe.exit_config_update_mode()
+            # sleep(1.0)
+            # # re-check temperature measurement (repeat the calibration if not successful!)
+            # print("Recheck temperature measurement after temperature calibration:")
+            # print(afe.read_temperatures())
+            # afe.enter_config_update_mode()
+            # print(afe.read_temperature_calibration_offsets(hexi=True))
+            # afe.exit_config_update_mode()
 
 
-            gg_temperature = gg.temperature()  # in degC
-            gg_ext_temperature_offset = temp_cal - gg_temperature
-            print("T_ambient GG:", temp_cal , "meas:", gg_temperature, "offset to store:", gg_ext_temperature_offset)
-            gg.write_calibration_flash_data({
-                "ext_temperature_offset": int(round(gg_ext_temperature_offset * 1e+1)),  # -> 0.1C
-            })
-            gg.exit_calibration()
+            gg.calib_write_temperature(temp_cal)
+
+            # gg_temperature = gg.temperature()  # in degC
+            # gg_ext_temperature_offset = temp_cal - gg_temperature
+            # print("T_ambient GG:", temp_cal , "meas:", gg_temperature, "offset to store:", gg_ext_temperature_offset)
+            # gg.write_calibration_flash_data({
+            #     "ext_temperature_offset": int(round(gg_ext_temperature_offset * 1e+1)),  # -> 0.1C
+            # })
+            # gg.exit_calibration()
+            # verify GG
+            sleep(2.0)
+            print(gg.temperature())  # in degC
 
 
             _enable_fets()
