@@ -18,6 +18,12 @@ class CANBus(Eth2CanPort):
             timeout (float, optional): Timeout of Ethernet request process in seconds. Defaults to 1.0.
         """
 
+        s = b'W' + flags.to_bytes(4, "little") +\
+            identifier.to_bytes(4, "little") +\
+            can_timeout.to_bytes(2, "little") +\
+            bytes([len(data)]) + bytearray(data)
+        print(hexlify(s))
+
         r = self.request(b'W' +
                         flags.to_bytes(4, "little") +
                         identifier.to_bytes(4, "little") +
