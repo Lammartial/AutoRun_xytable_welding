@@ -1155,7 +1155,7 @@ if __name__ == "__main__":
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
     #LINE_NETWORK = "172.25.102"  # VN line 2
-    #LINE_NETWORK = "172.25.103"  # VN line 3
+    LINE_NETWORK = "172.25.103"  # VN line 3
 
 
     SOCKET = 0  # 0, 1 or 2
@@ -1175,22 +1175,22 @@ if __name__ == "__main__":
     _filestore_path = Path(__file__).parent / "../../Battery-PCBA-Test/filestore/"
 
     if SOCKET == 0:
-        scanner = create_barcode_scanner(f"{LINE_NETWORK}.31:2000")  # socket 0
-        feasa = FEASA_CH9121(f"{LINE_NETWORK}.30:3000")  # PCBA test, socket 0
         i2cbus = I2CPort(f"{LINE_NETWORK}.30:2101")  # socket 0
         can = CANBus(f"{LINE_NETWORK}.30:3303")  # socket 0
+        scanner = create_barcode_scanner(f"{LINE_NETWORK}.31:2000")  # socket 0
+        feasa = FEASA_CH9121(f"{LINE_NETWORK}.31:3000")  # PCBA test, socket 0
         ap = AlgocraftProgrammer(f"{LINE_NETWORK}.38:2101", _filestore_path)  # socket 0
     if SOCKET == 1:
-        scanner = create_barcode_scanner(f"{LINE_NETWORK}.33:2000")  # socket 1
-        feasa = FEASA_CH9121(f"{LINE_NETWORK}.32:3000")  # PCBA test, socket 1
         i2cbus = I2CPort(f"{LINE_NETWORK}.32:2101")  # socket 1
         can = CANBus(f"{LINE_NETWORK}.32:3303")  # socket 1
+        scanner = create_barcode_scanner(f"{LINE_NETWORK}.33:2000")  # socket 1
+        feasa = FEASA_CH9121(f"{LINE_NETWORK}.33:3000")  # PCBA test, socket 1
         ap = AlgocraftProgrammer(f"{LINE_NETWORK}.39:2101", _filestore_path)  # socket 1
     if SOCKET == 2:
-        scanner = create_barcode_scanner(f"{LINE_NETWORK}.35:2000")  # socket 2
-        feasa = FEASA_CH9121(f"{LINE_NETWORK}.34:3000")  # PCBA test, socket 2
         i2cbus = I2CPort(f"{LINE_NETWORK}.34:2101")  # socket 2
         can = CANBus(f"{LINE_NETWORK}.34:3303")  # socket 2
+        scanner = create_barcode_scanner(f"{LINE_NETWORK}.35:2000")  # socket 2
+        feasa = FEASA_CH9121(f"{LINE_NETWORK}.35:3000")  # PCBA test, socket 2
         ap = AlgocraftProgrammer(f"{LINE_NETWORK}.29:2101", _filestore_path)  # socket 2
 
 
@@ -1255,7 +1255,7 @@ if __name__ == "__main__":
     #print(daq.selftest())
 
     # .... do some tests here ....
-
+    
     rack_test(cart, gpio, vsim, calib, feasa, psu1, psu2, daq, can, ap)
 
     i2cbus.close()
