@@ -21,7 +21,7 @@ class CartridgePETA:
         """
 
         self._i2c = i2c
-        self._onboard_mux = BusMux(self._i2c, address=mux_address)  # important to have only ONE instance here
+        self._onboard_mux = BusMux(self._i2c, address=int(mux_address))  # important to have only ONE instance here
         self.bus_to_mirco = self.get_muxed_i2c_bus_for(1)         # needs a switch to CAN or I2C !
         self.backyard_bus = self.get_muxed_i2c_bus_for(2)
         self.gpio = GPIOExtender(self.get_muxed_i2c_bus_for(8), i2c_address_7bit=0x20)  # Extender on channel 8 of the cartridge MUX
@@ -44,7 +44,7 @@ class CartridgePETA:
             Muxed I2C bus for the specified channel.
         """
 
-        return I2CMuxedBus(self._i2c, self._onboard_mux, channel)
+        return I2CMuxedBus(self._i2c, self._onboard_mux, int(channel))
 
 
     def switch_mosfet(self, index: int, state: bool | int) -> None:
@@ -56,15 +56,16 @@ class CartridgePETA:
             state (bool): True to turn on, False to turn off.
         """
 
+        index = int(index)
         if index < 0 or index > 3:
             raise ValueError("Index must be between 0 and 3 for the 4 MOSFETs.")
 
         pin_no = (index + 0)  # Assuming MOSFETs are connected to GPIO pins 0-3
 
-        if state:
+        if bool(state):
             return self.gpio.set_pin(pin_no)
         else:
-            return self.gpio.reset_pin(pin_no)
+                return self.gpio.reset_pin(pin_no)
                 
 
 
@@ -101,10 +102,11 @@ class CartridgePETA:
             state (bool): True to turn on, False to turn off.
         """
 
+        pin_number = int(pin_number)
         if pin_number not in (4, 7):
             raise ValueError("Index must be either 4 or 7 for the 4 GPIOs.")
 
-        if state:
+        if bool(state):
             return self.gpio.set_pin(pin_number)
         else:
             return self.gpio.reset_pin(pin_number)

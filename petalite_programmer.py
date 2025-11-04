@@ -187,7 +187,7 @@ class AlgocraftProgrammer(Eth2SerialDevice):
         if not ok:
             _error = self.get_system_error(site=site_flags)
         else:
-            _error = None
+            _error = ""
         return ok, _error
 
 

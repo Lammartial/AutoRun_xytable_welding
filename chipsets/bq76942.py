@@ -12,6 +12,7 @@ __version__ = "0.5.0"
 
 from io import BufferedIOBase
 import math
+import numpy as np
 from itertools import combinations, chain
 from multiprocessing import Value
 from typing import List, Tuple
@@ -105,6 +106,7 @@ class BQ76942:
         self.pec = bool(pec)
         self.pause_us = int(pause_us)  # in micro seconds
         self.retry_limit = int(retry_limit)  # number of read repetitions, must be integer in range 1 .. 10
+        self._max_possible_cells = 10  # this is maximum cell for this IC type, it is NOT related to USED CELLs !!
 
     # --------------------------------------------
 
@@ -350,7 +352,7 @@ class BQ76942:
             bool: True, if sealed False otherwise
         """
 
-        if refresh or self._operation_status is None:
+        if refresh or self._battery_status is None:
             # using a more robust implementation to read operation_status at this point
             # as we had issues on EOL test's shipping mode function here
             #self.read_battery_status_robust()
@@ -552,17 +554,15 @@ class BQ76942:
         buf, ok = self.readBytes(self.address, 0x12, 2)
         if ok:
             self._battery_status = self._battery_status_to_dict(buf)
-            return self._battery_status, True
-        else:
-            return None, False
-
+        return _od2t(self._battery_status)
+        
 
     def read_battery_status_robust(self, retries: int = 10, pause_on_retry: float = 0.1) -> None:
         """Reads battery_status() until successfully read or throw after limit of retries."""
         retries = int(retries)
         while (retries >= 0):
             try:
-                _ = self.read_battery_status()  # => update the self._operation_status attribute
+                self.read_battery_status()  # => update the self._operation_status attribute
             except OSError as ex:
                 sleep(pause_on_retry)
                 if retries == 0:
@@ -689,7 +689,7 @@ class BQ76942:
     #----------------------------------------------------------------------------------------------
 
 
-    def read_cell_voltages(self) -> Tuple[float]:
+    def read_cell_voltages(self) -> np.array:
         """Read cell voltages from the BQ76942.
 
         Args:
@@ -699,7 +699,7 @@ class BQ76942:
         """
 
         _standard_scale = 1e-3 # mV -> V
-        scale = [_standard_scale] * 10
+        scale = [_standard_scale] * self._max_possible_cells
         voltages = ()
         regadr = 0x14 # base register address for Cell 1 Voltage
         for i in range(10):  # 10 cells
@@ -708,7 +708,7 @@ class BQ76942:
             voltages += (volt,)
             regadr += 2
             sleep(0.005)
-        return voltages
+        return np.array(voltages)
 
 
     #----------------------------------------------------------------------------------------------
@@ -795,7 +795,7 @@ class BQ76942:
 
         _standard_scale = 0.1  # 0.1K -> K
         _user_scale = 1.0  # user defined scale for the temperature on the TS pin
-        scale = [_standard_scale] * 10
+        scale = [_standard_scale] * self._max_possible_cells
         temperatures = ()
         #raw = ()
         regadr = 0x68 # base register address for Temperature 1
@@ -1007,7 +1007,7 @@ class BQ76942:
         Raises:
             RuntimeError: _description_
         """
-        n = int(round(timeout * 10))
+        n = int(round(timeout * 10))  # in 100ms rounds
         while n > 0:
             status = self.read_fet_status()
             if (status["DDSG_PIN"] == 0) and (status["CHG_FET"] == 1) and (status["DSG_FET"] == 1):
@@ -1029,7 +1029,7 @@ class BQ76942:
         Raises:
             RuntimeError: _description_
         """
-        n = int(round(timeout * 10))
+        n = int(round(timeout * 10))  # in 100ms rounds
         while n > 0:
             status = self.read_fet_status()
             if (status["DDSG_PIN"] == 1) and (status["CHG_FET"] == 0) and (status["DSG_FET"] == 0):
@@ -1043,8 +1043,8 @@ class BQ76942:
 
 
 
-    def read_dastatus(self, hexi: bool | str | None = None) -> Tuple[List[int], List[int]]:
-        """Reads all DAStatus 1 to 4
+    def read_dastatus(self) -> Tuple[List[int], List[int]]:
+        """Reads all DAStatus 1 to 3
 
         Args:
             hexi (bool | str | None, optional): _description_. Defaults to None.
@@ -1056,10 +1056,10 @@ class BQ76942:
         buf1 = self.read_subcommand(0x0071)  # DASTATUS1
         buf2 = self.read_subcommand(0x0072)  # DASTATUS2
         buf3 = self.read_subcommand(0x0073)  # DASTATUS3
-        buf4 = self.read_subcommand(0x0074)  # DASTATUS4
+        #buf4 = self.read_subcommand(0x0074)  # DASTATUS4
 
         _fmt = "<L"  # unsigned long, 4 bytes
-        all_items = [n[0] for n in list(chain.from_iterable([iter_unpack(_fmt, bytes(buffer)) for buffer in [buf1, buf2, buf3, buf4]]))]
+        all_items = [n[0] for n in list(chain.from_iterable([iter_unpack(_fmt, bytes(buffer)) for buffer in [buf1, buf2, buf3]]))]
         self.cell_voltage_counts = all_items[::2]  # every 2nd is a voltage count, starting from first element
         self.cell_current_counts = all_items[1::2]  # every 2nd is a current count, starting from 2nd element
         #print(self.cell_voltage_counts)
@@ -1067,7 +1067,22 @@ class BQ76942:
         return self.cell_voltage_counts, self.cell_current_counts
 
 
-    def read_cal1(self, hexi: bool | str | None = None) -> dict:
+    def read_dastatus_average(self, num_samples: int, pause_between: float = 0.005) -> Tuple[List[float], List[float]]:
+        _cell_voltages = [0] * self._max_possible_cells
+        _cell_currents = [0] * self._max_possible_cells     
+        for n in enumerate(range(int(num_samples))):
+            _cv, _cc = self.read_dastatus()
+            if len(_cv) < len(_cell_voltages):
+                raise ValueError(f"Not enough cell voltage data {len(_cv)}")
+            for i in range(len(_cell_voltages)):
+                _cell_voltages[i] += _cv[i]
+                _cell_currents[i] += _cc[i]
+            if pause_between and (float(pause_between) > 0):
+                sleep(float(pause_between))
+        return [(v / num_samples) for v in _cell_voltages], [(a / num_samples) for a in _cell_currents]
+
+
+    def read_cal1(self, hexi: bool | str | None = None) -> OrderedDict:
         """READ_CAL1 - Mix of different calibration values.
 
         Args:
@@ -1088,6 +1103,64 @@ class BQ76942:
             })
         return self.calibration_counts
 
+
+    def read_cal1_average(self, num_samples: int, pause_between: float = 0.005) -> OrderedDict:
+        cal1 = OrderedDict({})
+        for n in range(int(num_samples)):
+            d = self.read_cal1()
+            for k,v in d.items():
+                u = cal1.get(k, 0)  # fill and sum
+                if isinstance(v, (int, float)):
+                    cal1[k] = u + v
+                else:
+                    cal1[k] = v
+            if pause_between and (float(pause_between) > 0):
+                sleep(float(pause_between))
+        result = OrderedDict({})
+        for k,v in cal1.items():
+            result[k] = (v / num_samples) if isinstance(v, (int,float)) else v
+        return result
+    
+
+    def calibrate_cell_voltages(self, reference_cell_voltages: np.array, num_samples: int = 10, pause_between: float = 0.005) -> Tuple[float, np.array]:
+        reference_cell_voltages = list(reference_cell_voltages)
+        # Take the average of measurements and calculate gains        
+        cell_voltage_counts, _  = self.read_dastatus_average(num_samples=int(num_samples), pause_between=pause_between)
+        if len(cell_voltage_counts) != len(reference_cell_voltages):
+            raise ValueError(f"Length of parameter array reference_cell_voltages {len(reference_cell_voltages)} has to match length of cell_voltage_counts {len(cell_voltage_counts)}.")
+        
+        # calculate the cell gains
+        _dummy_gain = 0  # 12100
+        cell_gain = [0] * len(cell_voltage_counts)
+        for i in range(0, len(cell_gain)):
+            _test_voltage = reference_cell_voltages[i]  # in Volts
+            _adc_counts = cell_voltage_counts[i]
+            print(_test_voltage, _adc_counts)  # DEBUG
+            if _adc_counts == 0:
+                # avoid div by zero
+                cell_gain[i] = _dummy_gain
+                continue
+            test_v = 3.03 / 2**24 * _adc_counts  # DEBUG
+            gain = 2**24 * ((_test_voltage * 1e+3) / _adc_counts)  # 5 x 1.212V / 2**23 = 6,06V / 2**23 => 3,03 / 2**24 * _adc_counts = _test_voltage
+            if gain < -32768 or gain > 32767:
+                gain = _dummy_gain
+            cell_gain[i] = int(round(gain))
+            print("Cell ",i+1," Gain = ", cell_gain[i])  # DEBUG
+
+        # Calculate Cell Offset based on Cell1
+        #cell_offset = ((cell_gain[0] * cell_voltage_counts_a[0]) / 2**24) - 2500
+        cell_offset_float = ((cell_gain[0] * cell_voltage_counts[0]) / 2**24) - (reference_cell_voltages[0] * 1e+3)
+        cell_offset = int(round(cell_offset_float))
+        print("Cell Offset:", cell_offset_float, "->", cell_offset)  # DEBUG
+        # write voltage calibration into RAM
+        self.enter_config_update_mode()
+        self.write_cell_offset(cell_offset)
+        # Cell Voltage Gains
+        self.write_cell_gain(cell_gain)
+        self.exit_config_update_mode()
+        return float(cell_offset), np.array([float(g) for g in cell_gain])  # Teststand easier to handle
+
+   
 
     def read_cell_gain(self) -> list:
         buf = bytearray()
@@ -1346,7 +1419,7 @@ class BQ76942:
         retries = int(retries)
         while (retries >= 0):
             try:
-                _, ok = self.read_battery_status()  # => update the self._operation_status attribute
+                self.read_battery_status()  # => update the self._operation_status attribute
                 if bool(self._battery_status[bs_key]) == bool(state):
                     break
                 sleep(pause_on_retry)

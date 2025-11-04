@@ -131,7 +131,7 @@ def rack_test(cartridge: CartridgePETA,
     cartridge.switch_some_io(7, 0)  # enable microcontroller
     ap.erase_flash()
     cartridge.switch_some_io(7, 1)  # disable microcontroller
-
+   
     # sleep(0.5)
     # cartridge.select_bus_to_micro("can")
     # can.send(0x11, (1,2,3,4,5,6,7,8))
@@ -281,7 +281,7 @@ def rack_test(cartridge: CartridgePETA,
             print(afe.read_control_status())
             print(afe.read_battery_status())
             print(afe.read_safety_status(hexi=True))
-            print(afe.read_dastatus(hexi=True))
+            print(afe.read_dastatus())
 
             afe.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets
 
@@ -386,8 +386,8 @@ def rack_test(cartridge: CartridgePETA,
 
             # GG: enter calibration mode ----------
 
-            cs = gg.read_control_status()
-            if cs["CALEN"] == 0:
+            gg.read_control_status()
+            if gg._control_status["CALEN"] == 0:
                 gg.enable_enter_and_exit_of_calibration_mode()
                 sleep(0.1)
 
@@ -583,8 +583,8 @@ def rack_test(cartridge: CartridgePETA,
                 while not is_calibrating:
                     # CC offset calibration
                     gg.calibrate_cc_offset()
-                    cs = gg.read_control_status()
-                    if cs["CCA"] == 1:
+                    gg.read_control_status()
+                    if gg._control_status["CCA"] == 1:
                         is_calibrating = True
                         break
                     # here we can insert another calibration task while waiting
@@ -611,6 +611,10 @@ def rack_test(cartridge: CartridgePETA,
                 tos_voltage_daq_b = u_xtra[0]
                 pack_voltage_daq_b = u_xtra[3]
                 ld_voltage_daq_b = u_xtra[3]
+
+                print(afe.read_dastatus_average(10))
+                print(afe.read_cal1_average(10))
+
                 # get the ADC reading from the AFE
                 for i in range(10):
                     _u_counts, _i_counts = afe.read_dastatus()
@@ -690,8 +694,8 @@ def rack_test(cartridge: CartridgePETA,
                 x = False
                 n = 60*2
                 while n:
-                    cs = gg.read_control_status()
-                    if cs["CCA"] == 0:
+                    gg.read_control_status()
+                    if gg._control_status["CCA"] == 0:
                         break
                     # here we can insert another calibration task while waiting
                     # ...
@@ -740,8 +744,8 @@ def rack_test(cartridge: CartridgePETA,
             while not is_calibrating:
                 # CC offset calibration
                 gg.calibrate_board_offset()
-                cs = gg.read_control_status()
-                if cs["CCA"] == 1 and cs["BCA"] == 1:
+                gg.read_control_status()
+                if gg._control_status["CCA"] == 1 and gg._control_status["BCA"] == 1:
                     is_calibrating = True
                     break
                 # here we can insert another calibration task while waiting
@@ -1155,7 +1159,7 @@ if __name__ == "__main__":
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
     #LINE_NETWORK = "172.25.102"  # VN line 2
-    LINE_NETWORK = "172.25.103"  # VN line 3
+    #LINE_NETWORK = "172.25.103"  # VN line 3
 
 
     SOCKET = 0  # 0, 1 or 2

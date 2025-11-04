@@ -395,10 +395,12 @@ class BQ34Z100:
 
 
     def calib_voltage_divider(self, calib_bat_voltage: float) -> float:
+        _voltage_meas = self.voltage()
+        if round(_voltage_meas) == 0:
+            return 0.0
         self.enter_calibration()
         _stored_calib = self.read_calibration_flash_data()
         _voltage_divider_stored = _stored_calib["voltage_divider"]
-        _voltage_meas = self.voltage()        
         #print("GG V meas ERROR vefore:", (calib_bat_voltage - _voltage_meas), "V")
         if _voltage_divider_stored <= 0:
             _voltage_divider_stored = 5000  # default value
@@ -762,7 +764,8 @@ class BQ34Z100:
         _, buf = self._read_control(0x0000)
         # convert to bitflags field
         self._control_status = self._decode_control_status(buf, hexi)
-        return self._control_status
+        return _od2t(self._control_status)
+    
 
 
     def read_control_status_robust(self, retries: int = 10, pause_on_retry: float = 0.1) -> None:
