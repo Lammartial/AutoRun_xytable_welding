@@ -39,7 +39,7 @@ class AlgocraftProgrammer(Eth2SerialDevice):
 
         self.project_file = self._filestore_path / project_file
         self.image_file = self._filestore_path / image_file
-        self.erase_flash_project_file = (self._filestore_path / erase_flash_project_file) if erase_flash_project_file else None
+        self.erase_flash_project_file = (self._filestore_path / erase_flash_project_file) if (erase_flash_project_file and (erase_flash_project_file != "")) else None
 
 
     def execute_command(self, command: str) -> str:
@@ -53,7 +53,7 @@ class AlgocraftProgrammer(Eth2SerialDevice):
 
 
     def get_system_error(self, site: int = 0, level: int = 3) -> str:
-        return self.execute_command(f"#status -o get -p err -v {site} -l {level}")
+        return self.execute_command(f"#status -o get -p err -v {int(site)} -l {int(level)}")
 
 
     def send_file(self, file_path, destination_path) -> bool:
@@ -168,7 +168,7 @@ class AlgocraftProgrammer(Eth2SerialDevice):
     def erase_flash(self, site_flags: int = 1) -> Tuple[bool, str]:
         if self.erase_flash_project_file is None:
             raise ValueError("Missing erase flash project.")
-        sites = f"h{site_flags:02X}"  # Bit mask of the sites to enable
+        sites = f"h{int(site_flags):02X}"  # Bit mask of the sites to enable
         command = f"#exec -o prj -f projects/{self.erase_flash_project_file.name} -s {sites}"
         answer = self.execute_command(command)
         ok = answer.endswith(">")
@@ -180,7 +180,7 @@ class AlgocraftProgrammer(Eth2SerialDevice):
 
 
     def program_flash(self, site_flags: int = 1) -> Tuple[bool, str]:
-        sites = f"h{site_flags:02X}"  # Bit mask of the sites to enable
+        sites = f"h{int(site_flags):02X}"  # Bit mask of the sites to enable
         command = f"#exec -o prj -f projects/{self.project_file.name} -s {sites}"
         answer = self.execute_command(command)
         ok = answer.endswith(">")

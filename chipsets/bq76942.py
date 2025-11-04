@@ -970,14 +970,77 @@ class BQ76942:
 
 
     def all_fets_on(self, hexi: bool | str| None = None) -> bool:
+        """Using build-in function of BQ76942.
+
+        Args:
+            hexi (bool | str | None, optional): _description_. Defaults to None.
+
+        Returns:
+            bool: _description_
+        """
+        
         return self.write_subcommand(0x0096)
 
+
     def all_fets_off(self, hexi: bool | str| None = None) -> bool:
+        """Using build-in function of BQ76942.
+
+        Args:
+            hexi (bool | str | None, optional): _description_. Defaults to None.
+
+        Returns:
+            bool: _description_
+        """
         return self.write_subcommand(0x0095)
 
 
     def toggle_fet_enable(self, hexi: bool | str| None = None) -> bool:
         return self.write_subcommand(0x0022)
+
+
+    def enable_fets(self, timeout: float = 10.0) -> None:
+        """ENABLE FETs using toggle and flag check.
+
+        Args:
+            timeout (float, optional): _description_. Defaults to 10.0.
+
+        Raises:
+            RuntimeError: _description_
+        """
+        n = int(round(timeout * 10))
+        while n > 0:
+            status = self.read_fet_status()
+            if (status["DDSG_PIN"] == 0) and (status["CHG_FET"] == 1) and (status["DSG_FET"] == 1):
+                return
+            print(status)  # DEBUG
+            #if (status["DDSG_PIN"] == 0):
+            _ok = self.toggle_fet_enable()
+            sleep(0.1)
+            n -= 1
+        raise RuntimeError(f"Could not enable FET {status}")
+
+    
+    def disable_fets(self, timeout: float = 10.0) -> None:
+        """DISABLE FETs using toggle and flag check.
+
+        Args:
+            timeout (float, optional): _description_. Defaults to 10.0.
+
+        Raises:
+            RuntimeError: _description_
+        """
+        n = int(round(timeout * 10))
+        while n > 0:
+            status = self.read_fet_status()
+            if (status["DDSG_PIN"] == 1) and (status["CHG_FET"] == 0) and (status["DSG_FET"] == 0):
+                return
+            print(status)  # DEBUG
+            #if (status["DDSG_PIN"] == 1):
+            _ok = self.toggle_fet_enable()
+            sleep(0.1)
+            n -= 1
+        raise RuntimeError(f"Could not disable FET {status}")
+
 
 
     def read_dastatus(self, hexi: bool | str | None = None) -> Tuple[List[int], List[int]]:

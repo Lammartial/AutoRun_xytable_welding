@@ -65,6 +65,7 @@ class CartridgePETA:
             return self.gpio.set_pin(pin_no)
         else:
             return self.gpio.reset_pin(pin_no)
+                
 
 
     def select_bus_to_micro(self, bustype: str) -> None:

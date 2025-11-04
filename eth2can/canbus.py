@@ -1,7 +1,7 @@
 
 from typing import Tuple
 from struct import unpack_from
-from binascii import hexlify
+from binascii import hexlify, unhexlify
 from rrc.eth2can.base import Eth2CanPort
 
 
@@ -10,7 +10,7 @@ from rrc.eth2can.base import Eth2CanPort
 class CANBus(Eth2CanPort):
 
 
-    def send(self, identifier: int, data: bytes | bytearray, flags: int = 0, can_timeout: int = 150, timeout: float = 1.0) -> Tuple[bool, bytes, str]:
+    def send(self, identifier: int, data: bytes | bytearray, flags: int = 0, can_timeout_ms: int = 150, timeout: float = 1.0) -> Tuple[bool, bytes, str]:
         """
         Send raw CAN frame data.
 
@@ -25,7 +25,7 @@ class CANBus(Eth2CanPort):
         buf = b'W' + \
             flags.to_bytes(4, "little") + \
             identifier.to_bytes(4, "little") + \
-            can_timeout.to_bytes(2, "little") + \
+            can_timeout_ms.to_bytes(2, "little") + \
             bytes([len(data)]) + \
             bytearray(data)
         print(hexlify(buf))  # DEBUG
@@ -36,8 +36,14 @@ class CANBus(Eth2CanPort):
         else:
             return ok, None, err
         
-        
-    def receive(self, identifier: int, flags: int = 0, can_timeout: int = 900, timeout: float = 1.0) -> Tuple[bool, bytes, str]:
+
+    def teststand_send(self, identifier: int, data: str, flags: int = 0, can_timeout_ms: int = 150, timeout: float = 1.0) -> Tuple[bool, bytes, str]: 
+        buf = unhexlify(data.replace("0x","").replace(",",""))
+        ok, r, txt = self.send(int(identifier), int(flags), buf, can_timeout_ms=can_timeout_ms, timeout=timeout)
+        return ok, f"Ok: {txt}" if ok else txt
+
+
+    def receive(self, identifier: int, flags: int = 0, can_timeout_ms: int = 900, timeout: float = 1.0) -> Tuple[bool, bytes, str]:
         """Receive raw CAN frame data.
 
         Args:
@@ -57,7 +63,7 @@ class CANBus(Eth2CanPort):
         buf = b'R' + \
             identifier.to_bytes(4, "little") + \
             flags.to_bytes(4, "little") + \
-            can_timeout.to_bytes(2, "little")
+            can_timeout_ms.to_bytes(2, "little")
         print(hexlify(buf))  # DEBUG
         r = self.request(buf, timeout=timeout, encoding=False)
         ok, err = self._check_result_for_error(r)
@@ -65,6 +71,11 @@ class CANBus(Eth2CanPort):
             return ok, r, hexlify(r).decode()
         else:
             return ok, None, err
+
+
+    def teststand_receive(self, identifier: int, flags: int = 0, can_timeout_ms: int = 900, timeout: float = 1.0) -> Tuple[bool, bytes, str]: 
+        ok, r, txt = self.receive(int(identifier), int(flags), can_timeout_ms=can_timeout_ms, timeout=timeout)
+        return ok, f"Ok: {txt}" if ok else txt
 
 
     def _check_result_for_error(self, result: bytes | bytearray) -> Tuple[bool, str]:
