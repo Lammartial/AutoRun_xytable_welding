@@ -107,6 +107,11 @@ class BQ76942:
         self.pause_us = int(pause_us)  # in micro seconds
         self.retry_limit = int(retry_limit)  # number of read repetitions, must be integer in range 1 .. 10
         self._max_possible_cells = 10  # this is maximum cell for this IC type, it is NOT related to USED CELLs !!
+        self._standard_scale_volt = 1e-3  # mV -> V
+        self._user_scale_volt = 1e-3      # user defined scale for the last three voltages: Stack Voltage (VC10 pin), PACK pin voltage, LD pin voltage
+        self._standard_scale_current = 1e-3 # mA -> A
+        self._standard_scale_temp = 0.1  # 0.1K -> K
+        self._user_scale_temp = 1.0  # user defined scale for the temperature on the TS pin
 
     # --------------------------------------------
 
@@ -698,8 +703,7 @@ class BQ76942:
             List[float], List[str]: List of voltages read, all values in raw as hex format str.
         """
 
-        _standard_scale = 1e-3 # mV -> V
-        scale = [_standard_scale] * self._max_possible_cells
+        scale = [self._standard_scale_volt] * self._max_possible_cells
         voltages = ()
         regadr = 0x14 # base register address for Cell 1 Voltage
         for i in range(10):  # 10 cells
@@ -720,11 +724,10 @@ class BQ76942:
             float, bool: The pack voltage in volts and a boolean indicating success.
         """
 
-        _user_scale = 1e-3  # user defined scale for the last three voltages: Stack Voltage (VC10 pin), PACK pin voltage, LD pin voltage
         raw, ok = self.readWord(0x36)  # PACK Voltage register
         if not ok:
             return None
-        volt = raw * _user_scale  # scale returned value into Volts
+        volt = raw * self._user_scale_volt  # scale returned value into Volts
         return volt
 
     #----------------------------------------------------------------------------------------------
@@ -736,11 +739,10 @@ class BQ76942:
             float, bool: The TOST voltage in volts and a boolean indicating success.
         """
 
-        _user_scale = 1e-3  # user defined scale for the last three voltages: Stack Voltage (VC10 pin), PACK pin voltage, LD pin voltage
         raw, ok = self.readWord(0x34)  # TOS Voltage register
         if not ok:
             return None
-        volt = raw * _user_scale  # scale returned value into Volts
+        volt = raw * self._user_scale_volt  # scale returned value into Volts
         return volt
 
 
@@ -754,11 +756,10 @@ class BQ76942:
             float, bool: The LD voltage in volts and a boolean indicating success.
         """
 
-        _user_scale = 1e-3  # user defined scale for the last three voltages: Stack Voltage (VC10 pin), PACK pin voltage, LD pin voltage
         raw, ok = self.readWord(0x38)  # LD Voltage register
         if not ok:
             return None
-        volt = raw * _user_scale  # scale returned value into Volts
+        volt = raw * self._user_scale_volt  # scale returned value into Volts
         return volt
 
 
@@ -771,12 +772,11 @@ class BQ76942:
         Returns:
             float, bool: The CC2 current in Amperes and a boolean indicating success.
         """
-
-        _standard_scale = 1e-3 # mA -> A
+       
         raw, ok = self.readWord(0x3A, signed=True)  # CC2 Current register
         if not ok:
             return None
-        curr = raw * _standard_scale  # scale returned value into Amperes
+        curr = raw * self._standard_scale_current  # scale returned value into Amperes
         return curr
 
 
@@ -793,9 +793,8 @@ class BQ76942:
             List[float], List[str]: List of temperatures read, all values in raw as hex format str.
         """
 
-        _standard_scale = 0.1  # 0.1K -> K
-        _user_scale = 1.0  # user defined scale for the temperature on the TS pin
-        scale = [_standard_scale] * self._max_possible_cells
+       
+        scale = [self._standard_scale_temp] * self._max_possible_cells
         temperatures = ()
         #raw = ()
         regadr = 0x68 # base register address for Temperature 1
@@ -1160,6 +1159,21 @@ class BQ76942:
         self.exit_config_update_mode()
         return float(cell_offset), np.array([float(g) for g in cell_gain])  # Teststand easier to handle
 
+
+    def calibrate_pack_tos_ld_voltages(self, ref_pack_voltage: float, ref_tos_voltage: float, ref_ld_voltage: float, 
+                                       num_samples: int = 10, pause_between: float = 0.005) -> Tuple[float]:
+        d = self.read_cal1_average(num_samples=int(num_samples), pause_between=pause_between)
+        # Calculate PACK, TOS, LD gains by using the measured voltages in cV (not mV !!)
+        PACK_Gain = int(round(2**16 * ((ref_pack_voltage * 1e+2) / d["pack_pin_adc_counts"])))        
+        TOS_Gain = int(round(2**16 * ((ref_tos_voltage * 1e+2) / d["tos_adc_counts"])))
+        LD_Gain = int(round(2**16 * ((ref_ld_voltage * 1e+2) / d["ld_pin_adc_counts"])))
+        # write voltage calibration into RAM
+        self.enter_config_update_mode()
+        self.write_pack_gain(PACK_Gain)
+        self.write_tos_gain(TOS_Gain)        
+        self.write_ld_gain(LD_Gain)        
+        self.exit_config_update_mode()
+        return PACK_Gain, TOS_Gain, LD_Gain
    
 
     def read_cell_gain(self) -> list:

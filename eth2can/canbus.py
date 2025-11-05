@@ -10,6 +10,10 @@ from rrc.eth2can.base import Eth2CanPort
 class CANBus(Eth2CanPort):
 
 
+    def __init__(self, resource_str, termination = "\n", open_connection = True, pause_on_retry = 10):  # this is for Teststand
+        super().__init__(resource_str, termination=termination, open_connection=bool(open_connection), pause_on_retry=int(pause_on_retry))
+
+
     def send(self, identifier: int, data: bytes | bytearray, flags: int = 0, can_timeout_ms: int = 150, timeout: float = 1.0) -> Tuple[bool, bytes, str]:
         """
         Send raw CAN frame data.
@@ -39,7 +43,7 @@ class CANBus(Eth2CanPort):
 
     def teststand_send(self, identifier: int, data: str, flags: int = 0, can_timeout_ms: int = 150, timeout: float = 1.0) -> Tuple[bool, bytes, str]: 
         buf = unhexlify(data.replace("0x","").replace(",",""))
-        ok, r, txt = self.send(int(identifier), int(flags), buf, can_timeout_ms=can_timeout_ms, timeout=timeout)
+        ok, r, txt = self.send(int(identifier), buf, flags=int(flags), can_timeout_ms=int(can_timeout_ms), timeout=float(timeout))
         return ok, f"Ok: {txt}" if ok else txt
 
 
@@ -74,7 +78,7 @@ class CANBus(Eth2CanPort):
 
 
     def teststand_receive(self, identifier: int, flags: int = 0, can_timeout_ms: int = 900, timeout: float = 1.0) -> Tuple[bool, bytes, str]: 
-        ok, r, txt = self.receive(int(identifier), int(flags), can_timeout_ms=can_timeout_ms, timeout=timeout)
+        ok, r, txt = self.receive(int(identifier), flags=int(flags), can_timeout_ms=int(can_timeout_ms), timeout=int(timeout))
         return ok, f"Ok: {txt}" if ok else txt
 
 
