@@ -257,15 +257,20 @@ def rack_test(cartridge: CartridgePETA,
     cartridge.switch_some_io(7, 1)  # disable microcontroller
     #print("Program FLASH:", ap.program_flash())
     cartridge.switch_mosfet(0, 0)  # 0ohm
-    cartridge.switch_mosfet(1, 1)  # 20kohm
-    cartridge.switch_mosfet(2, 0)  # 200kohm
+    cartridge.switch_mosfet(1, 0)  # 20kohm
+    cartridge.switch_mosfet(2, 1)  # 200kohm
     cartridge.switch_mosfet(3, 0)  # 400kohm
     #------------------------------------------------------------------
     cartridge.select_bus_to_micro("can")
     cartridge.switch_some_io(7, 0)  # enable microcontroller
     sleep(1.0)
-    print(can.send(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00))) 
+    print(can.receive(0x7ff))
+    print(can.send(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
+    print(can.send(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current
     print(can.receive(0x5a0))
+    print(can.receive(0xffff))
+    print(can.recover_can_driver_on_remote())
+    #print(can.reinstall_can_driver_on_bridge())
     # expected response: 0x5a0 8 0x4b 0x09 0x20 0x00 0xd2 0x5d 0x00 0x00 (voltage at 4 and 5)
     cartridge.select_bus_to_micro("i2c")
     sleep(0.5)
