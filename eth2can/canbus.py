@@ -96,7 +96,8 @@ class CANBus(Eth2CanPort):
                 0x4713: "Wrong payload length: expected 10 bytes payload.",
                 0x4714: "Receive Error",            
             }
-            _err = f"CAN bus error: 0x{err_code:04X}, 0x{optional_code:08X}. {_txt[err_code] if err_code in _txt else ''}"
+            _twai_status = hexlify(result[7:])
+            _err = f"CAN bus error: 0x{err_code:04X}, 0x{optional_code:08X}. {_txt[err_code] if err_code in _txt else ''} Status={_twai_status}"
             #raise IOError(f"CAN bus error: 0x{err_code:04X}, 0x{optional_code:08X}. {_txt[err_code] if err_code in _txt else ''}")
             return False, _err
         else:
@@ -104,8 +105,8 @@ class CANBus(Eth2CanPort):
             raise IOError(f"Unknown result header: {result[0]}")
 
 
-    def reinstall_can_driver_on_bridge(self, timeout: float = 1.0) -> bool: 
-        buf = b'X'
+    def reinstall_can_driver_on_remote(self, timeout: float = 1.0) -> bool: 
+        buf = b'X_'
         print(hexlify(buf))  # DEBUG
         r = self.request(buf, timeout=timeout, encoding=False)
         ok, err = self._check_result_for_error(r)
@@ -115,8 +116,8 @@ class CANBus(Eth2CanPort):
             return ok, None, err
 
 
-    def start_can_driver_on_bridge(self, timeout: float = 1.0) -> bool: 
-        buf = b'Q'  # = Start TWAI driver, e.g. after being in RESET state
+    def recover_can_driver_on_remote(self, timeout: float = 1.0) -> bool: 
+        buf = b'Q_'  # = Try to recover TWAI driver, e.g. after being in RESET state
         print(hexlify(buf))  # DEBUG
         r = self.request(buf, timeout=timeout, encoding=False)
         ok, err = self._check_result_for_error(r)
