@@ -104,5 +104,27 @@ class CANBus(Eth2CanPort):
             raise IOError(f"Unknown result header: {result[0]}")
 
 
+    def reinstall_can_driver_on_bridge(self, timeout: float = 1.0) -> bool: 
+        buf = b'X'
+        print(hexlify(buf))  # DEBUG
+        r = self.request(buf, timeout=timeout, encoding=False)
+        ok, err = self._check_result_for_error(r)
+        if ok:        
+            return ok, r, hexlify(r).decode()
+        else:
+            return ok, None, err
+
+
+    def start_can_driver_on_bridge(self, timeout: float = 1.0) -> bool: 
+        buf = b'Q'  # = Start TWAI driver, e.g. after being in RESET state
+        print(hexlify(buf))  # DEBUG
+        r = self.request(buf, timeout=timeout, encoding=False)
+        ok, err = self._check_result_for_error(r)
+        if ok:        
+            return ok, r, hexlify(r).decode()
+        else:
+            return ok, None, err
+        
+
 
 # END OF FILE
