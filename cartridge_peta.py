@@ -4,7 +4,7 @@ Convenience wrapper for PETA cartridge adapter insert.
 
 from rrc.i2cbus import I2CBus, BusMux, I2CMuxedBus
 from rrc.smbus import BusMaster
-from rrc.gpio_tcal6416 import TCAL6416 as GPIOExtender
+from rrc.gpio_pcf8574 import PCF8574 as GPIOExtender
 
 
 class CartridgePETA:
@@ -24,9 +24,10 @@ class CartridgePETA:
         self._onboard_mux = BusMux(self._i2c, address=int(mux_address))  # important to have only ONE instance here
         self.bus_to_mirco = self.get_muxed_i2c_bus_for(1)         # needs a switch to CAN or I2C !
         self.backyard_bus = self.get_muxed_i2c_bus_for(2)
-        self.gpio = GPIOExtender(self.get_muxed_i2c_bus_for(8), i2c_address_7bit=0x20)  # Extender on channel 8 of the cartridge MUX
+        self.gpio = GPIOExtender(self.get_muxed_i2c_bus_for(8), i2c_address_7bit=0x20, number_of_gpio=8)  # Extender on channel 8 of the cartridge MUX
         # configure GPIO
-        self.gpio.configure_pins("1111111100000000", "0000000000000000", preset_output="0000000000000000")  # all pins output, no polarity inversion,
+        self.gpio.write_output("10010000")  # 1 = input or open drain output, 0=output 0
+        # -> disable CAN and I2C, Reset MCU (Pin7=1), all MOSFETs OFF
 
 
     def reset_mux(self) -> None:
@@ -65,7 +66,7 @@ class CartridgePETA:
         if bool(state):
             return self.gpio.set_pin(pin_no)
         else:
-                return self.gpio.reset_pin(pin_no)
+            return self.gpio.reset_pin(pin_no)
                 
 
 

@@ -284,10 +284,12 @@ class TCAL6416(GPIO_BASE):
 
     def __init__(self, i2c: I2CBase,
                  i2c_address_7bit: int = 0x20,
+                 number_of_gpio: int = 16,
                  init_shadow_from_ic: bool = False,
                  port0_open_drain: bool = False,
                  port1_open_drain: bool = False) -> None:
-        super().__init__(i2c, i2c_address_7bit, 16, init_shadow_from_ic)
+        
+        super().__init__(i2c, i2c_address_7bit, number_of_gpio, init_shadow_from_ic)
         # here go the TCAL specific register addresses
         self.REG_OUTPUT_DRIVE_STRENGTH = 0x40  # needs two bits per port pin -> 32 bits pin
         self.REG_PULL_RESISTOR_ENABLE = 0x46
