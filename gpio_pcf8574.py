@@ -86,7 +86,7 @@ class PCF8574:
         for n in range(0, self.retry_limit):
             try:
                 buf = self.bus.readfrom(self.i2c_address_7bit, length)  # does 3 retries with 1ms pause between
-                print(hexlify(buf).decode())  # DEBUG
+                #print(hexlify(buf).decode())  # DEBUG
                 try:
                     value = int.from_bytes(buf, "little", signed=False) & self._number_of_gpio_mask
                     #self._shadow_reg = value

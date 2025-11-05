@@ -252,7 +252,7 @@ def rack_test(cartridge: CartridgePETA,
     try:
 
         afe = BQ76942(cartridge.backyard_bus, slvAddress=0x08, pec=True, retry_limit=5)
-        #afe.disable_checksum()
+        afe.disable_checksum()
 
         print(afe.read_control_status())
         print(afe.read_battery_status())
@@ -317,37 +317,40 @@ def rack_test(cartridge: CartridgePETA,
             #------------------------------------------------------------------
             cartridge.select_bus_to_micro("i2c")
             cartridge.switch_some_io(7, 0)  # enable microcontroller
-     
+            print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
+
             for n in range(1,9):
-                print(cartridge.get_muxed_i2c_bus_for(n).i2c_bus_scan())
+                cartridge._onboard_mux.setChannel(n)
+                print(cartridge._i2c.i2c_bus_scan())
 
             bat = Battery(BusMaster(cartridge.bus_to_mirco))
             print(bat.temperature())
         
-        # NOTE: The µ-controller interacts with AFE and GG so program it
-        # after all things are set for AFE and GG.
-        #------------------------------------------------------------------
-        cartridge.switch_some_io(7, 1)  # disable microcontroller
-        #print("Program FLASH:", ap.program_flash())
-        cartridge.switch_mosfet(0, 0)  # 0ohm
-        cartridge.switch_mosfet(1, 0)  # 20kohm
-        cartridge.switch_mosfet(2, 1)  # 200kohm
-        cartridge.switch_mosfet(3, 0)  # 400kohm
-        #------------------------------------------------------------------
-        cartridge.select_bus_to_micro("can")
-        cartridge.switch_some_io(7, 0)  # enable microcontroller
-        sleep(1.0)
-        print(can.receive(0x7ff))
-        print(can.send(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
-        print(can.send(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current
-        print(can.receive(0x5a0))
-        print(can.receive(0xffff))
-        print(can.recover_can_driver_on_remote())
-        print(can.reinstall_can_driver_on_remote())
-        # expected response: 0x5a0 8 0x4b 0x09 0x20 0x00 0xd2 0x5d 0x00 0x00 (voltage at 4 and 5)
-        cartridge.select_bus_to_micro("i2c")
-        sleep(0.5)
-        cartridge.switch_some_io(7, 1)  # diable microcontroller
+        if 0:
+            # NOTE: The µ-controller interacts with AFE and GG so program it
+            # after all things are set for AFE and GG.
+            #------------------------------------------------------------------
+            cartridge.switch_some_io(7, 1)  # disable microcontroller
+            #print("Program FLASH:", ap.program_flash())
+            cartridge.switch_mosfet(0, 0)  # 0ohm
+            cartridge.switch_mosfet(1, 0)  # 20kohm
+            cartridge.switch_mosfet(2, 1)  # 200kohm
+            cartridge.switch_mosfet(3, 0)  # 400kohm
+            #------------------------------------------------------------------
+            cartridge.select_bus_to_micro("can")
+            cartridge.switch_some_io(7, 0)  # enable microcontroller
+            sleep(1.0)
+            print(can.receive(0x7ff))
+            print(can.send(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
+            print(can.send(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current
+            print(can.receive(0x5a0))
+            print(can.receive(0xffff))
+            print(can.recover_can_driver_on_remote())
+            print(can.reinstall_can_driver_on_remote())
+            # expected response: 0x5a0 8 0x4b 0x09 0x20 0x00 0xd2 0x5d 0x00 0x00 (voltage at 4 and 5)
+            cartridge.select_bus_to_micro("i2c")
+            sleep(0.5)
+            cartridge.switch_some_io(7, 1)  # diable microcontroller
     
 
 
@@ -366,10 +369,6 @@ def rack_test(cartridge: CartridgePETA,
         # cartridge.select_bus_to_micro("i2c")
         # sleep(0.5)
         # cartridge.switch_some_io(7, 1)  # diable microcontroller
-
-
-
-
 
 
         #------------------------------------------------------------------
@@ -1262,7 +1261,10 @@ if __name__ == "__main__":
     calib = CalibrationStorage(I2CMuxedBus(i2cbus, mux, 1))
     print("Inventory:", calib.load_inventory_number())
 
-    gpio = RelayBoard4Relay4GPIO(I2CMuxedBus(i2cbus, mux, 3))
+    gpio = RelayBoard4Relay4GPIO(I2CMuxedBus(i2cbus, mux, 3))  # old 4bit IO extender board
+    print(gpio.gpio.get_gpio_register())
+    gpio_ifcard = TCAL6416(I2CMuxedBus(i2cbus, mux, 8), i2c_address_7bit=0x20)  # OLIMEX breakout Expander, 16bits
+    print(gpio_ifcard.read_input())
 
     #sleep(0.5)
 
