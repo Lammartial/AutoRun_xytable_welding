@@ -171,24 +171,18 @@ class AlgocraftProgrammer(Eth2SerialDevice):
         sites = f"h{int(site_flags):02X}"  # Bit mask of the sites to enable
         command = f"#exec -o prj -f projects/{self.erase_flash_project_file.name} -s {sites}"
         answer = self.execute_command(command)
-        ok = answer.endswith(">")
-        if not ok:
-            _error = self.get_system_error(site=site_flags)
-        else:
-            _error = None
-        return ok, _error
+        error = self.get_system_error(site=site_flags)
+        ok = answer.endswith(">") and  (error == "")      
+        return ok, error + " : " + answer
 
 
     def program_flash(self, site_flags: int = 1) -> Tuple[bool, str]:
         sites = f"h{int(site_flags):02X}"  # Bit mask of the sites to enable
         command = f"#exec -o prj -f projects/{self.project_file.name} -s {sites}"
         answer = self.execute_command(command)
-        ok = answer.endswith(">")
-        if not ok:
-            _error = self.get_system_error(site=site_flags)
-        else:
-            _error = ""
-        return ok, _error
+        error = self.get_system_error(site=site_flags)
+        ok = answer.endswith(">") and (error == "")
+        return ok, error + " : " + answer
 
 
 
