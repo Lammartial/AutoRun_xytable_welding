@@ -298,7 +298,7 @@ class BQ34Z100:
             "ext_temperature_offset": unpack_from(">b", buf, 12)[0],
             "voltage_divider": unpack_from(">H", buf, 14)[0],
         })
-        return self.calibration_data
+        return _od2t(self.calibration_data)
 
 
     def write_calibration_flash_data(self, data: dict | OrderedDict | Tuple = None) -> bool:
@@ -394,7 +394,20 @@ class BQ34Z100:
         return ext_temperature_offset
 
 
-    def calib_voltage_divider(self, calib_bat_voltage: float) -> float:
+    def calib_write_cc_gain_and_cc_delta(self, reference_current: int) -> Tuple[float, float]:
+        _current_meas = self.current()
+        if (_current_meas > -0.1) and (_current_meas < 0.1):
+            raise ValueError("No current flow - cannot calibrate CC Gain and CC Delta")
+        self.enter_calibration()
+        self.read_calibration_flash_data()
+        gg_cc_gain = self.calibration_data["cc_gain"] * reference_current / _current_meas * 1  # * 1 Ohm
+        gg_cc_delta = gg_cc_gain * 1193046.0  # magic constant
+        self.write_calibration_flash_data(data={"cc_gain": gg_cc_gain, "cc_delta": gg_cc_delta})
+        self.exit_calibration()
+        return gg_cc_gain, gg_cc_delta
+
+
+    def calib_write_voltage_divider(self, calib_bat_voltage: float) -> float:
         _voltage_meas = self.voltage()
         if round(_voltage_meas) == 0:
             return 0.0

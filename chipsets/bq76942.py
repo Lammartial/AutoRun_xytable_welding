@@ -915,8 +915,8 @@ class BQ76942:
     def read_safety_status(self, hexi: bool | str | None = None) -> tuple:
         buf, ok = self.readBytes(self.address, 0x02, 6, use_pec=self.pec)
         self._safety_status = self._decode_safety_status(buf, hexi=hexi)
-        #return _od2t(self._safety_status)  # Teststand interface
-        return self._safety_status
+        return _od2t(self._safety_status)  # Teststand interface
+        #return self._safety_status
 
 
     def _decode_fet_status(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:
@@ -934,10 +934,11 @@ class BQ76942:
             "CHG_FET": ((os>>0) & 1),
         })
 
-    def read_fet_status(self, hexi: bool | str| None = None) -> int:
+
+    def read_fet_status(self, hexi: bool | str| None = None) -> OrderedDict:
         buf, ok = self.readBytes(self.address, 0x7F, 1, use_pec=self.pec)
         self._fet_status = self._decode_fet_status(buf, hexi=hexi)
-        return self._fet_status
+        return _od2t(self._fet_status)
 
 
     def _decode_manufacturing_status(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:
@@ -1008,7 +1009,8 @@ class BQ76942:
         """
         n = int(round(timeout * 10))  # in 100ms rounds
         while n > 0:
-            status = self.read_fet_status()
+            self.read_fet_status()
+            status = self._fet_status
             if (status["DDSG_PIN"] == 0) and (status["CHG_FET"] == 1) and (status["DSG_FET"] == 1):
                 return
             print(status)  # DEBUG
@@ -1030,7 +1032,8 @@ class BQ76942:
         """
         n = int(round(timeout * 10))  # in 100ms rounds
         while n > 0:
-            status = self.read_fet_status()
+            self.read_fet_status()
+            status = self._fet_status
             if (status["DDSG_PIN"] == 1) and (status["CHG_FET"] == 0) and (status["DSG_FET"] == 0):
                 return
             print(status)  # DEBUG
@@ -1175,6 +1178,23 @@ class BQ76942:
         self.exit_config_update_mode()
         return PACK_Gain, TOS_Gain, LD_Gain
    
+
+    def calibrate_board_offset_current(self, num_samples: int = 10, pause_between: float = 0.005) -> float:
+        stored_board_offset = self.read_board_offset()
+        stored_offset_samples = self.read_coulomb_counter_offset_sample()
+        # should be 64 but we calculate here with 1
+        offset_samples = 1  # stored_offset_samples
+        d = self.read_cal1_average(num_samples=int(num_samples), pause_between=pause_between)
+        board_offset = offset_samples * int(round(d["cc2_counts"] * 1e+1))
+        if board_offset < -32768 or board_offset > 32767:
+            raise ValueError(f"Board_offset out of boundaries -> cannot calibrate current: {board_offset}")
+        self.enter_config_update_mode()
+        self.write_board_offset(board_offset)
+        self.exit_config_update_mode()
+        return board_offset
+
+
+
 
     def read_cell_gain(self) -> list:
         buf = bytearray()

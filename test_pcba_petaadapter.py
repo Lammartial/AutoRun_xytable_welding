@@ -302,10 +302,10 @@ def rack_test(cartridge: CartridgePETA,
 
         print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
 
-        if 0:
+        if 1:
             cartridge.switch_some_io(7, 0)  # enable microcontroller
             ap.erase_flash()
-            ap.program_flash()
+            #ap.program_flash()
             cartridge.switch_some_io(7, 1)  # disable microcontroller
         
         if 0:
@@ -417,7 +417,8 @@ def rack_test(cartridge: CartridgePETA,
             sleep(0.1)
 
         gg.enter_calibration()
-        v = gg.read_calibration_flash_data()
+        gg.read_calibration_flash_data()
+        v = gg.calibration_data
         gg_cc_gain_stored = v["cc_gain"]
         gg_cc_delta_stored = v["cc_delta"]
         gg_cc_offset_stored = v["cc_offset"]
