@@ -95,7 +95,7 @@ class CartridgePETA:
         #self.gpio.write_output(mask)  # modify the two port pins at the same time
 
 
-    def switch_some_io(self, pin_number: int, state: bool | int) -> None:
+    def switch_some_io(self, pin_number: int, state: bool | int) -> bool:
         """
         Set the state of the IO at the given index.
 
@@ -112,6 +112,14 @@ class CartridgePETA:
             return self.gpio.set_pin(pin_number)
         else:
             return self.gpio.reset_pin(pin_number)
+
+
+    # convenience functions
+    def disable_mcu(self) -> bool:
+        return self.switch_some_io(7, 1)  # 1 on GPIO pulls down the RESET
+
+    def enable_mcu(self) -> bool:
+        return self.switch_some_io(7, 0)  # 0 on GPIO releases the RESET
 
 
 

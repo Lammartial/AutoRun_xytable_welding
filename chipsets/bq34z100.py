@@ -87,7 +87,8 @@ class BQ34Z100:
         self._voltage_scale = None
         self._current_scale = None
         self._energy_scale = None
-        _bat = self
+        self._is_calibrating_cc_offset = False
+        self._is_calibrating_board_offset = False
 
 
     # --------------------------------------------
@@ -131,6 +132,56 @@ class BQ34Z100:
         #     _fmt = "<H"  # unsigned short
         # value = unpack(_fmt, data)[0]
         # return value
+
+
+    def _flash_to_float_backup(z: int) -> float:
+        """This is according to an example from TI.
+        You should use our versions which transform the numbers into float according to IEEE754
+        and do the conversion to 32bit bytes from there.
+
+        Args:
+            z (int): _description_
+
+        Returns:
+            float: _description_
+        """
+        exponent = (z >> 24) - 128 - 24  # both numbers are from ??? TI
+        print(hex(exponent))
+        mantissa = z & 0xFFFFFF
+        sign = -1 if (z & 0x800000) != 0 else 1
+        mantissa = mantissa | 0x800000  # set back the hidden 1 of mantissa
+        result = sign * mantissa * 2**exponent
+        return result
+
+
+    def _flash_f4_to_float(self, z: int) -> float:
+        """
+        TI stores the EXP in a different way:
+        b31..b24 = EXP + 2
+        b24 = sign bit
+        b23..b0 = mantissa
+        To convert to IEEE754 we need to subtract 2 from EXP and move the sign bit to b31
+
+        Args:
+            z (int): _description_
+
+        Returns:
+            float: _description_
+        """
+
+        n = (z & 0x7FFFFF) | (((((z >> 24) & 0xFF) - 2) & 0xFF) << 23) | ((z & 0x00800000) << 8)
+        b = pack("<L", n)
+        f = unpack("<f", b)
+        print(hexlify(b))
+        print(f)
+        return f[0]
+
+
+    def _float_to_flash_f4(self, value: float) -> int:
+        b = pack("<f", value)
+        n = unpack("<L", b)[0]
+        z = (n & 0x7FFFFF) | ((((n >> 23) & 0xFF) + 2) << 24) | ((n & 0x80000000) >> 8)
+        return z
 
 
 
@@ -1212,56 +1263,82 @@ class BQ34Z100:
         return False
 
 
+    def cc_offset_calibration_process(self) -> bool:
+        """
+        DONT USE FOR PRODUCTION! 
+        USE board_offset_calibration_process INSTEAD!
+        """
+        self.read_control_status()     
+        status = self._control_status
+        if status["CALEN"] == 0:
+            # activate the calibration
+            self.enable_enter_and_exit_of_calibration_mode()
+            sleep(0.1)
+            self.read_control_status()     
+            status = self._control_status
+            if status["CALEN"] == 0:
+                raise Exception("Cannot set BQ34Z100 into calibration mode.")
+        if not self._is_calibrating_cc_offset:
+            # not yet triggered (using our own state machine)
+            if status["CCA"] == 1 and status["BCA"] == 0:
+                # a calibration is running        
+                self._is_calibrating_cc_offset = True        
+                return False  # this is already active, but not finished yet    
+            # START CC offset calibration
+            self.calibrate_cc_offset()
+            self._is_calibrating_cc_offset = True        
+            return False  # activated, but not finished yet
+        # check if we are finished
+        if self._is_calibrating_cc_offset and status["CCA"] == 0:                
+            self.cc_offset_save()
+            self._is_calibrating_cc_offset = False
+            return True  # process is finished
+        # still running    
+        return False
+                
+            
+    def board_offset_calibration_process(self) -> bool:
+        """Calculating the Board Offset also calculates the CC Offset; 
+        therefore, it is not necessary to go through the CC Offset calibration process
+        if the Board Offset calibration process is implemented.
+        
+        NOTE: While the device is calibrating the CC Offset, the host system should not read the
+            ControlStatus() Register at a rate greater than once every 0.5 seconds.
 
-    def _flash_to_float_backup(z: int) -> float:
-        """This is according to an example from TI.
-        You should use our versions which transform the numbers into float according to IEEE754
-        and do the conversion to 32bit bytes from there.
-
-        Args:
-            z (int): _description_
+        Raises:
+            Exception: _descripif the device could not be set into calibration mode
 
         Returns:
-            float: _description_
-        """
-        exponent = (z >> 24) - 128 - 24  # both numbers are from ??? TI
-        print(hex(exponent))
-        mantissa = z & 0xFFFFFF
-        sign = -1 if (z & 0x800000) != 0 else 1
-        mantissa = mantissa | 0x800000  # set back the hidden 1 of mantissa
-        result = sign * mantissa * 2**exponent
-        return result
-
-
-    def _flash_f4_to_float(self, z: int) -> float:
-        """
-        TI stores the EXP in a different way:
-        b31..b24 = EXP + 2
-        b24 = sign bit
-        b23..b0 = mantissa
-        To convert to IEEE754 we need to subtract 2 from EXP and move the sign bit to b31
-
-        Args:
-            z (int): _description_
-
-        Returns:
-            float: _description_
+            bool: _description_if the full process is finished and cc & board offsets are calibrated.
         """
 
-        n = (z & 0x7FFFFF) | (((((z >> 24) & 0xFF) - 2) & 0xFF) << 23) | ((z & 0x00800000) << 8)
-        b = pack("<L", n)
-        f = unpack("<f", b)
-        print(hexlify(b))
-        print(f)
-        return f[0]
-
-
-    def _float_to_flash_f4(self, value: float) -> int:
-        b = pack("<f", value)
-        n = unpack("<L", b)[0]
-        z = (n & 0x7FFFFF) | ((((n >> 23) & 0xFF) + 2) << 24) | ((n & 0x80000000) >> 8)
-        return z
-
+        self.read_control_status()     
+        status = self._control_status
+        if status["CALEN"] == 0:
+            # activate the calibration
+            self.enable_enter_and_exit_of_calibration_mode()
+            sleep(0.1)
+            self.read_control_status()     
+            status = self._control_status
+            if status["CALEN"] == 0:
+                raise Exception("Cannot set BQ34Z100 into calibration mode.")
+        if not self._is_calibrating_board_offset:
+            # not yet triggered (using our own state machine)
+            if status["CCA"] == 1 and status["BCA"] == 1:
+                # a calibration is running        
+                self._is_calibrating_board_offset = True        
+                return False  # this is already active, but not finished yet
+            # START CC offset calibration
+            self.calibrate_board_offset()
+            self._is_calibrating_board_offset = True        
+            return False  # activated, but not finished yet
+        # check if we are finished
+        if self._is_calibrating_board_offset and status["CCA"] == 0:                
+            self.cc_offset_save()  # there was also a cc calibration done -> save it
+            self._is_calibrating_board_offset = False
+            return True  # process is finished
+        # still running    
+        return False
 
 
 

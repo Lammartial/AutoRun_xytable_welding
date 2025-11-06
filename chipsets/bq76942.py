@@ -289,6 +289,52 @@ class BQ76942:
         return True
 
 
+    # ----------------------------------------------------------------------------------------------
+   
+    
+    def _float_to_flash(self, value: float) -> int:
+        """This is the TI version of "IEEE754" float.
+        Something is slightly different.
+        """
+        if value == 0:
+            value += 0.0000001    # avoid log of zero
+        if value < 0:
+            bNegative = 1
+            value *= -1
+        else:
+            bNegative = 0
+        exponent = int( (math.log(value)/math.log(2)) )
+        MSB = exponent + 127        # exponent bits
+        mantissa = value / (2**exponent)
+        mantissa = (mantissa - 1) / (2**-23)
+        if (bNegative == 0):
+            mantissa = int(mantissa) & 0x7fffff   # remove sign bit if number is positive
+        #result = hex(int(round(mantissa + MSB * 2**23)))
+        result = int(round(mantissa + MSB * 2**23))
+        #print(hex(result))  # DEBUG
+        return result
+
+
+    def _flash_to_float(self, value: int) -> float:
+        exponent = 0xff & int(value / (2**23))  # exponent is most significant byte after sign bit
+        mantissa = value % (2**23)
+        if (0x80000000 & value == 0):   # check if number is positive
+            isPositive = 1
+        else:
+            isPositive = 0
+        mantissa_f = 1.0
+        mask = 0x400000
+        for i in range(0,23):
+            if ((mask >> i) & mantissa):
+                mantissa_f += 2**(-1*(i+1))
+        result = mantissa_f * 2**(exponent-127)
+        if not(isPositive):
+            result *= -1
+        return float(result)
+
+    # ----------------------------------------------------------------------------------------------
+   
+
     def disable_checksum(self) -> bool:
         buf = int(0x29e7).to_bytes(2, "little" )
         #return self.writeBytes(self.address, int(reg), bytearray(buf), use_pec=True)
@@ -521,12 +567,12 @@ class BQ76942:
             "LD_ON":      ((os>>0) & 1),
         })
 
-    def read_control_status(self) -> Tuple[int, bool]:
+
+    def read_control_status(self) -> Tuple[int]:
         buf, ok = self.readBytes(self.address, 0x00, 2)
         if ok:
-            return self._control_status_to_dict(buf), True
-        else:
-            None, False
+            self._control_status = self._control_status_to_dict(buf) 
+        return _od2t(self._control_status)
 
 
     #----------------------------------------------------------------------------------------------
@@ -555,7 +601,7 @@ class BQ76942:
             "CFGUPDATE": ((os>>0) & 1),
         })
 
-    def read_battery_status(self) -> Tuple[int, bool]:
+    def read_battery_status(self) -> Tuple[int]:
         buf, ok = self.readBytes(self.address, 0x12, 2)
         if ok:
             self._battery_status = self._battery_status_to_dict(buf)
@@ -603,14 +649,12 @@ class BQ76942:
             "WAKE":     ((os>>0) & 1),
         })
 
-    def read_alarm_status(self) -> Tuple[int, bool]:
+    def read_alarm_status(self) -> Tuple[int]:
         buf, ok = self.readBytes(self.address, 0x62, 2)
         if ok:
             self._alarm_status = self._alarm_status_to_dict(buf)
-            return self._alarm_status, True
-        else:
-            return None, False
-
+        _od2t(self._alarm_status)
+        
 
     #----------------------------------------------------------------------------------------------
 
@@ -915,16 +959,18 @@ class BQ76942:
             "PCHG_TEST": ((os>>0) & 1),
         })
 
-    def read_manufacturing_status(self, hexi: bool | str| None = None) -> int:
+    def read_manufacturing_status(self, hexi: bool | str| None = None) -> Tuple:
         buf = self.read_subcommand(0x0057)
         self._manufact_fet_status = self._decode_manufacturing_status(buf, hexi=hexi)
         return _od2t(self._manufact_fet_status)
 
+    def fuse_toggle(self) -> bool:
+        return self.write_subcommand(0x001D)
 
-    def charge_test(self, hexi: bool | str| None = None) -> bool:
+    def charge_test(self) -> bool:
         return self.write_subcommand(0x001F)
 
-    def discharge_test(self, hexi: bool | str| None = None) -> bool:
+    def discharge_test(self) -> bool:
         return self.write_subcommand(0x0020)
 
 
@@ -957,11 +1003,11 @@ class BQ76942:
         return self.write_subcommand(0x0022)
 
 
-    def enable_fets(self, timeout: float = 15.0) -> None:
+    def enable_fets(self, timeout: float = 5.0) -> None:
         """ENABLE FETs using toggle and flag check.
 
         Args:
-            timeout (float, optional): _description_. Defaults to 15.0.
+            timeout (float, optional): _description_. Defaults to 5.0.
 
         Raises:
             RuntimeError: _description_
@@ -984,25 +1030,15 @@ class BQ76942:
             if (status["CHG_TEST"] == 0):
                 self.charge_test()
             sleep(0.1)
-                
-            # self.read_fet_status()
-            # status = self._fet_status            
-            # if (status["DDSG_PIN"] == 0) and (status["CHG_FET"] == 1) and (status["DSG_FET"] == 1):
-            #     return
-            # print(status)  # DEBUG
-            # #if (status["DDSG_PIN"] == 0):
-            # _ok = self.toggle_fet_enable()
-            # sleep(0.1)
-            
             n -= 1
         raise RuntimeError(f"Could not enable FET {status}")
 
     
-    def disable_fets(self, timeout: float = 15.0) -> None:
+    def disable_fets(self, timeout: float = 5.0) -> None:
         """DISABLE FETs using toggle and flag check.
 
         Args:
-            timeout (float, optional): _description_. Defaults to 15.0.
+            timeout (float, optional): _description_. Defaults to 5.0.
 
         Raises:
             RuntimeError: _description_
@@ -1568,47 +1604,6 @@ class BQ76942:
         data_fail_addr = unpack_from("<H", buf, 1)[0]
         return results, data_fail_addr
 
-
-
-    def _float_to_flash(self, value: float) -> int:
-        """This is the TI version of "IEEE754" float.
-        Something is slightly different.
-        """
-        if value == 0:
-            value += 0.0000001    # avoid log of zero
-        if value < 0:
-            bNegative = 1
-            value *= -1
-        else:
-            bNegative = 0
-        exponent = int( (math.log(value)/math.log(2)) )
-        MSB = exponent + 127        # exponent bits
-        mantissa = value / (2**exponent)
-        mantissa = (mantissa - 1) / (2**-23)
-        if (bNegative == 0):
-            mantissa = int(mantissa) & 0x7fffff   # remove sign bit if number is positive
-        #result = hex(int(round(mantissa + MSB * 2**23)))
-        result = int(round(mantissa + MSB * 2**23))
-        #print(hex(result))  # DEBUG
-        return result
-
-
-    def _flash_to_float(self, value: int) -> float:
-        exponent = 0xff & int(value / (2**23))  # exponent is most significant byte after sign bit
-        mantissa = value % (2**23)
-        if (0x80000000 & value == 0):   # check if number is positive
-            isPositive = 1
-        else:
-            isPositive = 0
-        mantissa_f = 1.0
-        mask = 0x400000
-        for i in range(0,23):
-            if ((mask >> i) & mantissa):
-                mantissa_f += 2**(-1*(i+1))
-        result = mantissa_f * 2**(exponent-127)
-        if not(isPositive):
-            result *= -1
-        return float(result)
 
 
 
