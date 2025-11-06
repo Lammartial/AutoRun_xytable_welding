@@ -240,29 +240,22 @@ def rack_test(cartridge: CartridgePETA,
         print("AFE: enable full access ...", afe.enable_full_access())
         print("AFE: FULL ACCESS?", afe.is_unsealed(check_fullaccess=True, refresh=True))
 
-
         # AFE need always transfer into RAM
         ff = BQStudioFileFlexFlasher(afe, base_path / "GG_3412185A-02_A_draft4_unsealed_PF_Fet_dis_CDFETOFF_PDwn_Petalite_AFE_settings.gm.fs" )
         ff.validate_file()
-        tic = perf_counter()
         ff.program_fw_file()
-        toc = perf_counter()
-        _log.info(f"DONE in {toc - tic:0.4f} seconds.")
-
+        
         #psu1.set_output_state(0)
         sleep(1.0)
-
-
+        #afe.disable_checksum()
+        afe.disable_sleepmode()  # Sleep Disable 0x009A to prevent CHG FET from opening
+        
         #print(afe.read_subcommand(0x00a0))
         #print(afe.read_subcommand(0x9234))
         print(afe.read_cell_voltages())
         print(afe.read_temperatures())
 
-        # This step will enable the FETs to calibrate Top-of-Stack, PACK, and LD voltages.
-        # Make sure FETs are closed for PACK and LD measurements
-        afe.disable_sleepmode()  # Sleep Disable 0x009A to prevent CHG FET from opening
-        #psu1.set_output_state(0)
-
+        
         print("MFG STATUS:", afe.read_manufacturing_status())
         print("SAFETY STATUS:", afe.read_safety_status())
         #print(afe.all_fets_on())
@@ -280,29 +273,30 @@ def rack_test(cartridge: CartridgePETA,
         print("+1.8v VCC: ", u_xtras[2])
         print("Pack: ", u_xtras[3])
 
-        cartridge.switch_mosfet(0, 0)  # 0ohm
-        cartridge.switch_mosfet(1, 0)  # 20kohm
-        cartridge.switch_mosfet(2, 0)  # 200kohm
-        cartridge.switch_mosfet(3, 0)  # 400kohm
-        print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
-    
-        cartridge.select_bus_to_micro("i2c")
-        print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
-        cartridge.select_bus_to_micro("can")
-        print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
-        cartridge.select_bus_to_micro("none")
-        print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
-
-        cartridge.switch_mosfet(0, 1)  # 0ohm
-        cartridge.switch_mosfet(1, 1)  # 20kohm
-        cartridge.switch_mosfet(2, 1)  # 200kohm
-        cartridge.switch_mosfet(3, 1)  # 400kohm
-        print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+        if 0:
+            cartridge.switch_mosfet(0, 0)  # 0ohm
+            cartridge.switch_mosfet(1, 0)  # 20kohm
+            cartridge.switch_mosfet(2, 0)  # 200kohm
+            cartridge.switch_mosfet(3, 0)  # 400kohm
+            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
         
+            cartridge.select_bus_to_micro("i2c")
+            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+            cartridge.select_bus_to_micro("can")
+            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+            cartridge.select_bus_to_micro("none")
+            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+
+            cartridge.switch_mosfet(0, 1)  # 0ohm
+            cartridge.switch_mosfet(1, 1)  # 20kohm
+            cartridge.switch_mosfet(2, 1)  # 200kohm
+            cartridge.switch_mosfet(3, 1)  # 400kohm
+            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+            
         if 1:
             cartridge.switch_some_io(7, 0)  # enable microcontroller
             print(ap.erase_flash())
-            print(ap.program_flash())
+            #print(ap.program_flash())
             cartridge.switch_some_io(7, 1)  # disable microcontroller
         if 0:
             cartridge.switch_some_io(7, 1)  # disable microcontroller
@@ -322,7 +316,7 @@ def rack_test(cartridge: CartridgePETA,
             bat = Battery(BusMaster(cartridge.bus_to_mirco))
             print(bat.temperature())
         
-        if 1:
+        if 0:
             # NOTE: The µ-controller interacts with AFE and GG so program it
             # after all things are set for AFE and GG.
             #------------------------------------------------------------------
@@ -435,7 +429,7 @@ def rack_test(cartridge: CartridgePETA,
         # =====================================================================================
         # === calibrate temperature ===
         # =====================================================================================
-        afe.exit_config_update_mode()
+        #afe.exit_config_update_mode()
         print(afe.read_temperatures())
         # 1) apply known temperature TEMP(cal)
         #temp_cal = 21.4
@@ -833,8 +827,8 @@ def rack_test(cartridge: CartridgePETA,
         x = False
         n = 60*2
         while n:
-            cs = gg.read_control_status()
-            if cs["BCA"] == 0:
+            gg.read_control_status()
+            if gg._control_status["BCA"] == 0:
                 break
             # here we can insert another calibration task while waiting
             # ...
@@ -1187,10 +1181,10 @@ if __name__ == "__main__":
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
     #LINE_NETWORK = "172.25.102"  # VN line 2
-    LINE_NETWORK = "172.25.103"  # VN line 3
+    #LINE_NETWORK = "172.25.103"  # VN line 3
 
 
-    SOCKET = 1  # 0, 1 or 2
+    SOCKET = 0  # 0, 1 or 2
     # following assumes own IF-OLIMEX breakout adapter
     if SOCKET == 0:
         psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=1)  # socket 0 / share

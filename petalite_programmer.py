@@ -172,7 +172,7 @@ class AlgocraftProgrammer(Eth2SerialDevice):
         command = f"#exec -o prj -f projects/{self.erase_flash_project_file.name} -s {sites}"
         answer = self.execute_command(command)
         error = self.get_system_error(site=site_flags)
-        ok = answer.endswith(">") and  (error == "")      
+        ok = answer.endswith(">") and  (error == ">")      
         return ok, error + " : " + answer
 
 
@@ -181,7 +181,7 @@ class AlgocraftProgrammer(Eth2SerialDevice):
         command = f"#exec -o prj -f projects/{self.project_file.name} -s {sites}"
         answer = self.execute_command(command)
         error = self.get_system_error(site=site_flags)
-        ok = answer.endswith(">") and (error == "")
+        ok = answer.endswith(">") and (error == ">")
         return ok, error + " : " + answer
 
 
