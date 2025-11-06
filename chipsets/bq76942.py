@@ -957,11 +957,11 @@ class BQ76942:
         return self.write_subcommand(0x0022)
 
 
-    def enable_fets(self, timeout: float = 10.0) -> None:
+    def enable_fets(self, timeout: float = 15.0) -> None:
         """ENABLE FETs using toggle and flag check.
 
         Args:
-            timeout (float, optional): _description_. Defaults to 10.0.
+            timeout (float, optional): _description_. Defaults to 15.0.
 
         Raises:
             RuntimeError: _description_
@@ -980,11 +980,11 @@ class BQ76942:
         raise RuntimeError(f"Could not enable FET {status}")
 
     
-    def disable_fets(self, timeout: float = 10.0) -> None:
+    def disable_fets(self, timeout: float = 15.0) -> None:
         """DISABLE FETs using toggle and flag check.
 
         Args:
-            timeout (float, optional): _description_. Defaults to 10.0.
+            timeout (float, optional): _description_. Defaults to 15.0.
 
         Raises:
             RuntimeError: _description_
