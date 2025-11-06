@@ -917,8 +917,8 @@ class BQ76942:
 
     def read_manufacturing_status(self, hexi: bool | str| None = None) -> int:
         buf = self.read_subcommand(0x0057)
-        self._fet_status = self._decode_manufacturing_status(buf, hexi=hexi)
-        return self._fet_status
+        self._manufact_fet_status = self._decode_manufacturing_status(buf, hexi=hexi)
+        return _od2t(self._manufact_fet_status)
 
 
     def charge_test(self, hexi: bool | str| None = None) -> bool:
@@ -966,16 +966,34 @@ class BQ76942:
         Raises:
             RuntimeError: _description_
         """
+
         n = int(round(timeout * 10))  # in 100ms rounds
         while n > 0:
-            self.read_fet_status()
-            status = self._fet_status
-            if (status["DDSG_PIN"] == 0) and (status["CHG_FET"] == 1) and (status["DSG_FET"] == 1):
-                return
+            self.read_manufacturing_status()
+            status = self._manufact_fet_status
             print(status)  # DEBUG
-            #if (status["DDSG_PIN"] == 0):
-            _ok = self.toggle_fet_enable()
+            if (status["FET_EN"] == 0) and (status["DSG_TEST"] == 1) and (status["CHG_TEST"] == 1):
+                return
+            
+            if (status["FET_EN"] == 1):
+                # need to disable FW control
+                self.toggle_fet_enable()
+                sleep(0.1)
+            if (status["DSG_TEST"] == 0):
+                self.discharge_test()
+            if (status["CHG_TEST"] == 0):
+                self.charge_test()
             sleep(0.1)
+                
+            # self.read_fet_status()
+            # status = self._fet_status            
+            # if (status["DDSG_PIN"] == 0) and (status["CHG_FET"] == 1) and (status["DSG_FET"] == 1):
+            #     return
+            # print(status)  # DEBUG
+            # #if (status["DDSG_PIN"] == 0):
+            # _ok = self.toggle_fet_enable()
+            # sleep(0.1)
+            
             n -= 1
         raise RuntimeError(f"Could not enable FET {status}")
 
@@ -991,14 +1009,32 @@ class BQ76942:
         """
         n = int(round(timeout * 10))  # in 100ms rounds
         while n > 0:
-            self.read_fet_status()
-            status = self._fet_status
-            if (status["DDSG_PIN"] == 1) and (status["CHG_FET"] == 0) and (status["DSG_FET"] == 0):
-                return
+            self.read_manufacturing_status()
+            status = self._manufact_fet_status
             print(status)  # DEBUG
-            #if (status["DDSG_PIN"] == 1):
-            _ok = self.toggle_fet_enable()
+            if (status["FET_EN"] == 0) and (status["DSG_TEST"] == 0) and (status["CHG_TEST"] == 0):
+                return
+            
+            if (status["FET_EN"] == 1):
+                # need to disable FW control
+                self.toggle_fet_enable()
+                sleep(0.1)
+            if (status["DSG_TEST"] == 1):
+                self.discharge_test()
+            if (status["CHG_TEST"] == 1):
+                self.charge_test()
             sleep(0.1)
+
+
+            # self.read_fet_status()
+            # status = self._fet_status
+            # if (status["DDSG_PIN"] == 1) and (status["CHG_FET"] == 0) and (status["DSG_FET"] == 0):
+            #     return
+            # print(status)  # DEBUG
+            # #if (status["DDSG_PIN"] == 1):
+            # _ok = self.toggle_fet_enable()
+            # sleep(0.1)
+
             n -= 1
         raise RuntimeError(f"Could not disable FET {status}")
 

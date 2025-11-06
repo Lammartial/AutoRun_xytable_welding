@@ -92,7 +92,7 @@ def rack_test(cartridge: CartridgePETA,
         print("Ok.")
     else:
         print("Need to send Files to the programmer.")
-        ap.send_all_files()
+    ap.send_all_files()
 
 
     #psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
@@ -145,8 +145,9 @@ def rack_test(cartridge: CartridgePETA,
     # #gpio.set_gpio_n_low(6)
 
     #cartridge.select_bus_to_micro("i2c")
-    print("BACKYARD:", cartridge.backyard_bus.i2c_bus_scan())
+    print("GPIO:", cartridge.bus_to_gpio.i2c_bus_scan())
     print("MICRO:", cartridge.bus_to_mirco.i2c_bus_scan())
+    print("BACKYARD:", cartridge.backyard_bus.i2c_bus_scan())
     #for n in range(1,9):
     #    print(cartridge.get_muxed_i2c_bus_for(n).i2c_bus_scan())
 
@@ -241,9 +242,9 @@ def rack_test(cartridge: CartridgePETA,
         print("AFE: FULL ACCESS?", afe.is_unsealed(check_fullaccess=True, refresh=True))
 
         # AFE need always transfer into RAM
-        ff = BQStudioFileFlexFlasher(afe, base_path / "GG_3412185A-02_A_draft4_unsealed_PF_Fet_dis_CDFETOFF_PDwn_Petalite_AFE_settings.gm.fs" )
-        ff.validate_file()
-        ff.program_fw_file()
+        ff1 = BQStudioFileFlexFlasher(afe, base_path / "GG_3412185A-02_A_draft4_unsealed_PF_Fet_dis_CDFETOFF_PDwn_Petalite_AFE_settings.gm.fs" )
+        ff1.validate_file()
+        ff1.program_fw_file()
         
         #psu1.set_output_state(0)
         sleep(1.0)
@@ -293,7 +294,7 @@ def rack_test(cartridge: CartridgePETA,
             cartridge.switch_mosfet(3, 1)  # 400kohm
             print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
             
-        if 1:
+        if 0:
             cartridge.switch_some_io(7, 0)  # enable microcontroller
             print(ap.erase_flash())
             #print(ap.program_flash())
@@ -342,7 +343,7 @@ def rack_test(cartridge: CartridgePETA,
             sleep(0.5)
             cartridge.switch_some_io(7, 1)  # diable microcontroller
     
-
+        
 
         # # NOTE: The µ-controller interacts with AFE and GG so program it
         # # after all things are set for AFE and GG.
@@ -429,6 +430,13 @@ def rack_test(cartridge: CartridgePETA,
         # =====================================================================================
         # === calibrate temperature ===
         # =====================================================================================
+        print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+        #afe.disable_checksum()        
+        #ff1.program_fw_file()
+        #sleep(1.0)
+        #afe.disable_checksum()
+        #afe.disable_sleepmode()
+        #afe.disable_checksum()
         #afe.exit_config_update_mode()
         print(afe.read_temperatures())
         # 1) apply known temperature TEMP(cal)
@@ -815,7 +823,8 @@ def rack_test(cartridge: CartridgePETA,
         # Apply 1A discharge current through sense resistor
         print("FET status: ", afe.read_fet_status())
         psu1.set_output_state(0)
-        afe.enable_fets()
+        print(psu1.get_all_measurements())
+        afe.enable_fets(timeout=20.0)
         print("FET status: ", afe.read_fet_status())
         #print(afe.discharge_test())
         #print(afe.charge_test())
@@ -928,7 +937,7 @@ def rack_test(cartridge: CartridgePETA,
         psu1.set_output_state(0)  # SINK OFF
         psu1.configure_supply(u_supply, 0.080, 50, 0)  # PACK supply safe state
         psu2.configure_supply(u_supply, 0.080, 50, 1)  # Cell Stack SAFE STATE
-        afe.disable_fets()
+        afe.disable_fets(timeout=20.0)
         print("FET status: ", afe.read_fet_status())
         print("Measure PSU1", psu1.get_all_measurements())
         print("Measure PSU2", psu2.get_all_measurements())
@@ -1123,8 +1132,8 @@ def rack_test(cartridge: CartridgePETA,
         # NOTE: The µ-controller interacts with AFE and GG so program it
         # after all things are set for AFE and GG.
         #------------------------------------------------------------------
-        cartridge.switch_some_io(7, 0)  # enable microcontroller
-        print("Program FLASH:", ap.program_flash())
+        #cartridge.switch_some_io(7, 0)  # enable microcontroller
+        #print("Program FLASH:", ap.program_flash())
         #------------------------------------------------------------------
         # sleep(1.0)
         # cartridge.select_bus_to_micro("can")
@@ -1181,10 +1190,10 @@ if __name__ == "__main__":
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
     #LINE_NETWORK = "172.25.102"  # VN line 2
-    #LINE_NETWORK = "172.25.103"  # VN line 3
+    LINE_NETWORK = "172.25.103"  # VN line 3
 
 
-    SOCKET = 0  # 0, 1 or 2
+    SOCKET = 1  # 0, 1 or 2
     # following assumes own IF-OLIMEX breakout adapter
     if SOCKET == 0:
         psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=1)  # socket 0 / share
