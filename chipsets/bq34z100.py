@@ -381,43 +381,60 @@ class BQ34Z100:
     #----------------------------------------------------------------------------------------------
 
 
-    def calib_write_temperature(self, temp_cal: float) -> float:
-        temp_cal = float(temp_cal)
-        temperature = self.temperature()  # in degC
-        ext_temperature_offset = temp_cal - temperature
+    def calib_write_temperature(self, reference_temperature: float, num_samples: int = 5, pause_between: float = 0.05) -> float:
+        num_samples = int(num_samples)
+        _temperature_meas = 0
+        for n in range(num_samples):
+            _temperature_meas += self.temperature()  # in degC
+            if pause_between:
+                sleep(pause_between)
+        _temperature_meas = _temperature_meas / num_samples
+        ext_temperature_offset = reference_temperature - _temperature_meas
         ext_temperature_offset_int = int(round(ext_temperature_offset * 1e+1))  # -> 0.1C
-        #print("T_ambient GG:", temp_cal , "meas:", temperature, "offset to store:", ext_temperature_offset)
         self.enter_calibration()
-        self.read_calibration_flash_data()     
+        self.read_calibration_flash_data()  # prefill the struct, we change only one value!
         self.write_calibration_flash_data({"ext_temperature_offset": ext_temperature_offset_int})
         self.exit_calibration()
         return ext_temperature_offset
 
 
-    def calib_write_cc_gain_and_cc_delta(self, reference_current: int) -> Tuple[float, float]:
-        _current_meas = self.current()
+    def calib_write_cc_gain_and_cc_delta(self, reference_current: float, num_samples: int = 10, pause_between: float = 0.005) -> Tuple[float, float]:
+        num_samples = int(num_samples)
+        _current_meas = 0
+        for n in range(num_samples):
+            _current_meas = self.current()  # in A
+            if pause_between:
+                sleep(pause_between)
+        _current_meas = _current_meas / num_samples 
         if (_current_meas > -0.1) and (_current_meas < 0.1):
             raise ValueError("No current flow - cannot calibrate CC Gain and CC Delta")
         self.enter_calibration()
         self.read_calibration_flash_data()
-        gg_cc_gain = self.calibration_data["cc_gain"] * reference_current / _current_meas * 1  # * 1 Ohm
+        _cc_gain_stored = self.calibration_data["cc_gain"]
+        gg_cc_gain = _cc_gain_stored * reference_current / _current_meas * 1  # * 1 Ohm
         gg_cc_delta = gg_cc_gain * 1193046.0  # magic constant
         self.write_calibration_flash_data(data={"cc_gain": gg_cc_gain, "cc_delta": gg_cc_delta})
         self.exit_calibration()
         return gg_cc_gain, gg_cc_delta
 
 
-    def calib_write_voltage_divider(self, calib_bat_voltage: float) -> float:
-        _voltage_meas = self.voltage()
+    def calib_write_voltage_divider(self, reference_bat_voltage: float, num_samples: int = 10, pause_between: float = 0.005) -> float:
+        num_samples = int(num_samples)
+        _voltage_meas = 0
+        for n in range(num_samples):
+            _voltage_meas = self.voltage()  # in V
+            if pause_between:
+                sleep(pause_between)
+        _voltage_meas = _voltage_meas / num_samples
         if round(_voltage_meas) == 0:
-            return 0.0
+            raise ValueError("No voltage measured, cannot calibrate")
         self.enter_calibration()
-        _stored_calib = self.read_calibration_flash_data()
-        _voltage_divider_stored = _stored_calib["voltage_divider"]
+        self.read_calibration_flash_data()        
+        _voltage_divider_stored = self.calibration_data["voltage_divider"]
         #print("GG V meas ERROR vefore:", (calib_bat_voltage - _voltage_meas), "V")
         if _voltage_divider_stored <= 0:
             _voltage_divider_stored = 5000  # default value
-        new_voltage_divider = _voltage_divider_stored * calib_bat_voltage / _voltage_meas
+        new_voltage_divider = _voltage_divider_stored * reference_bat_voltage / _voltage_meas
         new_voltage_divider_int = int(round(new_voltage_divider))
         self.write_calibration_flash_data(data={"voltage_divider": new_voltage_divider_int})
         self.exit_calibration()

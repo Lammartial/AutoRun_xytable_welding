@@ -810,47 +810,6 @@ class BQ76942:
         return temperatures
 
 
-    def calib_write_temperature(self, temp_cal: float) -> Tuple[float]:
-        """Expects a calibration reference temperature as INPUT and calculates from that
-        the following offsets:
-        
-            Internal Temperature
-            CFETOFF Temperature (CFETOFF pin thermistor) - unused
-            DFETOFF Temperature (DFETOFF pin thermistor) - unused
-            ALERT Temperature (ALERT pin thermistor) - unused
-            TS1 (TS1 pin thermistor)
-            TS2 (TS2 pin thermistor) - unused
-            TS3 (TS3 pin thermistor)
-            HDQ Temperature (HDQ pin thermistor)
-            DCHG Temperature (DCHG pin thermistor)
-            DDSG Temperature (DDSG pin thermistor)
-
-        Args:
-            temp_cal (Tuple[float]): Calibrated reference temperature
-        """
-
-        temp_cal = float(temp_cal)
-        #print("T_ambient:", temp_cal)
-        # 1) measure the temperatures
-        t_meas = [0.0] * 10
-        for n in range(5):
-            t0 = self.read_temperatures()
-            for i in range(len(t_meas)):
-                t_meas[i] += t0[i]
-            sleep(0.050)
-        t_meas = [t/5 for t in t_meas]
-        # 2) calculate the offsets
-        temp_offsets = [(float(temp_cal - t) if t > -100 else 0) for t in t_meas]
-        #print("T-OFFSETS:", temp_offsets)
-        # 3) write the temperature calibration values
-        self.enter_config_update_mode()
-        self.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets        
-        self.write_temperature_calibration_offsets(temp_offsets)
-        self.exit_config_update_mode()        
-        return tuple(temp_offsets)
-
-        
-
     #----------------------------------------------------------------------------------------------
 
     def _decode_safety_status(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:
@@ -1124,7 +1083,10 @@ class BQ76942:
         return result
     
 
-    def calibrate_cell_voltages(self, reference_cell_voltages: np.array, num_samples: int = 10, pause_between: float = 0.005) -> Tuple[float, np.array]:
+    #----------------------------------------------------------------------------------------------
+
+
+    def calib_write_cell_voltages(self, reference_cell_voltages: np.array, num_samples: int = 10, pause_between: float = 0.005) -> Tuple[float, np.array]:
         reference_cell_voltages = list(reference_cell_voltages)
         # Take the average of measurements and calculate gains        
         cell_voltage_counts, _  = self.read_dastatus_average(num_samples=int(num_samples), pause_between=pause_between)
@@ -1163,11 +1125,11 @@ class BQ76942:
         return float(cell_offset), np.array([float(g) for g in cell_gain])  # Teststand easier to handle
 
 
-    def calibrate_pack_tos_ld_voltages(self, ref_pack_voltage: float, ref_tos_voltage: float, ref_ld_voltage: float, 
+    def calib_write_pack_tos_ld_voltages(self, ref_pack_voltage: float, ref_tos_voltage: float, ref_ld_voltage: float, 
                                        num_samples: int = 10, pause_between: float = 0.005) -> Tuple[float]:
-        d = self.read_cal1_average(num_samples=int(num_samples), pause_between=pause_between)
+        d = self.read_cal1_average(num_samples=num_samples, pause_between=pause_between)
         # Calculate PACK, TOS, LD gains by using the measured voltages in cV (not mV !!)
-        PACK_Gain = int(round(2**16 * ((ref_pack_voltage * 1e+2) / d["pack_pin_adc_counts"])))        
+        PACK_Gain = int(round(2**16 * ((ref_pack_voltage * 1e+2) / d["pack_pin_adc_counts"])))
         TOS_Gain = int(round(2**16 * ((ref_tos_voltage * 1e+2) / d["tos_adc_counts"])))
         LD_Gain = int(round(2**16 * ((ref_ld_voltage * 1e+2) / d["ld_pin_adc_counts"])))
         # write voltage calibration into RAM
@@ -1179,12 +1141,12 @@ class BQ76942:
         return PACK_Gain, TOS_Gain, LD_Gain
    
 
-    def calibrate_board_offset_current(self, num_samples: int = 10, pause_between: float = 0.005) -> float:
+    def calib_write_board_offset_current(self, num_samples: int = 10, pause_between: float = 0.005) -> float:
         stored_board_offset = self.read_board_offset()
         stored_offset_samples = self.read_coulomb_counter_offset_sample()
         # should be 64 but we calculate here with 1
         offset_samples = 1  # stored_offset_samples
-        d = self.read_cal1_average(num_samples=int(num_samples), pause_between=pause_between)
+        d = self.read_cal1_average(num_samples=num_samples, pause_between=pause_between)
         board_offset = offset_samples * int(round(d["cc2_counts"] * 1e+1))
         if board_offset < -32768 or board_offset > 32767:
             raise ValueError(f"Board_offset out of boundaries -> cannot calibrate current: {board_offset}")
@@ -1194,6 +1156,69 @@ class BQ76942:
         return board_offset
 
 
+    def calib_write_cc_gain_and_capacity_gain(self, ref_current: float, num_samples: int = 10, pause_between: float = 0.005) -> Tuple[float, float]:        
+        num_samples = int(num_samples)
+        stored_cc_gain = self.read_cc_gain()
+        stored_capacity_gain = self.read_capacity_gain()
+        cc2_current = 0
+        for n in range(num_samples):
+            cc2_current += self.read_cc2_current()
+            if pause_between and (pause_between > 0):
+                sleep(pause_between)
+        cc2_current = cc2_current / num_samples
+        #cc_gain_float = (current_diff / cc_counts_diff) / 1e-3
+        #cc_gain_float = (current_diff / cc2_current_diff) * stored_cc_gain  # alternative calculation using CC2 current directly
+        cc_gain_float = (ref_current / cc2_current) * stored_cc_gain  # alternative calculation using CC2 current directly
+        capacity_gain_float = 298261.6178 * cc_gain_float  # Note: constant 298261.6178 comes from TI doc
+        # write calibration into RAM
+        self.enter_config_update_mode()
+        self.write_cc_gain(cc_gain_float)
+        self.write_capacity_gain(capacity_gain_float)
+        self.exit_config_update_mode()
+        return cc_gain_float, capacity_gain_float
+
+
+    def calib_write_temperatures(self, reference_temperature: float, num_samples: int = 5, pause_between: float = 0.05) -> Tuple[float]:
+        """Expects a calibration reference temperature as INPUT and calculates from that
+        the following offsets:
+        
+            Internal Temperature
+            CFETOFF Temperature (CFETOFF pin thermistor) - unused
+            DFETOFF Temperature (DFETOFF pin thermistor) - unused
+            ALERT Temperature (ALERT pin thermistor) - unused
+            TS1 (TS1 pin thermistor)
+            TS2 (TS2 pin thermistor) - unused
+            TS3 (TS3 pin thermistor)
+            HDQ Temperature (HDQ pin thermistor)
+            DCHG Temperature (DCHG pin thermistor)
+            DDSG Temperature (DDSG pin thermistor)
+
+        Args:
+            temp_cal (Tuple[float]): Calibrated reference temperature
+        """
+
+        num_samples = int(num_samples)  # Teststand
+        # 1) measure the temperatures (10 measurement points)
+        t_meas = [0.0] * 10
+        for n in range(num_samples):
+            t0 = self.read_temperatures()
+            for i in range(len(t_meas)):
+                t_meas[i] += t0[i]
+            if pause_between:
+                sleep(pause_between)
+        t_meas = [t / num_samples for t in t_meas]
+        # 2) calculate the offsets
+        temp_offsets = [(float(reference_temperature - t) if t > -100 else 0) for t in t_meas]
+        #print("T-OFFSETS:", temp_offsets)
+        # 3) write the temperature calibration values
+        self.enter_config_update_mode()
+        self.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets        
+        self.write_temperature_calibration_offsets(temp_offsets)
+        self.exit_config_update_mode()        
+        return tuple(temp_offsets)
+
+
+    # ----------------------------------------------------------------------------------------------
 
 
     def read_cell_gain(self) -> list:
