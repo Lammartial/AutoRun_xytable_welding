@@ -87,7 +87,7 @@ def rack_test(cartridge: CartridgePETA,
     print("Integrity check MD5: ")
     if ap.verify_all_files_on_programmer(
         "821C93A15324CC4E05E839E8D04521AE",
-        "322D36DAE4DBA54A1B06164744D266E4",
+        "075C14FF64BFA821E378A6B42437026E",
         erase_project_file_hash="0711D04EFD02FA4E3317F3D6829FDA0D"):
         print("Ok.")
     else:
@@ -150,34 +150,6 @@ def rack_test(cartridge: CartridgePETA,
     #for n in range(1,9):
     #    print(cartridge.get_muxed_i2c_bus_for(n).i2c_bus_scan())
 
-
-    # ENABLE FETs
-    def _enable_fets(timeout: float = 10.0) -> None:
-        n = int(round(timeout * 10))
-        while n > 0:
-            status = afe.read_fet_status()
-            if (status["DDSG_PIN"] == 0) and (status["CHG_FET"] == 1) and (status["DSG_FET"] == 1):
-                return
-            print(status)  # DEBUG
-            #if (status["DDSG_PIN"] == 0):
-            _ok = afe.toggle_fet_enable()
-            sleep(0.1)
-            n -= 1
-        raise RuntimeError(f"Could not enable FET {status}")
-
-    # DISABLE FETs
-    def _disable_fets(timeout: float = 10.0) -> None:
-        n = int(round(timeout * 10))
-        while n > 0:
-            status = afe.read_fet_status()
-            if (status["DDSG_PIN"] == 1) and (status["CHG_FET"] == 0) and (status["DSG_FET"] == 0):
-                return
-            print(status)  # DEBUG
-            #if (status["DDSG_PIN"] == 1):
-            _ok = afe.toggle_fet_enable()
-            sleep(0.1)
-            n -= 1
-        raise RuntimeError(f"Could not disable FET {status}")
 
     def setup_daq_range_and_resolution() -> bool:
 
@@ -252,7 +224,7 @@ def rack_test(cartridge: CartridgePETA,
     try:
 
         afe = BQ76942(cartridge.backyard_bus, slvAddress=0x08, pec=True, retry_limit=5)
-        afe.disable_checksum()
+        #afe.disable_checksum()
 
         print(afe.read_control_status())
         print(afe.read_battery_status())
@@ -300,14 +272,38 @@ def rack_test(cartridge: CartridgePETA,
         print("ALARM STATUS:", afe.read_alarm_status())
         print("FET status: ", afe.read_fet_status())
 
+        print("Read voltages from DAQ:")
+        u_cells, u_xtras = read_voltages_from_daq()
+        print("Cells: ", u_cells)
+        print("Cellstack: ", u_xtras[0])
+        print("+3.3v VCC: ", u_xtras[1])
+        print("+1.8v VCC: ", u_xtras[2])
+        print("Pack: ", u_xtras[3])
+
+        cartridge.switch_mosfet(0, 0)  # 0ohm
+        cartridge.switch_mosfet(1, 0)  # 20kohm
+        cartridge.switch_mosfet(2, 0)  # 200kohm
+        cartridge.switch_mosfet(3, 0)  # 400kohm
+        print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+    
+        cartridge.select_bus_to_micro("i2c")
+        print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+        cartridge.select_bus_to_micro("can")
+        print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+        cartridge.select_bus_to_micro("none")
         print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
 
+        cartridge.switch_mosfet(0, 1)  # 0ohm
+        cartridge.switch_mosfet(1, 1)  # 20kohm
+        cartridge.switch_mosfet(2, 1)  # 200kohm
+        cartridge.switch_mosfet(3, 1)  # 400kohm
+        print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+        
         if 1:
             cartridge.switch_some_io(7, 0)  # enable microcontroller
-            ap.erase_flash()
-            #ap.program_flash()
+            print(ap.erase_flash())
+            print(ap.program_flash())
             cartridge.switch_some_io(7, 1)  # disable microcontroller
-        
         if 0:
             cartridge.switch_some_io(7, 1)  # disable microcontroller
             cartridge.switch_mosfet(0, 0)  # 0ohm
@@ -326,7 +322,7 @@ def rack_test(cartridge: CartridgePETA,
             bat = Battery(BusMaster(cartridge.bus_to_mirco))
             print(bat.temperature())
         
-        if 0:
+        if 1:
             # NOTE: The µ-controller interacts with AFE and GG so program it
             # after all things are set for AFE and GG.
             #------------------------------------------------------------------
@@ -439,13 +435,14 @@ def rack_test(cartridge: CartridgePETA,
         # =====================================================================================
         # === calibrate temperature ===
         # =====================================================================================
-
+        afe.exit_config_update_mode()
+        print(afe.read_temperatures())
         # 1) apply known temperature TEMP(cal)
         #temp_cal = 21.4
         temp_cal = daq.get_temp(3, "RTD", 1000, 0, "")  # channel 3 + 13
         print("T_ambient:", temp_cal)
         # 2) measure the temperatures
-        new_t_ofs = afe.calib_write_temperature(temp_cal)
+        new_t_ofs = afe.calib_write_temperatures(temp_cal)
         print(new_t_ofs)
         # re-check temperature measurement (repeat the calibration if not successful!)
         sleep(1.0)
@@ -491,9 +488,9 @@ def rack_test(cartridge: CartridgePETA,
         print(gg.temperature())  # in degC
 
 
-        _enable_fets()
+        afe.enable_fets()
         print("FET status: ", afe.read_fet_status())
-        _disable_fets()
+        afe.disable_fets()
         print("FET status: ", afe.read_fet_status())
 
 
@@ -547,7 +544,7 @@ def rack_test(cartridge: CartridgePETA,
         # # print(afe.discharge_test())
         # # print(afe.charge_test())
         # #print(afe.toggle_fet_enable())
-        # _enable_fets()
+        # afe.enable_fets()
         # print("FET status: ", afe.read_fet_status())
 
         cell_voltage_daq_a = [0] * 16
@@ -695,7 +692,7 @@ def rack_test(cartridge: CartridgePETA,
         print("Pack new Gain", PACK_Gain)
         print("LD new Gain", LD_Gain)
 
-        # _disable_fets()
+        # afe.disable_fets()
         # print("FET status: ", afe.read_fet_status())
         # psu1.set_output_state(1)
         # sleep(0.5)
@@ -824,7 +821,7 @@ def rack_test(cartridge: CartridgePETA,
         # Apply 1A discharge current through sense resistor
         print("FET status: ", afe.read_fet_status())
         psu1.set_output_state(0)
-        _enable_fets()
+        afe.enable_fets()
         print("FET status: ", afe.read_fet_status())
         #print(afe.discharge_test())
         #print(afe.charge_test())
@@ -864,7 +861,7 @@ def rack_test(cartridge: CartridgePETA,
         for cell_no in range(1, num_cells):
             vsim.set_cell_n_voltage(cell_no, u_cell)
         sleep(0.1)
-        _enable_fets()
+        afe.enable_fets()
         print("FET status: ", afe.read_fet_status())
         psu1.set_output_state(1)
         sleep(0.5)
@@ -937,7 +934,7 @@ def rack_test(cartridge: CartridgePETA,
         psu1.set_output_state(0)  # SINK OFF
         psu1.configure_supply(u_supply, 0.080, 50, 0)  # PACK supply safe state
         psu2.configure_supply(u_supply, 0.080, 50, 1)  # Cell Stack SAFE STATE
-        _disable_fets()
+        afe.disable_fets()
         print("FET status: ", afe.read_fet_status())
         print("Measure PSU1", psu1.get_all_measurements())
         print("Measure PSU2", psu2.get_all_measurements())
@@ -986,7 +983,7 @@ def rack_test(cartridge: CartridgePETA,
         for cell_no in range(1, num_cells):
             vsim.set_cell_n_voltage(cell_no, u_cell)
         sleep(0.1)
-        _enable_fets()
+        afe.enable_fets()
         print("FET status: ", afe.read_fet_status())
         psu1.set_output_state(1)
         sleep(0.5)
@@ -1008,7 +1005,7 @@ def rack_test(cartridge: CartridgePETA,
         psu1.set_output_state(0)  # SINK OFF
         psu1.configure_supply(u_supply, 0.080, 50, 0)  # PACK supply safe state
         psu2.configure_supply(u_supply, 0.080, 50, 1)  # Cell Stack SAFE STATE
-        _disable_fets()
+        afe.disable_fets()
         print("FET status: ", afe.read_fet_status())
         print("Measure PSU1", psu1.get_all_measurements())
         print("Measure PSU2", psu2.get_all_measurements())
@@ -1053,7 +1050,7 @@ def rack_test(cartridge: CartridgePETA,
         # afe.exit_config_update_mode()
 
 
-            #--------------------------------------------------------------------------------------
+        #--------------------------------------------------------------------------------------
         # MOSFET Test
 
         # Apply 3.0V to all cells -----------
@@ -1069,7 +1066,7 @@ def rack_test(cartridge: CartridgePETA,
         print("Measure PSU1", psu1.get_all_measurements())
         print("Measure PSU2", psu2.get_all_measurements())
         print(read_voltages_from_daq())
-        _disable_fets()
+        afe.disable_fets()
         print("FET status: ", afe.read_fet_status())
         print("Measure PSU1 (should be 0)", psu1.get_all_measurements())  # should be 0
         psu1.set_output_state(1)  # sink ON
@@ -1110,7 +1107,7 @@ def rack_test(cartridge: CartridgePETA,
         for cell_no in range(1, num_cells):
             vsim.set_cell_n_voltage(cell_no, u_cell)
         psu2.configure_supply(u_supply, 0.080, 50, 1)
-        _disable_fets()
+        afe.disable_fets()
         print("FET status: ", afe.read_fet_status())
         sleep(1.0)
         print("Measure PSU1", psu1.get_all_measurements())
@@ -1146,7 +1143,19 @@ def rack_test(cartridge: CartridgePETA,
     
 
     except Exception as ex:
+        
         print_exception(type(ex), ex, ex.__traceback__)
+
+    try:
+        print("Read voltages from DAQ:")
+        u_cells, u_xtras = read_voltages_from_daq()
+        print("Cells: ", u_cells)
+        print("Cellstack: ", u_xtras[0])
+        print("+3.3v VCC: ", u_xtras[1])
+        print("+1.8v VCC: ", u_xtras[2])
+        print("Pack: ", u_xtras[3])
+    except Exception:
+        pass
 
     # reset testrack in save state
 
@@ -1178,10 +1187,10 @@ if __name__ == "__main__":
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
     #LINE_NETWORK = "172.25.102"  # VN line 2
-    #LINE_NETWORK = "172.25.103"  # VN line 3
+    LINE_NETWORK = "172.25.103"  # VN line 3
 
 
-    SOCKET = 0  # 0, 1 or 2
+    SOCKET = 1  # 0, 1 or 2
     # following assumes own IF-OLIMEX breakout adapter
     if SOCKET == 0:
         psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=1)  # socket 0 / share

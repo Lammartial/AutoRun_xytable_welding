@@ -794,7 +794,7 @@ class BQ76942:
         """
 
        
-        scale = [self._standard_scale_temp] * self._max_possible_cells
+        scale = [self._standard_scale_temp] * 10  # 10 = number of temperature measurement points
         temperatures = ()
         #raw = ()
         regadr = 0x68 # base register address for Temperature 1
@@ -806,7 +806,7 @@ class BQ76942:
             temperatures += (temp,)
             #raw += (_maybe_hexlify(tckelvin.to_bytes(2, "little"), hexi),)
             regadr += 2
-            sleep(0.005)
+            #sleep(0.005)
         return temperatures
 
 
