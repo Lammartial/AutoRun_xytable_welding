@@ -18,7 +18,7 @@ from rrc.eth2can import CANBus
 class PetaMCU:
 
     def __init__(self, can :CANBus, i2c: I2CBus, i2c_address_7bit: int = 0x0B, i2c_pec: bool = True):
-        self._i2c = i2c        
+        self._i2c = i2c
         self.i2C_address = i2c_address_7bit
         self.use_pec = i2c_pec
         self.bus = BusMaster(i2c, retry_limit=1, verify_rounds=3, pause_us=50)
@@ -35,7 +35,7 @@ class PetaMCU:
             now.hour.to_bytes(_fmt, 1) + \
             now.minute.to_bytes(_fmt, 1) + \
             now.second.to_bytes(_fmt, 1)
-        print(hexlify(buf))   # DEBUG    
+        print(hexlify(buf))   # DEBUG
         return self.bus.writeBytes(self.i2C_address, 0x1E, buf, use_pec=self.use_pec)
 
 
@@ -53,50 +53,59 @@ class PetaMCU:
 
 
     # CAN Bus Kommunikation
-    # Make sure to select the CAN bus in the cartridge before 
-    # start the communication 
-    
-    def _can_helper_send(self, identifier: int) -> bool:
+    # Make sure to select the CAN bus in the cartridge before
+    # start the communication
+
+    def _can_helper_send(self, mcu_cmd: int, identifier: int = 0x620) -> bool:
         buf = bytearray((
-            0x40, 
-            identifier & 0xFF, ((identifier >> 8) & 0xFF),
+            0x40,
+            mcu_cmd & 0xFF, ((mcu_cmd >> 8) & 0xFF),
             0,0,0,0,0
         ))
-        ok, res, txt = self.can.send(0x620, buf, flags=0, can_timeout_ms=250, timeout=1.0)
+        ok, res, txt = self.can.send(identifier, buf, flags=0, can_timeout_ms=500, timeout=1.0)
         print("CAN-SEND:", ok, res, txt)  # DEBUG
         return ok
 
-    def _can_helper_read(self, identifier: int) -> Tuple[bool, List[int]]:
+    def _can_helper_read(self, identifier: int = 0x5a0) -> Tuple[bool, List[int]]:
         done = False
         while not done:
-            ok, res, txt = self.can.receive(0x5a0, flags=0, can_timeout_ms=900, timeout=1.2)
+            ok, res, txt = self.can.receive(identifier, flags=0, can_timeout_ms=900, timeout=1.2)
             print("CAN-RECEIVE:", ok, res, txt)
-            if ok:
-                if int.from_bytes(res[4:9], "little") == identifier:
+            if ok and (int(res[0]) == 0x55):  # API says OK
+                _rid = int.from_bytes(res[5:9], "little")
+                if _rid == identifier:
                     done = True
+                else:
+                    print(f"got wrong identifier {_rid}, expected {identifier}")
             else:
                 done = True
-        return ok, res if res else None
+        return ok, res[1:] if res else None
 
 
     def can_read_voltage(self) -> Tuple[bool, float]:
         ok = False
         v = None
         if self._can_helper_send(0x2009):  # fetch voltage
-            sleep(0.1)
+            #sleep(0.01)
             ok, res = self._can_helper_read()
         if ok:
-            v = int(res[11:13], "little")
+            print(list(res))
+            cr = int.from_bytes(res[10:12], "little")
+            v = int.from_bytes(res[12:14], "little")
+            print(hex(cr), v)
         return ok, v
 
     def can_read_current(self) -> Tuple[bool, float]:
         ok = False
-        v = None        
+        v = None
         if self._can_helper_send(0x200a):  # fetch current
-            sleep(0.1)
+            #sleep(0.01)
             ok, res = self._can_helper_read()
         if ok:
-            v = int(res[11:13], "little")
+            print(list(res))
+            cr = int.from_bytes(res[10:12], "little")
+            v = int.from_bytes(res[12:14], "little")
+            print(hex(cr), v)
         return ok, v
 
 
@@ -165,7 +174,7 @@ class CartridgePETA:
             return self.gpio.set_pin(pin_no)
         else:
             return self.gpio.reset_pin(pin_no)
-                
+
 
 
     def select_bus_to_micro(self, bustype: str) -> None:
@@ -242,12 +251,22 @@ if __name__ == "__main__":
     RESOURCE_STR = "172.21.101.30:3303"
 
     can = CANBus(RESOURCE_STR)
-    print(can.send(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
-    print(can.receive(0x5a0))
-    print(can.send(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current
-    print(can.receive(0x5a0))
     print(can.recover_can_driver_on_remote())
     print(can.reinstall_can_driver_on_remote())
+    print(can.send(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
+    print(can.receive(0x5a0))
+
+    # print(can.send(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current
+    # print(can.receive(0x5a0))
+
+    mcu = PetaMCU(can, None)
+    for n in range(10):
+        print(mcu.can_read_voltage())
+        print(mcu.can_read_current())
+
+
+
+
 
 
 

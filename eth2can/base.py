@@ -71,19 +71,16 @@ def is_socket_closed(sock: socket.socket) -> bool:
 
 class Eth2CanPort(object):
 
-    def __init__(self, resource_str: str, termination: str = "\r\n", open_connection: bool = True, pause_on_retry: int | None = 10):
+    def __init__(self, resource_str: str, open_connection: bool = True, pause_on_retry: int | None = 10):
         """Initialize the object with IP address and port number given by URL style resource string.
 
         Args:
             resource_str (str): String of url form '{hostname or IPv4 address}:{port number}'
-            termination (str, optional): Defines the line termination. Defaults to '\r\n'
             open_connection (bool, optional): If True, the connection is opened once on creation and never actively closed.
                 If False, the connection is opened on each send/request. Defaults to True.
             pause_on_retry (int, optional): If retries is > 1 on send/request, the pause in milliseconds is held before next try. Defaults to 10.
 
         """
-        self.termination = termination
-        self._termination_as_bytes = bytes(termination, "utf-8")  # need them also as bytes
         lst = resource_str.split(":")
         self.host = lst[0]          # string
         self.port = int(lst[1])     # int
@@ -97,7 +94,7 @@ class Eth2CanPort(object):
         return f"ETH to CAN bridge at {self.host}:{self.port}"
 
     def __repr__(self) -> str:
-        return f"Eth2CanbusDevice('{self.host}:{self.port}', termination='{hexlify(self._termination_as_bytes)}')"
+        return f"Eth2CanbusDevice('{self.host}:{self.port}')"
 
     #----------------------------------------------------------------------------------------------
 

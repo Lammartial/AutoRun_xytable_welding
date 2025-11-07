@@ -10,8 +10,8 @@ from rrc.eth2can.base import Eth2CanPort
 class CANBus(Eth2CanPort):
 
 
-    def __init__(self, resource_str, termination = "\n", open_connection = True, pause_on_retry = 10):  # this is for Teststand
-        super().__init__(resource_str, termination=termination, open_connection=bool(open_connection), pause_on_retry=int(pause_on_retry))
+    def __init__(self, resource_str, open_connection = True, pause_on_retry = 10):  # this is for Teststand
+        super().__init__(resource_str, open_connection=bool(open_connection), pause_on_retry=int(pause_on_retry))
 
 
     def send(self, identifier: int, data: bytes | bytearray, flags: int = 0, can_timeout_ms: int = 150, timeout: float = 1.0) -> Tuple[bool, bytes, str]:
@@ -35,13 +35,13 @@ class CANBus(Eth2CanPort):
         print(hexlify(buf))  # DEBUG
         r = self.request(buf, timeout=timeout, encoding=False)
         ok, err = self._check_result_for_error(r)
-        if ok:        
+        if ok:
             return ok, r, hexlify(r).decode()
         else:
             return ok, None, err
-        
 
-    def teststand_send(self, identifier: int, data: str, flags: int = 0, can_timeout_ms: int = 150, timeout: float = 1.0) -> Tuple[bool, bytes, str]: 
+
+    def teststand_send(self, identifier: int, data: str, flags: int = 0, can_timeout_ms: int = 150, timeout: float = 1.0) -> Tuple[bool, bytes, str]:
         buf = unhexlify(data.replace("0x","").replace(",",""))
         ok, r, txt = self.send(int(identifier), buf, flags=int(flags), can_timeout_ms=int(can_timeout_ms), timeout=float(timeout))
         return ok, f"Ok: {txt}" if ok else txt
@@ -65,19 +65,19 @@ class CANBus(Eth2CanPort):
         """
 
         buf = b'R' + \
-            identifier.to_bytes(4, "little") + \
             flags.to_bytes(4, "little") + \
+            identifier.to_bytes(4, "little") + \
             can_timeout_ms.to_bytes(2, "little")
         print(hexlify(buf))  # DEBUG
         r = self.request(buf, timeout=timeout, encoding=False)
         ok, err = self._check_result_for_error(r)
-        if ok:        
+        if ok:
             return ok, r, hexlify(r).decode()
         else:
             return ok, None, err
 
 
-    def teststand_receive(self, identifier: int, flags: int = 0, can_timeout_ms: int = 900, timeout: float = 1.0) -> Tuple[bool, bytes, str]: 
+    def teststand_receive(self, identifier: int, flags: int = 0, can_timeout_ms: int = 900, timeout: float = 1.0) -> Tuple[bool, bytes, str]:
         ok, r, txt = self.receive(int(identifier), flags=int(flags), can_timeout_ms=int(can_timeout_ms), timeout=int(timeout))
         return ok, f"Ok: {txt}" if ok else txt
 
@@ -94,7 +94,7 @@ class CANBus(Eth2CanPort):
                 0x4711: "Wrong payload length: expected 11 or more",
                 0x4712: "Write Error",
                 0x4713: "Wrong payload length: expected 10 bytes payload.",
-                0x4714: "Receive Error",            
+                0x4714: "Receive Error",
             }
             _twai_status = hexlify(result[7:])
             _err = f"CAN bus error: 0x{err_code:04X}, 0x{optional_code:08X}. {_txt[err_code] if err_code in _txt else ''} Status={_twai_status}"
@@ -105,27 +105,27 @@ class CANBus(Eth2CanPort):
             raise IOError(f"Unknown result header: {result[0]}")
 
 
-    def reinstall_can_driver_on_remote(self, timeout: float = 1.0) -> bool: 
+    def reinstall_can_driver_on_remote(self, timeout: float = 1.0) -> bool:
         buf = b'X_'
         print(hexlify(buf))  # DEBUG
         r = self.request(buf, timeout=timeout, encoding=False)
         ok, err = self._check_result_for_error(r)
-        if ok:        
+        if ok:
             return ok, r, hexlify(r).decode()
         else:
             return ok, None, err
 
 
-    def recover_can_driver_on_remote(self, timeout: float = 1.0) -> bool: 
+    def recover_can_driver_on_remote(self, timeout: float = 1.0) -> bool:
         buf = b'Q_'  # = Try to recover TWAI driver, e.g. after being in RESET state
         print(hexlify(buf))  # DEBUG
         r = self.request(buf, timeout=timeout, encoding=False)
         ok, err = self._check_result_for_error(r)
-        if ok:        
+        if ok:
             return ok, r, hexlify(r).decode()
         else:
             return ok, None, err
-        
+
 
 
 # END OF FILE
