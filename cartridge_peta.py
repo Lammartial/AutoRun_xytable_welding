@@ -56,20 +56,27 @@ class PetaMCU:
     # Make sure to select the CAN bus in the cartridge before 
     # start the communication 
     
-    def _can_helper_send(self, cmd: int) -> bool:
+    def _can_helper_send(self, identifier: int) -> bool:
         buf = bytearray((
             0x40, 
-            cmd & 0xFF, ((cmd >> 8) & 0xFF),
+            identifier & 0xFF, ((identifier >> 8) & 0xFF),
             0,0,0,0,0
         ))
         ok, res, txt = self.can.send(0x620, buf, flags=0, can_timeout_ms=250, timeout=1.0)
         print("CAN-SEND:", ok, res, txt)  # DEBUG
         return ok
 
-    def _can_helper_read(self) -> Tuple[bool, List[int]]:
-        ok, res, txt = self.can.receive(0x5a0, flags=0, can_timeout_ms=900, timeout=1.2)
-        print("CAN-RECEIVE:", ok, res, txt)
-        return ok, list(res) if res else None
+    def _can_helper_read(self, identifier: int) -> Tuple[bool, List[int]]:
+        done = False
+        while not done:
+            ok, res, txt = self.can.receive(0x5a0, flags=0, can_timeout_ms=900, timeout=1.2)
+            print("CAN-RECEIVE:", ok, res, txt)
+            if ok:
+                if int.from_bytes(res[4:9], "little") == identifier:
+                    done = True
+            else:
+                done = True
+        return ok, res if res else None
 
 
     def can_read_voltage(self) -> Tuple[bool, float]:
@@ -79,7 +86,7 @@ class PetaMCU:
             sleep(0.1)
             ok, res = self._can_helper_read()
         if ok:
-            v = res[1] | (res[2] << 8)
+            v = int(res[11:13], "little")
         return ok, v
 
     def can_read_current(self) -> Tuple[bool, float]:
@@ -89,7 +96,7 @@ class PetaMCU:
             sleep(0.1)
             ok, res = self._can_helper_read()
         if ok:
-            v = res[1] | (res[2] << 8)
+            v = int(res[11:13], "little")
         return ok, v
 
 
@@ -227,6 +234,21 @@ class CartridgePETA:
             # signal to MCU
             self.switch_mosfet(1, 1)  # 20kohm
             self.switch_mosfet(2, 0)  # 200kohm
+
+
+#--------------------------------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    RESOURCE_STR = "172.21.101.30:3303"
+
+    can = CANBus(RESOURCE_STR)
+    print(can.send(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
+    print(can.receive(0x5a0))
+    print(can.send(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current
+    print(can.receive(0x5a0))
+    print(can.recover_can_driver_on_remote())
+    print(can.reinstall_can_driver_on_remote())
+
 
 
 
