@@ -620,7 +620,7 @@ def identify_uut(test_socket: int, requested_udi: list, scanner_resource_str: st
 
     _log = getLogger(__name__, DEBUG)
     allow_manual_edit = allow_user_edit
-    #allow_manual_edit = True
+    allow_manual_edit = True
     # # this is just to demonstrate the parameter passing from TestStand
     # context_id = seq_context.Id
     # executing_sequence_name = seq_context.Sequence.Name

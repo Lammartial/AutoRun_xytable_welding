@@ -2,9 +2,54 @@
 Convenience wrapper for PETA cartridge adapter insert.
 """
 
+from typing import Tuple
+from datetime import datetime as dt
+from binascii import hexlify
+from struct import unpack_from
 from rrc.i2cbus import I2CBus, BusMux, I2CMuxedBus
 from rrc.smbus import BusMaster
 from rrc.gpio_pcf8574 import PCF8574 as GPIOExtender
+
+
+#--------------------------------------------------------------------------------------------------
+
+class PetaMCU:
+
+    def _init_(self, i2c: I2CBus, slvAddress: int = 0x0B, pec: bool = True):
+        self._i2c = i2c
+        self.address = slvAddress
+        self.use_pec = pec
+        self.bus = BusMaster(i2c, retry_limit=1, verify_rounds=3, pause_us=50)
+
+
+    def setup_rtc(self) -> bool:
+        now = dt.now()
+        _fmt = "little"
+        buf = bytes(6) + \
+            now.year.to_bytes(_fmt, 1) + \
+            now.month.to_bytes(_fmt, 1) + \
+            now.day.to_bytes(_fmt, 1) + \
+            now.hour.to_bytes(_fmt, 1) + \
+            now.minute.to_bytes(_fmt, 1) + \
+            now.second.to_bytes(_fmt, 1)
+        print(hexlify(buf))   # DEBUG    
+        return self.bus.writeBytes(self.address, 0x1E, buf, use_pec=self.use_pec)
+
+
+    def read_rtc(self) -> Tuple[dt, str]:
+        buf = self.bus.readBytes(self.address, 0x1E, 6, use_pec=self.use_pec)
+        _fmt = "<B"
+        year = unpack_from(_fmt, buf, offset=1)
+        month = unpack_from(_fmt, buf, offset=2)
+        day = unpack_from(_fmt, buf, offset=3)
+        hour = unpack_from(_fmt, buf, offset=4)
+        minute = unpack_from(_fmt, buf, offset=5)
+        second = unpack_from(_fmt, buf, offset=6)
+        d = dt(year, month, day, hour, minute, second)
+        return d, d.isoformat(sep=" ")
+
+
+#--------------------------------------------------------------------------------------------------
 
 
 class CartridgePETA:

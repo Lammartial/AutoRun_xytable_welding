@@ -1088,7 +1088,7 @@ class BQ34Z100:
         for _ in range(0, 20):
             self._write_key(unseal_key)
             sleep(0.25) # wait a bit (250ms)
-            if self.is_unsealed():
+            if self.is_unsealed(refresh=True):
                 #print("bestens")
                 break
         sleep(0.1)

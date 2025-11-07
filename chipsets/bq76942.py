@@ -463,13 +463,13 @@ class BQ76942:
         if isinstance(key, int):
             ikey = key # already integer
         elif isinstance(key, bytearray) or isinstance(key, bytes):
-            ikey = int.from_bytes(key, "big")
+            ikey = int.from_bytes(key, "little")
         elif isinstance(key, str):
             if key[0] == ":":
                 b = unhexlify(key[1:])
             else:
                 b = unhexlify(key)
-            ikey = int.from_bytes(b, "big")
+            ikey = int.from_bytes(b, "little")
         else:
             raise AttributeError("Invalid battery key")
 
@@ -504,7 +504,7 @@ class BQ76942:
         for _ in range(0, 20):
             self._write_key(unseal_key)
             sleep(0.25) # wait a bit (250ms)
-            if self.is_unsealed():
+            if self.is_unsealed(refresh=True):
                 #print("bestens")
                 break
         sleep(0.1)
@@ -545,11 +545,29 @@ class BQ76942:
         return True
 
 
+    def seal_in_production(self) -> bool:
+        if self.is_sealed(refresh=True): return True
+        self.enter_config_update_mode()
+        self.write_subcommand(0x9256, data=bytearray([0x01]))  # b0=SEAL, b1=LOCK_CFG, b2=PERM_SEAL
+        self.read_battery_status()  # DEBUG
+        self.exit_config_update_mode()  # this activates the SEAL
+        #self.write_subcommand(0x0030)  # this is chipset specific! Send SEAL command        
+        #self.read_battery_status()  # DEBUG        
+        self.disable_sleepmode()
+        self.read_battery_status()  # DEBUG
+        sleep(0.1)
+        if not self.is_sealed(refresh=True): return False
+        # After sealing quite a few commands are not recognised by the bq.
+        # Therefore we explicitly wait before proceeding with further script
+        # actions.
+        sleep(0.5) # was 5s !!!
+        return True
+
     def enable_full_access(self) -> bool:
         #
         # no encrypted keys here!
         #
-        #return self.unseal(0x8D21FAC3, 0x63DB2CE4)  # low-word goes first to battery
+        return self.unseal(":EC5D9F23", ":3E5F75CE")  # low-word goes first to battery
         return self.unseal(0xEC5D9F23, 0x3E5F75CE)  # low-word goes first to battery
 
 
@@ -961,8 +979,8 @@ class BQ76942:
 
     def read_manufacturing_status(self, hexi: bool | str| None = None) -> Tuple:
         buf = self.read_subcommand(0x0057)
-        self._manufact_fet_status = self._decode_manufacturing_status(buf, hexi=hexi)
-        return _od2t(self._manufact_fet_status)
+        self._manufact_status = self._decode_manufacturing_status(buf, hexi=hexi)
+        return _od2t(self._manufact_status)
 
     def fuse_toggle(self) -> bool:
         return self.write_subcommand(0x001D)
@@ -1016,7 +1034,7 @@ class BQ76942:
         n = int(round(timeout * 10))  # in 100ms rounds
         while n > 0:
             self.read_manufacturing_status()
-            status = self._manufact_fet_status
+            status = self._manufact_status
             print(status)  # DEBUG
             if (status["FET_EN"] == 0) and (status["DSG_TEST"] == 1) and (status["CHG_TEST"] == 1):
                 return
@@ -1046,7 +1064,7 @@ class BQ76942:
         n = int(round(timeout * 10))  # in 100ms rounds
         while n > 0:
             self.read_manufacturing_status()
-            status = self._manufact_fet_status
+            status = self._manufact_status
             print(status)  # DEBUG
             if (status["FET_EN"] == 0) and (status["DSG_TEST"] == 0) and (status["CHG_TEST"] == 0):
                 return
@@ -1194,6 +1212,7 @@ class BQ76942:
         # Cell Voltage Gains
         self.write_cell_gain(cell_gain)
         self.exit_config_update_mode()
+        self.disable_sleepmode()  # after exit_config_update() the SLEEP_EN is being set again...
         return float(cell_offset), np.array([float(g) for g in cell_gain])  # Teststand easier to handle
 
 
@@ -1210,6 +1229,7 @@ class BQ76942:
         self.write_tos_gain(TOS_Gain)        
         self.write_ld_gain(LD_Gain)        
         self.exit_config_update_mode()
+        self.disable_sleepmode()  # after exit_config_update() the SLEEP_EN is being set again...
         return PACK_Gain, TOS_Gain, LD_Gain
    
 
@@ -1225,6 +1245,7 @@ class BQ76942:
         self.enter_config_update_mode()
         self.write_board_offset(board_offset)
         self.exit_config_update_mode()
+        self.disable_sleepmode()  # after exit_config_update() the SLEEP_EN is being set again...
         return board_offset
 
 
@@ -1247,6 +1268,7 @@ class BQ76942:
         self.write_cc_gain(cc_gain_float)
         self.write_capacity_gain(capacity_gain_float)
         self.exit_config_update_mode()
+        self.disable_sleepmode()  # after exit_config_update() the SLEEP_EN is being set again...
         return cc_gain_float, capacity_gain_float
 
 
@@ -1286,7 +1308,8 @@ class BQ76942:
         self.enter_config_update_mode()
         self.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets        
         self.write_temperature_calibration_offsets(temp_offsets)
-        self.exit_config_update_mode()        
+        self.exit_config_update_mode()     
+        self.disable_sleepmode()  # after exit_config_update() the SLEEP_EN is being set again...   
         return tuple(temp_offsets)
 
 
@@ -1527,6 +1550,7 @@ class BQ76942:
         ok = ok and self.enter_config_update_mode()
         ok = ok and self.write_subcommand(0xF091)  # execute CAL_COV()
         ok = ok and self.exit_config_update_mode()
+        self.disable_sleepmode()  # after exit_config_update() the SLEEP_EN is being set again...
         return ok
 
     def calibrate_cell_under_voltage(self) -> bool:
@@ -1542,6 +1566,7 @@ class BQ76942:
         ok = ok and self.enter_config_update_mode()
         ok = ok and self.write_subcommand(0xF090)  # execute CAL_CUV()
         ok = ok and self.exit_config_update_mode()
+        self.disable_sleepmode()  # after exit_config_update() the SLEEP_EN is being set again...
         return ok
 
 
