@@ -18,7 +18,7 @@ from rrc.i2cbus import BusMux, I2CMuxedBus
 from rrc.smbus import BusMaster
 from rrc.chipsets import BQ40Z50R1, BQStudioFileFlexFlasher, BQ34Z100, BQ76942
 from rrc.gpio_tcal6416 import TCAL6416
-from rrc.cartridge_peta import CartridgePETA
+from rrc.cartridge_peta import CartridgePETA, PetaMCU
 from rrc.relayboard_i2cio4r4xdpdt import RelayBoard4Relay4GPIO
 from rrc.cell_voltage_simulation import CellVoltageSimulation
 from rrc.calibration_storage import CalibrationStorage
@@ -81,12 +81,16 @@ def rack_test(cartridge: CartridgePETA,
               can: CANBus,
               ap: AlgocraftProgrammer,
               relais : RelayBoard4Relay4GPIO,
+              mcu: PetaMCU,
             ) -> None:
 
     # prepare the microcontroller programming
     ap.set_filenames("petalite-01_RC7-image.wni", 
                      "petalite-01_RC7.wnp", 
                      erase_flash_project_file="petalite-flash-erase.wnp")
+    # ap.set_filenames("petalite-test-image.wni", 
+    #                  "petalite-test.wnp", 
+    #                  erase_flash_project_file="petalite-flash-erase.wnp")
     print("Integrity check MD5: ")
     if ap.verify_all_files_on_programmer(
         "821C93A15324CC4E05E839E8D04521AE",
@@ -95,7 +99,7 @@ def rack_test(cartridge: CartridgePETA,
         print("Ok.")
     else:
         print("Need to send Files to the programmer.")
-        ap.send_all_files()
+    ap.send_all_files()
 
 
     #psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
@@ -290,7 +294,7 @@ def rack_test(cartridge: CartridgePETA,
 
         _check_if_sleep_en()
 
-        if 1:
+        if 0:
             cartridge.enable_mcu()
             print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
             cartridge.disable_mcu()
@@ -322,10 +326,10 @@ def rack_test(cartridge: CartridgePETA,
             
         if 1:
             cartridge.enable_mcu()
-            print(ap.erase_flash())
+            #print(ap.erase_flash())
             print(ap.program_flash())
             cartridge.disable_mcu()
-        if 1:
+        if 0:
             cartridge.disable_mcu()
             cartridge.switch_mosfet(0, 0)  # 0ohm
             cartridge.switch_mosfet(1, 1)  # 20kohm
@@ -343,7 +347,7 @@ def rack_test(cartridge: CartridgePETA,
             #bat = Battery(BusMaster(cartridge.bus_to_mirco))
             #print(bat.temperature())
         
-        if 1:
+        if 0:
             # NOTE: The µ-controller interacts with AFE and GG so program it
             # after all things are set for AFE and GG.
             #------------------------------------------------------------------
@@ -358,17 +362,17 @@ def rack_test(cartridge: CartridgePETA,
             cartridge.enable_mcu()
             print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
             sleep(1.0)
-            print(can.receive(0x7ff))
+            #print(can.receive(0x7ff))
             print(can.send(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
-            print(can.send(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current
             print(can.receive(0x5a0))
-            print(can.receive(0xffff))
+            print(can.send(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current            
+            print(can.receive(0x07ff))
             print(can.recover_can_driver_on_remote())
             print(can.reinstall_can_driver_on_remote())
             # expected response: 0x5a0 8 0x4b 0x09 0x20 0x00 0xd2 0x5d 0x00 0x00 (voltage at 4 and 5)
             cartridge.select_bus_to_micro("i2c")
             sleep(0.5)
-            cartridge.disable_mcu()        
+            cartridge.disable_mcu()
 
         #------------------------------------------------------------------
         # GG: Gas Gauge FW update
@@ -961,54 +965,65 @@ def rack_test(cartridge: CartridgePETA,
         afe.read_battery_status()
         print(afe._battery_status)
         
-        print("GG: Set to sealed:", gg.seal())
-        sleep(0.1)
-        gg.read_control_status()
-        print(gg._control_status)
-        print("GG: Full Access:", gg.enable_full_access())
-        gg.read_control_status()
-        print(gg._control_status)
+        #print("GG: Set to sealed:", gg.seal())
+        #sleep(0.1)
+        #gg.read_control_status()
+        #print(gg._control_status)
+        #print("GG: Full Access:", gg.enable_full_access())
+        #gg.read_control_status()
+        #print(gg._control_status)
 
-
+        #--------------------------------------------------------------------------------------
+        # === Enable Functions of AFE before writing OTP ===
+        #  
+        afe.read_manufacturing_status()
+        print(afe._manufact_status)
+        afe.enable_fet_control()  # make sure FET_EN == 1
+        afe.enable_pf_control()   # make sure PF_EN == 1            
+        afe.read_manufacturing_status()
+        print(afe._manufact_status)
+                
+                
 
         #--------------------------------------------------------------------------------------
         # === write to OTP ===
 
-        u_supply = 11.0  # target stack voltage for OTP programming
-        u_cell = round(u_supply / num_cells, 2)
-        print(f"Apply {u_supply}v stack voltage for OTP programming")
-        print(u_supply, u_cell)
-        afe.disable_fets()
-        print("FET status: ", afe.read_fet_status())        
-        for cell_no in range(1, num_cells):
-            vsim.set_cell_n_voltage(cell_no, u_cell)
-        psu2.configure_supply(u_supply, 0.080, 50, 1)
-        psu1.configure_supply(u_supply, 0.080, 50, 1)        
-        sleep(1.0)
-        print("Measure PSU1", psu1.get_all_measurements())
-        print("Measure PSU2", psu2.get_all_measurements())
-        print("Cells:", afe.read_cell_voltages())
-        print("TOS:", afe.read_tos_voltage())        
-        afe.enter_config_update_mode()
-        results, data_fail_addr = afe.read_otp_wr_check()
-        if results == 0x80:
-            # all ok -> write to OTP
-            print(f"AFE ready: 0x{results:02X} -> write to OTP")
-            afe.write_otp()
-            sleep(0.5)
-            afe.exit_config_update_mode()
-            afe.disable_sleepmode()
-        else:
-            afe.exit_config_update_mode()
-            afe.disable_sleepmode()
-            #raise RuntimeError(f"OTP write check failed at address 0x{data_fail_addr:04X} with result 0x{results:02X}")
-            print(f"FAILED: OTP write check at address 0x{data_fail_addr:04X} with result 0x{results:02X}")
+        # u_supply = 11.0  # target stack voltage for OTP programming
+        # u_cell = round(u_supply / num_cells, 2)
+        # print(f"Apply {u_supply}v stack voltage for OTP programming")
+        # print(u_supply, u_cell)
+        # afe.disable_fets()
+        # print("FET status: ", afe.read_fet_status())        
+        # for cell_no in range(1, num_cells):
+        #     vsim.set_cell_n_voltage(cell_no, u_cell)
+        # psu2.configure_supply(u_supply, 0.080, 50, 1)
+        # psu1.configure_supply(u_supply, 0.080, 50, 1)        
+        # sleep(1.0)
+        # print("Measure PSU1", psu1.get_all_measurements())
+        # print("Measure PSU2", psu2.get_all_measurements())
+        # print("Cells:", afe.read_cell_voltages())
+        # print("TOS:", afe.read_tos_voltage())        
+        # afe.enter_config_update_mode()
+        # results, data_fail_addr = afe.read_otp_wr_check()
+        # if results == 0x80:
+        #     # all ok -> write to OTP
+        #     print(f"AFE ready: 0x{results:02X} -> write to OTP")
+        #     afe.write_otp()
+        #     sleep(0.5)
+        #     afe.exit_config_update_mode()
+        #     afe.disable_sleepmode()
+        # else:
+        #     afe.exit_config_update_mode()
+        #     afe.disable_sleepmode()
+        #     #raise RuntimeError(f"OTP write check failed at address 0x{data_fail_addr:04X} with result 0x{results:02X}")
+        #     print(f"FAILED: OTP write check at address 0x{data_fail_addr:04X} with result 0x{results:02X}")
 
 
-        #--------------------------------------------------------------------------------------
+        #------------------------------------------------------------------------------------------
         # MOSFET Test
 
         _check_if_sleep_en()
+
         
         u_cell = 3.6
         u_supply = u_cell * num_cells
@@ -1023,6 +1038,7 @@ def rack_test(cartridge: CartridgePETA,
         print("Measure PSU2", psu2.get_all_measurements())
         print(read_voltages_from_daq())
         afe.disable_fets()
+        afe.disable_pf_control()
         print("FET status: ", afe.read_fet_status())
         print("Measure PSU1 (should be 0)", psu1.get_all_measurements())  # should be 0
         psu1.set_output_state(1)  # sink ON
@@ -1042,7 +1058,7 @@ def rack_test(cartridge: CartridgePETA,
         print("FET status: ", afe.read_fet_status())
 
 
-        #--------------------------------------------------------------------------------------
+        #------------------------------------------------------------------------------------------
         # Test FUSE pin
         
         _check_if_sleep_en()
@@ -1092,30 +1108,60 @@ def rack_test(cartridge: CartridgePETA,
             relais.disable_relay_n(2)
         print("Done.")
         
-        #--------------------------------------------------------------------------------------
+        #------------------------------------------------------------------------------------------
         
 
 
-        #--------------------------------------------------------------------------------------
-
-
-
-
+        #------------------------------------------------------------------------------------------
         # NOTE: The µ-controller interacts with AFE and GG so program it
         # after all things are set for AFE and GG.
-        #------------------------------------------------------------------
-        cartridge.enable_mcu()  # enable microcontroller
-        print("Program FLASH:", ap.program_flash())
-        #------------------------------------------------------------------
-        # sleep(1.0)
-        # cartridge.select_bus_to_micro("can")
-        # can.send(0x11, (1,2,3,4,5,6,7,8))
-        # print(can.receive(0x11))
-        # cartridge.select_bus_to_micro("i2c")
-        # sleep(0.5)
-        cartridge.disable_mcu()  # diable microcontroller by reset
+        #------------------------------------------------------------------------------------------
+        if 0:
+            #cartridge.disable_mcu()
+            cartridge.switch_mosfet(0, 0)  # 0ohm
+            cartridge.switch_mosfet(1, 0)  # 20kohm
+            cartridge.switch_mosfet(2, 1)  # 200kohm
+            cartridge.switch_mosfet(3, 0)  # 400kohm
+            cartridge.select_bus_to_micro("can")            
+            cartridge.enable_mcu()  # enable microcontroller
+            #print("Program FLASH:", ap.program_flash())           
+            print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
+            sleep(5.0)
+            #print(can.receive(0x7ff))
+            print(can.send(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
+            print(can.receive(0x5a0))
+            print(can.send(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current            
+            print(can.receive(0x07ff))
+            print(can.recover_can_driver_on_remote())
+            print(can.reinstall_can_driver_on_remote())
+            # expected response: 0x5a0 8 0x4b 0x09 0x20 0x00 0xd2 0x5d 0x00 0x00 (voltage at 4 and 5)
+            cartridge.select_bus_to_micro("i2c")
+            sleep(0.5)
+            cartridge.disable_mcu()        
+        if 1:
+            afe.disable_checksum()
+            cartridge.configure_communication_to_mcu("can")
+            cartridge.enable_mcu()  # enable microcontroller
+            print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
+            sleep(5.0)
+            print(mcu.can_read_voltage())
+            print(mcu.can_read_current())
+        
+        if 0:
+            afe.disable_checksum()
+            cartridge.configure_communication_to_mcu("i2c")
+            cartridge.enable_mcu()  # enable microcontroller
+            print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
+            sleep(5.0)
+            print(cartridge.bus_to_mirco.i2c_bus_scan())
+            print(cartridge.backyard_bus.i2c_bus_scan())
+            print(cartridge.bus_to_gpio.i2c_bus_scan())
+            
+            #bat = Battery(BusMaster(cartridge.bus_to_mirco))
+            #print(bat.temperature())
+        
 
-    
+        print("Finish Test.")
 
     except Exception as ex:
         
@@ -1227,6 +1273,8 @@ if __name__ == "__main__":
     cart = CartridgePETA(dutcom)
     test_cartridge_only(cart)
 
+    mcu = PetaMCU(can, cart.bus_to_mirco)
+
     #cart.select_bus_to_micro("can")
     #can.send(0x11, (1,2,3,4,5,6,7,8))
     #print(can.receive(0x11))
@@ -1267,7 +1315,7 @@ if __name__ == "__main__":
 
     # .... do some tests here ....
     
-    rack_test(cart, gpio, vsim, calib, feasa, psu1, psu2, daq, can, ap, relais)
+    rack_test(cart, gpio, vsim, calib, feasa, psu1, psu2, daq, can, ap, relais, mcu)
 
     i2cbus.close()
 

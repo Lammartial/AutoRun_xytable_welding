@@ -2,24 +2,27 @@
 Convenience wrapper for PETA cartridge adapter insert.
 """
 
-from typing import Tuple
+from typing import Tuple, List
+from time import sleep
 from datetime import datetime as dt
 from binascii import hexlify
 from struct import unpack_from
 from rrc.i2cbus import I2CBus, BusMux, I2CMuxedBus
 from rrc.smbus import BusMaster
 from rrc.gpio_pcf8574 import PCF8574 as GPIOExtender
+from rrc.eth2can import CANBus
 
 
 #--------------------------------------------------------------------------------------------------
 
 class PetaMCU:
 
-    def _init_(self, i2c: I2CBus, slvAddress: int = 0x0B, pec: bool = True):
-        self._i2c = i2c
-        self.address = slvAddress
-        self.use_pec = pec
+    def __init__(self, can :CANBus, i2c: I2CBus, i2c_address_7bit: int = 0x0B, i2c_pec: bool = True):
+        self._i2c = i2c        
+        self.i2C_address = i2c_address_7bit
+        self.use_pec = i2c_pec
         self.bus = BusMaster(i2c, retry_limit=1, verify_rounds=3, pause_us=50)
+        self.can = can
 
 
     def setup_rtc(self) -> bool:
@@ -33,11 +36,11 @@ class PetaMCU:
             now.minute.to_bytes(_fmt, 1) + \
             now.second.to_bytes(_fmt, 1)
         print(hexlify(buf))   # DEBUG    
-        return self.bus.writeBytes(self.address, 0x1E, buf, use_pec=self.use_pec)
+        return self.bus.writeBytes(self.i2C_address, 0x1E, buf, use_pec=self.use_pec)
 
 
     def read_rtc(self) -> Tuple[dt, str]:
-        buf = self.bus.readBytes(self.address, 0x1E, 6, use_pec=self.use_pec)
+        buf = self.bus.readBytes(self.i2C_address, 0x1E, 6, use_pec=self.use_pec)
         _fmt = "<B"
         year = unpack_from(_fmt, buf, offset=1)
         month = unpack_from(_fmt, buf, offset=2)
@@ -47,6 +50,48 @@ class PetaMCU:
         second = unpack_from(_fmt, buf, offset=6)
         d = dt(year, month, day, hour, minute, second)
         return d, d.isoformat(sep=" ")
+
+
+    # CAN Bus Kommunikation
+    # Make sure to select the CAN bus in the cartridge before 
+    # start the communication 
+    
+    def _can_helper_send(self, cmd: int) -> bool:
+        buf = bytearray((
+            0x40, 
+            cmd & 0xFF, ((cmd >> 8) & 0xFF),
+            0,0,0,0,0
+        ))
+        ok, res, txt = self.can.send(0x620, buf, flags=0, can_timeout_ms=250, timeout=1.0)
+        print("CAN-SEND:", ok, res, txt)  # DEBUG
+        return ok
+
+    def _can_helper_read(self) -> Tuple[bool, List[int]]:
+        ok, res, txt = self.can.receive(0x5a0, flags=0, can_timeout_ms=900, timeout=1.2)
+        print("CAN-RECEIVE:", ok, res, txt)
+        return ok, list(res) if res else None
+
+
+    def can_read_voltage(self) -> Tuple[bool, float]:
+        ok = False
+        v = None
+        if self._can_helper_send(0x2009):  # fetch voltage
+            sleep(0.1)
+            ok, res = self._can_helper_read()
+        if ok:
+            v = res[1] | (res[2] << 8)
+        return ok, v
+
+    def can_read_current(self) -> Tuple[bool, float]:
+        ok = False
+        v = None        
+        if self._can_helper_send(0x200a):  # fetch current
+            sleep(0.1)
+            ok, res = self._can_helper_read()
+        if ok:
+            v = res[1] | (res[2] << 8)
+        return ok, v
+
 
 
 #--------------------------------------------------------------------------------------------------
@@ -165,6 +210,23 @@ class CartridgePETA:
 
     def enable_mcu(self) -> bool:
         return self.switch_some_io(7, 0)  # 0 on GPIO releases the RESET
+
+
+    def configure_communication_to_mcu(self, com_type: str = "i2c") -> None:
+        self.switch_mosfet(0, 0)  # 0ohm
+        self.switch_mosfet(3, 0)  # 400kohm
+        if com_type.lower() == "can":
+            # can
+            self.select_bus_to_micro("can")
+            # signal to MCU
+            self.switch_mosfet(1, 0)  # 20kohm
+            self.switch_mosfet(2, 1)  # 200kohm
+        else:
+            # i2c
+            self.select_bus_to_micro("i2c")
+            # signal to MCU
+            self.switch_mosfet(1, 1)  # 20kohm
+            self.switch_mosfet(2, 0)  # 200kohm
 
 
 

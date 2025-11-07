@@ -10,12 +10,12 @@ __version__ = "0.5.0"
 
 # pylint: disable=line-too-long,C0103,C0321,C0413,W0703,W0107,R1702,R0904
 
-from io import BufferedIOBase
+
 import math
 import numpy as np
 from itertools import combinations, chain
 from multiprocessing import Value
-from typing import List, Tuple
+from typing import List, Tuple, Callable
 from time import sleep, monotonic_ns
 from binascii import hexlify, unhexlify
 from struct import pack, unpack, unpack_from, iter_unpack
@@ -463,13 +463,13 @@ class BQ76942:
         if isinstance(key, int):
             ikey = key # already integer
         elif isinstance(key, bytearray) or isinstance(key, bytes):
-            ikey = int.from_bytes(key, "little")
+            ikey = int.from_bytes(key, "big")
         elif isinstance(key, str):
             if key[0] == ":":
                 b = unhexlify(key[1:])
             else:
                 b = unhexlify(key)
-            ikey = int.from_bytes(b, "little")
+            ikey = int.from_bytes(b, "big")
         else:
             raise AttributeError("Invalid battery key")
 
@@ -567,8 +567,8 @@ class BQ76942:
         #
         # no encrypted keys here!
         #
-        return self.unseal(":EC5D9F23", ":3E5F75CE")  # low-word goes first to battery
-        return self.unseal(0xEC5D9F23, 0x3E5F75CE)  # low-word goes first to battery
+        #return self.unseal(":EC5D9F23", ":3E5F75CE")  # low-word goes first to battery
+        return self.unseal(0x9F23EC5D, 0x75CE3E5F)  # low-word goes first to battery
 
 
     # ----------------------------------------------------------------------------------------------
@@ -1019,81 +1019,161 @@ class BQ76942:
 
     def toggle_fet_enable(self, hexi: bool | str| None = None) -> bool:
         return self.write_subcommand(0x0022)
+    
+    def toggle_pf_enable(self, hexi: bool | str| None = None) -> bool:
+        return self.write_subcommand(0x0024)
 
-
-    def enable_fets(self, timeout: float = 5.0) -> None:
-        """ENABLE FETs using toggle and flag check.
+    #----------------------------------------------------------------------------------------------
+    # controlled switch functions
+    
+    def enable_fets(self, timeout: float = 5.0, pause_between: float = 0.1) -> bool:
+        """ENABLE CHG and DSG FETs using toggle and flag check.
+        Retries until timeout using given pause between the retries.
 
         Args:
             timeout (float, optional): _description_. Defaults to 5.0.
+            pause_between (float, optional): _description_. Defaults to 0.1.
 
-        Raises:
-            RuntimeError: _description_
+         Returns:
+            bool: True, if FETs could be enabled, False if not 
         """
 
-        n = int(round(timeout * 10))  # in 100ms rounds
+        n = int(round(timeout / pause_between))  # split the timeout into rounds
         while n > 0:
+            n -= 1
             self.read_manufacturing_status()
             status = self._manufact_status
             print(status)  # DEBUG
             if (status["FET_EN"] == 0) and (status["DSG_TEST"] == 1) and (status["CHG_TEST"] == 1):
-                return
-            
+                return True
             if (status["FET_EN"] == 1):
                 # need to disable FW control
                 self.toggle_fet_enable()
-                sleep(0.1)
             if (status["DSG_TEST"] == 0):
                 self.discharge_test()
             if (status["CHG_TEST"] == 0):
                 self.charge_test()
-            sleep(0.1)
-            n -= 1
-        raise RuntimeError(f"Could not enable FET {status}")
+            sleep(pause_between)
 
+        #raise RuntimeError(f"Could not enable FET {status}")
+        return False
     
-    def disable_fets(self, timeout: float = 5.0) -> None:
-        """DISABLE FETs using toggle and flag check.
+
+    def disable_fets(self, timeout: float = 5.0, pause_between: float = 0.1) -> bool:
+        """DISABLE FETs CHG and DSG FETs using toggle and flag check.
+        Retries until timeout using given pause between the retries.
 
         Args:
             timeout (float, optional): _description_. Defaults to 5.0.
+            pause_between (float, optional): _description_. Defaults to 0.1.
 
-        Raises:
-            RuntimeError: _description_
+        Returns:
+            bool: True, if FETs could be DISABLED, False if not 
         """
-        n = int(round(timeout * 10))  # in 100ms rounds
+
+        n = int(round(timeout / pause_between))  # split the timeout into rounds
         while n > 0:
+            n -= 1
             self.read_manufacturing_status()
             status = self._manufact_status
             print(status)  # DEBUG
             if (status["FET_EN"] == 0) and (status["DSG_TEST"] == 0) and (status["CHG_TEST"] == 0):
-                return
-            
+                return True      
             if (status["FET_EN"] == 1):
                 # need to disable FW control
                 self.toggle_fet_enable()
-                sleep(0.1)
             if (status["DSG_TEST"] == 1):
-                self.discharge_test()
+                self.discharge_test() # toggle
             if (status["CHG_TEST"] == 1):
-                self.charge_test()
-            sleep(0.1)
+                self.charge_test() # toggle
+            sleep(pause_between)
+            
+        #raise RuntimeError(f"Could not disable FET {status}")
+        return False
+
+    def enable_fet_control(self, timeout: float = 5.0, pause_between: float = 0.1) -> bool:
+        """ENABLE FET_EN using toggle and flag check.
+        Retries until timeout using given pause between the retries.
+
+        Args:
+            timeout (float, optional): _description_. Defaults to 5.0.
+            pause_between (float, optional): _description_. Defaults to 0.1.
+
+        Returns:
+            bool: True, if PF_EN could be ENABLED, False if not 
+        """
+
+        return self._switch_manufacturing_status_state("FET_EN", 1, self.toggle_fet_enable, timeout=timeout, pause_between=pause_between)
 
 
-            # self.read_fet_status()
-            # status = self._fet_status
-            # if (status["DDSG_PIN"] == 1) and (status["CHG_FET"] == 0) and (status["DSG_FET"] == 0):
-            #     return
-            # print(status)  # DEBUG
-            # #if (status["DDSG_PIN"] == 1):
-            # _ok = self.toggle_fet_enable()
-            # sleep(0.1)
+    def enable_pf_control(self, timeout: float = 5.0, pause_between: float = 0.1) -> bool:
+        """ENABLE PF_EN using toggle and flag check.
+        Retries until timeout using given pause between the retries.
 
+        Args:
+            timeout (float, optional): _description_. Defaults to 5.0.
+            pause_between (float, optional): _description_. Defaults to 0.1.
+
+        Returns:
+            bool: True, if PF_EN could be ENABLED, False if not 
+        """
+
+        return self._switch_manufacturing_status_state("PF_EN", 1, self.toggle_pf_enable, timeout=timeout, pause_between=pause_between)
+
+
+    def disable_pf_control(self, timeout: float = 5.0, pause_between: float = 0.1) -> bool:
+        """DISABLE PF_EN using toggle and flag check.
+        Retries until timeout using given pause between the retries.
+
+        Args:
+            timeout (float, optional): _description_. Defaults to 5.0.
+            pause_between (float, optional): _description_. Defaults to 0.1.
+
+        Returns:
+            bool: True, if FETs could be DISABLED, False if not 
+        """
+
+        return self._switch_manufacturing_status_state("PF_EN", 0, self.toggle_pf_enable, timeout=timeout, pause_between=pause_between)
+       
+    
+
+    def _switch_manufacturing_status_state(self, key: str, target_state: int, toggle_func: Callable, timeout: float = 5.0, pause_between: float = 0.1) -> bool:
+        """Switches a flag from manufacturing state using toggle and flag check.
+        Retries until timeout using given pause between the retries.
+
+        Args:
+            timeout (float, optional): _description_. Defaults to 5.0.
+            pause_between (float, optional): _description_. Defaults to 0.1.
+
+        Returns:
+            bool: True, if state could be activated, False if not 
+        """
+
+        target_state = int(target_state)  # Teststand
+        has_been_toggled = False
+        n = int(round(timeout / pause_between))  # split the timeout into rounds
+        while n > 0:
             n -= 1
-        raise RuntimeError(f"Could not disable FET {status}")
+            self.read_manufacturing_status()
+            status = self._manufact_status
+            print(status)  # DEBUG
+            if (status[key] == target_state):
+                return True
+            if 0:  # variant 1: toggle each round
+                toggle_func()
+            if 1:  # variant 2: toggle once, then wait
+                if not has_been_toggled:
+                    toggle_func()
+                    has_been_toggled = True
+            sleep(pause_between)
+            
+        #raise RuntimeError(f"Could not disable PF_Enable {status}")
+        return False
 
 
-
+   
+    #----------------------------------------------------------------------------------------------
+   
     def read_dastatus(self) -> Tuple[List[int], List[int]]:
         """Reads all DAStatus 1 to 3
 
