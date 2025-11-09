@@ -77,13 +77,15 @@ def rack_test(cartridge: CartridgePETA,
               calib: CalibrationStorage,
               feasa: FEASA_CH9121,
               psu1: M3400, psu2: M3400,
-              daq: DAQ970A,
-              can: CANBus,
+              daq: DAQ970A,              
               ap: AlgocraftProgrammer,
               relais : RelayBoard4Relay4GPIO,
-              mcu: PetaMCU,
             ) -> None:
 
+    # the cartridge provides alreay an mcu object, which also contains the can bus
+    mcu: PetaMCU = cart.mcu
+    can: CANBus = cart.can
+    
     # prepare the microcontroller programming
     ap.set_filenames("petalite-01_RC7-image.wni", 
                      "petalite-01_RC7.wnp", 
@@ -1270,10 +1272,10 @@ if __name__ == "__main__":
     #     mux_on_cartridge.setChannel(c)
     #     print("CH:", c, dutcom.i2c_bus_scan())
 
-    cart = CartridgePETA(dutcom)
-    test_cartridge_only(cart)
+    cart = CartridgePETA(can, dutcom)
+    #test_cartridge_only(cart)
 
-    mcu = PetaMCU(can, cart.bus_to_mirco)
+    #mcu = PetaMCU(can, cart.bus_to_mirco)
 
     #cart.select_bus_to_micro("can")
     #can.send_frame(0x11, (1,2,3,4,5,6,7,8))
@@ -1315,7 +1317,7 @@ if __name__ == "__main__":
 
     # .... do some tests here ....
     
-    rack_test(cart, gpio, vsim, calib, feasa, psu1, psu2, daq, can, ap, relais, mcu)
+    rack_test(cart, gpio, vsim, calib, feasa, psu1, psu2, daq, ap, relais)
 
     i2cbus.close()
 

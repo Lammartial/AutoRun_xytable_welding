@@ -62,24 +62,25 @@ class PetaMCU:
             mcu_cmd & 0xFF, ((mcu_cmd >> 8) & 0xFF),
             0,0,0,0,0
         ))
-        ok, res, txt = self.can.send_frame(identifier, buf, flags=0, can_timeout_ms=500, timeout=1.0)
-        print("CAN-SEND:", ok, txt)  # DEBUG
+        ok, res, _info = self.can.send_frame(identifier, buf, flags=0, can_timeout_ms=500, timeout=1.0)
+        print("CAN-SEND:", ok, _info)  # DEBUG
         return ok
+
 
     def _can_helper_read(self, identifier: int = 0x5a0) -> Tuple[bool, List[int]]:
         done = False
         while not done:
-            ok, res, txt = self.can.receive_frame(identifier, flags=0, can_timeout_ms=900, timeout=1.2)
-            print("CAN-RECEIVE:", ok, txt)  # DEBUG
-            if ok and (int(res[0]) == 0x55):  # API says OK
-                _rid = int.from_bytes(res[5:9], "little")
+            ok, res, _info = self.can.receive_frame(identifier, flags=0, can_timeout_ms=900, timeout=1.2)
+            print("CAN-RECEIVE:", ok, _info)  # DEBUG
+            if ok:  # API says OK
+                _rid = int.from_bytes(res[4:8], "little")
                 if _rid == identifier:
                     done = True
                 else:
                     print(f"got wrong identifier {_rid}, expected {identifier}")
             else:
                 done = True
-        return ok, res[1:] if res else None
+        return ok, res
 
 
     def can_read_voltage(self) -> Tuple[bool, float]:
@@ -94,6 +95,7 @@ class PetaMCU:
             v = int.from_bytes(res[12:14], "little")
             print(hex(cr), v)
         return ok, v
+
 
     def can_read_current(self) -> Tuple[bool, float]:
         ok = False
