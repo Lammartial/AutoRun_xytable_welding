@@ -20,7 +20,7 @@ from rrc.custom_logging import getLogger, logger_init
 
 API_HEADER_BYTE: int = 0xAA
 API_ERROR_BYTE: int = 0xEE
-
+API_OK_BYTE: int = 0x55
 
 #--------------------------------------------------------------------------------------------------
 

@@ -62,15 +62,15 @@ class PetaMCU:
             mcu_cmd & 0xFF, ((mcu_cmd >> 8) & 0xFF),
             0,0,0,0,0
         ))
-        ok, res, txt = self.can.send(identifier, buf, flags=0, can_timeout_ms=500, timeout=1.0)
-        print("CAN-SEND:", ok, res, txt)  # DEBUG
+        ok, res, txt = self.can.send_frame(identifier, buf, flags=0, can_timeout_ms=500, timeout=1.0)
+        print("CAN-SEND:", ok, txt)  # DEBUG
         return ok
 
     def _can_helper_read(self, identifier: int = 0x5a0) -> Tuple[bool, List[int]]:
         done = False
         while not done:
-            ok, res, txt = self.can.receive(identifier, flags=0, can_timeout_ms=900, timeout=1.2)
-            print("CAN-RECEIVE:", ok, res, txt)
+            ok, res, txt = self.can.receive_frame(identifier, flags=0, can_timeout_ms=900, timeout=1.2)
+            print("CAN-RECEIVE:", ok, txt)  # DEBUG
             if ok and (int(res[0]) == 0x55):  # API says OK
                 _rid = int.from_bytes(res[5:9], "little")
                 if _rid == identifier:
@@ -116,7 +116,7 @@ class PetaMCU:
 class CartridgePETA:
 
 
-    def __init__(self, i2c: I2CBus, mux_address: int = 0x70) -> None:
+    def __init__(self, can :CANBus, i2c: I2CBus, mux_address: int = 0x70) -> None:
         """
         Initialize the CartridgePETA with the given I2C bus.
 
@@ -126,6 +126,7 @@ class CartridgePETA:
             i2c (I2CBus): The I2C bus to use for communication.
         """
 
+        self.can = can
         self._i2c = i2c
         self._onboard_mux = BusMux(self._i2c, address=int(mux_address))  # important to have only ONE instance here
         self.bus_to_mirco = self.get_muxed_i2c_bus_for(1)         # needs a switch to CAN or I2C !
@@ -135,6 +136,10 @@ class CartridgePETA:
         # configure GPIO
         self.gpio.write_output("10010000")  # 1 = input or open drain output, 0=output 0
         # -> disable CAN and I2C, Reset MCU (Pin7=1), all MOSFETs OFF
+        # ---
+        # Create a MCU communication object which can be fetched from Teststand 
+        # to interact with the MCU by CAN or by I2C 
+        self.mcu = PetaMCU(can, self.bus_to_mirco)
 
 
     def reset_mux(self) -> None:
@@ -253,11 +258,11 @@ if __name__ == "__main__":
     can = CANBus(RESOURCE_STR)
     print(can.recover_can_driver_on_remote())
     print(can.reinstall_can_driver_on_remote())
-    print(can.send(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
-    print(can.receive(0x5a0))
+    print(can.send_frame(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
+    print(can.receive_frame(0x5a0))
 
-    # print(can.send(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current
-    # print(can.receive(0x5a0))
+    # print(can.send_frame(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current
+    # print(can.receive_frame(0x5a0))
 
     mcu = PetaMCU(can, None)
     for n in range(10):

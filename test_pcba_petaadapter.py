@@ -134,7 +134,7 @@ def rack_test(cartridge: CartridgePETA,
    
     # sleep(0.5)
     # cartridge.select_bus_to_micro("can")
-    # can.send(0x11, (1,2,3,4,5,6,7,8))
+    # can.send_frame(0x11, (1,2,3,4,5,6,7,8))
     # print(can.receive(0x11))
     # cartridge.select_bus_to_micro("i2c")
     # sleep(0.5)
@@ -363,10 +363,10 @@ def rack_test(cartridge: CartridgePETA,
             print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
             sleep(1.0)
             #print(can.receive(0x7ff))
-            print(can.send(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
-            print(can.receive(0x5a0))
-            print(can.send(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current            
-            print(can.receive(0x07ff))
+            print(can.send_frame(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
+            print(can.receive_frame(0x5a0))
+            print(can.send_frame(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current            
+            print(can.receive_frame(0x07ff))
             print(can.recover_can_driver_on_remote())
             print(can.reinstall_can_driver_on_remote())
             # expected response: 0x5a0 8 0x4b 0x09 0x20 0x00 0xd2 0x5d 0x00 0x00 (voltage at 4 and 5)
@@ -1128,10 +1128,10 @@ def rack_test(cartridge: CartridgePETA,
             print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
             sleep(5.0)
             #print(can.receive(0x7ff))
-            print(can.send(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
-            print(can.receive(0x5a0))
-            print(can.send(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current            
-            print(can.receive(0x07ff))
+            print(can.send_frame(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
+            print(can.receive_frame(0x5a0))
+            print(can.send_frame(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current            
+            print(can.receive_frame(0x07ff))
             print(can.recover_can_driver_on_remote())
             print(can.reinstall_can_driver_on_remote())
             # expected response: 0x5a0 8 0x4b 0x09 0x20 0x00 0xd2 0x5d 0x00 0x00 (voltage at 4 and 5)
@@ -1276,8 +1276,8 @@ if __name__ == "__main__":
     mcu = PetaMCU(can, cart.bus_to_mirco)
 
     #cart.select_bus_to_micro("can")
-    #can.send(0x11, (1,2,3,4,5,6,7,8))
-    #print(can.receive(0x11))
+    #can.send_frame(0x11, (1,2,3,4,5,6,7,8))
+    #print(can.receive_frame(0x11))
 
     # double MUX'd
     # dut_micro = BusMaster(I2CMuxedBus(dutcom, mux_on_cartridge, 1), retry_limit=7, verify_rounds=3, pause_us=50)
