@@ -85,7 +85,7 @@ def rack_test(cartridge: CartridgePETA,
     # the cartridge provides alreay an mcu object, which also contains the can bus
     mcu: PetaMCU = cart.mcu
     can: CANBus = cart.can
-    
+
     # prepare the microcontroller programming
     ap.set_filenames("petalite-01_RC7-image.wni", 
                      "petalite-01_RC7.wnp", 
@@ -972,7 +972,7 @@ def rack_test(cartridge: CartridgePETA,
         #gg.read_control_status()
         #print(gg._control_status)
         #print("GG: Full Access:", gg.enable_full_access())
-        #gg.read_control_status()
+        gg.read_control_status()
         #print(gg._control_status)
 
         #--------------------------------------------------------------------------------------

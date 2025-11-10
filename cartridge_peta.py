@@ -9,6 +9,7 @@ from binascii import hexlify
 from struct import unpack_from
 from rrc.i2cbus import I2CBus, BusMux, I2CMuxedBus
 from rrc.smbus import BusMaster
+from rrc.smartbattery import Battery
 from rrc.gpio_pcf8574 import PCF8574 as GPIOExtender
 from rrc.eth2can import CANBus
 
@@ -22,6 +23,7 @@ class PetaMCU:
         self.i2C_address = i2c_address_7bit
         self.use_pec = i2c_pec
         self.bus = BusMaster(i2c, retry_limit=1, verify_rounds=3, pause_us=50)
+        self.smartbattery = Battery(self.bus, pec=False)  # this is to reuse already implemented functionality
         self.can = can
 
 
@@ -50,6 +52,23 @@ class PetaMCU:
         second = unpack_from(_fmt, buf, offset=6)
         d = dt(year, month, day, hour, minute, second)
         return d, d.isoformat(sep=" ")
+
+
+    def check_rtc_against_systemtime(self) -> float:
+        now = dt.now()
+        rtc, rtc_str = self.read_rtc()
+        _diff = now-rtc
+        return _diff.total_seconds()
+
+
+    def start_selftesting(self) -> bool:
+        # ???
+        pass
+
+
+    def read_pushbutton_status(self) -> int:
+        # ???
+        return 0
 
 
     # CAN Bus Kommunikation
@@ -250,6 +269,15 @@ class CartridgePETA:
             # signal to MCU
             self.switch_mosfet(1, 1)  # 20kohm
             self.switch_mosfet(2, 0)  # 200kohm
+
+
+    def switch_vcc_of_led(self, onoff: int) -> bool:
+        pass
+
+
+    def switch_pushbutton(self, onoff: int) -> bool:
+        pass
+
 
 
 #--------------------------------------------------------------------------------------------------
