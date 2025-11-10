@@ -462,7 +462,8 @@ class BQ34Z100:
         self.enter_calibration()
         self.read_calibration_flash_data()
         _cc_gain_stored = self.calibration_data["cc_gain"]
-        gg_cc_gain = _cc_gain_stored * reference_current / _current_meas * 1  # * 1 Ohm
+        # write as float values
+        gg_cc_gain = _cc_gain_stored * reference_current / _current_meas * 1   # * 1 Ohm
         gg_cc_delta = gg_cc_gain * 1193046.0  # magic constant
         self.write_calibration_flash_data(data={"cc_gain": gg_cc_gain, "cc_delta": gg_cc_delta})
         self.exit_calibration()

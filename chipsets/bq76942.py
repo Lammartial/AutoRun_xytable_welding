@@ -1356,10 +1356,8 @@ class BQ76942:
         # should be 64 but we calculate here with 1
         offset_samples = 1  # stored_offset_samples
         d = self.read_cal1_average(num_samples=num_samples, pause_between=pause_between)
-        board_offset = offset_samples * int(round(d["cc2_counts"] * 1e+1))
-        if board_offset < -32768 or board_offset > 32767:
-            raise ValueError(f"Board_offset out of boundaries -> cannot calibrate current: {board_offset}")
-        return board_offset
+        board_offset_float = offset_samples * d["cc2_counts"] * 1e+1
+        return board_offset_float 
 
 
     def calib_cc_gain_and_capacity_gain(self, ref_current: float, num_samples: int = 10, pause_between: float = 0.005) -> Tuple[float, float]:        
@@ -1380,7 +1378,7 @@ class BQ76942:
         return cc_gain_float, capacity_gain_float
 
 
-    def write_current_calibration(self, board_offset, cc_gain_float, capacity_gain_float) -> bool:
+    def write_current_calibration(self, board_offset_float: float, cc_gain_float: float , capacity_gain_float: float) -> bool:
         """Write the current calibration values to the RAM.
         
         Note: NO CURRENT WHEN CALLING THIS FUNCTION!
@@ -1389,19 +1387,24 @@ class BQ76942:
             board.
         
         Args:
-            board_offset (_type_): Board current offset
-            cc_gain_float (_type_): _description_
-            capacity_gain_float (_type_): _description_
+            board_offset_float (float): Board current offset
+            cc_gain_float (float): _description_
+            capacity_gain_float (float): _description_
 
         Returns:
             bool: _description_
         """
 
+        board_offset = int(round(board_offset_float))  # Teststand
+        if board_offset < -32768 or board_offset > 32767:
+            raise ValueError(f"Board_offset out of boundaries -> cannot calibrate current: {board_offset}")        
+        cc_gain = int(round(cc_gain_float))
+        capacity_gain = int(round(capacity_gain_float))        
         # write calibration into RAM
         self.enter_config_update_mode()
         self.write_board_offset(board_offset)
-        self.write_cc_gain(cc_gain_float)
-        self.write_capacity_gain(capacity_gain_float)
+        self.write_cc_gain(cc_gain)
+        self.write_capacity_gain(capacity_gain)
         self.exit_config_update_mode()
         self.disable_sleepmode()  # after exit_config_update() the SLEEP_EN is being set again...
         return True

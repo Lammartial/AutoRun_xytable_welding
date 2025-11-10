@@ -1074,176 +1074,182 @@ def rack_test(cartridge: CartridgePETA,
         
         _check_if_sleep_en()
         
-        u_cell = 3.6
-        u_supply = u_cell * num_cells
-        print(f"Apply {u_cell} cell voltages for FUSE test")
-        print(u_supply, u_cell)
-        psu1.set_output_state(0)
-        for cell_no in range(1, num_cells):
-            vsim.set_cell_n_voltage(cell_no, u_cell)
-        psu2.configure_supply(u_supply, 0.050, 50, 1)
-        sleep(1.0)
-        print("Measure PSU1", psu1.get_all_measurements())
-        print("Measure PSU2", psu2.get_all_measurements())
-        afe.disable_fets()
-        fuse_voltage_low = daq.get_VDC(16)  # FUSE pin
-        pack_voltage_before = daq.get_VDC(4)
-        print("Before:", fuse_voltage_low, pack_voltage_before)
-        afe.read_battery_status()
-        print("BS1:", afe._battery_status)
-        afe.disable_sleepmode()
-        afe.read_battery_status()
-        print("BS2:", afe._battery_status)
-        afe.read_alarm_status()
-        print("AS:", afe._alarm_status)
-        if afe._battery_status["FUSE"] == 1:
-            afe.toggle_fuse()
-            afe.wait_for_battery_status_flag("FUSE", 0, retries=20, pause_on_retry=0.5)
-        #afe.read_battery_status()
-        if afe._battery_status["FUSE"] == 0:
-            relais.enable_relay_n(2)  # gate of heater FET to ground
-            print(psu2.get_all_measurements())
-            fuse_voltage = daq.get_VDC(16)  # FUSE pin
-            #afe.wait_for_battery_status_flag("FUSE", 1, retries=20, pause_on_retry=0.5)
-            print("FL:", fuse_voltage)
-            afe.toggle_fuse()
-            print("PSU2:", psu2.get_all_measurements())
+        def test_fuse_pin():
+            u_cell = 3.6
+            u_supply = u_cell * num_cells
+            print(f"Apply {u_cell} cell voltages for FUSE test")
+            print(u_supply, u_cell)
+            psu1.set_output_state(0)
+            for cell_no in range(1, num_cells):
+                vsim.set_cell_n_voltage(cell_no, u_cell)
+            psu2.configure_supply(u_supply, 0.050, 50, 1)
+            sleep(1.0)
+            print("Measure PSU1", psu1.get_all_measurements())
+            print("Measure PSU2", psu2.get_all_measurements())
+            afe.disable_fets()
+            fuse_voltage_low = daq.get_VDC(16)  # FUSE pin
+            pack_voltage_before = daq.get_VDC(4)
+            print("Before:", fuse_voltage_low, pack_voltage_before)
             afe.read_battery_status()
+            print("BS1:", afe._battery_status)
+            afe.disable_sleepmode()
+            afe.read_battery_status()
+            print("BS2:", afe._battery_status)
             afe.read_alarm_status()
-            #if afe._battery_status["FUSE"] == 1:
-            fuse_voltage_higher = daq.get_VDC(16)
-            print("FH:", fuse_voltage_higher)
-            afe.toggle_fuse()
-            fuse_voltage_end = daq.get_VDC(16)
-            print("FE:", fuse_voltage_end)
-            relais.disable_relay_n(2)
-        print("Done.")
-        
+            print("AS:", afe._alarm_status)
+            if afe._battery_status["FUSE"] == 1:
+                afe.toggle_fuse()
+                afe.wait_for_battery_status_flag("FUSE", 0, retries=20, pause_on_retry=0.5)
+            #afe.read_battery_status()
+            if afe._battery_status["FUSE"] == 0:
+                relais.enable_relay_n(2)  # gate of heater FET to ground
+                print(psu2.get_all_measurements())
+                fuse_voltage = daq.get_VDC(16)  # FUSE pin
+                #afe.wait_for_battery_status_flag("FUSE", 1, retries=20, pause_on_retry=0.5)
+                print("FL:", fuse_voltage)
+                afe.toggle_fuse()
+                print("PSU2:", psu2.get_all_measurements())
+                afe.read_battery_status()
+                afe.read_alarm_status()
+                #if afe._battery_status["FUSE"] == 1:
+                fuse_voltage_higher = daq.get_VDC(16)
+                print("FH:", fuse_voltage_higher)
+                afe.toggle_fuse()
+                fuse_voltage_end = daq.get_VDC(16)
+                print("FE:", fuse_voltage_end)
+                relais.disable_relay_n(2)
+            print("Done.")
+            
+        test_fuse_pin()
+
+
         #------------------------------------------------------------------------------------------
         # Overvoltage Test, 2nd Protection
         
         _check_if_sleep_en()
         
-        u_cell = 3.64
-        u_supply = u_cell * num_cells
-        print(f"Apply {u_cell} cell voltages for Overvoltags/2nd Protection test")
-        print(u_supply, u_cell)
-        psu1.set_output_state(0)
-        for cell_no in range(1, num_cells):
-            vsim.set_cell_n_voltage(cell_no, u_cell)
-        psu2.configure_supply(u_supply, 0.050, 50, 1)
-        sleep(1.0)
-        print("Measure PSU1", psu1.get_all_measurements())
-        print("Measure PSU2", psu2.get_all_measurements())
-        afe.read_fet_status()
-        print(afe._fet_status)
-        if afe._fet_status["CHG"] == 0 and afe._fet_status["DSG"] == 0 and afe._fet_status["PCHG"] == 0:
-            # ok
-            u_fuse_pin = daq.get_VDC(16)
-            u_gate_heater_fet = daq.get_VDC(7)            
-            u_2ndp_lv = daq.get_VDC(1)  # cell1
-            u_2ndp_hv = daq.get_VDC(2)  # cell2
-            print(u_gate_heater_fet)
-            print(u_2ndp_lv)
-            print(u_2ndp_hv)
-            # gate of heater FET normal
-            relais.disable_relay_n(2)
-            # switch 1k resistor heater to GND
-            relais.enable_relay_n(1)
-            # 2ndP @ cell1
-            # set cell1 to OverVoltage (OV)
-            vsim.set_cell_n_voltage(1, 4.38)
-            psu2.configure_supply(26.22, 0.050, 50, 1)            
-            sleep(5.0)
-            u_2ndp_lv = daq.get_VDC(1)  # cell1
-            #u_2ndp_hv = daq.get_VDC(2)  # cell5
-            print(u_2ndp_lv)  # 6.0 - 8.0mv
-            #print(u_2ndp_hv)
-            u_tos = daq.get_VDC(15)  # TOS
-            print(u_tos)
-            u_gate_heater_fet = daq.get_VDC(7)
-            print(u_gate_heater_fet)  # 0.440 - 0.900mv
-            # cell1 nominal
-            vsim.set_cell_n_voltage(1, 3.64)
+        def test_overvoltage():
+            u_cell = 3.64
+            u_supply = u_cell * num_cells
+            print(f"Apply {u_cell} cell voltages for Overvoltags/2nd Protection test")
+            print(u_supply, u_cell)
+            psu1.set_output_state(0)
+            for cell_no in range(1, num_cells):
+                vsim.set_cell_n_voltage(cell_no, u_cell)
             psu2.configure_supply(u_supply, 0.050, 50, 1)
-            # measure again
-            u_2ndp_lv = daq.get_VDC(1)  # cell1
-            #u_2ndp_hv = daq.get_VDC(2)  # cell5
-            print(u_2ndp_lv)  # 6.0 - 8.0mv
-            #print(u_2ndp_hv)
-            u_tos = daq.get_VDC(15)  # TOS
-            print(u_tos)
-            u_gate_heater_fet = daq.get_VDC(7)
-            print(u_gate_heater_fet)  # 0.440 - 0.900mv
+            sleep(1.0)
+            print("Measure PSU1", psu1.get_all_measurements())
+            print("Measure PSU2", psu2.get_all_measurements())
+            afe.read_fet_status()
+            print(afe._fet_status)
+            if (afe._fet_status["CHG"] == 0) and (afe._fet_status["DSG"] == 0) and (afe._fet_status["PCHG"] == 0):
+                # ok
+                u_fuse_pin = daq.get_VDC(16)
+                u_gate_heater_fet = daq.get_VDC(7)            
+                u_2ndp_lv = daq.get_VDC(1)  # cell1
+                u_2ndp_hv = daq.get_VDC(2)  # cell2
+                print(u_gate_heater_fet)
+                print(u_2ndp_lv)
+                print(u_2ndp_hv)
+                # gate of heater FET normal
+                relais.disable_relay_n(2)
+                # switch 1k resistor heater to GND
+                relais.enable_relay_n(1)
+                # 2ndP @ cell1
+                # set cell1 to OverVoltage (OV)
+                vsim.set_cell_n_voltage(1, 4.38)
+                psu2.configure_supply(26.22, 0.050, 50, 1)            
+                sleep(5.0)
+                u_2ndp_lv = daq.get_VDC(1)  # cell1
+                #u_2ndp_hv = daq.get_VDC(2)  # cell5
+                print(u_2ndp_lv)  # 6.0 - 8.0mv
+                #print(u_2ndp_hv)
+                u_tos = daq.get_VDC(15)  # TOS
+                print(u_tos)
+                u_gate_heater_fet = daq.get_VDC(7)
+                print(u_gate_heater_fet)  # 0.440 - 0.900mv
+                # cell1 nominal
+                vsim.set_cell_n_voltage(1, 3.64)
+                psu2.configure_supply(u_supply, 0.050, 50, 1)
+                # measure again
+                u_2ndp_lv = daq.get_VDC(1)  # cell1
+                #u_2ndp_hv = daq.get_VDC(2)  # cell5
+                print(u_2ndp_lv)  # 6.0 - 8.0mv
+                #print(u_2ndp_hv)
+                u_tos = daq.get_VDC(15)  # TOS
+                print(u_tos)
+                u_gate_heater_fet = daq.get_VDC(7)
+                print(u_gate_heater_fet)  # 0.440 - 0.900mv
 
+                # 2ndP @ cell5 
+                vsim.set_cell_n_voltage(5, 4.380)
+                psu2.configure_supply(26.22, 0.050, 50, 1)
+                sleep(5.0)
+                #u_2ndp_lv = daq.get_VDC(1)  # cell1
+                u_2ndp_hv = daq.get_VDC(2)  # cell5
+                #print(u_2ndp_lv)  # 6.0 - 8.0mv
+                print(u_2ndp_hv)
+                u_tos = daq.get_VDC(15)  # TOS
+                print(u_tos)
+                u_gate_heater_fet = daq.get_VDC(7)
+                print(u_gate_heater_fet)  # 0.440 - 0.900mv
+                # cell1 nominal
+                vsim.set_cell_n_voltage(1, 3.64)
+                psu2.configure_supply(u_supply, 0.050, 50, 1)
+                # measure again
+                u_2ndp_lv = daq.get_VDC(1)  # cell1
+                #u_2ndp_hv = daq.get_VDC(2)  # cell5
+                print(u_2ndp_lv)  # 6.0 - 8.0mv
+                #print(u_2ndp_hv)
+                u_tos = daq.get_VDC(15)  # TOS
+                print(u_tos)
+                u_gate_heater_fet = daq.get_VDC(7)
+                print(u_gate_heater_fet)  # 0.440 - 0.900mv
+                # disable 1k resistor heater to GND
+                relais.disable_relay_n(1)
 
-            # 2ndP @ cell5 
-            vsim.set_cell_n_voltage(5, 4.380)
-            psu2.configure_supply(26.22, 0.050, 50, 1)
-            sleep(5.0)
-            #u_2ndp_lv = daq.get_VDC(1)  # cell1
-            u_2ndp_hv = daq.get_VDC(2)  # cell5
-            #print(u_2ndp_lv)  # 6.0 - 8.0mv
-            print(u_2ndp_hv)
-            u_tos = daq.get_VDC(15)  # TOS
-            print(u_tos)
-            u_gate_heater_fet = daq.get_VDC(7)
-            print(u_gate_heater_fet)  # 0.440 - 0.900mv
-             # cell1 nominal
-            vsim.set_cell_n_voltage(1, 3.64)
-            psu2.configure_supply(u_supply, 0.050, 50, 1)
-            # measure again
-            u_2ndp_lv = daq.get_VDC(1)  # cell1
-            #u_2ndp_hv = daq.get_VDC(2)  # cell5
-            print(u_2ndp_lv)  # 6.0 - 8.0mv
-            #print(u_2ndp_hv)
-            u_tos = daq.get_VDC(15)  # TOS
-            print(u_tos)
-            u_gate_heater_fet = daq.get_VDC(7)
-            print(u_gate_heater_fet)  # 0.440 - 0.900mv
-            # disable 1k resistor heater to GND
-            relais.disable_relay_n(1)
-
+        test_overvoltage()
 
         #------------------------------------------------------------------------------------------
         # Heater Path Test
         
-        u_cell = 3.64
-        u_supply = u_cell * num_cells
-        print(f"Apply {u_cell} cell voltages for Overvoltags/2nd Protection test")
-        print(u_supply, u_cell)
-        psu1.configure_supply(u_supply, 0.050, 50, 0)
-        for cell_no in range(1, num_cells):
-            vsim.set_cell_n_voltage(cell_no, u_cell)
-        psu2.configure_supply(u_supply, 0.050, 50, 1)
-        sleep(1.0)
-        print("Measure PSU1", psu1.get_all_measurements())
-        print("Measure PSU2", psu2.get_all_measurements())
-        
-        afe.shutdown() 
-        cartridge.all_mosfets_to(0)
-        # apply vsim cell8 to enable heater FET
-        vsim.set_cell_n_voltage(8, 4.5)  # heater path voltage source 
-        relais.enable_relay_n(4)  # switch vsim cell8 to heater path
-        u_tos = daq.get_VDC(15)  # TOS
-        print("TOS Voltage:", u_tos)  # should be about 0 .. 1V
-        sleep(0.5)
-        #u_heater_path = daq.get_VDC(8)
-        #print("Heater Path Voltage:", u_heater_path)  # should be about 3.3v
-        relais.disable_relay_n(4)
-        vsim.set_cell_n_voltage(8, 0)  # disable heater path voltage source 
-        u_tos = daq.get_VDC(15)  # TOS
-        print("TOS Voltage:", u_tos)  # should be about 25.73V
-        
-        psu1.set_output_state(1)  # enable PSU1
-        sleep(0.5)
-        afe.enable_full_access()
-        afe.enter_config_update_mode()
-        afe.disable_fet_control()
-        afe.disable_pf_control()
-        afe.disable_fets()
-        
-
+        def test_heater_path()
+            u_cell = 3.64
+            u_supply = u_cell * num_cells
+            print(f"Apply {u_cell} cell voltages for Overvoltags/2nd Protection test")
+            print(u_supply, u_cell)
+            psu1.configure_supply(u_supply, 0.050, 50, 0)
+            for cell_no in range(1, num_cells):
+                vsim.set_cell_n_voltage(cell_no, u_cell)
+            psu2.configure_supply(u_supply, 0.050, 50, 1)
+            sleep(1.0)
+            print("Measure PSU1", psu1.get_all_measurements())
+            print("Measure PSU2", psu2.get_all_measurements())
+            
+            afe.shutdown() 
+            cartridge.all_mosfets_to(0)
+            # apply vsim cell8 to enable heater FET
+            vsim.set_cell_n_voltage(8, 4.5)  # heater path voltage source 
+            relais.enable_relay_n(4)  # switch vsim cell8 to heater path
+            u_tos = daq.get_VDC(15)  # TOS
+            print("TOS Voltage:", u_tos)  # should be about 0 .. 1V
+            sleep(0.5)
+            #u_heater_path = daq.get_VDC(8)
+            #print("Heater Path Voltage:", u_heater_path)  # should be about 3.3v
+            relais.disable_relay_n(4)
+            vsim.set_cell_n_voltage(8, 0)  # disable heater path voltage source 
+            u_tos = daq.get_VDC(15)  # TOS
+            print("TOS Voltage:", u_tos)  # should be about 25.73V
+            
+            psu1.set_output_state(1)  # enable PSU1
+            sleep(0.5)
+            afe.enable_full_access()
+            afe.enter_config_update_mode()
+            afe.disable_fet_control()
+            afe.disable_pf_control()
+            afe.disable_fets()
+            
+        test_heater_path()
 
 
         #------------------------------------------------------------------------------------------
