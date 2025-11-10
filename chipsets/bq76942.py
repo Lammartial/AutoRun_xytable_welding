@@ -982,7 +982,7 @@ class BQ76942:
         self._manufact_status = self._decode_manufacturing_status(buf, hexi=hexi)
         return _od2t(self._manufact_status)
 
-    def fuse_toggle(self) -> bool:
+    def toggle_fuse(self) -> bool:
         return self.write_subcommand(0x001D)
 
     def charge_test(self) -> bool:
@@ -1272,6 +1272,21 @@ class BQ76942:
 
 
     def calib_write_cell_voltages(self, reference_cell_voltages: np.array, num_samples: int = 10, pause_between: float = 0.005) -> Tuple[float, np.array]:
+        """Measures and calibrates teh cell voltages against the passed reference cell voltages.
+
+        Note: NO CURRENT WHEN CALLING THIS FUNCTION!
+
+        Args:
+            reference_cell_voltages (np.array): _description_
+            num_samples (int, optional): _description_. Defaults to 10.
+            pause_between (float, optional): _description_. Defaults to 0.005.
+
+        Raises:
+            ValueError: _description_
+
+        Returns:
+            Tuple[float, np.array]: _description_
+        """
         reference_cell_voltages = list(reference_cell_voltages)
         # Take the average of measurements and calculate gains        
         cell_voltage_counts, _  = self.read_dastatus_average(num_samples=int(num_samples), pause_between=pause_between)
@@ -1313,6 +1328,12 @@ class BQ76942:
 
     def calib_write_pack_tos_ld_voltages(self, ref_pack_voltage: float, ref_tos_voltage: float, ref_ld_voltage: float, 
                                        num_samples: int = 10, pause_between: float = 0.005) -> Tuple[float]:
+        """Calibrates Pack, TOS and LD Voltages.
+        
+        Note: NO CURRENT WHEN CALLING THIS FUNCTION!
+
+        """
+        
         d = self.read_cal1_average(num_samples=num_samples, pause_between=pause_between)
         # Calculate PACK, TOS, LD gains by using the measured voltages in cV (not mV !!)
         PACK_Gain = int(round(2**16 * ((ref_pack_voltage * 1e+2) / d["pack_pin_adc_counts"])))
@@ -1328,7 +1349,8 @@ class BQ76942:
         return PACK_Gain, TOS_Gain, LD_Gain
    
 
-    def calib_write_board_offset_current(self, num_samples: int = 10, pause_between: float = 0.005) -> float:
+    def calib_board_offset_current(self, num_samples: int = 10, pause_between: float = 0.005) -> float:
+        """Measured at 0a current."""
         stored_board_offset = self.read_board_offset()
         stored_offset_samples = self.read_coulomb_counter_offset_sample()
         # should be 64 but we calculate here with 1
@@ -1337,14 +1359,11 @@ class BQ76942:
         board_offset = offset_samples * int(round(d["cc2_counts"] * 1e+1))
         if board_offset < -32768 or board_offset > 32767:
             raise ValueError(f"Board_offset out of boundaries -> cannot calibrate current: {board_offset}")
-        self.enter_config_update_mode()
-        self.write_board_offset(board_offset)
-        self.exit_config_update_mode()
-        self.disable_sleepmode()  # after exit_config_update() the SLEEP_EN is being set again...
         return board_offset
 
 
-    def calib_write_cc_gain_and_capacity_gain(self, ref_current: float, num_samples: int = 10, pause_between: float = 0.005) -> Tuple[float, float]:        
+    def calib_cc_gain_and_capacity_gain(self, ref_current: float, num_samples: int = 10, pause_between: float = 0.005) -> Tuple[float, float]:        
+        """Measure at HIGH current."""
         num_samples = int(num_samples)
         stored_cc_gain = self.read_cc_gain()
         stored_capacity_gain = self.read_capacity_gain()
@@ -1357,14 +1376,35 @@ class BQ76942:
         #cc_gain_float = (current_diff / cc_counts_diff) / 1e-3
         #cc_gain_float = (current_diff / cc2_current_diff) * stored_cc_gain  # alternative calculation using CC2 current directly
         cc_gain_float = (ref_current / cc2_current) * stored_cc_gain  # alternative calculation using CC2 current directly
-        capacity_gain_float = 298261.6178 * cc_gain_float  # Note: constant 298261.6178 comes from TI doc
+        capacity_gain_float = 298261.6178 * cc_gain_float  # Note: constant 298261.6178 comes from TI doc        
+        return cc_gain_float, capacity_gain_float
+
+
+    def write_current_calibration(self, board_offset, cc_gain_float, capacity_gain_float) -> bool:
+        """Write the current calibration values to the RAM.
+        
+        Note: NO CURRENT WHEN CALLING THIS FUNCTION!
+            as the exit config update mode() will enable the 
+            firmware FET control again which will kill the 
+            board.
+        
+        Args:
+            board_offset (_type_): Board current offset
+            cc_gain_float (_type_): _description_
+            capacity_gain_float (_type_): _description_
+
+        Returns:
+            bool: _description_
+        """
+
         # write calibration into RAM
         self.enter_config_update_mode()
+        self.write_board_offset(board_offset)
         self.write_cc_gain(cc_gain_float)
         self.write_capacity_gain(capacity_gain_float)
         self.exit_config_update_mode()
         self.disable_sleepmode()  # after exit_config_update() the SLEEP_EN is being set again...
-        return cc_gain_float, capacity_gain_float
+        return True
 
 
     def calib_write_temperatures(self, reference_temperature: float, num_samples: int = 5, pause_between: float = 0.05) -> Tuple[float]:
@@ -1381,6 +1421,8 @@ class BQ76942:
             HDQ Temperature (HDQ pin thermistor)
             DCHG Temperature (DCHG pin thermistor)
             DDSG Temperature (DDSG pin thermistor)
+
+        Note: NO CURRENT WHEN CALLING THIS FUNCTION!
 
         Args:
             temp_cal (Tuple[float]): Calibrated reference temperature
@@ -1696,7 +1738,7 @@ class BQ76942:
     def shutdown(self) -> bool:
         return self.write_subcommand(0x0010)
 
-    def reset(self) -> bool:
+    def reset_device(self) -> bool:
         return self.write_subcommand(0x0012)
 
 

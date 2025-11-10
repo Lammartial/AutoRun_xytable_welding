@@ -148,14 +148,7 @@ def rack_test(cartridge: CartridgePETA,
     # gpio.set_gpio_n_high(6)
     # #gpio.set_gpio_n_low(6)
 
-    #cartridge.select_bus_to_micro("i2c")
-    print("GPIO:", cartridge.bus_to_gpio.i2c_bus_scan())
-    print("MICRO:", cartridge.bus_to_mirco.i2c_bus_scan())
-    print("BACKYARD:", cartridge.backyard_bus.i2c_bus_scan())
-    #for n in range(1,9):
-    #    print(cartridge.get_muxed_i2c_bus_for(n).i2c_bus_scan())
-
-
+   
     def setup_daq_range_and_resolution() -> bool:
 
         _config = [
@@ -237,6 +230,18 @@ def rack_test(cartridge: CartridgePETA,
     # cartridge.gpio.reset_pin(4)  # disable micro
     # cartridge.switch_mosfet(0, 0)  # disable micro
     
+
+    cartridge.configure_communication_to_mcu("i2c")
+    print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+
+    print("GPIO:", cartridge.bus_to_gpio.i2c_bus_scan())
+    print("MICRO:", cartridge.bus_to_mirco.i2c_bus_scan())
+    print("BACKYARD:", cartridge.backyard_bus.i2c_bus_scan())
+    #for n in range(1,9):
+    #    print(cartridge.get_muxed_i2c_bus_for(n).i2c_bus_scan())
+
+
+
     base_path = Path(__file__).parent / "../../Battery-PCBA-Test/filestore"
 
     try:
@@ -294,9 +299,11 @@ def rack_test(cartridge: CartridgePETA,
         print("+1.8v VCC: ", u_xtras[2])
         print("Pack: ", u_xtras[3])
 
+        cartridge.select_bus_to_micro("i2c")
+
         _check_if_sleep_en()
 
-        if 0:
+        if 1:
             cartridge.enable_mcu()
             print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
             cartridge.disable_mcu()
@@ -326,21 +333,23 @@ def rack_test(cartridge: CartridgePETA,
             cartridge.switch_mosfet(3, 1)  # 400kohm
             print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
             
-        if 1:
+        if 0:
+            cartridge.enable_valmod()
+            cartridge.disable_valmod()
             cartridge.enable_mcu()
-            #print(ap.erase_flash())
+            print(ap.erase_flash())
             print(ap.program_flash())
             cartridge.disable_mcu()
-        if 0:
+        if 1:
             cartridge.disable_mcu()
-            cartridge.switch_mosfet(0, 0)  # 0ohm
-            cartridge.switch_mosfet(1, 1)  # 20kohm
-            cartridge.switch_mosfet(2, 0)  # 200kohm
-            cartridge.switch_mosfet(3, 0)  # 400kohm
-            #------------------------------------------------------------------
-            cartridge.select_bus_to_micro("i2c")
+            cartridge.enable_valmod()
+            cartridge.disable_valmod()
+            cartridge.configure_communication_to_mcu("i2c")
             cartridge.enable_mcu()
+            cartridge.switch_mosfet(0, 1)  # 0ohm
+            cartridge.switch_mosfet(1, 0)  # 20kohm
             print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
+            sleep(2.0)
 
             for n in range(1,9):
                 cartridge._onboard_mux.setChannel(n)
@@ -1088,7 +1097,7 @@ def rack_test(cartridge: CartridgePETA,
         afe.read_alarm_status()
         print("AS:", afe._alarm_status)
         if afe._battery_status["FUSE"] == 1:
-            afe.fuse_toggle()
+            afe.toggle_fuse()
             afe.wait_for_battery_status_flag("FUSE", 0, retries=20, pause_on_retry=0.5)
         #afe.read_battery_status()
         if afe._battery_status["FUSE"] == 0:
@@ -1097,21 +1106,144 @@ def rack_test(cartridge: CartridgePETA,
             fuse_voltage = daq.get_VDC(16)  # FUSE pin
             #afe.wait_for_battery_status_flag("FUSE", 1, retries=20, pause_on_retry=0.5)
             print("FL:", fuse_voltage)
-            afe.fuse_toggle()
+            afe.toggle_fuse()
             print("PSU2:", psu2.get_all_measurements())
             afe.read_battery_status()
             afe.read_alarm_status()
             #if afe._battery_status["FUSE"] == 1:
             fuse_voltage_higher = daq.get_VDC(16)
             print("FH:", fuse_voltage_higher)
-            afe.fuse_toggle()
+            afe.toggle_fuse()
             fuse_voltage_end = daq.get_VDC(16)
             print("FE:", fuse_voltage_end)
             relais.disable_relay_n(2)
         print("Done.")
         
         #------------------------------------------------------------------------------------------
+        # Overvoltage Test, 2nd Protection
         
+        _check_if_sleep_en()
+        
+        u_cell = 3.64
+        u_supply = u_cell * num_cells
+        print(f"Apply {u_cell} cell voltages for Overvoltags/2nd Protection test")
+        print(u_supply, u_cell)
+        psu1.set_output_state(0)
+        for cell_no in range(1, num_cells):
+            vsim.set_cell_n_voltage(cell_no, u_cell)
+        psu2.configure_supply(u_supply, 0.050, 50, 1)
+        sleep(1.0)
+        print("Measure PSU1", psu1.get_all_measurements())
+        print("Measure PSU2", psu2.get_all_measurements())
+        afe.read_fet_status()
+        print(afe._fet_status)
+        if afe._fet_status["CHG"] == 0 and afe._fet_status["DSG"] == 0 and afe._fet_status["PCHG"] == 0:
+            # ok
+            u_fuse_pin = daq.get_VDC(16)
+            u_gate_heater_fet = daq.get_VDC(7)            
+            u_2ndp_lv = daq.get_VDC(1)  # cell1
+            u_2ndp_hv = daq.get_VDC(2)  # cell2
+            print(u_gate_heater_fet)
+            print(u_2ndp_lv)
+            print(u_2ndp_hv)
+            # gate of heater FET normal
+            relais.disable_relay_n(2)
+            # switch 1k resistor heater to GND
+            relais.enable_relay_n(1)
+            # 2ndP @ cell1
+            # set cell1 to OverVoltage (OV)
+            vsim.set_cell_n_voltage(1, 4.38)
+            psu2.configure_supply(26.22, 0.050, 50, 1)            
+            sleep(5.0)
+            u_2ndp_lv = daq.get_VDC(1)  # cell1
+            #u_2ndp_hv = daq.get_VDC(2)  # cell5
+            print(u_2ndp_lv)  # 6.0 - 8.0mv
+            #print(u_2ndp_hv)
+            u_tos = daq.get_VDC(15)  # TOS
+            print(u_tos)
+            u_gate_heater_fet = daq.get_VDC(7)
+            print(u_gate_heater_fet)  # 0.440 - 0.900mv
+            # cell1 nominal
+            vsim.set_cell_n_voltage(1, 3.64)
+            psu2.configure_supply(u_supply, 0.050, 50, 1)
+            # measure again
+            u_2ndp_lv = daq.get_VDC(1)  # cell1
+            #u_2ndp_hv = daq.get_VDC(2)  # cell5
+            print(u_2ndp_lv)  # 6.0 - 8.0mv
+            #print(u_2ndp_hv)
+            u_tos = daq.get_VDC(15)  # TOS
+            print(u_tos)
+            u_gate_heater_fet = daq.get_VDC(7)
+            print(u_gate_heater_fet)  # 0.440 - 0.900mv
+
+
+            # 2ndP @ cell5 
+            vsim.set_cell_n_voltage(5, 4.380)
+            psu2.configure_supply(26.22, 0.050, 50, 1)
+            sleep(5.0)
+            #u_2ndp_lv = daq.get_VDC(1)  # cell1
+            u_2ndp_hv = daq.get_VDC(2)  # cell5
+            #print(u_2ndp_lv)  # 6.0 - 8.0mv
+            print(u_2ndp_hv)
+            u_tos = daq.get_VDC(15)  # TOS
+            print(u_tos)
+            u_gate_heater_fet = daq.get_VDC(7)
+            print(u_gate_heater_fet)  # 0.440 - 0.900mv
+             # cell1 nominal
+            vsim.set_cell_n_voltage(1, 3.64)
+            psu2.configure_supply(u_supply, 0.050, 50, 1)
+            # measure again
+            u_2ndp_lv = daq.get_VDC(1)  # cell1
+            #u_2ndp_hv = daq.get_VDC(2)  # cell5
+            print(u_2ndp_lv)  # 6.0 - 8.0mv
+            #print(u_2ndp_hv)
+            u_tos = daq.get_VDC(15)  # TOS
+            print(u_tos)
+            u_gate_heater_fet = daq.get_VDC(7)
+            print(u_gate_heater_fet)  # 0.440 - 0.900mv
+            # disable 1k resistor heater to GND
+            relais.disable_relay_n(1)
+
+
+        #------------------------------------------------------------------------------------------
+        # Heater Path Test
+        
+        u_cell = 3.64
+        u_supply = u_cell * num_cells
+        print(f"Apply {u_cell} cell voltages for Overvoltags/2nd Protection test")
+        print(u_supply, u_cell)
+        psu1.configure_supply(u_supply, 0.050, 50, 0)
+        for cell_no in range(1, num_cells):
+            vsim.set_cell_n_voltage(cell_no, u_cell)
+        psu2.configure_supply(u_supply, 0.050, 50, 1)
+        sleep(1.0)
+        print("Measure PSU1", psu1.get_all_measurements())
+        print("Measure PSU2", psu2.get_all_measurements())
+        
+        afe.shutdown() 
+        cartridge.all_mosfets_to(0)
+        # apply vsim cell8 to enable heater FET
+        vsim.set_cell_n_voltage(8, 4.5)  # heater path voltage source 
+        relais.enable_relay_n(4)  # switch vsim cell8 to heater path
+        u_tos = daq.get_VDC(15)  # TOS
+        print("TOS Voltage:", u_tos)  # should be about 0 .. 1V
+        sleep(0.5)
+        #u_heater_path = daq.get_VDC(8)
+        #print("Heater Path Voltage:", u_heater_path)  # should be about 3.3v
+        relais.disable_relay_n(4)
+        vsim.set_cell_n_voltage(8, 0)  # disable heater path voltage source 
+        u_tos = daq.get_VDC(15)  # TOS
+        print("TOS Voltage:", u_tos)  # should be about 25.73V
+        
+        psu1.set_output_state(1)  # enable PSU1
+        sleep(0.5)
+        afe.enable_full_access()
+        afe.enter_config_update_mode()
+        afe.disable_fet_control()
+        afe.disable_pf_control()
+        afe.disable_fets()
+        
+
 
 
         #------------------------------------------------------------------------------------------
@@ -1142,6 +1274,7 @@ def rack_test(cartridge: CartridgePETA,
             cartridge.disable_mcu()        
         if 1:
             afe.disable_checksum()
+            cartridge.enable_valmod()  # ???
             cartridge.configure_communication_to_mcu("can")
             cartridge.enable_mcu()  # enable microcontroller
             print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))

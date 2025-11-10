@@ -23,7 +23,7 @@ class PetaMCU:
         self.i2C_address = i2c_address_7bit
         self.use_pec = i2c_pec
         self.bus = BusMaster(i2c, retry_limit=1, verify_rounds=3, pause_us=50)
-        self.smartbattery = Battery(self.bus, pec=False)  # this is to reuse already implemented functionality
+        self.smartbattery = Battery(self.bus, pec=i2c_pec)  # this is to reuse already implemented functionality
         self.can = can
 
 
@@ -155,8 +155,8 @@ class CartridgePETA:
         self.bus_to_gpio = self.get_muxed_i2c_bus_for(8)
         self.gpio = GPIOExtender(self.bus_to_gpio, i2c_address_7bit=0x20, number_of_gpio=8)  # Extender on channel 8 of the cartridge MUX
         # configure GPIO
-        self.gpio.write_output("10010000")  # 1 = input or open drain output, 0=output 0
-        # -> disable CAN and I2C, Reset MCU (Pin7=1), all MOSFETs OFF
+        self.gpio.write_output("10100000")  # 1 = input or open drain output, 0=output 0
+        # -> disable CAN, select I2C, Reset MCU (Pin7=1), all MOSFETs OFF
         # ---
         # Create a MCU communication object which can be fetched from Teststand 
         # to interact with the MCU by CAN or by I2C 
@@ -201,6 +201,13 @@ class CartridgePETA:
         else:
             return self.gpio.reset_pin(pin_no)
 
+
+    def all_mosfets_to(self, state: int) -> bool:
+        for p in range(4):
+            if state != 0:
+                self.gpio.set_pin(p)
+            else:
+                self.gpio.reset_pin(p)
 
 
     def select_bus_to_micro(self, bustype: str) -> None:
@@ -270,6 +277,12 @@ class CartridgePETA:
             self.switch_mosfet(1, 1)  # 20kohm
             self.switch_mosfet(2, 0)  # 200kohm
 
+
+    def enable_valmod(self) -> bool:
+        return self.switch_some_io(4, 1)
+    
+    def disable_valmod(self) -> bool:
+        return self.switch_some_io(4, 0)
 
     def switch_vcc_of_led(self, onoff: int) -> bool:
         pass
