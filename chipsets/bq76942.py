@@ -165,7 +165,7 @@ class BQ76942:
         #print("BQ76 write bytes", hexlify(bufc).decode())  # DEBUG
         for n in range(0, self._retry_limit):
             try:
-                # wlen = self.i2c.writeto_mem(slvAddress,cmd,buf)
+                # wlen = self.i2c.writeto_mem(slvAddress,c  md,buf)
                 wlen = self.i2c.writeto(slvAddress, bufc)
                 # ok = (wlen > 0)
                 ok: bool = len(bufc) == wlen
@@ -990,7 +990,7 @@ class BQ76942:
 
     def discharge_test(self) -> bool:
         return self.write_subcommand(0x0020)
-
+  
 
     def all_fets_on(self, hexi: bool | str| None = None) -> bool:
         """Using build-in function of BQ76942.
@@ -1104,6 +1104,21 @@ class BQ76942:
         """
 
         return self._switch_manufacturing_status_state("FET_EN", 1, self.toggle_fet_enable, timeout=timeout, pause_between=pause_between)
+
+
+    def disable_fet_control(self, timeout: float = 5.0, pause_between: float = 0.1) -> bool:
+        """DISABLE FET_EN using toggle and flag check.
+        Retries until timeout using given pause between the retries.
+
+        Args:
+            timeout (float, optional): _description_. Defaults to 5.0.
+            pause_between (float, optional): _description_. Defaults to 0.1.
+
+        Returns:
+            bool: True, if PF_EN could be ENABLED, False if not 
+        """
+
+        return self._switch_manufacturing_status_state("FET_EN", 0, self.toggle_fet_enable, timeout=timeout, pause_between=pause_between)
 
 
     def enable_pf_control(self, timeout: float = 5.0, pause_between: float = 0.1) -> bool:
@@ -1678,6 +1693,12 @@ class BQ76942:
         return self.wait_for_battery_status_flag("CFGUPDATE", 0)
 
 
+    def shutdown(self) -> bool:
+        return self.write_subcommand(0x0010)
+
+    def reset(self) -> bool:
+        return self.write_subcommand(0x0012)
+
 
     def disable_sleepmode(self) -> bool:
         return self.write_subcommand(0x009a)
@@ -1685,6 +1706,15 @@ class BQ76942:
 
     def enable_sleepmode(self) -> bool:
         return self.write_subcommand(0x0099)
+
+   
+    def enter_deepsleepmode(self) -> bool:
+        ok1 = self.write_subcommand(0x000F)
+        ok2 = self.write_subcommand(0x000F)  # need to be send twice in 4s
+        return ok1 and ok2
+
+    def exit_deepsleepmode(self) -> bool:
+        return self.write_subcommand(0x000E)
 
 
     def read_otp_wr_check(self) -> Tuple[int, int]:

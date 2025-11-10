@@ -977,7 +977,7 @@ def rack_test(cartridge: CartridgePETA,
 
         #--------------------------------------------------------------------------------------
         # === Enable Functions of AFE before writing OTP ===
-        #  
+        
         afe.read_manufacturing_status()
         print(afe._manufact_status)
         afe.enable_fet_control()  # make sure FET_EN == 1
