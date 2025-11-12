@@ -433,6 +433,7 @@ class BQ34Z100:
 
 
     def calib_write_temperature(self, reference_temperature: float, num_samples: int = 5, pause_between: float = 0.05) -> float:
+        self.enter_calibration()
         num_samples = int(num_samples)
         _temperature_meas = 0
         for n in range(num_samples):
@@ -441,8 +442,7 @@ class BQ34Z100:
                 sleep(pause_between)
         _temperature_meas = _temperature_meas / num_samples
         ext_temperature_offset = reference_temperature - _temperature_meas
-        ext_temperature_offset_int = int(round(ext_temperature_offset * 1e+1))  # -> 0.1C
-        self.enter_calibration()
+        ext_temperature_offset_int = int(round(ext_temperature_offset * 1e+1))  # -> 0.1C        
         self.read_calibration_flash_data()  # prefill the struct, we change only one value!
         self.write_calibration_flash_data({"ext_temperature_offset": ext_temperature_offset_int})
         self.exit_calibration()
@@ -450,16 +450,16 @@ class BQ34Z100:
 
 
     def calib_write_cc_gain_and_cc_delta(self, reference_current: float, num_samples: int = 10, pause_between: float = 0.005) -> Tuple[float, float]:
+        self.enter_calibration()
         num_samples = int(num_samples)
         _current_meas = 0
         for n in range(num_samples):
-            _current_meas = self.current()  # in A
+            _current_meas += self.current()  # in A
             if pause_between:
                 sleep(pause_between)
         _current_meas = _current_meas / num_samples 
         if (_current_meas > -0.1) and (_current_meas < 0.1):
-            raise ValueError("No current flow - cannot calibrate CC Gain and CC Delta")
-        self.enter_calibration()
+            raise ValueError("No current flow - cannot calibrate CC Gain and CC Delta")        
         self.read_calibration_flash_data()
         _cc_gain_stored = self.calibration_data["cc_gain"]
         # write as float values
@@ -471,6 +471,7 @@ class BQ34Z100:
 
 
     def calib_write_voltage_divider(self, reference_bat_voltage: float, num_samples: int = 10, pause_between: float = 0.005) -> float:
+        self.enter_calibration()
         num_samples = int(num_samples)
         _voltage_meas = 0
         for n in range(num_samples):
@@ -479,8 +480,7 @@ class BQ34Z100:
                 sleep(pause_between)
         _voltage_meas = _voltage_meas / num_samples
         if round(_voltage_meas) == 0:
-            raise ValueError("No voltage measured, cannot calibrate")
-        self.enter_calibration()
+            raise ValueError("No voltage measured, cannot calibrate")        
         self.read_calibration_flash_data()        
         _voltage_divider_stored = self.calibration_data["voltage_divider"]
         #print("GG V meas ERROR vefore:", (calib_bat_voltage - _voltage_meas), "V")
@@ -1269,19 +1269,19 @@ class BQ34Z100:
         DONT USE FOR PRODUCTION! 
         USE board_offset_calibration_process INSTEAD!
         """
-        self.read_control_status()     
-        status = self._control_status
-        if status["CALEN"] == 0:
+        self.read_control_status()             
+        if self._control_status["CALEN"] == 0:
             # activate the calibration
             self.enable_enter_and_exit_of_calibration_mode()
             sleep(0.1)
-            self.read_control_status()     
-            status = self._control_status
-            if status["CALEN"] == 0:
-                raise Exception("Cannot set BQ34Z100 into calibration mode.")
+            self.read_control_status()
+            if self._control_status["CALEN"] == 0:
+                raise Exception("Cannot set BQ34Z100 into calibration mode.")            
+            self.enter_calibration()
+            self.read_control_status()            
         if not self._is_calibrating_cc_offset:
             # not yet triggered (using our own state machine)
-            if status["CCA"] == 1 and status["BCA"] == 0:
+            if self._control_status["CCA"] == 1 and self._control_status["BCA"] == 0:
                 # a calibration is running        
                 self._is_calibrating_cc_offset = True        
                 return False  # this is already active, but not finished yet    
@@ -1290,7 +1290,7 @@ class BQ34Z100:
             self._is_calibrating_cc_offset = True        
             return False  # activated, but not finished yet
         # check if we are finished
-        if self._is_calibrating_cc_offset and status["CCA"] == 0:                
+        if self._is_calibrating_cc_offset and self._control_status["CCA"] == 0:                
             self.cc_offset_save()
             self._is_calibrating_cc_offset = False
             return True  # process is finished

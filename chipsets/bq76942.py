@@ -331,6 +331,7 @@ class BQ76942:
         if not(isPositive):
             result *= -1
         return float(result)
+        
 
     # ----------------------------------------------------------------------------------------------
    
@@ -619,10 +620,10 @@ class BQ76942:
             "CFGUPDATE": ((os>>0) & 1),
         })
 
-    def read_battery_status(self) -> Tuple[int]:
+    def read_battery_status(self, hexi: bool | str | None = None) -> OrderedDict:
         buf, ok = self.readBytes(self.address, 0x12, 2)
         if ok:
-            self._battery_status = self._battery_status_to_dict(buf)
+            self._battery_status = self._battery_status_to_dict(buf, hexi=hexi)
         return _od2t(self._battery_status)
         
 
@@ -1360,7 +1361,33 @@ class BQ76942:
         return board_offset_float 
 
 
-    def calib_cc_gain_and_capacity_gain(self, ref_current: float, num_samples: int = 10, pause_between: float = 0.005) -> Tuple[float, float]:        
+    def calib_write_board_offset_current(self, num_samples: int = 10, pause_between: float = 0.005) -> int:
+        """Write the board offset calibration value to the RAM.
+        
+        Note: NO CURRENT WHEN CALLING THIS FUNCTION!
+            as the exit config update mode() will enable the 
+            firmware FET control again which will kill the 
+            board.
+        Args:
+            num_samples (int): Number of samples to average
+            pause_between (float): Pause duration between samples
+
+        """
+
+        board_offset_float = self.calib_board_offset_current(num_samples=num_samples, pause_between=pause_between)
+        board_offset = int(round(board_offset_float))
+        if board_offset < -32768 or board_offset > 32767:
+            raise ValueError(f"Board_offset out of boundaries -> cannot calibrate current: {board_offset}")        
+        # write calibration into RAM
+        self.enter_config_update_mode()
+        self.write_board_offset(board_offset)
+        self.exit_config_update_mode()
+        self.disable_sleepmode()
+        return board_offset  
+    
+
+
+    def calib_cc_gain_and_capacity_gain(self, ref_current: float, num_samples: int = 10, pause_between: float = 0.025) -> Tuple[float, float]:        
         """Measure at HIGH current."""
         num_samples = int(num_samples)
         stored_cc_gain = self.read_cc_gain()
@@ -1373,9 +1400,11 @@ class BQ76942:
         cc2_current = cc2_current / num_samples
         #cc_gain_float = (current_diff / cc_counts_diff) / 1e-3
         #cc_gain_float = (current_diff / cc2_current_diff) * stored_cc_gain  # alternative calculation using CC2 current directly
+        # cc2_current * stored_cc_gain = ref_current
+        # DEFAULT: 7.5684 / 1.012 = cc_gain 
         cc_gain_float = (ref_current / cc2_current) * stored_cc_gain  # alternative calculation using CC2 current directly
         capacity_gain_float = 298261.6178 * cc_gain_float  # Note: constant 298261.6178 comes from TI doc        
-        return cc_gain_float, capacity_gain_float
+        return cc_gain_float, capacity_gain_float, cc2_current
 
 
     def write_current_calibration(self, board_offset_float: float, cc_gain_float: float , capacity_gain_float: float) -> bool:
@@ -1398,13 +1427,11 @@ class BQ76942:
         board_offset = int(round(board_offset_float))  # Teststand
         if board_offset < -32768 or board_offset > 32767:
             raise ValueError(f"Board_offset out of boundaries -> cannot calibrate current: {board_offset}")        
-        cc_gain = int(round(cc_gain_float))
-        capacity_gain = int(round(capacity_gain_float))        
         # write calibration into RAM
         self.enter_config_update_mode()
         self.write_board_offset(board_offset)
-        self.write_cc_gain(cc_gain)
-        self.write_capacity_gain(capacity_gain)
+        self.write_cc_gain(cc_gain_float)
+        self.write_capacity_gain(capacity_gain_float)
         self.exit_config_update_mode()
         self.disable_sleepmode()  # after exit_config_update() the SLEEP_EN is being set again...
         return True
@@ -1535,7 +1562,7 @@ class BQ76942:
 
     def read_cc_gain(self) -> float:
         buf = self.read_subcommand(0x91A8)
-        #return unpack_from("<f", buf, 0)[0]  # float
+        print("READ cc_gain as hex:", hexlify(buf))  # DEBUG
         i = unpack_from("<L", buf, 0)[0]  # to int
         v = self._flash_to_float(i)
         return v
@@ -1544,6 +1571,7 @@ class BQ76942:
     def write_cc_gain(self, value: float) -> bool:
         v = self._float_to_flash(value)
         buf = pack("<L", v)  # pack the bytes as 4 bytes little endian
+        print("WRITE cc_gain as hex:", hexlify(buf))  # DEBUG
         return self.write_subcommand(0x91A8, data=buf)
 
     #----------------------------------------------------------------------------------------------
@@ -1551,7 +1579,7 @@ class BQ76942:
 
     def read_capacity_gain(self) -> float:
         buf = self.read_subcommand(0x91AC)
-        #return unpack_from("<h", buf, 0)[0]  # signed
+        print("READ capacity_gain as hex:", hexlify(buf))  # DEBUG
         i = unpack_from("<L", buf, 0)[0]  # to int
         v = self._flash_to_float(i)
         return v
@@ -1561,6 +1589,7 @@ class BQ76942:
         #buf = pack("f", value)
         v = self._float_to_flash(value)
         buf = pack("<L", v)  # pack the bytes as 4 bytes little endian
+        print("WRITE capacity_gain as hex:", hexlify(buf))  # DEBUG
         return self.write_subcommand(0x91AC, data=buf)
 
 
@@ -1581,7 +1610,7 @@ class BQ76942:
         return unpack_from("<h", buf, 0)[0]  # signed
 
     def write_board_offset(self, value: int) -> bool:
-        buf = pack("<h", value)
+        buf = pack("<h", int(value))
         return self.write_subcommand(0x91C8, data=buf)
 
 

@@ -189,7 +189,9 @@ class M3400(Eth2SerialDevice):
         # 5 results - string "###, ###, ###, ###, ###"
         # voltage, current, power, amp-hour, watt-hour
         lst = str(result).split(',')
-        return tuple([float(m) for m in lst[:-1]])
+        #return tuple([float(m) for m in lst[:-1]])
+        return tuple([float(m) for m in lst])
+
 
 
     def set_output_state(self, state: int) -> bool:

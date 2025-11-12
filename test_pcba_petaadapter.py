@@ -303,7 +303,7 @@ def rack_test(cartridge: CartridgePETA,
 
         _check_if_sleep_en()
 
-        if 1:
+        if 0:
             cartridge.enable_mcu()
             print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
             cartridge.disable_mcu()
@@ -340,14 +340,14 @@ def rack_test(cartridge: CartridgePETA,
             print(ap.erase_flash())
             print(ap.program_flash())
             cartridge.disable_mcu()
-        if 1:
+        if 0:
             cartridge.disable_mcu()
             cartridge.enable_valmod()
             cartridge.disable_valmod()
             cartridge.configure_communication_to_mcu("i2c")
             cartridge.enable_mcu()
-            cartridge.switch_mosfet(0, 1)  # 0ohm
-            cartridge.switch_mosfet(1, 0)  # 20kohm
+            cartridge.switch_mosfet(0, 0)  # 0ohm
+            cartridge.switch_mosfet(1, 1)  # 20kohm
             print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
             sleep(2.0)
 
@@ -357,6 +357,32 @@ def rack_test(cartridge: CartridgePETA,
 
             #bat = Battery(BusMaster(cartridge.bus_to_mirco))
             #print(bat.temperature())
+        
+        if 1:
+            afe.disable_checksum()
+            cartridge.enable_valmod()  # ???
+            cartridge.configure_communication_to_mcu("can")
+            cartridge.enable_mcu()  # enable microcontroller
+            print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
+            sleep(5.0)
+            print(mcu.can_read_voltage())
+            print(mcu.can_read_current())
+        
+        if 1:
+            afe.disable_checksum()
+            cartridge.configure_communication_to_mcu("i2c")
+            cartridge.enable_mcu()  # enable microcontroller
+            print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
+            sleep(5.0)
+            print(cartridge.bus_to_mirco.i2c_bus_scan())
+            cartridge.disable_mcu()      
+            print(cartridge.backyard_bus.i2c_bus_scan())
+            print(cartridge.bus_to_gpio.i2c_bus_scan())
+            
+
+
+
+
         
         if 0:
             # NOTE: The µ-controller interacts with AFE and GG so program it
@@ -701,7 +727,7 @@ def rack_test(cartridge: CartridgePETA,
         for cell_no in range(1, num_cells):
             vsim.set_cell_n_voltage(cell_no, u_cell)
         psu2.configure_supply(u_supply, 0.080, 50, 1)
-        psu1.configure_supply(u_supply, 0.080, 50, 1)
+        psu1.configure_supply(u_supply, 0.080, 50, 0)
         sleep(1.0)
         print("Measure PSU1", psu1.get_all_measurements())
         print("Measure PSU2", psu2.get_all_measurements())
@@ -711,25 +737,32 @@ def rack_test(cartridge: CartridgePETA,
             cc = afe.read_cal1()
             value += cc["cc2_counts"]
             sleep(0.1)
-        print(cc)
+        print("cc average:", value/10)
 
-        print("AFE stored board offset:", afe.read_board_offset())
-        _offset_samples = afe.read_coulomb_counter_offset_sample()
-        print("OFFSET Samples:", _offset_samples)
-        _offset_samples = 1
-        board_offset = _offset_samples * int(round(value / 10))
-        #board_offset = -(value & 0x8000) | (value & 0x7fff)
-        if board_offset < -32768 or board_offset > 32767:
-            print(f"Board_offset out of boundaries -> cannot calibrate current: {board_offset}")
-            may_calibrate_current = False
+        bb = afe.read_cal1_average(num_samples=10, pause_between=0.1)
+        print("bb average:", bb["cc2_counts"])
+
+        if 0:  # skip board offset 
+            print("AFE stored board offset:", afe.read_board_offset())
+            _offset_samples = afe.read_coulomb_counter_offset_sample()
+            print("OFFSET Samples:", _offset_samples)
+            _offset_samples = 1
+            board_offset = _offset_samples * int(round(value / 10))
+            #board_offset = -(value & 0x8000) | (value & 0x7fff)
+            if board_offset < -32768 or board_offset > 32767:
+                print(f"Board_offset out of boundaries -> cannot calibrate current: {board_offset}")
+                may_calibrate_current = False
+            else:
+                may_calibrate_current = True
+            print("Board offset", board_offset)
+            if may_calibrate_current:
+                afe.enter_config_update_mode()
+                afe.write_board_offset(board_offset)
+                afe.exit_config_update_mode()
+                afe.disable_sleepmode()
         else:
             may_calibrate_current = True
-        print("Board offset", board_offset)
-        if may_calibrate_current:
-            afe.enter_config_update_mode()
-            afe.write_board_offset(board_offset)
-            afe.exit_config_update_mode()
-            afe.disable_sleepmode()
+        
 
         # Apply 1A discharge current through sense resistor
         print("FET status: ", afe.read_fet_status())
@@ -760,65 +793,38 @@ def rack_test(cartridge: CartridgePETA,
             raise RuntimeError("BCA bit not cleared after board offset calibration!") 
         print(f"Done ({toc-tic}s).")     
         #--------------------------------------------------------------
-
-        i_pack_a = 1.0
-        print(f"Apply {i_pack_a}A discharge current")
-        p_pack_a = (u_supply * i_pack_a)
-        print(u_supply, u_cell, i_pack_a, p_pack_a)
-        #psu1.set_output_state(0)
-        psu1.configure_sink(-i_pack_a, None, -(i_pack_a*1.05), u_supply, -(p_pack_a * 1.05), 0)
-        psu2.configure_supply(u_supply, i_pack_a*1.25, (p_pack_a * 1.10), 1)
-        for cell_no in range(1, num_cells):
-            vsim.set_cell_n_voltage(cell_no, u_cell)
-        sleep(0.1)
-        afe.enable_fets()
-        print("FET status: ", afe.read_fet_status())
-        psu1.set_output_state(1)
-        sleep(0.5)
-        i_psu_a = psu1.get_current()
-        print("Measure PSU1", psu1.get_all_measurements())
-        print("Measure PSU2", psu2.get_all_measurements())
-        #sleep(2.0)
-        cc2_current_a = afe.read_cc2_current()
-        print("PSU1 current:", i_psu_a)
-        print("AFE CC2 current:", cc2_current_a)
-        # check if we have 1A
-
-        # value = 0
-        # for i in range(10):
-        #     cc = afe.read_cal1()
-        #     value += cc["cc2_counts"]
-        #     sleep(0.1)
-        # print("CC a:", cc, value)
-        # cc_counts_a = int(round(value / 10))
-        # #cc_counts_a = -(value & 0x8000) | (value & 0x7fff)
-        # print(cc_counts_a)
+       
 
         # Apply HIGH discharge current through sense resistor
-        i_pack_b = 10.0
-        print(f"Apply {i_pack_b}A discharge current")
-        p_pack_b = (u_supply * i_pack_b)
-        print(u_supply, u_cell, i_pack_b, p_pack_b)
-        psu2.configure_supply(u_supply, i_pack_b*1.25, p_pack_b * 1.10, 1)
+        i_pack = 10.0
+        print(f"Apply {i_pack}A discharge current")
+        p_pack = (u_supply * i_pack)
+        print(u_supply, u_cell, i_pack, p_pack)
+        psu2.configure_supply(u_supply, i_pack*1.25, p_pack * 1.10, 1)
         #psu1.configure_cc_mode(-1.000, None, 22.09, 10.0, -60, 1)
-        psu1.configure_sink(-i_pack_b, None, -(i_pack_b*1.05), u_supply, -(p_pack_b * 1.05), 1)
+        psu1.configure_sink(-i_pack, None, -(i_pack*1.05), u_supply, -(p_pack * 1.05), 1)
         sleep(0.5)
         print("Measure PSU1", psu1.get_all_measurements())
         print("Measure PSU2", psu2.get_all_measurements())
-        i_psu_b = psu1.get_current()
+        i_psu = psu1.get_current()
         sleep(2.0)
-        cc2_current_b = afe.read_cc2_current()
-        print("PSU1 current:", i_psu_b)
-        print("AFE CC2 current:", cc2_current_b)
+        cc2_current = afe.read_cc2_current()
+        print("PSU1 current:", i_psu)
+        print("AFE CC2 current:", cc2_current)
         value = 0
-        for i in range(10):
+        for i in range(20):
             cc = afe.read_cal1()
             value += cc["cc2_counts"]
-            sleep(0.1)
+            sleep(0.005)
         print("CC b:", cc, value)
-        cc_counts_b = int(round(value / 10))
-        #cc_counts_b = -(value & 0x8000) | (value & 0x7fff)
-        print(cc_counts_b)
+        cc_counts = int(round(value / 20))
+        print(cc_counts)
+
+
+        verify_cc_gain , verify_capacity_gain, cc2_current_verify = afe.calib_cc_gain_and_capacity_gain(i_psu, num_samples=20, pause_between=0.005)
+        print("Verify AFE CC Gain:", verify_cc_gain)
+        print("Verify AFE Capacity Gain:", verify_capacity_gain)
+        print("Verify AFE CC2 current:", cc2_current_verify)
 
         _check_if_sleep_en()
         
@@ -829,7 +835,7 @@ def rack_test(cartridge: CartridgePETA,
         if (gg_current > -0.1) and (gg_current < 0.1):
             print("No current flow - skip CC Gain calibration")
         else:
-            gg_cc_gain = gg_cc_gain_stored * i_psu_b / gg_current * 1  # * 1 Ohm
+            gg_cc_gain = gg_cc_gain_stored * i_psu / gg_current * 1  # * 1 Ohm
             gg_cc_delta = gg_cc_gain * 1193046.0  # magic constant
             print("New CC Gain:", gg_cc_gain)
             print("New CC Delta:", gg_cc_delta)
@@ -851,31 +857,39 @@ def rack_test(cartridge: CartridgePETA,
         print("Measure PSU2", psu2.get_all_measurements())
 
         #if (cc_counts_a == cc_counts_b) or (cc_counts_a == 0) or (cc_counts_b == 0):
-        if (cc_counts_b == 0):
-            raise ValueError(f"Current calibration results will cause div by zero error: {cc_counts_b}")
+        if (cc_counts == 0):
+            raise ValueError(f"Current calibration results will cause div by zero error: {cc_counts}")
 
         stored_cc_gain = afe.read_cc_gain()
         stored_capacity_gain = afe.read_capacity_gain()
         print("AFE stored CC Gain:", stored_cc_gain)
         print("AFE stored Cap Gain:", stored_capacity_gain)
 
-        #current_diff = (i_psu_b - i_psu_a)  # in Amps
-        #cc_counts_diff = (cc_counts_b - cc_counts_a)
-        #cc2_current_diff = (cc2_current_b - cc2_current_a)
-        #print("DIFFS:", current_diff, cc_counts_diff, cc2_current_diff)
-        #cc_gain_float = (current_diff / cc_counts_diff) / 1e-3
-        #cc_gain_float = (current_diff / cc2_current_diff) * stored_cc_gain  # alternative calculation using CC2 current directly
-        cc_gain_float = (i_psu_b / cc2_current_b) * stored_cc_gain  # alternative calculation using CC2 current directly
+        
+        # CC Gain = 1e+6 * VREF2 / (5 × 32768 × Rsense in mΩ), with VREF2 = 1.24V
+        # CC Gain = 1e+6 * 1.24 / (5 * 32768 * Rsense in mΩ)
+        # CC Gain = 7.5684 / (Rsense in mΩ)
+
+        # cc_counts / cc_gain = ref_current / (7.5684 / (Rsense in mΩ))
+        # => cc_gain = ref_current / (7.5684 / (Rsense in mΩ)) / cc_counts 
+        # => cc_gain = ((ref_current * (Rsense in mΩ) / 7.5684) / cc_counts) * 1e+6
+        # => cc_gain = ((ref_current * 2 ) / 7.5684) / cc_counts) * 1e+6
+        # => cc_gain = (ref_current / cc_counts) * 264256.6460546483
+
+        cc_gain_float2 = (i_psu / cc_counts) * 264256.6460546483         
+        cc_gain_float = (i_psu / cc2_current) * stored_cc_gain  # alternative calculation using CC2 current directly
         capacity_gain_float = 298261.6178 * cc_gain_float  # Note: constant 298261.6178 comes from TI doc
 
+        
         print("AFE new CC Gain:", cc_gain_float)
+        print("AFE new CC Gain (alt):", cc_gain_float2)
         print("AFE new Cap Gain:", capacity_gain_float)
 
         if may_calibrate_current:
             # write calibration into RAM
             afe.enter_config_update_mode()
             # CC Offset, CC Gain, Capacity Gain
-            afe.write_board_offset(board_offset)
+            #afe.write_board_offset(board_offset)   # Skip board offset
             afe.write_cc_gain(cc_gain_float)
             afe.write_capacity_gain(capacity_gain_float)
             afe.exit_config_update_mode()
@@ -999,36 +1013,39 @@ def rack_test(cartridge: CartridgePETA,
         #--------------------------------------------------------------------------------------
         # === write to OTP ===
 
-        # u_supply = 11.0  # target stack voltage for OTP programming
-        # u_cell = round(u_supply / num_cells, 2)
-        # print(f"Apply {u_supply}v stack voltage for OTP programming")
-        # print(u_supply, u_cell)
-        # afe.disable_fets()
-        # print("FET status: ", afe.read_fet_status())        
-        # for cell_no in range(1, num_cells):
-        #     vsim.set_cell_n_voltage(cell_no, u_cell)
-        # psu2.configure_supply(u_supply, 0.080, 50, 1)
-        # psu1.configure_supply(u_supply, 0.080, 50, 1)        
-        # sleep(1.0)
-        # print("Measure PSU1", psu1.get_all_measurements())
-        # print("Measure PSU2", psu2.get_all_measurements())
-        # print("Cells:", afe.read_cell_voltages())
-        # print("TOS:", afe.read_tos_voltage())        
-        # afe.enter_config_update_mode()
-        # results, data_fail_addr = afe.read_otp_wr_check()
-        # if results == 0x80:
-        #     # all ok -> write to OTP
-        #     print(f"AFE ready: 0x{results:02X} -> write to OTP")
-        #     afe.write_otp()
-        #     sleep(0.5)
-        #     afe.exit_config_update_mode()
-        #     afe.disable_sleepmode()
-        # else:
-        #     afe.exit_config_update_mode()
-        #     afe.disable_sleepmode()
-        #     #raise RuntimeError(f"OTP write check failed at address 0x{data_fail_addr:04X} with result 0x{results:02X}")
-        #     print(f"FAILED: OTP write check at address 0x{data_fail_addr:04X} with result 0x{results:02X}")
+        def write_to_otp():
+            print("Write configuration to OTP memory")
+            u_supply = 11.0  # target stack voltage for OTP programming
+            u_cell = round(u_supply / num_cells, 2)
+            print(f"Apply {u_supply}v stack voltage for OTP programming")
+            print(u_supply, u_cell)
+            afe.disable_fets()
+            print("FET status: ", afe.read_fet_status())
+            psu1.configure_supply(u_supply, 0.080, 50, 1)
+            for cell_no in range(1, num_cells):
+                vsim.set_cell_n_voltage(cell_no, u_cell)
+            psu2.configure_supply(u_supply, 0.080, 50, 1)               
+            sleep(1.0)
+            print("Measure PSU1", psu1.get_all_measurements())
+            print("Measure PSU2", psu2.get_all_measurements())
+            print("Cells:", afe.read_cell_voltages())
+            print("TOS:", afe.read_tos_voltage())        
+            afe.enter_config_update_mode()
+            results, data_fail_addr = afe.read_otp_wr_check()
+            if results == 0x80:
+                # all ok -> write to OTP
+                print(f"AFE ready: 0x{results:02X} -> write to OTP")
+                afe.write_otp()
+                sleep(0.5)
+                afe.exit_config_update_mode()
+                afe.disable_sleepmode()
+            else:
+                afe.exit_config_update_mode()
+                afe.disable_sleepmode()
+                #raise RuntimeError(f"OTP write check failed at address 0x{data_fail_addr:04X} with result 0x{results:02X}")
+                print(f"FAILED: OTP write check at address 0x{data_fail_addr:04X} with result 0x{results:02X}")
 
+        write_to_otp()
 
         #------------------------------------------------------------------------------------------
         # MOSFET Test
@@ -1036,38 +1053,48 @@ def rack_test(cartridge: CartridgePETA,
         _check_if_sleep_en()
 
         
-        u_cell = 3.6
-        u_supply = u_cell * num_cells
-        print(f"Apply {u_cell} cell voltages for MOSFET test")
-        print(u_supply, u_cell)
-        psu1.configure_sink(-0.040, 1000.0, -0.050, u_supply, -5.0, 0)
-        for cell_no in range(1, num_cells):
-            vsim.set_cell_n_voltage(cell_no, u_cell)
-        psu2.configure_supply(u_supply, 0.080, 50, 1)
-        sleep(1.0)
-        print("Measure PSU1", psu1.get_all_measurements())
-        print("Measure PSU2", psu2.get_all_measurements())
-        print(read_voltages_from_daq())
-        afe.disable_fets()
-        afe.disable_pf_control()
-        print("FET status: ", afe.read_fet_status())
-        print("Measure PSU1 (should be 0)", psu1.get_all_measurements())  # should be 0
-        psu1.set_output_state(1)  # sink ON
-        afe.discharge_test()  # discharge FET ON
-        print("FET status: ", afe.read_fet_status())
-        sleep(2.0)
-        print("Measure PSU1 (should show current)", psu1.get_all_measurements())
-        afe.charge_test()
-        print("FET status: ", afe.read_fet_status())
-        sleep(2.0)
-        print("Measure PSU1 (voltage should be equal)", psu1.get_all_measurements())
-        afe.discharge_test()  # OFF
-        print("FET status: ", afe.read_fet_status())
-        sleep(1.0)
-        print("Measure PSU1 (should be 0)", psu1.get_all_measurements())  # should be 0
-        psu1.set_output_state(0)  # sink OFF
-        print("FET status: ", afe.read_fet_status())
+        def mosfet_test():
+            u_cell = 3.6
+            u_supply = u_cell * num_cells
+            print(f"Apply {u_cell} cell voltages for MOSFET test")
+            print(u_supply, u_cell)
+            psu1.configure_sink(-0.040, 1000.0, -0.050, u_supply, -5.0, 0)
+            for cell_no in range(1, num_cells):
+                vsim.set_cell_n_voltage(cell_no, u_cell)
+            psu2.configure_supply(u_supply, 0.080, 50, 1)
+            sleep(1.0)
+            print("Measure PSU1", psu1.get_all_measurements())
+            print("Measure PSU2", psu2.get_all_measurements())
+            print(read_voltages_from_daq())
+            afe.disable_fets()
+            afe.disable_pf_control()
+            afe.read_fet_status()
+            print("FET status: ", afe._fet_status)
+            print("Measure PSU1 (should be 0)", psu1.get_all_measurements())  # should be 0        
+            psu1.set_output_state(1)  # sink ON
+            afe.discharge_test()  # discharge FET ON
+            afe.read_fet_status()
+            print("FET status: ", afe._fet_status)
+            sleep(2.0)
+            print("Measure PSU1 (should show current)", psu1.get_all_measurements())
+            print("Measure PSU2", psu2.get_all_measurements())        
+            afe.charge_test()
+            afe.read_fet_status()
+            afe.read_fet_status()
+            print("FET status: ", afe._fet_status)
+            sleep(2.0)
+            print("Measure PSU1 (voltage should be equal)", psu1.get_all_measurements())
+            print("Measure PSU2", psu2.get_all_measurements())        
+            afe.discharge_test()  # OFF
+            afe.read_fet_status()
+            print("FET status: ", afe._fet_status)
+            sleep(1.0)
+            print("Measure PSU1 (should be 0)", psu1.get_all_measurements())  # should be 0
+            psu1.set_output_state(0)  # sink OFF
+            afe.read_fet_status()
+            print("FET status: ", afe._fet_status)
 
+        mosfet_test()
 
         #------------------------------------------------------------------------------------------
         # Test FUSE pin
@@ -1213,7 +1240,7 @@ def rack_test(cartridge: CartridgePETA,
         #------------------------------------------------------------------------------------------
         # Heater Path Test
         
-        def test_heater_path()
+        def test_heater_path():
             u_cell = 3.64
             u_supply = u_cell * num_cells
             print(f"Apply {u_cell} cell voltages for Overvoltags/2nd Protection test")
@@ -1278,7 +1305,7 @@ def rack_test(cartridge: CartridgePETA,
             cartridge.select_bus_to_micro("i2c")
             sleep(0.5)
             cartridge.disable_mcu()        
-        if 1:
+        if 0:
             afe.disable_checksum()
             cartridge.enable_valmod()  # ???
             cartridge.configure_communication_to_mcu("can")
@@ -1413,7 +1440,23 @@ if __name__ == "__main__":
 
     cart = CartridgePETA(can, dutcom)
     #test_cartridge_only(cart)
+    # cart.switch_mosfet(0, 1)  # 0ohm
+    # cart.switch_mosfet(1, 1)  # 20kohm
+    # cart.switch_mosfet(2, 1)  # 200kohm
+    # cart.switch_mosfet(3, 1)  # 400kohm
+    
+    # cart.switch_mosfet(0, 0)  # 0ohm
+    # cart.switch_mosfet(1, 1)  # 20kohm
+    # cart.switch_mosfet(2, 0)  # 200kohm
+    # cart.switch_mosfet(3, 0)  # 400kohm
+    
+    
+    # cart.switch_some_io(7,0)    
+    # cart.switch_some_io(7,1)
 
+    # cart.switch_some_io(4,0)
+    # cart.switch_some_io(4,1)
+    
     #mcu = PetaMCU(can, cart.bus_to_mirco)
 
     #cart.select_bus_to_micro("can")
