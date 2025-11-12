@@ -475,7 +475,7 @@ class BQ34Z100:
         num_samples = int(num_samples)
         _voltage_meas = 0
         for n in range(num_samples):
-            _voltage_meas = self.voltage()  # in V
+            _voltage_meas += self.voltage()  # in V
             if pause_between:
                 sleep(pause_between)
         _voltage_meas = _voltage_meas / num_samples
