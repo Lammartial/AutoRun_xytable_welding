@@ -1295,13 +1295,13 @@ class BQ76942:
             raise ValueError(f"Length of parameter array reference_cell_voltages {len(reference_cell_voltages)} has to match length of cell_voltage_counts {len(cell_voltage_counts)}.")
         
         # calculate the cell gains
-        _dummy_gain = 0  # 12100
+        _dummy_gain = 12100
         cell_gain = [0] * len(cell_voltage_counts)
         for i in range(0, len(cell_gain)):
             _test_voltage = reference_cell_voltages[i]  # in Volts
             _adc_counts = cell_voltage_counts[i]
             print(_test_voltage, _adc_counts)  # DEBUG
-            if _adc_counts == 0:
+            if (_adc_counts == 0) or (round(_test_voltage) == 0):
                 # avoid div by zero
                 cell_gain[i] = _dummy_gain
                 continue
@@ -1806,6 +1806,10 @@ class BQ76942:
         Returns:
             Tuple[int, int]: _description_
         """
+
+        # setup OTPW_EN bit in Manufact Status Init
+        buf = pack("<H", 0x00d0)  # OTPW_EN = 1, PF_EN = 1, FET_EN = 1
+        self.write_subcommand(0x9343, data=buf)
 
         buf = self.read_subcommand(0x00a0, pause_before_data_available=0.15)  # SIMULATION
         #buf = self.read_subcommand(0x00a1, pause_before_data_available=0.15)  # !!! HOT FUNCTION !!!
