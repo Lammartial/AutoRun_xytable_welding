@@ -530,7 +530,7 @@ class BQ76942:
             return True # already in correct mode
         # Note: After sealing, the bq will not accept unsealing for about
         #       3s to 5s, therefore we retry.
-        for _ in range(0, 20):
+        for _ in range(0, 30):
             self._write_key(unseal_key)
             sleep(0.25) # wait a bit (250ms)
             if self.is_unsealed(refresh=True):
@@ -547,7 +547,7 @@ class BQ76942:
         #print("try full access")
         # Batteries might need a time between 1s and 4s to accept full access
         # after the unseal key was written.
-        for _ in range(0, 8):
+        for _ in range(0, 10):
             sleep(0.5)
             self._write_key(fullaccess_key)
             if self.is_unsealed(check_fullaccess=True, refresh=True):
