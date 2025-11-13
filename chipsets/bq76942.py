@@ -290,9 +290,9 @@ class BQ76942:
 
 
     # ----------------------------------------------------------------------------------------------
-   
-    
-    def _float_to_flash(self, value: float) -> int:
+
+
+    def _donotuse_float_to_flash(self, value: float) -> int:
         """This is the TI version of "IEEE754" float.
         Something is slightly different.
         """
@@ -315,7 +315,7 @@ class BQ76942:
         return result
 
 
-    def _flash_to_float(self, value: int) -> float:
+    def _donotuse_flash_to_float(self, value: int) -> float:
         exponent = 0xff & int(value / (2**23))  # exponent is most significant byte after sign bit
         mantissa = value % (2**23)
         if (0x80000000 & value == 0):   # check if number is positive
@@ -331,10 +331,38 @@ class BQ76942:
         if not(isPositive):
             result *= -1
         return float(result)
-        
+
+
+    def _float_to_flash(self, value: float) -> int:
+        """Convert a float into the BQ76942 flash format (4 bytes unsigned int).
+
+        Args:
+            value (float): _description_
+
+        Returns:
+            int: _description_
+        """
+        b = pack("f", value)  # float to bytes
+        i = unpack_from("<I", b, 0)[0]  # bytes to unsigned int (4 bytes), little endian
+        return i
+
+    def _flash_to_float(self, value: int) -> float:
+        """Convert a BQ76942 flash format (4 bytes unsigned int) into a float.
+
+        Args:
+            value (int): _description_
+
+        Returns:
+            float: _description_
+        """
+        b = pack("<I", value)  # unsigned int (4 bytes), little endian to bytes
+        f = unpack_from("f", b, 0)[0]  # bytes to float
+        return f
+
+
 
     # ----------------------------------------------------------------------------------------------
-   
+
 
     def disable_checksum(self) -> bool:
         buf = int(0x29e7).to_bytes(2, "little" )
@@ -385,7 +413,7 @@ class BQ76942:
             if not invert and self.is_ready(): return True
             if invert and not self.is_ready(): return True
             sleep(pause / 1000000)
-        if throw: 
+        if throw:
             raise IOError("Timeout {}ms while waiting for AFE ready.".format(timeout_ms))
         return False
 
@@ -552,8 +580,8 @@ class BQ76942:
         self.write_subcommand(0x9256, data=bytearray([0x01]))  # b0=SEAL, b1=LOCK_CFG, b2=PERM_SEAL
         self.read_battery_status()  # DEBUG
         self.exit_config_update_mode()  # this activates the SEAL
-        #self.write_subcommand(0x0030)  # this is chipset specific! Send SEAL command        
-        #self.read_battery_status()  # DEBUG        
+        #self.write_subcommand(0x0030)  # this is chipset specific! Send SEAL command
+        #self.read_battery_status()  # DEBUG
         self.disable_sleepmode()
         self.read_battery_status()  # DEBUG
         sleep(0.1)
@@ -590,7 +618,7 @@ class BQ76942:
     def read_control_status(self) -> Tuple[int]:
         buf, ok = self.readBytes(self.address, 0x00, 2)
         if ok:
-            self._control_status = self._control_status_to_dict(buf) 
+            self._control_status = self._control_status_to_dict(buf)
         return _od2t(self._control_status)
 
 
@@ -625,7 +653,7 @@ class BQ76942:
         if ok:
             self._battery_status = self._battery_status_to_dict(buf, hexi=hexi)
         return _od2t(self._battery_status)
-        
+
 
     def read_battery_status_robust(self, retries: int = 10, pause_on_retry: float = 0.1) -> None:
         """Reads battery_status() until successfully read or throw after limit of retries."""
@@ -673,7 +701,7 @@ class BQ76942:
         if ok:
             self._alarm_status = self._alarm_status_to_dict(buf)
         _od2t(self._alarm_status)
-        
+
 
     #----------------------------------------------------------------------------------------------
 
@@ -835,7 +863,7 @@ class BQ76942:
         Returns:
             float, bool: The CC2 current in Amperes and a boolean indicating success.
         """
-       
+
         raw, ok = self.readWord(0x3A, signed=True)  # CC2 Current register
         if not ok:
             return None
@@ -856,7 +884,7 @@ class BQ76942:
             List[float], List[str]: List of temperatures read, all values in raw as hex format str.
         """
 
-       
+
         scale = [self._standard_scale_temp] * 10  # 10 = number of temperature measurement points
         temperatures = ()
         #raw = ()
@@ -991,7 +1019,7 @@ class BQ76942:
 
     def discharge_test(self) -> bool:
         return self.write_subcommand(0x0020)
-  
+
 
     def all_fets_on(self, hexi: bool | str| None = None) -> bool:
         """Using build-in function of BQ76942.
@@ -1002,7 +1030,7 @@ class BQ76942:
         Returns:
             bool: _description_
         """
-        
+
         return self.write_subcommand(0x0096)
 
 
@@ -1020,13 +1048,13 @@ class BQ76942:
 
     def toggle_fet_enable(self, hexi: bool | str| None = None) -> bool:
         return self.write_subcommand(0x0022)
-    
+
     def toggle_pf_enable(self, hexi: bool | str| None = None) -> bool:
         return self.write_subcommand(0x0024)
 
     #----------------------------------------------------------------------------------------------
     # controlled switch functions
-    
+
     def enable_fets(self, timeout: float = 5.0, pause_between: float = 0.1) -> bool:
         """ENABLE CHG and DSG FETs using toggle and flag check.
         Retries until timeout using given pause between the retries.
@@ -1036,7 +1064,7 @@ class BQ76942:
             pause_between (float, optional): _description_. Defaults to 0.1.
 
          Returns:
-            bool: True, if FETs could be enabled, False if not 
+            bool: True, if FETs could be enabled, False if not
         """
 
         n = int(round(timeout / pause_between))  # split the timeout into rounds
@@ -1058,7 +1086,7 @@ class BQ76942:
 
         #raise RuntimeError(f"Could not enable FET {status}")
         return False
-    
+
 
     def disable_fets(self, timeout: float = 5.0, pause_between: float = 0.1) -> bool:
         """DISABLE FETs CHG and DSG FETs using toggle and flag check.
@@ -1069,7 +1097,7 @@ class BQ76942:
             pause_between (float, optional): _description_. Defaults to 0.1.
 
         Returns:
-            bool: True, if FETs could be DISABLED, False if not 
+            bool: True, if FETs could be DISABLED, False if not
         """
 
         n = int(round(timeout / pause_between))  # split the timeout into rounds
@@ -1079,7 +1107,7 @@ class BQ76942:
             status = self._manufact_status
             print(status)  # DEBUG
             if (status["FET_EN"] == 0) and (status["DSG_TEST"] == 0) and (status["CHG_TEST"] == 0):
-                return True      
+                return True
             if (status["FET_EN"] == 1):
                 # need to disable FW control
                 self.toggle_fet_enable()
@@ -1088,7 +1116,7 @@ class BQ76942:
             if (status["CHG_TEST"] == 1):
                 self.charge_test() # toggle
             sleep(pause_between)
-            
+
         #raise RuntimeError(f"Could not disable FET {status}")
         return False
 
@@ -1101,7 +1129,7 @@ class BQ76942:
             pause_between (float, optional): _description_. Defaults to 0.1.
 
         Returns:
-            bool: True, if PF_EN could be ENABLED, False if not 
+            bool: True, if PF_EN could be ENABLED, False if not
         """
 
         return self._switch_manufacturing_status_state("FET_EN", 1, self.toggle_fet_enable, timeout=timeout, pause_between=pause_between)
@@ -1116,7 +1144,7 @@ class BQ76942:
             pause_between (float, optional): _description_. Defaults to 0.1.
 
         Returns:
-            bool: True, if PF_EN could be ENABLED, False if not 
+            bool: True, if PF_EN could be ENABLED, False if not
         """
 
         return self._switch_manufacturing_status_state("FET_EN", 0, self.toggle_fet_enable, timeout=timeout, pause_between=pause_between)
@@ -1131,7 +1159,7 @@ class BQ76942:
             pause_between (float, optional): _description_. Defaults to 0.1.
 
         Returns:
-            bool: True, if PF_EN could be ENABLED, False if not 
+            bool: True, if PF_EN could be ENABLED, False if not
         """
 
         return self._switch_manufacturing_status_state("PF_EN", 1, self.toggle_pf_enable, timeout=timeout, pause_between=pause_between)
@@ -1146,12 +1174,12 @@ class BQ76942:
             pause_between (float, optional): _description_. Defaults to 0.1.
 
         Returns:
-            bool: True, if FETs could be DISABLED, False if not 
+            bool: True, if FETs could be DISABLED, False if not
         """
 
         return self._switch_manufacturing_status_state("PF_EN", 0, self.toggle_pf_enable, timeout=timeout, pause_between=pause_between)
-       
-    
+
+
 
     def _switch_manufacturing_status_state(self, key: str, target_state: int, toggle_func: Callable, timeout: float = 5.0, pause_between: float = 0.1) -> bool:
         """Switches a flag from manufacturing state using toggle and flag check.
@@ -1162,7 +1190,7 @@ class BQ76942:
             pause_between (float, optional): _description_. Defaults to 0.1.
 
         Returns:
-            bool: True, if state could be activated, False if not 
+            bool: True, if state could be activated, False if not
         """
 
         target_state = int(target_state)  # Teststand
@@ -1182,14 +1210,14 @@ class BQ76942:
                     toggle_func()
                     has_been_toggled = True
             sleep(pause_between)
-            
+
         #raise RuntimeError(f"Could not disable PF_Enable {status}")
         return False
 
 
-   
+
     #----------------------------------------------------------------------------------------------
-   
+
     def read_dastatus(self) -> Tuple[List[int], List[int]]:
         """Reads all DAStatus 1 to 3
 
@@ -1216,7 +1244,7 @@ class BQ76942:
 
     def read_dastatus_average(self, num_samples: int, pause_between: float = 0.005) -> Tuple[List[float], List[float]]:
         _cell_voltages = [0] * self._max_possible_cells
-        _cell_currents = [0] * self._max_possible_cells     
+        _cell_currents = [0] * self._max_possible_cells
         for n in enumerate(range(int(num_samples))):
             _cv, _cc = self.read_dastatus()
             if len(_cv) < len(_cell_voltages):
@@ -1267,7 +1295,7 @@ class BQ76942:
         for k,v in cal1.items():
             result[k] = (v / num_samples) if isinstance(v, (int,float)) else v
         return result
-    
+
 
     #----------------------------------------------------------------------------------------------
 
@@ -1289,11 +1317,11 @@ class BQ76942:
             Tuple[float, np.array]: _description_
         """
         reference_cell_voltages = list(reference_cell_voltages)
-        # Take the average of measurements and calculate gains        
+        # Take the average of measurements and calculate gains
         cell_voltage_counts, _  = self.read_dastatus_average(num_samples=int(num_samples), pause_between=pause_between)
         if len(cell_voltage_counts) != len(reference_cell_voltages):
             raise ValueError(f"Length of parameter array reference_cell_voltages {len(reference_cell_voltages)} has to match length of cell_voltage_counts {len(cell_voltage_counts)}.")
-        
+
         # calculate the cell gains
         _dummy_gain = 12100
         cell_gain = [0] * len(cell_voltage_counts)
@@ -1327,14 +1355,14 @@ class BQ76942:
         return float(cell_offset), np.array([float(g) for g in cell_gain])  # Teststand easier to handle
 
 
-    def calib_write_pack_tos_ld_voltages(self, ref_pack_voltage: float, ref_tos_voltage: float, ref_ld_voltage: float, 
+    def calib_write_pack_tos_ld_voltages(self, ref_pack_voltage: float, ref_tos_voltage: float, ref_ld_voltage: float,
                                        num_samples: int = 10, pause_between: float = 0.005) -> Tuple[float]:
         """Calibrates Pack, TOS and LD Voltages.
-        
+
         Note: NO CURRENT WHEN CALLING THIS FUNCTION!
 
         """
-        
+
         d = self.read_cal1_average(num_samples=num_samples, pause_between=pause_between)
         # Calculate PACK, TOS, LD gains by using the measured voltages in cV (not mV !!)
         PACK_Gain = int(round(2**16 * ((ref_pack_voltage * 1e+2) / d["pack_pin_adc_counts"])))
@@ -1343,12 +1371,12 @@ class BQ76942:
         # write voltage calibration into RAM
         self.enter_config_update_mode()
         self.write_pack_gain(PACK_Gain)
-        self.write_tos_gain(TOS_Gain)        
-        self.write_ld_gain(LD_Gain)        
+        self.write_tos_gain(TOS_Gain)
+        self.write_ld_gain(LD_Gain)
         self.exit_config_update_mode()
         self.disable_sleepmode()  # after exit_config_update() the SLEEP_EN is being set again...
         return PACK_Gain, TOS_Gain, LD_Gain
-   
+
 
     def calib_board_offset_current(self, num_samples: int = 10, pause_between: float = 0.005) -> float:
         """Measured at 0a current."""
@@ -1358,15 +1386,15 @@ class BQ76942:
         offset_samples = 1  # stored_offset_samples
         d = self.read_cal1_average(num_samples=num_samples, pause_between=pause_between)
         board_offset_float = offset_samples * d["cc2_counts"] * 1e+1
-        return board_offset_float 
+        return board_offset_float
 
 
     def calib_write_board_offset_current(self, num_samples: int = 10, pause_between: float = 0.005) -> int:
         """Write the board offset calibration value to the RAM.
-        
+
         Note: NO CURRENT WHEN CALLING THIS FUNCTION!
-            as the exit config update mode() will enable the 
-            firmware FET control again which will kill the 
+            as the exit config update mode() will enable the
+            firmware FET control again which will kill the
             board.
         Args:
             num_samples (int): Number of samples to average
@@ -1377,17 +1405,17 @@ class BQ76942:
         board_offset_float = self.calib_board_offset_current(num_samples=num_samples, pause_between=pause_between)
         board_offset = int(round(board_offset_float))
         if board_offset < -32768 or board_offset > 32767:
-            raise ValueError(f"Board_offset out of boundaries -> cannot calibrate current: {board_offset}")        
+            raise ValueError(f"Board_offset out of boundaries -> cannot calibrate current: {board_offset}")
         # write calibration into RAM
         self.enter_config_update_mode()
         self.write_board_offset(board_offset)
         self.exit_config_update_mode()
         self.disable_sleepmode()
-        return board_offset  
-    
+        return board_offset
 
 
-    def calib_cc_gain_and_capacity_gain(self, ref_current: float, num_samples: int = 10, pause_between: float = 0.025) -> Tuple[float, float]:        
+
+    def calib_cc_gain_and_capacity_gain(self, ref_current: float, num_samples: int = 10, pause_between: float = 0.025) -> Tuple[float, float]:
         """Measure at HIGH current."""
         num_samples = int(num_samples)
         stored_cc_gain = self.read_cc_gain()
@@ -1401,20 +1429,20 @@ class BQ76942:
         #cc_gain_float = (current_diff / cc_counts_diff) / 1e-3
         #cc_gain_float = (current_diff / cc2_current_diff) * stored_cc_gain  # alternative calculation using CC2 current directly
         # cc2_current * stored_cc_gain = ref_current
-        # DEFAULT: 7.5684 / 1.012 = cc_gain 
+        # DEFAULT: 7.5684 / 1.012 = cc_gain
         cc_gain_float = (ref_current / cc2_current) * stored_cc_gain  # alternative calculation using CC2 current directly
-        capacity_gain_float = 298261.6178 * cc_gain_float  # Note: constant 298261.6178 comes from TI doc        
+        capacity_gain_float = 298261.6178 * cc_gain_float  # Note: constant 298261.6178 comes from TI doc
         return cc_gain_float, capacity_gain_float, cc2_current
 
 
     def write_current_calibration(self, board_offset_float: float, cc_gain_float: float , capacity_gain_float: float) -> bool:
         """Write the current calibration values to the RAM.
-        
+
         Note: NO CURRENT WHEN CALLING THIS FUNCTION!
-            as the exit config update mode() will enable the 
-            firmware FET control again which will kill the 
+            as the exit config update mode() will enable the
+            firmware FET control again which will kill the
             board.
-        
+
         Args:
             board_offset_float (float): Board current offset
             cc_gain_float (float): _description_
@@ -1426,7 +1454,7 @@ class BQ76942:
 
         board_offset = int(round(board_offset_float))  # Teststand
         if board_offset < -32768 or board_offset > 32767:
-            raise ValueError(f"Board_offset out of boundaries -> cannot calibrate current: {board_offset}")        
+            raise ValueError(f"Board_offset out of boundaries -> cannot calibrate current: {board_offset}")
         # write calibration into RAM
         self.enter_config_update_mode()
         self.write_board_offset(board_offset)
@@ -1440,7 +1468,7 @@ class BQ76942:
     def calib_write_temperatures(self, reference_temperature: float, num_samples: int = 5, pause_between: float = 0.05) -> Tuple[float]:
         """Expects a calibration reference temperature as INPUT and calculates from that
         the following offsets:
-        
+
             Internal Temperature
             CFETOFF Temperature (CFETOFF pin thermistor) - unused
             DFETOFF Temperature (DFETOFF pin thermistor) - unused
@@ -1473,10 +1501,10 @@ class BQ76942:
         #print("T-OFFSETS:", temp_offsets)
         # 3) write the temperature calibration values
         self.enter_config_update_mode()
-        self.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets        
+        self.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets
         self.write_temperature_calibration_offsets(temp_offsets)
-        self.exit_config_update_mode()     
-        self.disable_sleepmode()  # after exit_config_update() the SLEEP_EN is being set again...   
+        self.exit_config_update_mode()
+        self.disable_sleepmode()  # after exit_config_update() the SLEEP_EN is being set again...
         return tuple(temp_offsets)
 
 
@@ -1781,7 +1809,7 @@ class BQ76942:
     def enable_sleepmode(self) -> bool:
         return self.write_subcommand(0x0099)
 
-   
+
     def enter_deepsleepmode(self) -> bool:
         ok1 = self.write_subcommand(0x000F)
         ok2 = self.write_subcommand(0x000F)  # need to be send twice in 4s
@@ -1818,7 +1846,26 @@ class BQ76942:
         return results, data_fail_addr
 
 
+#--------------------------------------------------------------------------------------------------
 
+def test_float_conversion() -> None:
+    """Test the float conversion functions."""
+
+    afe = BQ76942(None)  # no interface needed for this test
+    test_values = [0.0, 1.0, 12.34, 123.456, 0.1234, 0.0001, -0.0001, 10000.0, 65535.0]
+    for v in test_values:
+        f = afe._donotuse_float_to_flash(v)
+        print("A", hex(f))
+        f2 = afe._float_to_flash(v)
+        print("B", hex(f2))
+        v2 = afe._donotuse_flash_to_float(f)
+        print(f"A: Original: {v} -> Flash: {hex(f)} -> Converted back: {v2}")
+        if not (abs(v - v2) < 0.01):
+            print(f"A: Value mismatch: {v} != {v2}")
+        v3 = afe._flash_to_float(f2)
+        print(f"B: Original: {v} -> Flash: {hex(f2)} -> Converted back: {v3}")
+        if not (abs(v3 - v) < 0.01):
+            print(f"Value mismatch: {v3} != {v}")
 
 #--------------------------------------------------------------------------------------------------
 
@@ -1827,7 +1874,8 @@ if __name__ == "__main__":
     #logger_init(filename_base=None)  ## init root logger
     #_log = getLogger(__name__, DEBUG)
 
-    print("NO TESTS: ", __file__)
+    test_float_conversion()
+    #print("NO TESTS: ", __file__)
 
     #
     # to test please setup a "test_xxx.py" module !
