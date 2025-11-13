@@ -254,798 +254,834 @@ def rack_test(cartridge: CartridgePETA,
         print(afe.read_safety_status(hexi=True))
         print(afe.read_dastatus())
 
-        afe.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets
-
-        print("AFE: SEALED?", afe.is_sealed(refresh=True))
-        print("AFE: FULL ACCESS?", afe.is_unsealed(check_fullaccess=True, refresh=True))
-        #print("AFE: SEALING...", afe.seal())
-        print("AFE: enable full access ...", afe.enable_full_access())
-        print("AFE: FULL ACCESS?", afe.is_unsealed(check_fullaccess=True, refresh=True))
-
-        # AFE need always transfer into RAM
-        ff1 = BQStudioFileFlexFlasher(afe, base_path / "GG_3412185A-02_A_draft4_unsealed_PF_Fet_dis_CDFETOFF_PDwn_Petalite_AFE_settings.gm.fs" )
-        ff1.validate_file()
-        ff1.program_fw_file()
+        def control_vcc_voltages():
+            print("Read voltages from DAQ:")
+            u_cells, u_xtras = read_voltages_from_daq()
+            print("Cells: ", u_cells)
+            print("Cellstack: ", u_xtras[0])
+            print("+3.3v VCC: ", u_xtras[1])
+            print("+1.8v VCC: ", u_xtras[2])
+            print("Pack: ", u_xtras[3])
         
-        sleep(0.5)
-        #afe.disable_checksum()
-        afe.disable_sleepmode()  # Sleep Disable 0x009A to prevent CHG FET from opening
-        
-        psu1.set_output_state(0) # disable packside supply
-
-        print(afe.read_cell_voltages())
-        print(afe.read_temperatures())
-
-        afe.read_battery_status()
-        afe.read_manufacturing_status()
-        afe.read_safety_status()
-        afe.read_alarm_status()
-        afe.read_fet_status()
-        print("BATTERY STATUS:", afe._battery_status)
-        print("MFG STATUS:", afe._manufact_status)
-        print("SAFETY STATUS:", afe._safety_status)
-        print("ALARM STATUS:", afe._alarm_status)
-        print("FET status: ", afe._fet_status)
-        #print(afe.all_fets_on())
-        #print(afe.discharge_test())
-        #print(afe.charge_test())
-        #print(afe.read_manufacturing_status())
-        
-        print("Read voltages from DAQ:")
-        u_cells, u_xtras = read_voltages_from_daq()
-        print("Cells: ", u_cells)
-        print("Cellstack: ", u_xtras[0])
-        print("+3.3v VCC: ", u_xtras[1])
-        print("+1.8v VCC: ", u_xtras[2])
-        print("Pack: ", u_xtras[3])
-
-        cartridge.select_bus_to_micro("i2c")
-
-        _check_if_sleep_en()
-
-        if 0:
-            cartridge.enable_mcu()
-            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
-            cartridge.disable_mcu()
-            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
-
-            cartridge.switch_some_io(4, 0) # VALMODE / TESTpin MCU
-            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
-            cartridge.switch_some_io(4, 1)
-            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
-
-            cartridge.switch_mosfet(0, 0)  # 0ohm
-            cartridge.switch_mosfet(1, 0)  # 20kohm
-            cartridge.switch_mosfet(2, 0)  # 200kohm
-            cartridge.switch_mosfet(3, 0)  # 400kohm
-            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
-        
-            cartridge.select_bus_to_micro("i2c")
-            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
-            cartridge.select_bus_to_micro("can")
-            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
-            cartridge.select_bus_to_micro("none")
-            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
-
-            cartridge.switch_mosfet(0, 1)  # 0ohm
-            cartridge.switch_mosfet(1, 1)  # 20kohm
-            cartridge.switch_mosfet(2, 1)  # 200kohm
-            cartridge.switch_mosfet(3, 1)  # 400kohm
-            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
-            
-        if 0:
-            cartridge.enable_valmod()
-            cartridge.disable_valmod()
-            cartridge.enable_mcu()
-            print(ap.erase_flash())
-            print(ap.program_flash())
-            cartridge.disable_mcu()
-        if 0:
-            cartridge.disable_mcu()
-            cartridge.enable_valmod()
-            cartridge.disable_valmod()
-            cartridge.configure_communication_to_mcu("i2c")
-            cartridge.enable_mcu()
-            cartridge.switch_mosfet(0, 0)  # 0ohm
-            cartridge.switch_mosfet(1, 1)  # 20kohm
-            print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
-            sleep(2.0)
-
-            for n in range(1,9):
-                cartridge._onboard_mux.setChannel(n)
-                print(cartridge._i2c.i2c_bus_scan())
-
-            #bat = Battery(BusMaster(cartridge.bus_to_mirco))
-            #print(bat.temperature())
-        
-        if 1:
-            afe.disable_checksum()
-            cartridge.enable_valmod()  # ???
-            cartridge.configure_communication_to_mcu("can")
-            cartridge.enable_mcu()  # enable microcontroller
-            print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
-            sleep(5.0)
-            print(mcu.can_read_voltage())
-            print(mcu.can_read_current())
-        
-        if 1:
-            afe.disable_checksum()
-            cartridge.configure_communication_to_mcu("i2c")
-            cartridge.enable_mcu()  # enable microcontroller
-            print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
-            sleep(5.0)
-            print(cartridge.bus_to_mirco.i2c_bus_scan())
-            cartridge.disable_mcu()      
-            print(cartridge.backyard_bus.i2c_bus_scan())
-            print(cartridge.bus_to_gpio.i2c_bus_scan())
-            
-
-
-
-
-        
-        if 0:
-            # NOTE: The µ-controller interacts with AFE and GG so program it
-            # after all things are set for AFE and GG.
-            #------------------------------------------------------------------
-            cartridge.disable_mcu()
-            #print("Program FLASH:", ap.program_flash())
-            cartridge.switch_mosfet(0, 0)  # 0ohm
-            cartridge.switch_mosfet(1, 0)  # 20kohm
-            cartridge.switch_mosfet(2, 1)  # 200kohm
-            cartridge.switch_mosfet(3, 0)  # 400kohm
-            #------------------------------------------------------------------
-            cartridge.select_bus_to_micro("can")
-            cartridge.enable_mcu()
-            print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
-            sleep(1.0)
-            #print(can.receive(0x7ff))
-            print(can.send_frame(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
-            print(can.receive_frame(0x5a0))
-            print(can.send_frame(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current            
-            print(can.receive_frame(0x07ff))
-            print(can.recover_can_driver_on_remote())
-            print(can.reinstall_can_driver_on_remote())
-            # expected response: 0x5a0 8 0x4b 0x09 0x20 0x00 0xd2 0x5d 0x00 0x00 (voltage at 4 and 5)
-            cartridge.select_bus_to_micro("i2c")
-            sleep(0.5)
-            cartridge.disable_mcu()
-
-        #------------------------------------------------------------------
-        # GG: Gas Gauge FW update
-        gg = BQ34Z100(BusMaster(cartridge.backyard_bus, retry_limit=5), slvAddress=0x55, pec=False)
-        v = gg.read_version_information()
-        print(v)
-        print(gg.teststand_read_version_information())
-
-        if (v["hw_version"] == "0x0080") and (v["fw_version"] == "0x0202") and (v["device_type"] == "0x0100"):
-            # differencial only
-            ff2 = BQStudioFileFlexFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.df.fs" )
-            ff2.validate_file()
-            tic = perf_counter()
-            ff2.program_fw_file()
-            toc = perf_counter()
-            print(f"DONE in {toc - tic:0.4f} seconds.")
-
-        else:
-            # full update necessary
-            # write FLASH -----------
-            ff2 = BQStudioFileFlexFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.bq.fs" )
-            ff2.validate_file()
-            tic = perf_counter()
-            ff2.program_fw_file()
-            toc = perf_counter()
-            print(f"DONE in {toc - tic:0.4f} seconds.")
-
-        print(gg.get_voltage_scale())
-        print(gg.get_current_scale())
-        print(gg.get_energy_scale())
-        print(gg.voltage())
-        print(gg.temperature())
-
-        print("GG: SEALED?", gg.is_sealed(refresh=True))
-        print("GG: FULL ACCESS?", gg.is_unsealed(check_fullaccess=True, refresh=True))
-        #print("GG: SEALING...", gg.seal())
-        print("GG: enable full access ...", gg.enable_full_access())
-        print("GG: FULL ACCESS?", gg.is_unsealed(check_fullaccess=True, refresh=True))
-
-        _check_if_sleep_en()
-
-        # GG: enter calibration mode ----------
-
-        gg.read_control_status()
-        if gg._control_status["CALEN"] == 0:
-            gg.enable_enter_and_exit_of_calibration_mode()
-            sleep(0.1)
-
-        gg.enter_calibration()
-        gg.read_calibration_flash_data()
-        v = gg.calibration_data
-        gg_cc_gain_stored = v["cc_gain"]
-        gg_cc_delta_stored = v["cc_delta"]
-        gg_cc_offset_stored = v["cc_offset"]
-        gg_voltage_divider_stored = v["voltage_divider"]
-        gg_board_offset_stored = v["board_offset"]
-        gg_int_temperature_offset_stored = v["int_temperature_offset"]
-        gg_ext_temperature_offset_stored = v["ext_temperature_offset"]
-        print("GG: stored calibration values:")
-        print(" Voltage divider:", gg_voltage_divider_stored)
-        print(" Board offset:", gg_board_offset_stored)
-        print(" Int. temp. offset:", gg_int_temperature_offset_stored)
-        print(" Ext. temp. offset:", gg_ext_temperature_offset_stored)
-        print(" CC Gain:", gg_cc_gain_stored)
-        print(" CC Delta:", gg_cc_delta_stored)
-        print(" CC Offset:", gg_cc_offset_stored)
-        print(" Magic constant:", gg_cc_delta_stored / gg_cc_gain_stored, " = 1193046.0 ?")
-
-        # =====================================================================================
-        # === calibrate temperature ===
-        # =====================================================================================
-
-        # # AFE need always transfer into RAM
-        # ff1.program_fw_file()        
-        # sleep(0.5)
-        # afe.disable_checksum()
-        # afe.disable_sleepmode() 
-        _check_if_sleep_en()
-        
-
-        print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))       
-        print(afe.read_temperatures())
-        # 1) apply known temperature TEMP(cal)
-        #temp_cal = 21.4
-        temp_cal = daq.get_temp(3, "RTD", 1000, 0, "")  # channel 3 + 13
-        print("T_ambient:", temp_cal)
-        # 2) measure the temperatures
-        new_t_ofs = afe.calib_write_temperatures(temp_cal)  # has disable_sleepmode() integrated
-        print(new_t_ofs)
-        # re-check temperature measurement (repeat the calibration if not successful!)
-        sleep(1.0)
-        print("Recheck temperature measurement after temperature calibration:")
-        print(afe.read_temperatures())
-        
-        gg.calib_write_temperature(temp_cal)
-        
-        # verify GG
-        sleep(2.0)
-        print(gg.temperature())  # in degC
-
-        afe.enable_fets()
-        print("FET status: ", afe.read_fet_status())
-        afe.disable_fets()
-        print("FET status: ", afe.read_fet_status())
-
-
-        print("TOS Gain stored:", afe.read_tos_gain())
-        print("PACK Gain stored:", afe.read_pack_gain())
-        print("LD Gain stored:", afe.read_ld_gain())
-
-        # =================================================================================
-        # === Voltage calibration ===
-        # =================================================================================
-        
-        _check_if_sleep_en()
-        
-        # Apply 3.6V to all cells -----------
-        u_cell_a = 3.6
-        u_supply = u_cell_a * num_cells
-        print("Apply 3.6v cell voltages for voltage calibration")
-        print(u_supply, u_cell_a)
-        for cell_no in range(1, num_cells):
-            vsim.set_cell_n_voltage(cell_no, u_cell_a)
-        psu2.configure_supply(u_supply, 0.080, 50, 1)
-        psu1.configure_supply(u_supply, 0.080, 50, 0)  # keep Packside OFF        
-        sleep(1.0)
-        print("Measure PSU1", psu1.get_all_measurements())
-        print("Measure PSU2", psu2.get_all_measurements())
-        print(read_voltages_from_daq())
-
-        afe.enable_fets()  # need voltage on packside from inside
-
-        print("Measure PSU1", psu1.get_all_measurements())
-        print("Measure PSU2", psu2.get_all_measurements())
-        print(read_voltages_from_daq())
-
-        # GG: Calibrate Voltage DIVIDER ---------
-        gg_voltage = gg.voltage()
-        u_cells, u_xtras = read_voltages_from_daq()
-        known_voltage = u_xtras[0]
-        print("GG V meas ERROR vefore:", (known_voltage - gg_voltage), "V")
-        if gg_voltage_divider_stored <= 0:
-            gg_voltage_divider_stored = 5000  # default value
-        new_voltage_divider = gg_voltage_divider_stored * known_voltage / gg_voltage
-        new_voltage_divider_int = int(round(new_voltage_divider))
-        gg.write_calibration_flash_data(data={"voltage_divider": new_voltage_divider_int})
-        gg.exit_calibration()
-
-        sleep(0.5)
-        # verify
-        gg_voltage = gg.voltage()
-        u_cells, u_xtras = read_voltages_from_daq()
-        known_voltage = u_xtras[0]  # full pack voltage
-        print("GG V meas ERROR after cal:", (known_voltage - gg_voltage), "V")
-        print("Voltage divider calibration done:", new_voltage_divider)
-
-
-        # GG: CC and Board Offset Calibration GG -----------
-        # Trigger board_offset_calibration_process which also processes the cc offset calc
-        # (need zero current flow)
-
-        print("CC and Board Offsets calibration...", end="")
-        gg.enter_calibration()
-        gg.board_offset_calibration_process()  # trigger CCA and BCA        
-        print("Started!")
-
-        # AFE: Calibrate Cell, TOS, PACK, LD gains ---------
-
-        _check_if_sleep_en()
-        
-        cell_voltage_daq = [0] * 16
-        pack_voltage_daq = 0
-        cell_voltage_counts = [0] * 16
-        tos_voltage_counts = 0
-        pack_voltage_counts = 0
-        ld_voltage_counts = 0
-        u_daq, u_xtra = read_voltages_from_daq()
-        u_psu1 = psu1.get_voltage()
-        # transform DAQ voltages to counts positions
-        for i in range(6):
-            cell_voltage_daq[i] = u_daq[i]
-        cell_voltage_daq[9] = u_daq[6]
-        tos_voltage_daq = u_xtra[0]
-        pack_voltage_daq = u_xtra[3]
-        ld_voltage_daq = u_xtra[3]
-        # get the ADC reading from the AFE
-        for i in range(10):
-            _u_counts, _i_counts = afe.read_dastatus()
-            _cal1 = afe.read_cal1()
-            for j, u in enumerate(_u_counts):
-                cell_voltage_counts[j] += u
-            tos_voltage_counts += _cal1["tos_adc_counts"]
-            pack_voltage_counts += _cal1["pack_pin_adc_counts"]
-            ld_voltage_counts += _cal1["ld_pin_adc_counts"]
-        # calc average
-        cell_voltage_counts = [n / 10 for n in cell_voltage_counts]
-        tos_voltage_counts /= 10
-        pack_voltage_counts /= 10
-        ld_voltage_counts /= 10
-
-        print("Compare - DAStatus:", afe.read_dastatus_average(10))
-        print("Compare - CAL1:", afe.read_cal1_average(10))
-
-        # Take the average of the 10 measurements and calculate gains
-        _dummy_gain = 0  # 12100
-        cell_gain = [0] * len(cell_voltage_counts)
-        for i in range(0, len(cell_gain)):
-            _test_voltage_ref = cell_voltage_daq[i] # in Volts
-            _test_adc_counts_voltage = cell_voltage_counts[i]
-            print(_test_voltage_ref, _test_adc_counts_voltage)
-            if _test_adc_counts_voltage == 0:
-                # avoid div by zero
-                cell_gain[i] = _dummy_gain
-                continue
-            gain = 2**24 * ((_test_voltage_ref * 1e+3) / _test_adc_counts_voltage)
-            if gain < -32768 or gain > 32767:
-                gain = _dummy_gain
-            cell_gain[i] = int(round(gain))
-            print("Cell ",i+1," Gain = ", cell_gain[i])
-
-
-        # PSU1 and PSU2 are in safe state which avoid damadge on DUT
-
-        print(cell_gain)
-
-        #afe.disable_fets()
-        print("FET status: ", afe.read_fet_status())
-
-        # Calculate Cell Offset based on Cell1
-        #cell_offset = ((cell_gain[0] * cell_voltage_counts_a[0]) / 2**24) - 2500
-        cell_offset_float = ((cell_gain[0] * cell_voltage_counts[0]) / 2**24) - (cell_voltage_daq[0] * 1e+3)
-        cell_offset = int(round(cell_offset_float))
-        #if cell_offset < 0:
-        #    cell_offset_x = 0xFFFF + cell_offset
-        #print("Cell Offset:", cell_offset, cell_offset_x)
-        print("Cell Offset:", cell_offset_float, "->", cell_offset)
-        # Calculate TOS, PACK, LD Gains by using the measured voltages in cV (not mV !!)
-        TOS_Gain = int(round(2**16 * ((tos_voltage_daq * 1e+2) / tos_voltage_counts)))
-        PACK_Gain = int(round(2**16 * ((pack_voltage_daq * 1e+2) / pack_voltage_counts)))
-        LD_Gain = int(round(2**16 * ((ld_voltage_daq * 1e+2) / ld_voltage_counts)))
-
-        print("TOS new Gain", TOS_Gain)
-        print("Pack new Gain", PACK_Gain)
-        print("LD new Gain", LD_Gain)    
-
-        # write voltage calibration into RAM
-        afe.enter_config_update_mode()
-
-        afe.write_cell_offset(cell_offset)
-        # Cell Voltage Gains
-        afe.write_cell_gain(cell_gain)
-        # PACK, LD, TOS Gains
-        afe.write_pack_gain(PACK_Gain)
-        afe.write_ld_gain(LD_Gain)
-        afe.write_tos_gain(TOS_Gain)
-
-        afe.exit_config_update_mode()
-        afe.disable_sleepmode()
-
-        # # -------------------------------------------------------------
-        # # CC offset calibration: wait until CCA cleared
-        # n = 60 * 2
-        # while n > 0:
-        #     n -= 1
-        #     if gg.cc_offset_calibration_process():
-        #         break
-        # gg.exit_calibration()
-        # if n == 0:
-        #     raise RuntimeError("CCA bit not cleared after CC offset calibration!")
-        # # -------------------------------------------------------------
-
-
-        # recheck voltage measurement
-        print("Recheck cell voltages after voltage calibration:")
-        sleep(1.0)
-        print("AFE: TOS Gain stored:", afe.read_tos_gain())
-        print("AFE: PACK Gain stored:", afe.read_pack_gain())
-        print("AFE: LD Gain stored:", afe.read_ld_gain())
-        u_recheck = afe.read_cell_voltages()
-        for i, v in enumerate(u_recheck):
-            print(f"AFE: Cell {i+1}: {round(v, 3)}V")
-        print("AFE: TOS:", afe.read_tos_voltage())
-        print("AFE: PACK:", afe.read_pack_voltage())
-        print("AFE: LD:", afe.read_ld_voltage())
-        print(read_voltages_from_daq())
-
-        print("GG: Voltage", gg.voltage())
-
-        afe.disable_fets()
-        print("FET status: ", afe.read_fet_status())
-
-        # =====================================================================================
-        # === Current calibration ===
-        # =====================================================================================
-
-        _check_if_sleep_en()
-        
-
-        # # -----------------------------------------------------------------
-        # # GG: board offset --
-        # print("Board offset")
-        # gg.enter_calibration()
-        # gg.board_offset_calibration_process()  # trigger
-       
-        # #-------------------------------------------------------------
-
-        # Apply a known current I_CAL of 0mA
-        # psu1 and psu2 already in mode that no current is flowing
-        u_cell = 3.6
-        u_supply = u_cell * num_cells
-        i_pack = 0.0
-        print("Apply 0A discharge current")
-        print(u_supply, u_cell, i_pack)
-        print("FET status: ", afe.read_fet_status())        
-        for cell_no in range(1, num_cells):
-            vsim.set_cell_n_voltage(cell_no, u_cell)
-        psu2.configure_supply(u_supply, 0.080, 50, 1)
-        psu1.configure_supply(u_supply, 0.080, 50, 0)
-        sleep(1.0)
-        print("Measure PSU1", psu1.get_all_measurements())
-        print("Measure PSU2", psu2.get_all_measurements())
-
-        value = 0
-        for i in range(10):
-            cc = afe.read_cal1()
-            value += cc["cc2_counts"]
-            sleep(0.1)
-        print("cc average:", value/10)
-
-        bb = afe.read_cal1_average(num_samples=10, pause_between=0.1)
-        print("bb average:", bb["cc2_counts"])
-
-        if 0:  # skip board offset 
-            print("AFE stored board offset:", afe.read_board_offset())
-            _offset_samples = afe.read_coulomb_counter_offset_sample()
-            print("OFFSET Samples:", _offset_samples)
-            _offset_samples = 1
-            board_offset = _offset_samples * int(round(value / 10))
-            #board_offset = -(value & 0x8000) | (value & 0x7fff)
-            if board_offset < -32768 or board_offset > 32767:
-                print(f"Board_offset out of boundaries -> cannot calibrate current: {board_offset}")
-                may_calibrate_current = False
-            else:
-                may_calibrate_current = True
-            print("Board offset", board_offset)
-            if may_calibrate_current:
-                afe.enter_config_update_mode()
-                afe.write_board_offset(board_offset)
-                afe.exit_config_update_mode()
-                afe.disable_sleepmode()
-        else:
-            may_calibrate_current = True
-        
-
-        # Apply 1A discharge current through sense resistor
-        print("FET status: ", afe.read_fet_status())
-        psu1.set_output_state(0)
-        print(psu1.get_all_measurements())
-        afe.enable_fets()
-        print("FET status: ", afe.read_fet_status())
-        #print(afe.discharge_test())
-        #print(afe.charge_test())
-        #print("FET status: ", afe.read_fet_status())
-
-        _check_if_sleep_en()
-        
-        #------------------------------------------------------------------
-        # GG: wait until CC and Board Offsets done
-        print("Wait for CC and Board Offsets calibration to finish...", end="")
-        tic = perf_counter()      
-        #gg.enter_calibration()
-        n = 60 * 2
-        while n > 0:
-            n -= 1
-            if gg.board_offset_calibration_process():                
-                break
-            sleep(0.5)
-        gg.exit_calibration()
-        toc = perf_counter()
-        if n == 0:
-            raise RuntimeError("BCA bit not cleared after board offset calibration!") 
-        print(f"Done ({toc-tic}s).")     
-        #--------------------------------------------------------------
-       
-
-        # Apply HIGH discharge current through sense resistor
-        i_pack = 10.0
-        print(f"Apply {i_pack}A discharge current")
-        p_pack = (u_supply * i_pack)
-        print(u_supply, u_cell, i_pack, p_pack)
-        psu2.configure_supply(u_supply, i_pack*1.25, p_pack * 1.10, 1)
-        #psu1.configure_cc_mode(-1.000, None, 22.09, 10.0, -60, 1)
-        psu1.configure_sink(-i_pack, None, -(i_pack*1.05), u_supply, -(p_pack * 1.05), 1)
-        sleep(0.5)
-        print("Measure PSU1", psu1.get_all_measurements())
-        print("Measure PSU2", psu2.get_all_measurements())
-        i_psu = psu1.get_current()
-        sleep(2.0)
-        cc2_current = afe.read_cc2_current()
-        print("PSU1 current:", i_psu)
-        print("AFE CC2 current:", cc2_current)
-        value = 0
-        for i in range(20):
-            cc = afe.read_cal1()
-            value += cc["cc2_counts"]
-            sleep(0.005)
-        print("CC b:", cc, value)
-        cc_counts = int(round(value / 20))
-        print(cc_counts)
-
-
-        verify_cc_gain , verify_capacity_gain, cc2_current_verify = afe.calib_cc_gain_and_capacity_gain(i_psu, num_samples=20, pause_between=0.005)
-        print("Verify AFE CC Gain:", verify_cc_gain)
-        print("Verify AFE Capacity Gain:", verify_capacity_gain)
-        print("Verify AFE CC2 current:", cc2_current_verify)
-
-        _check_if_sleep_en()
-        
-        # -----------------------------------------------------------------
-        # GG: bq34Z100 calculation of CC Gain and Capacity Gain
-        gg.enter_calibration()
-        gg_current = gg.current()
-        if (gg_current > -0.1) and (gg_current < 0.1):
-            print("No current flow - skip CC Gain calibration")
-        else:
-            gg_cc_gain = gg_cc_gain_stored * i_psu / gg_current * 1  # * 1 Ohm
-            gg_cc_delta = gg_cc_gain * 1193046.0  # magic constant
-            print("New CC Gain:", gg_cc_gain)
-            print("New CC Delta:", gg_cc_delta)
-            gg.write_calibration_flash_data(data={"cc_gain": gg_cc_gain, "cc_delta": gg_cc_delta})
-            print("CC Gain calibration done:", gg_cc_gain)
-            sleep(0.1)
-        gg.exit_calibration()
-        #------------------------------------------------------------------
+        control_vcc_voltages()
 
         #
-        # set PSU1 and PSU2 to safe state avoiding damadge on DUT
+        # SEALED / UNSEALED CHECK
         #
-        psu1.set_output_state(0)  # SINK OFF
-        psu1.configure_supply(u_supply, 0.080, 50, 0)  # PACK supply safe state
-        psu2.configure_supply(u_supply, 0.080, 50, 1)  # Cell Stack SAFE STATE
-        afe.disable_fets()
-        print("FET status: ", afe.read_fet_status())
-        print("Measure PSU1", psu1.get_all_measurements())
-        print("Measure PSU2", psu2.get_all_measurements())
-
-        #if (cc_counts_a == cc_counts_b) or (cc_counts_a == 0) or (cc_counts_b == 0):
-        if (cc_counts == 0):
-            raise ValueError(f"Current calibration results will cause div by zero error: {cc_counts}")
-
-        stored_cc_gain = afe.read_cc_gain()
-        stored_capacity_gain = afe.read_capacity_gain()
-        print("AFE stored CC Gain:", stored_cc_gain)
-        print("AFE stored Cap Gain:", stored_capacity_gain)
-
+        skip_calibration_section = afe.is_sealed(refresh=True)
+        print("AFE: SEALED?", skip_calibration_section)
+        print("AFE: FULL ACCESS?", afe.is_unsealed(check_fullaccess=True, refresh=True))
+        if skip_calibration_section:
         
-        # CC Gain = 1e+6 * VREF2 / (5 × 32768 × Rsense in mΩ), with VREF2 = 1.24V
-        # CC Gain = 1e+6 * 1.24 / (5 * 32768 * Rsense in mΩ)
-        # CC Gain = 7.5684 / (Rsense in mΩ)
+            print("AFE is sealed -> skip Calibration Process...")
+            print("AFE: enable full access ...", afe.enable_full_access())
+            print("AFE: FULL ACCESS?", afe.is_unsealed(check_fullaccess=True, refresh=True))
 
-        # cc_counts / cc_gain = ref_current / (7.5684 / (Rsense in mΩ))
-        # => cc_gain = ref_current / (7.5684 / (Rsense in mΩ)) / cc_counts 
-        # => cc_gain = ((ref_current * (Rsense in mΩ) / 7.5684) / cc_counts) * 1e+6
-        # => cc_gain = ((ref_current * 2 ) / 7.5684) / cc_counts) * 1e+6
-        # => cc_gain = (ref_current / cc_counts) * 264256.6460546483
-
-        cc_gain_float2 = (i_psu / cc_counts) * 264256.6460546483         
-        cc_gain_float = (i_psu / cc2_current) * stored_cc_gain  # alternative calculation using CC2 current directly
-        capacity_gain_float = 298261.6178 * cc_gain_float  # Note: constant 298261.6178 comes from TI doc
-
-        
-        print("AFE new CC Gain:", cc_gain_float)
-        print("AFE new CC Gain (alt):", cc_gain_float2)
-        print("AFE new Cap Gain:", capacity_gain_float)
-
-        if may_calibrate_current:
-            # write calibration into RAM
-            afe.enter_config_update_mode()
-            # CC Offset, CC Gain, Capacity Gain
-            #afe.write_board_offset(board_offset)   # Skip board offset
-            afe.write_cc_gain(cc_gain_float)
-            afe.write_capacity_gain(capacity_gain_float)
-            afe.exit_config_update_mode()
+            afe.read_manufacturing_status()
+            print(afe._manufact_status)
+            afe.disable_fet_control()  # make sure FET_EN == 0
+            afe.disable_pf_control()   # make sure PF_EN == 0           
+            afe.read_manufacturing_status()
+            print(afe._manufact_status)
             afe.disable_sleepmode()
+            afe.disable_checksum() # for MCU communication to the AFE
 
-        _check_if_sleep_en()
-        
-        # recheck current measurement -> repeat if necessary
-        print("Recheck current measurement after current calibration:")
-
-        u_cell = 3.6
-        u_supply = u_cell * num_cells
-        i_pack = 7.5
-        print(f"Apply {i_pack}A discharge current")
-        p_pack = (u_supply * i_pack)
-        print(u_supply, u_cell, i_pack, p_pack)
-        psu1.configure_sink(-i_pack, None, -(i_pack*1.05), u_supply, -(p_pack * 1.05), 0)
-        psu2.configure_supply(u_supply, i_pack*1.25, p_pack * 1.10, 1)
-        for cell_no in range(1, num_cells):
-            vsim.set_cell_n_voltage(cell_no, u_cell)
-        sleep(0.1)
-        afe.enable_fets()
-        print("FET status: ", afe.read_fet_status())
-        psu1.set_output_state(1)
-        sleep(0.5)
-        print("PSU current:", psu2.get_current())
-        print("Measure PSU1", psu1.get_all_measurements())
-        print("Measure PSU2", psu2.get_all_measurements())
-        sleep(2.0)
-        print("AFE current:", afe.read_cc2_current())
-        print("AFE TOS:", afe.read_tos_voltage())
-        print("AFE PACK:", afe.read_pack_voltage())
-        print("AFE LD:", afe.read_ld_voltage())
-
-        # GG test also
-        print("GG voltage:", gg.voltage())
-        print("GG current:", gg.current())
-        print("GG temperature:", gg.temperature())
+        else:
+            print("AFE unsealed -> need Calibration...")
 
 
-        psu1.set_output_state(0)  # SINK OFF
-        psu1.configure_supply(u_supply, 0.080, 50, 0)  # PACK supply safe state
-        psu2.configure_supply(u_supply, 0.080, 50, 1)  # Cell Stack SAFE STATE
-        afe.disable_fets()
-        print("FET status: ", afe.read_fet_status())
-        print("Measure PSU1", psu1.get_all_measurements())
-        print("Measure PSU2", psu2.get_all_measurements())
+            afe.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets
 
-        _check_if_sleep_en()
-        
-        # === COV/CUV calibration ===
-        # Apply the desired value for the cell over-voltage threshold to device cell inputs.
-        # Calibration will use the voltage applied to the top cell of the device.
-        # For example, Apply 4350mV: measure cells 1-6 voltage, then set psu2 to this +4.350v
-        #
-        # psu2... vsim...
-        #afe.enter_config_update_mode()
-        #afe.calibrate_cell_over_voltage()
-        #afe.exit_config_update_mode()
+            # AFE need always transfer into RAM
+            ff1 = BQStudioFileFlexFlasher(afe, base_path / "GG_3412185A-02_A_draft4_unsealed_PF_Fet_dis_CDFETOFF_PDwn_Petalite_AFE_settings.gm.fs" )
+            ff1.validate_file()
+            ff1.program_fw_file()
+            
+            sleep(0.5)
+            #afe.disable_checksum()
+            afe.disable_sleepmode()  # Sleep Disable 0x009A to prevent CHG FET from opening
+            
+            psu1.set_output_state(0) # disable packside supply
 
+            print(afe.read_cell_voltages())
+            print(afe.read_temperatures())
 
-        # apply desired CUV voltage value to device cell inputs
-        # Apply the desired value for the cell under-voltage threshold to device cell inputs.
-        # Calibration will use the voltage applied to the top cell of the device.
-        # For example, Apply 2400mV: measure cells 1-6 voltage, then set psu2 to this +2.4v
+            afe.read_battery_status()
+            afe.read_manufacturing_status()
+            afe.read_safety_status()
+            afe.read_alarm_status()
+            afe.read_fet_status()
+            print("BATTERY STATUS:", afe._battery_status)
+            print("MFG STATUS:", afe._manufact_status)
+            print("SAFETY STATUS:", afe._safety_status)
+            print("ALARM STATUS:", afe._alarm_status)
+            print("FET status: ", afe._fet_status)
+            #print(afe.all_fets_on())
+            #print(afe.discharge_test())
+            #print(afe.charge_test())
+            #print(afe.read_manufacturing_status())
+            
+           
+            control_vcc_voltages()
 
+            cartridge.select_bus_to_micro("i2c")
 
-        # psu2... vsim...
-        #afe.enter_config_update_mode()
-        #afe.calibrate_cell_under_voltage()
-        #afe.exit_config_update_mode()
+            _check_if_sleep_en()
 
-        # # === write all calibration into RAM ===
-        # afe.enter_config_update_mode()
-        # # Cell Voltage Gains
-        # afe.write_cell_gain(cell_gain)
-        # # PACK, LD, TOS Gains
-        # afe.write_pack_gain(PACK_Gain)
-        # afe.write_ld_gain(LD_Gain)
-        # afe.write_tos_gain(TOS_Gain)
-        # # CC Offset, CC Gain, Capacity Gain
-        # afe.write_board_offset(board_offset)
-        # afe.write_cc_gain(cc_gain_float)
-        # afe.write_capacity_gain(capacity_gain)
-        # # Temperature offsets
-        # afe.write_temperature_calibration_offsets(temp_offsets)
-        # afe.exit_config_update_mode()
+            if 0:
+                cartridge.enable_mcu()
+                print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+                cartridge.disable_mcu()
+                print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
 
+                cartridge.switch_some_io(4, 0) # VALMODE / TESTpin MCU
+                print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+                cartridge.switch_some_io(4, 1)
+                print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
 
-        #--------------------------------------------------------------------------------------
-        # Seal / unseal test
-        
-        print("AFE: Set to sealed:", afe.seal_in_production())
-        sleep(0.1)
-        afe.read_battery_status()
-        print(afe._battery_status)
-        print("AFE: Full Access:", afe.enable_full_access())
-        afe.read_battery_status()
-        print(afe._battery_status)
-        
-        #print("GG: Set to sealed:", gg.seal())
-        #sleep(0.1)
-        #gg.read_control_status()
-        #print(gg._control_status)
-        #print("GG: Full Access:", gg.enable_full_access())
-        gg.read_control_status()
-        #print(gg._control_status)
+                cartridge.switch_mosfet(0, 0)  # 0ohm
+                cartridge.switch_mosfet(1, 0)  # 20kohm
+                cartridge.switch_mosfet(2, 0)  # 200kohm
+                cartridge.switch_mosfet(3, 0)  # 400kohm
+                print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+            
+                cartridge.select_bus_to_micro("i2c")
+                print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+                cartridge.select_bus_to_micro("can")
+                print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+                cartridge.select_bus_to_micro("none")
+                print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
 
-        #--------------------------------------------------------------------------------------
-        # === Enable Functions of AFE before writing OTP ===
-        
-        afe.read_manufacturing_status()
-        print(afe._manufact_status)
-        afe.enable_fet_control()  # make sure FET_EN == 1
-        afe.enable_pf_control()   # make sure PF_EN == 1            
-        afe.read_manufacturing_status()
-        print(afe._manufact_status)
+                cartridge.switch_mosfet(0, 1)  # 0ohm
+                cartridge.switch_mosfet(1, 1)  # 20kohm
+                cartridge.switch_mosfet(2, 1)  # 200kohm
+                cartridge.switch_mosfet(3, 1)  # 400kohm
+                print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
                 
-                
+           
 
-        #--------------------------------------------------------------------------------------
-        # === write to OTP ===
+            #------------------------------------------------------------------
+            # GG: Gas Gauge FW update
+            gg = BQ34Z100(BusMaster(cartridge.backyard_bus, retry_limit=5), slvAddress=0x55, pec=False)
+            v = gg.read_version_information()
+            print(v)
+            print(gg.teststand_read_version_information())
 
-        def write_to_otp():
-            print("Write configuration to OTP memory")
-            u_supply = 11.0  # target stack voltage for OTP programming
-            u_cell = round(u_supply / num_cells, 2)
-            print(f"Apply {u_supply}v stack voltage for OTP programming")
-            print(u_supply, u_cell)
+            if (v["hw_version"] == "0x0080") and (v["fw_version"] == "0x0202") and (v["device_type"] == "0x0100"):
+                # differencial only
+                ff2 = BQStudioFileFlexFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.df.fs" )
+                ff2.validate_file()
+                tic = perf_counter()
+                ff2.program_fw_file()
+                toc = perf_counter()
+                print(f"DONE in {toc - tic:0.4f} seconds.")
+
+            else:
+                # full update necessary
+                # write FLASH -----------
+                ff2 = BQStudioFileFlexFlasher(gg, base_path / "3412185B-02_A_RRC3570-4_BMS-Files.bq.fs" )
+                ff2.validate_file()
+                tic = perf_counter()
+                ff2.program_fw_file()
+                toc = perf_counter()
+                print(f"DONE in {toc - tic:0.4f} seconds.")
+
+            print(gg.get_voltage_scale())
+            print(gg.get_current_scale())
+            print(gg.get_energy_scale())
+            print(gg.voltage())
+            print(gg.temperature())
+
+            print("GG: SEALED?", gg.is_sealed(refresh=True))
+            print("GG: FULL ACCESS?", gg.is_unsealed(check_fullaccess=True, refresh=True))
+            #print("GG: SEALING...", gg.seal())
+            print("GG: enable full access ...", gg.enable_full_access())
+            print("GG: FULL ACCESS?", gg.is_unsealed(check_fullaccess=True, refresh=True))
+
+            _check_if_sleep_en()
+
+            # GG: enter calibration mode ----------
+
+            gg.read_control_status()
+            if gg._control_status["CALEN"] == 0:
+                gg.enable_enter_and_exit_of_calibration_mode()
+                sleep(0.1)
+
+            gg.enter_calibration()
+            gg.read_calibration_flash_data()
+            v = gg.calibration_data
+            gg_cc_gain_stored = v["cc_gain"]
+            gg_cc_delta_stored = v["cc_delta"]
+            gg_cc_offset_stored = v["cc_offset"]
+            gg_voltage_divider_stored = v["voltage_divider"]
+            gg_board_offset_stored = v["board_offset"]
+            gg_int_temperature_offset_stored = v["int_temperature_offset"]
+            gg_ext_temperature_offset_stored = v["ext_temperature_offset"]
+            print("GG: stored calibration values:")
+            print(" Voltage divider:", gg_voltage_divider_stored)
+            print(" Board offset:", gg_board_offset_stored)
+            print(" Int. temp. offset:", gg_int_temperature_offset_stored)
+            print(" Ext. temp. offset:", gg_ext_temperature_offset_stored)
+            print(" CC Gain:", gg_cc_gain_stored)
+            print(" CC Delta:", gg_cc_delta_stored)
+            print(" CC Offset:", gg_cc_offset_stored)
+            print(" Magic constant:", gg_cc_delta_stored / gg_cc_gain_stored, " = 1193046.0 ?")
+
+            # =====================================================================================
+            # === calibrate temperature ===
+            # =====================================================================================
+
+            # # AFE need always transfer into RAM
+            # ff1.program_fw_file()        
+            # sleep(0.5)
+            # afe.disable_checksum()
+            # afe.disable_sleepmode() 
+            _check_if_sleep_en()
+            
+
+            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))       
+            print(afe.read_temperatures())
+            # 1) apply known temperature TEMP(cal)
+            #temp_cal = 21.4
+            temp_cal = daq.get_temp(3, "RTD", 1000, 0, "")  # channel 3 + 13
+            print("T_ambient:", temp_cal)
+            # 2) measure the temperatures
+            new_t_ofs = afe.calib_write_temperatures(temp_cal)  # has disable_sleepmode() integrated
+            print(new_t_ofs)
+            # re-check temperature measurement (repeat the calibration if not successful!)
+            sleep(1.0)
+            print("Recheck temperature measurement after temperature calibration:")
+            print(afe.read_temperatures())
+            
+            gg.calib_write_temperature(temp_cal)
+            
+            # verify GG
+            sleep(2.0)
+            print(gg.temperature())  # in degC
+
+            afe.enable_fets()
+            print("FET status: ", afe.read_fet_status())
             afe.disable_fets()
             print("FET status: ", afe.read_fet_status())
-            psu1.configure_supply(u_supply, 0.080, 50, 1)
+
+
+            print("TOS Gain stored:", afe.read_tos_gain())
+            print("PACK Gain stored:", afe.read_pack_gain())
+            print("LD Gain stored:", afe.read_ld_gain())
+
+            # =================================================================================
+            # === Voltage calibration ===
+            # =================================================================================
+            
+            _check_if_sleep_en()
+            
+            # Apply 3.6V to all cells -----------
+            u_cell_a = 3.6
+            u_supply = u_cell_a * num_cells
+            print("Apply 3.6v cell voltages for voltage calibration")
+            print(u_supply, u_cell_a)
             for cell_no in range(1, num_cells):
-                vsim.set_cell_n_voltage(cell_no, u_cell)
-            psu2.configure_supply(u_supply, 0.080, 50, 1)               
+                vsim.set_cell_n_voltage(cell_no, u_cell_a)
+            psu2.configure_supply(u_supply, 0.080, 50, 1)
+            psu1.configure_supply(u_supply, 0.080, 50, 0)  # keep Packside OFF        
             sleep(1.0)
             print("Measure PSU1", psu1.get_all_measurements())
             print("Measure PSU2", psu2.get_all_measurements())
-            print("Cells:", afe.read_cell_voltages())
-            print("TOS:", afe.read_tos_voltage())        
-            afe.enter_config_update_mode()
-            results, data_fail_addr = afe.read_otp_wr_check()
-            if results == 0x80:
-                # all ok -> write to OTP
-                print(f"AFE ready: 0x{results:02X} -> write to OTP")
-                afe.write_otp()
-                sleep(0.5)
-                afe.exit_config_update_mode()
-                afe.disable_sleepmode()
-            else:
-                afe.exit_config_update_mode()
-                afe.disable_sleepmode()
-                #raise RuntimeError(f"OTP write check failed at address 0x{data_fail_addr:04X} with result 0x{results:02X}")
-                print(f"FAILED: OTP write check at address 0x{data_fail_addr:04X} with result 0x{results:02X}")
+            print(read_voltages_from_daq())
 
-        write_to_otp()
+            afe.enable_fets()  # need voltage on packside from inside
+
+            print("Measure PSU1", psu1.get_all_measurements())
+            print("Measure PSU2", psu2.get_all_measurements())
+            print(read_voltages_from_daq())
+
+            # GG: Calibrate Voltage DIVIDER ---------
+            gg_voltage = gg.voltage()
+            u_cells, u_xtras = read_voltages_from_daq()
+            known_voltage = u_xtras[0]
+            print("GG V meas ERROR vefore:", (known_voltage - gg_voltage), "V")
+            if gg_voltage_divider_stored <= 0:
+                gg_voltage_divider_stored = 5000  # default value
+            new_voltage_divider = gg_voltage_divider_stored * known_voltage / gg_voltage
+            new_voltage_divider_int = int(round(new_voltage_divider))
+            gg.write_calibration_flash_data(data={"voltage_divider": new_voltage_divider_int})
+            gg.exit_calibration()
+
+            sleep(0.5)
+            # verify
+            gg_voltage = gg.voltage()
+            u_cells, u_xtras = read_voltages_from_daq()
+            known_voltage = u_xtras[0]  # full pack voltage
+            print("GG V meas ERROR after cal:", (known_voltage - gg_voltage), "V")
+            print("Voltage divider calibration done:", new_voltage_divider)
+
+
+            # GG: CC and Board Offset Calibration GG -----------
+            # Trigger board_offset_calibration_process which also processes the cc offset calc
+            # (need zero current flow)
+
+            print("CC and Board Offsets calibration...", end="")
+            gg.enter_calibration()
+            gg.board_offset_calibration_process()  # trigger CCA and BCA        
+            print("Started!")
+
+            # AFE: Calibrate Cell, TOS, PACK, LD gains ---------
+
+            _check_if_sleep_en()
+            
+            cell_voltage_daq = [0] * 16
+            pack_voltage_daq = 0
+            cell_voltage_counts = [0] * 16
+            tos_voltage_counts = 0
+            pack_voltage_counts = 0
+            ld_voltage_counts = 0
+            u_daq, u_xtra = read_voltages_from_daq()
+            u_psu1 = psu1.get_voltage()
+            # transform DAQ voltages to counts positions
+            for i in range(6):
+                cell_voltage_daq[i] = u_daq[i]
+            cell_voltage_daq[9] = u_daq[6]
+            tos_voltage_daq = u_xtra[0]
+            pack_voltage_daq = u_xtra[3]
+            ld_voltage_daq = u_xtra[3]
+            # get the ADC reading from the AFE
+            for i in range(10):
+                _u_counts, _i_counts = afe.read_dastatus()
+                _cal1 = afe.read_cal1()
+                for j, u in enumerate(_u_counts):
+                    cell_voltage_counts[j] += u
+                tos_voltage_counts += _cal1["tos_adc_counts"]
+                pack_voltage_counts += _cal1["pack_pin_adc_counts"]
+                ld_voltage_counts += _cal1["ld_pin_adc_counts"]
+            # calc average
+            cell_voltage_counts = [n / 10 for n in cell_voltage_counts]
+            tos_voltage_counts /= 10
+            pack_voltage_counts /= 10
+            ld_voltage_counts /= 10
+
+            print("Compare - DAStatus:", afe.read_dastatus_average(10))
+            print("Compare - CAL1:", afe.read_cal1_average(10))
+
+            # Take the average of the 10 measurements and calculate gains
+            _dummy_gain = 0  # 12100
+            cell_gain = [0] * len(cell_voltage_counts)
+            for i in range(0, len(cell_gain)):
+                _test_voltage_ref = cell_voltage_daq[i] # in Volts
+                _test_adc_counts_voltage = cell_voltage_counts[i]
+                print(_test_voltage_ref, _test_adc_counts_voltage)
+                if _test_adc_counts_voltage == 0:
+                    # avoid div by zero
+                    cell_gain[i] = _dummy_gain
+                    continue
+                gain = 2**24 * ((_test_voltage_ref * 1e+3) / _test_adc_counts_voltage)
+                if gain < -32768 or gain > 32767:
+                    gain = _dummy_gain
+                cell_gain[i] = int(round(gain))
+                print("Cell ",i+1," Gain = ", cell_gain[i])
+
+
+            # PSU1 and PSU2 are in safe state which avoid damadge on DUT
+
+            print(cell_gain)
+
+            #afe.disable_fets()
+            print("FET status: ", afe.read_fet_status())
+
+            # Calculate Cell Offset based on Cell1
+            #cell_offset = ((cell_gain[0] * cell_voltage_counts_a[0]) / 2**24) - 2500
+            cell_offset_float = ((cell_gain[0] * cell_voltage_counts[0]) / 2**24) - (cell_voltage_daq[0] * 1e+3)
+            cell_offset = int(round(cell_offset_float))
+            #if cell_offset < 0:
+            #    cell_offset_x = 0xFFFF + cell_offset
+            #print("Cell Offset:", cell_offset, cell_offset_x)
+            print("Cell Offset:", cell_offset_float, "->", cell_offset)
+            # Calculate TOS, PACK, LD Gains by using the measured voltages in cV (not mV !!)
+            TOS_Gain = int(round(2**16 * ((tos_voltage_daq * 1e+2) / tos_voltage_counts)))
+            PACK_Gain = int(round(2**16 * ((pack_voltage_daq * 1e+2) / pack_voltage_counts)))
+            LD_Gain = int(round(2**16 * ((ld_voltage_daq * 1e+2) / ld_voltage_counts)))
+
+            print("TOS new Gain", TOS_Gain)
+            print("Pack new Gain", PACK_Gain)
+            print("LD new Gain", LD_Gain)    
+
+            # write voltage calibration into RAM
+            afe.enter_config_update_mode()
+
+            afe.write_cell_offset(cell_offset)
+            # Cell Voltage Gains
+            afe.write_cell_gain(cell_gain)
+            # PACK, LD, TOS Gains
+            afe.write_pack_gain(PACK_Gain)
+            afe.write_ld_gain(LD_Gain)
+            afe.write_tos_gain(TOS_Gain)
+
+            afe.exit_config_update_mode()
+            afe.disable_sleepmode()
+
+            # # -------------------------------------------------------------
+            # # CC offset calibration: wait until CCA cleared
+            # n = 60 * 2
+            # while n > 0:
+            #     n -= 1
+            #     if gg.cc_offset_calibration_process():
+            #         break
+            # gg.exit_calibration()
+            # if n == 0:
+            #     raise RuntimeError("CCA bit not cleared after CC offset calibration!")
+            # # -------------------------------------------------------------
+
+
+            # recheck voltage measurement
+            print("Recheck cell voltages after voltage calibration:")
+            sleep(1.0)
+            print("AFE: TOS Gain stored:", afe.read_tos_gain())
+            print("AFE: PACK Gain stored:", afe.read_pack_gain())
+            print("AFE: LD Gain stored:", afe.read_ld_gain())
+            u_recheck = afe.read_cell_voltages()
+            for i, v in enumerate(u_recheck):
+                print(f"AFE: Cell {i+1}: {round(v, 3)}V")
+            print("AFE: TOS:", afe.read_tos_voltage())
+            print("AFE: PACK:", afe.read_pack_voltage())
+            print("AFE: LD:", afe.read_ld_voltage())
+            print(read_voltages_from_daq())
+
+            print("GG: Voltage", gg.voltage())
+
+            afe.disable_fets()
+            print("FET status: ", afe.read_fet_status())
+
+            # =====================================================================================
+            # === Current calibration ===
+            # =====================================================================================
+
+            _check_if_sleep_en()
+            
+
+            # # -----------------------------------------------------------------
+            # # GG: board offset --
+            # print("Board offset")
+            # gg.enter_calibration()
+            # gg.board_offset_calibration_process()  # trigger
+        
+            # #-------------------------------------------------------------
+
+            # Apply a known current I_CAL of 0mA
+            # psu1 and psu2 already in mode that no current is flowing
+            u_cell = 3.6
+            u_supply = u_cell * num_cells
+            i_pack = 0.0
+            print("Apply 0A discharge current")
+            print(u_supply, u_cell, i_pack)
+            print("FET status: ", afe.read_fet_status())        
+            for cell_no in range(1, num_cells):
+                vsim.set_cell_n_voltage(cell_no, u_cell)
+            psu2.configure_supply(u_supply, 0.080, 50, 1)
+            psu1.configure_supply(u_supply, 0.080, 50, 0)
+            sleep(1.0)
+            print("Measure PSU1", psu1.get_all_measurements())
+            print("Measure PSU2", psu2.get_all_measurements())
+
+            value = 0
+            for i in range(10):
+                cc = afe.read_cal1()
+                value += cc["cc2_counts"]
+                sleep(0.1)
+            print("cc average:", value/10)
+
+            bb = afe.read_cal1_average(num_samples=10, pause_between=0.1)
+            print("bb average:", bb["cc2_counts"])
+
+            if 0:  # skip board offset 
+                print("AFE stored board offset:", afe.read_board_offset())
+                _offset_samples = afe.read_coulomb_counter_offset_sample()
+                print("OFFSET Samples:", _offset_samples)
+                _offset_samples = 1
+                board_offset = _offset_samples * int(round(value / 10))
+                #board_offset = -(value & 0x8000) | (value & 0x7fff)
+                if board_offset < -32768 or board_offset > 32767:
+                    print(f"Board_offset out of boundaries -> cannot calibrate current: {board_offset}")
+                    may_calibrate_current = False
+                else:
+                    may_calibrate_current = True
+                print("Board offset", board_offset)
+                if may_calibrate_current:
+                    afe.enter_config_update_mode()
+                    afe.write_board_offset(board_offset)
+                    afe.exit_config_update_mode()
+                    afe.disable_sleepmode()
+            else:
+                may_calibrate_current = True
+            
+
+            # Apply 1A discharge current through sense resistor
+            print("FET status: ", afe.read_fet_status())
+            psu1.set_output_state(0)
+            print(psu1.get_all_measurements())
+            afe.enable_fets()
+            print("FET status: ", afe.read_fet_status())
+            #print(afe.discharge_test())
+            #print(afe.charge_test())
+            #print("FET status: ", afe.read_fet_status())
+
+            _check_if_sleep_en()
+            
+            #------------------------------------------------------------------
+            # GG: wait until CC and Board Offsets done
+            print("Wait for CC and Board Offsets calibration to finish...", end="")
+            tic = perf_counter()      
+            #gg.enter_calibration()
+            n = 60 * 2
+            while n > 0:
+                n -= 1
+                if gg.board_offset_calibration_process():                
+                    break
+                sleep(0.5)
+            gg.exit_calibration()
+            toc = perf_counter()
+            if n == 0:
+                raise RuntimeError("BCA bit not cleared after board offset calibration!") 
+            print(f"Done ({toc-tic}s).")     
+            #--------------------------------------------------------------
+        
+
+            # Apply HIGH discharge current through sense resistor
+            i_pack = 10.0
+            print(f"Apply {i_pack}A discharge current")
+            p_pack = (u_supply * i_pack)
+            print(u_supply, u_cell, i_pack, p_pack)
+            psu2.configure_supply(u_supply, i_pack*1.25, p_pack * 1.10, 1)
+            #psu1.configure_cc_mode(-1.000, None, 22.09, 10.0, -60, 1)
+            psu1.configure_sink(-i_pack, None, -(i_pack*1.05), u_supply, -(p_pack * 1.05), 1)
+            sleep(0.5)
+            print("Measure PSU1", psu1.get_all_measurements())
+            print("Measure PSU2", psu2.get_all_measurements())
+            i_psu = psu1.get_current()
+            sleep(2.0)
+            cc2_current = afe.read_cc2_current()
+            print("PSU1 current:", i_psu)
+            print("AFE CC2 current:", cc2_current)
+            value = 0
+            for i in range(20):
+                cc = afe.read_cal1()
+                value += cc["cc2_counts"]
+                sleep(0.005)
+            print("CC b:", cc, value)
+            cc_counts = int(round(value / 20))
+            print(cc_counts)
+
+
+            verify_cc_gain , verify_capacity_gain, cc2_current_verify = afe.calib_cc_gain_and_capacity_gain(i_psu, num_samples=20, pause_between=0.005)
+            print("Verify AFE CC Gain:", verify_cc_gain)
+            print("Verify AFE Capacity Gain:", verify_capacity_gain)
+            print("Verify AFE CC2 current:", cc2_current_verify)
+
+            _check_if_sleep_en()
+            
+            # -----------------------------------------------------------------
+            # GG: bq34Z100 calculation of CC Gain and Capacity Gain
+            gg.enter_calibration()
+            gg_current = gg.current()
+            if (gg_current > -0.1) and (gg_current < 0.1):
+                print("No current flow - skip CC Gain calibration")
+            else:
+                gg_cc_gain = gg_cc_gain_stored * i_psu / gg_current * 1  # * 1 Ohm
+                gg_cc_delta = gg_cc_gain * 1193046.0  # magic constant
+                print("New CC Gain:", gg_cc_gain)
+                print("New CC Delta:", gg_cc_delta)
+                gg.write_calibration_flash_data(data={"cc_gain": gg_cc_gain, "cc_delta": gg_cc_delta})
+                print("CC Gain calibration done:", gg_cc_gain)
+                sleep(0.1)
+            gg.exit_calibration()
+            #------------------------------------------------------------------
+
+            #
+            # set PSU1 and PSU2 to safe state avoiding damadge on DUT
+            #
+            psu1.set_output_state(0)  # SINK OFF
+            psu1.configure_supply(u_supply, 0.080, 50, 0)  # PACK supply safe state
+            psu2.configure_supply(u_supply, 0.080, 50, 1)  # Cell Stack SAFE STATE
+            afe.disable_fets()
+            print("FET status: ", afe.read_fet_status())
+            print("Measure PSU1", psu1.get_all_measurements())
+            print("Measure PSU2", psu2.get_all_measurements())
+
+            #if (cc_counts_a == cc_counts_b) or (cc_counts_a == 0) or (cc_counts_b == 0):
+            if (cc_counts == 0):
+                raise ValueError(f"Current calibration results will cause div by zero error: {cc_counts}")
+
+            stored_cc_gain = afe.read_cc_gain()
+            stored_capacity_gain = afe.read_capacity_gain()
+            print("AFE stored CC Gain:", stored_cc_gain)
+            print("AFE stored Cap Gain:", stored_capacity_gain)
+
+            
+            # CC Gain = 1e+6 * VREF2 / (5 × 32768 × Rsense in mΩ), with VREF2 = 1.24V
+            # CC Gain = 1e+6 * 1.24 / (5 * 32768 * Rsense in mΩ)
+            # CC Gain = 7.5684 / (Rsense in mΩ)
+
+            # cc_counts / cc_gain = ref_current / (7.5684 / (Rsense in mΩ))
+            # => cc_gain = ref_current / (7.5684 / (Rsense in mΩ)) / cc_counts 
+            # => cc_gain = ((ref_current * (Rsense in mΩ) / 7.5684) / cc_counts) * 1e+6
+            # => cc_gain = ((ref_current * 2 ) / 7.5684) / cc_counts) * 1e+6
+            # => cc_gain = (ref_current / cc_counts) * 264256.6460546483
+
+            cc_gain_float2 = (i_psu / cc_counts) * 264256.6460546483         
+            cc_gain_float = (i_psu / cc2_current) * stored_cc_gain  # alternative calculation using CC2 current directly
+            capacity_gain_float = 298261.6178 * cc_gain_float  # Note: constant 298261.6178 comes from TI doc
+
+            
+            print("AFE new CC Gain:", cc_gain_float)
+            print("AFE new CC Gain (alt):", cc_gain_float2)
+            print("AFE new Cap Gain:", capacity_gain_float)
+
+            if may_calibrate_current:
+                # write calibration into RAM
+                afe.enter_config_update_mode()
+                # CC Offset, CC Gain, Capacity Gain
+                #afe.write_board_offset(board_offset)   # Skip board offset
+                afe.write_cc_gain(cc_gain_float)
+                afe.write_capacity_gain(capacity_gain_float)
+                afe.exit_config_update_mode()
+                afe.disable_sleepmode()
+
+            _check_if_sleep_en()
+            
+            # recheck current measurement -> repeat if necessary
+            print("Recheck current measurement after current calibration:")
+
+            u_cell = 3.6
+            u_supply = u_cell * num_cells
+            i_pack = 7.5
+            print(f"Apply {i_pack}A discharge current")
+            p_pack = (u_supply * i_pack)
+            print(u_supply, u_cell, i_pack, p_pack)
+            psu1.configure_sink(-i_pack, None, -(i_pack*1.05), u_supply, -(p_pack * 1.05), 0)
+            psu2.configure_supply(u_supply, i_pack*1.25, p_pack * 1.10, 1)
+            for cell_no in range(1, num_cells):
+                vsim.set_cell_n_voltage(cell_no, u_cell)
+            sleep(0.1)
+            afe.enable_fets()
+            print("FET status: ", afe.read_fet_status())
+            psu1.set_output_state(1)
+            sleep(0.5)
+            print("PSU current:", psu2.get_current())
+            print("Measure PSU1", psu1.get_all_measurements())
+            print("Measure PSU2", psu2.get_all_measurements())
+            sleep(2.0)
+            print("AFE current:", afe.read_cc2_current())
+            print("AFE TOS:", afe.read_tos_voltage())
+            print("AFE PACK:", afe.read_pack_voltage())
+            print("AFE LD:", afe.read_ld_voltage())
+
+            # GG test also
+            print("GG voltage:", gg.voltage())
+            print("GG current:", gg.current())
+            print("GG temperature:", gg.temperature())
+
+
+            psu1.set_output_state(0)  # SINK OFF
+            psu1.configure_supply(u_supply, 0.080, 50, 0)  # PACK supply safe state
+            psu2.configure_supply(u_supply, 0.080, 50, 1)  # Cell Stack SAFE STATE
+            afe.disable_fets()
+            print("FET status: ", afe.read_fet_status())
+            print("Measure PSU1", psu1.get_all_measurements())
+            print("Measure PSU2", psu2.get_all_measurements())
+
+            _check_if_sleep_en()
+            
+            # === COV/CUV calibration ===
+            # Apply the desired value for the cell over-voltage threshold to device cell inputs.
+            # Calibration will use the voltage applied to the top cell of the device.
+            # For example, Apply 4350mV: measure cells 1-6 voltage, then set psu2 to this +4.350v
+            #
+            # psu2... vsim...
+            #afe.enter_config_update_mode()
+            #afe.calibrate_cell_over_voltage()
+            #afe.exit_config_update_mode()
+
+
+            # apply desired CUV voltage value to device cell inputs
+            # Apply the desired value for the cell under-voltage threshold to device cell inputs.
+            # Calibration will use the voltage applied to the top cell of the device.
+            # For example, Apply 2400mV: measure cells 1-6 voltage, then set psu2 to this +2.4v
+
+
+            # psu2... vsim...
+            #afe.enter_config_update_mode()
+            #afe.calibrate_cell_under_voltage()
+            #afe.exit_config_update_mode()
+
+            # # === write all calibration into RAM ===
+            # afe.enter_config_update_mode()
+            # # Cell Voltage Gains
+            # afe.write_cell_gain(cell_gain)
+            # # PACK, LD, TOS Gains
+            # afe.write_pack_gain(PACK_Gain)
+            # afe.write_ld_gain(LD_Gain)
+            # afe.write_tos_gain(TOS_Gain)
+            # # CC Offset, CC Gain, Capacity Gain
+            # afe.write_board_offset(board_offset)
+            # afe.write_cc_gain(cc_gain_float)
+            # afe.write_capacity_gain(capacity_gain)
+            # # Temperature offsets
+            # afe.write_temperature_calibration_offsets(temp_offsets)
+            # afe.exit_config_update_mode()
+
+
+            #--------------------------------------------------------------------------------------
+            # Seal / unseal test
+            
+            print("AFE: Set to sealed:", afe.seal_in_production())
+            sleep(0.1)
+            afe.read_battery_status()
+            print(afe._battery_status)
+            print("AFE: Full Access:", afe.enable_full_access())
+            afe.read_battery_status()
+            print(afe._battery_status)
+            
+            #print("GG: Set to sealed:", gg.seal())
+            #sleep(0.1)
+            #gg.read_control_status()
+            #print(gg._control_status)
+            #print("GG: Full Access:", gg.enable_full_access())
+            gg.read_control_status()
+            #print(gg._control_status)
+
+            #--------------------------------------------------------------------------------------
+            # === Enable Functions of AFE before writing OTP ===
+            
+            afe.read_manufacturing_status()
+            print(afe._manufact_status)
+            afe.enable_fet_control()  # make sure FET_EN == 1
+            afe.enable_pf_control()   # make sure PF_EN == 1            
+            afe.read_manufacturing_status()
+            print(afe._manufact_status)
+
+
+            #--------------------------------------------------------------------------------------
+            # === write to OTP ===
+
+            def write_to_otp():
+                print("Write configuration to OTP memory")
+                u_supply = 11.0  # target stack voltage for OTP programming
+                u_cell = round(u_supply / num_cells, 2)
+                print(f"Apply {u_supply}v stack voltage for OTP programming")
+                print(u_supply, u_cell)
+                afe.disable_fets()
+                print("FET status: ", afe.read_fet_status())
+                psu1.configure_supply(u_supply, 0.080, 50, 1)
+                for cell_no in range(1, num_cells):
+                    vsim.set_cell_n_voltage(cell_no, u_cell)
+                psu2.configure_supply(u_supply, 0.080, 50, 1)               
+                sleep(1.0)
+                print("Measure PSU1", psu1.get_all_measurements())
+                print("Measure PSU2", psu2.get_all_measurements())
+                print("Cells:", afe.read_cell_voltages())
+                print("TOS:", afe.read_tos_voltage())        
+                afe.enter_config_update_mode()
+                results, data_fail_addr = afe.read_otp_wr_check()
+                if results == 0x80:
+                    # all ok -> write to OTP
+                    print(f"AFE ready: 0x{results:02X} -> write to OTP")
+                    afe.write_otp()
+                    sleep(0.5)
+                    afe.exit_config_update_mode()
+                    afe.disable_sleepmode()
+                else:
+                    afe.exit_config_update_mode()
+                    afe.disable_sleepmode()
+                    #raise RuntimeError(f"OTP write check failed at address 0x{data_fail_addr:04X} with result 0x{results:02X}")
+                    print(f"FAILED: OTP write check at address 0x{data_fail_addr:04X} with result 0x{results:02X}")
+
+            write_to_otp()
+
+
+    
+        #------------------------------------------------------------------------------------------
+        # MCU Flashing
+        # NOTE: The µ-controller interacts with AFE and GG so program it
+        #       after all things are set for AFE and GG.
+
+        control_vcc_voltages()
+
+        def program_mcu():
+
+            if 0:
+                cartridge.enable_valmod()
+                cartridge.disable_valmod()
+                cartridge.enable_mcu()
+                print(ap.erase_flash())
+                print(ap.program_flash())
+                cartridge.disable_mcu()
+                afe.disable_checksum()
+            if 0:
+                cartridge.disable_mcu()
+                cartridge.enable_valmod()
+                cartridge.disable_valmod()
+                cartridge.configure_communication_to_mcu("i2c")
+                cartridge.enable_mcu()
+                #cartridge.switch_mosfet(0, 0)  # 0ohm
+                #cartridge.switch_mosfet(1, 1)  # 20kohm
+                print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
+                sleep(2.0)
+
+                for n in range(1,9):
+                    cartridge._onboard_mux.setChannel(n)
+                    print(cartridge._i2c.i2c_bus_scan())
+
+                #bat = Battery(BusMaster(cartridge.bus_to_mirco))
+                #print(bat.temperature())
+            
+            if 1:
+                afe.disable_checksum()
+                cartridge.enable_valmod()  # ???
+                cartridge.configure_communication_to_mcu("can")
+                cartridge.enable_mcu()  # enable microcontroller
+                print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
+                sleep(2.0)
+                print(mcu.can_read_voltage())
+                print(mcu.can_read_current())
+            
+            if 1:
+                afe.disable_checksum()
+                cartridge.configure_communication_to_mcu("i2c")
+                cartridge.enable_mcu()  # enable microcontroller
+                print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
+                sleep(2.0)
+                print(cartridge.bus_to_mirco.i2c_bus_scan())
+                cartridge.disable_mcu()      
+                print(cartridge.backyard_bus.i2c_bus_scan())
+                print(cartridge.bus_to_gpio.i2c_bus_scan())
+                
+            
+            if 0:
+                # NOTE: The µ-controller interacts with AFE and GG so program it
+                # after all things are set for AFE and GG.
+                #------------------------------------------------------------------
+                cartridge.disable_mcu()
+                #print("Program FLASH:", ap.program_flash())
+                cartridge.switch_mosfet(0, 0)  # 0ohm
+                cartridge.switch_mosfet(1, 0)  # 20kohm
+                cartridge.switch_mosfet(2, 1)  # 200kohm
+                cartridge.switch_mosfet(3, 0)  # 400kohm
+                #------------------------------------------------------------------
+                cartridge.select_bus_to_micro("can")
+                cartridge.enable_mcu()
+                print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
+                sleep(1.0)
+                #print(can.receive(0x7ff))
+                print(can.send_frame(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
+                print(can.receive_frame(0x5a0))
+                print(can.send_frame(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current            
+                print(can.receive_frame(0x07ff))
+                print(can.recover_can_driver_on_remote())
+                print(can.reinstall_can_driver_on_remote())
+                # expected response: 0x5a0 8 0x4b 0x09 0x20 0x00 0xd2 0x5d 0x00 0x00 (voltage at 4 and 5)
+                cartridge.select_bus_to_micro("i2c")
+                sleep(0.5)
+                cartridge.disable_mcu()
+
+        program_mcu()
 
         #------------------------------------------------------------------------------------------
         # MOSFET Test
@@ -1094,7 +1130,7 @@ def rack_test(cartridge: CartridgePETA,
             afe.read_fet_status()
             print("FET status: ", afe._fet_status)
 
-        mosfet_test()
+        #mosfet_test()
 
         #------------------------------------------------------------------------------------------
         # Test FUSE pin
@@ -1147,8 +1183,7 @@ def rack_test(cartridge: CartridgePETA,
                 relais.disable_relay_n(2)
             print("Done.")
             
-        test_fuse_pin()
-
+        #test_fuse_pin()
 
         #------------------------------------------------------------------------------------------
         # Overvoltage Test, 2nd Protection
@@ -1235,7 +1270,7 @@ def rack_test(cartridge: CartridgePETA,
                 # disable 1k resistor heater to GND
                 relais.disable_relay_n(1)
 
-        test_overvoltage()
+        #test_overvoltage()
 
         #------------------------------------------------------------------------------------------
         # Heater Path Test
@@ -1276,58 +1311,10 @@ def rack_test(cartridge: CartridgePETA,
             afe.disable_pf_control()
             afe.disable_fets()
             
-        test_heater_path()
+        #test_heater_path()
 
 
-        #------------------------------------------------------------------------------------------
-        # NOTE: The µ-controller interacts with AFE and GG so program it
-        # after all things are set for AFE and GG.
-        #------------------------------------------------------------------------------------------
-        if 0:
-            #cartridge.disable_mcu()
-            cartridge.switch_mosfet(0, 0)  # 0ohm
-            cartridge.switch_mosfet(1, 0)  # 20kohm
-            cartridge.switch_mosfet(2, 1)  # 200kohm
-            cartridge.switch_mosfet(3, 0)  # 400kohm
-            cartridge.select_bus_to_micro("can")            
-            cartridge.enable_mcu()  # enable microcontroller
-            #print("Program FLASH:", ap.program_flash())           
-            print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
-            sleep(5.0)
-            #print(can.receive(0x7ff))
-            print(can.send_frame(0x620, (0x40,0x09,0x20,0x00,0x00,0x00,0x00,0x00)))  # voltage
-            print(can.receive_frame(0x5a0))
-            print(can.send_frame(0x620, (0x40,0x0a,0x20,0x00,0x00,0x00,0x00,0x00)))  # current            
-            print(can.receive_frame(0x07ff))
-            print(can.recover_can_driver_on_remote())
-            print(can.reinstall_can_driver_on_remote())
-            # expected response: 0x5a0 8 0x4b 0x09 0x20 0x00 0xd2 0x5d 0x00 0x00 (voltage at 4 and 5)
-            cartridge.select_bus_to_micro("i2c")
-            sleep(0.5)
-            cartridge.disable_mcu()        
-        if 0:
-            afe.disable_checksum()
-            cartridge.enable_valmod()  # ???
-            cartridge.configure_communication_to_mcu("can")
-            cartridge.enable_mcu()  # enable microcontroller
-            print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
-            sleep(5.0)
-            print(mcu.can_read_voltage())
-            print(mcu.can_read_current())
-        
-        if 0:
-            afe.disable_checksum()
-            cartridge.configure_communication_to_mcu("i2c")
-            cartridge.enable_mcu()  # enable microcontroller
-            print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
-            sleep(5.0)
-            print(cartridge.bus_to_mirco.i2c_bus_scan())
-            print(cartridge.backyard_bus.i2c_bus_scan())
-            print(cartridge.bus_to_gpio.i2c_bus_scan())
-            
-            #bat = Battery(BusMaster(cartridge.bus_to_mirco))
-            #print(bat.temperature())
-        
+      
 
         print("Finish Test.")
 
@@ -1336,13 +1323,7 @@ def rack_test(cartridge: CartridgePETA,
         print_exception(type(ex), ex, ex.__traceback__)
 
     try:
-        print("Read voltages from DAQ:")
-        u_cells, u_xtras = read_voltages_from_daq()
-        print("Cells: ", u_cells)
-        print("Cellstack: ", u_xtras[0])
-        print("+3.3v VCC: ", u_xtras[1])
-        print("+1.8v VCC: ", u_xtras[2])
-        print("Pack: ", u_xtras[3])
+        control_vcc_voltages()
     except Exception:
         pass
 
@@ -1376,10 +1357,10 @@ if __name__ == "__main__":
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
     #LINE_NETWORK = "172.25.102"  # VN line 2
-    #LINE_NETWORK = "172.25.103"  # VN line 3
+    LINE_NETWORK = "172.25.103"  # VN line 3
 
 
-    SOCKET = 0  # 0, 1 or 2
+    SOCKET = 1  # 0, 1 or 2
     # following assumes own IF-OLIMEX breakout adapter
     if SOCKET == 0:
         psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=1)  # socket 0 / share
