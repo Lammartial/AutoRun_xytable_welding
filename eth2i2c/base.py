@@ -21,6 +21,18 @@ class I2CBase:
     def close(self):
         pass
 
+    def i2c_change_clock_frequency(self, frequency_hz: int, timeout_ms: int = 20) -> bool:
+        """Change the I2C clock frequency.
+
+        Args:
+            frequency_hz (int): Desired clock frequency in Hz
+            timeout_ms (int): Timeout in milliseconds for the operation
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        pass
+
     def writeto(self, i2c_address: int, data: bytearray) -> int:
         """Send a bytearray (up to 100 bytes) to the specified I2C address and return the number of sent bytes.
 

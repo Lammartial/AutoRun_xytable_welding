@@ -14,7 +14,6 @@ from time import sleep, monotonic_ns
 from binascii import hexlify, unhexlify
 from struct import pack, unpack, unpack_from, pack_into
 from collections import OrderedDict
-from flask.scaffold import F
 from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
 from rrc.smbus import BusMaster
 

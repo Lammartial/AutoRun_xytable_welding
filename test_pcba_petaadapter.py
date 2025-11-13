@@ -90,18 +90,15 @@ def rack_test(cartridge: CartridgePETA,
     ap.set_filenames("petalite-01_RC7-image.wni", 
                      "petalite-01_RC7.wnp", 
                      erase_flash_project_file="petalite-flash-erase.wnp")
-    # ap.set_filenames("petalite-test-image.wni", 
-    #                  "petalite-test.wnp", 
-    #                  erase_flash_project_file="petalite-flash-erase.wnp")
     print("Integrity check MD5: ")
     if ap.verify_all_files_on_programmer(
-        "821C93A15324CC4E05E839E8D04521AE",
-        "075C14FF64BFA821E378A6B42437026E",
-        erase_project_file_hash="0711D04EFD02FA4E3317F3D6829FDA0D"):
+        "1556729B7469A0FF36878C46E174A61B",
+        "172FEED2F957142034B5488C88851D7D",
+        erase_project_file_hash="3A64ED4D9619D8CD6F644B537FA4196E"):
         print("Ok.")
     else:
         print("Need to send Files to the programmer.")
-    ap.send_all_files()
+        ap.send_all_files()
 
 
     #psu.configure_voltage_rise_times(pos="DEF", neg="DEF")
@@ -1081,7 +1078,39 @@ def rack_test(cartridge: CartridgePETA,
                 sleep(0.5)
                 cartridge.disable_mcu()
 
-        program_mcu()
+        #program_mcu()
+
+
+        def communication_i2c_with_mcu():
+            cartridge.disable_mcu()
+            cartridge.configure_communication_to_mcu("i2c")
+            cartridge.disable_valmod()  # ???
+            cartridge.bus_to_mirco.i2c_change_clock_frequency(100000, timeout_ms=30)            
+            cartridge.enable_mcu()  # enable microcontroller
+            print(f"GPIO-Cart:", hex(cartridge.gpio.read_input()), hex(cartridge.gpio._shadow_reg))
+            sleep(2.0)
+            print(cartridge.bus_to_mirco.i2c_bus_scan())            
+            #cartridge.mcu.smartbattery.pec = False
+            # print(cartridge.mcu.smartbattery.readBytes(0x1B, 4))            
+            # print(cartridge.mcu.smartbattery.readBytes(0x1C, 4))
+            # print(cartridge.mcu.smartbattery.readBytes(0x20, 16))
+            # print(cartridge.mcu.smartbattery.readBlock(0x20))  # fix: PEC was included in count
+            # print(cartridge.mcu.smartbattery.readBytes(0x21, 16))
+            # print(cartridge.mcu.smartbattery.readBlock(0x21))  # fix: PEC was included in count
+            print(cartridge.mcu.smartbattery.serial_number())
+            print(cartridge.mcu.smartbattery.device_name())
+            print(cartridge.mcu.smartbattery.manufacture_date())            
+            print(cartridge.mcu.smartbattery.manufacturer_name())
+            
+            cartridge.mcu.setup_rtc()
+            sleep(2.0)
+            #cartridge.mcu.check_rtc_against_systemtime()
+            
+            
+            cartridge.disable_mcu()
+
+        communication_i2c_with_mcu()
+
 
         #------------------------------------------------------------------------------------------
         # MOSFET Test
@@ -1357,10 +1386,10 @@ if __name__ == "__main__":
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
     #LINE_NETWORK = "172.25.102"  # VN line 2
-    LINE_NETWORK = "172.25.103"  # VN line 3
+    #LINE_NETWORK = "172.25.103"  # VN line 3
 
 
-    SOCKET = 1  # 0, 1 or 2
+    SOCKET = 0  # 0, 1 or 2
     # following assumes own IF-OLIMEX breakout adapter
     if SOCKET == 0:
         psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=1)  # socket 0 / share

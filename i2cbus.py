@@ -82,7 +82,7 @@ class BusMux:
     def reset(self) -> bool:
         """Disable ALL channels"""
         return self.setChannelMask(0x00)
-
+   
 
     def getChannels(self) -> Tuple[int]:
         mask = self.current_mask  # work with shadow only
@@ -152,6 +152,7 @@ class MultiBusMux:
         for m in self.muxes:
             ok = ok and m.reset()
         return ok
+    
 
     def get_mux(self, mux: int) -> BusMux:
         mux = int(mux)  # this is for TestStand
@@ -293,6 +294,23 @@ class I2CMuxedBus(I2CBase):
 
         self.mux.setChannel(self.channel)
         return self.i2c.i2c_bus_scan()
+
+
+    def i2c_change_clock_frequency(self, frequency_hz: int, timeout_ms: int = 20) -> bool:
+        """Change the I2C clock frequency of the underlying bus.
+
+        Args:
+            frequency_hz (int): New clock frequency in Hz
+            timeout_ms (int, optional): Timeout in ms for the operation. Defaults to 20.
+
+        Returns:
+            bool: True if successfully changed, False else
+        """
+
+        ok1 = self.mux.reset() # disable all channels first
+        ok2 = self.i2c.i2c_change_clock_frequency(frequency_hz, timeout_ms=timeout_ms)        
+        return ok1 and ok2
+
 
 
 #--------------------------------------------------------------------------------------------------

@@ -8,7 +8,7 @@ from datetime import datetime as dt
 from binascii import hexlify
 from struct import unpack_from
 from rrc.i2cbus import I2CBus, BusMux, I2CMuxedBus
-from rrc.smbus import BusMaster
+from rrc.smbus import BusMaster, BusMasterPetaPatch
 from rrc.smartbattery import Battery
 from rrc.gpio_pcf8574 import PCF8574 as GPIOExtender
 from rrc.eth2can import CANBus
@@ -22,27 +22,35 @@ class PetaMCU:
         self._i2c = i2c
         self.i2C_address = i2c_address_7bit
         self.use_pec = i2c_pec
-        self.bus = BusMaster(i2c, retry_limit=1, verify_rounds=3, pause_us=50)
+        self.bus = BusMasterPetaPatch(i2c, retry_limit=1, verify_rounds=3, pause_us=50)
         self.smartbattery = Battery(self.bus, pec=i2c_pec)  # this is to reuse already implemented functionality
         self.can = can
 
 
     def setup_rtc(self) -> bool:
         now = dt.now()
-        _fmt = "little"
-        buf = bytes(6) + \
-            now.year.to_bytes(_fmt, 1) + \
-            now.month.to_bytes(_fmt, 1) + \
-            now.day.to_bytes(_fmt, 1) + \
-            now.hour.to_bytes(_fmt, 1) + \
-            now.minute.to_bytes(_fmt, 1) + \
-            now.second.to_bytes(_fmt, 1)
+        buf = bytes([6, # length 
+                    (now.year & 0xFF), (now.month & 0xFF), (now.day & 0xFF),
+                    (now.hour & 0xFF), (now.minute & 0xFF), (now.second& 0xFF)
+                    ])
         print(hexlify(buf))   # DEBUG
-        return self.bus.writeBytes(self.i2C_address, 0x1E, buf, use_pec=self.use_pec)
+        return self.bus.writeBytes(self.i2C_address, 0xE1, buf, use_pec=self.use_pec)
+
+
+#define RRC_VAL_SELF_TEST            0xE0  (Read/Write Word)
+#define RRC_VAL_RTC_TIME             0xE1 (Read/Write Block)
+#define RRC_VAL_UDI                  0xE2 (Read/Write Block)
+#define RRC_VAL_CHECK_EXTERNAL_FLASH 0xE3  (Read/Write Word)
+#define RRC_VAL_VCC_LED              0xE4  (Read/Write Word)
+#define RRC_VAL_SET_LED              0xE5 (Read/Write Block)
+#define RRC_VAL_GET_BUTTON_STATE     0xE6 (Read Word)
+#define RRC_VAL_BQ_READOUT           0xE7  (Read/Write Word)
+#Ist aber noch nicht alles implementiert
+
 
 
     def read_rtc(self) -> Tuple[dt, str]:
-        buf = self.bus.readBytes(self.i2C_address, 0x1E, 6, use_pec=self.use_pec)
+        buf = self.bus.readBytes(self.i2C_address, 0xE1, 7, use_pec=self.use_pec)
         _fmt = "<B"
         year = unpack_from(_fmt, buf, offset=1)
         month = unpack_from(_fmt, buf, offset=2)
@@ -162,6 +170,19 @@ class CartridgePETA:
         # to interact with the MCU by CAN or by I2C 
         self.mcu = PetaMCU(can, self.bus_to_mirco)
 
+    def change_i2c_clock_frequency(self, frequency_hz: int, timeout_ms: int = 20) -> bool:
+        """Change the I2C clock frequency.
+
+        Args:
+            frequency_hz (int): Desired clock frequency in Hz
+            timeout_ms (int): Timeout in milliseconds for the operation
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        # we are using one of the muxed buses here to switch the clock for all
+        return self.bus_to_mirco.i2c_change_clock_frequency(int(frequency_hz), int(timeout_ms))            
+            
 
     def reset_mux(self) -> None:
         """Reset the onboard MUX to no channel selected."""

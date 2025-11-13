@@ -382,6 +382,43 @@ class BusMaster:
         return ok
 
 
+class BusMasterPetaPatch(BusMaster):
+     
+     # we need to change this function to fix the byte count for variable length read
+     def readBytesVarLen(self, slvAddress: int, cmd: int, use_pec: bool = False, byte_count: int = -1) -> Tuple[bytearray, bool]:
+        """Read bytes from slave address with variable length in first byte received.
+
+        As the i2c module does not provide this in dedicate function, we use two read
+        accesses: 1) to get only the 1st byte 2) to read the given bytes+1.
+
+        Args:
+            slvAddress (byte | int): 8 bit slave address (0..255)
+            cmd (byte | int): command code (0..255)
+            use_pec (bool, optional): Use a PEC checksum to verify the transfer if True. Defaults to False.
+
+        Returns:
+            bytearray: bytes buffer that has been read.
+            bool: True, if count bytes have been read and checksum was correct (if given), False else.
+        """
+        # 1. get count value
+        # count = self.i2c.readfrom_mem(slvAddress,cmd,1,stop=False)
+        # count = self.i2c.readfrom_mem(slvAddress,cmd,1)
+        if byte_count == -1:
+            count = self._retry_read_helper(slvAddress, cmd, 1)
+            # 2. read the correct number of bytes
+            if (len(count) > 0) and (count[0] > 0):
+                buf, ok = self.readBytes(slvAddress, cmd, 
+                                         count[0] + 1 -1,  # -1 is because the PEC is included in this count
+                                         use_pec=use_pec)
+            else:
+                buf = bytearray()  # empty bytearray
+                ok = False
+        else:
+            buf, ok = self.readBytes(slvAddress, cmd, byte_count, use_pec=use_pec)
+        return buf, ok
+
+
+
 
 #--------------------------------------------------------------------------------------------------
 

@@ -306,8 +306,8 @@ class I2CPort(I2CBase):
             return []
 
         tx_payload = bytes([0xCF]) \
-                        + pack(">L", frequency) \
-                        + (pack(">L", timeout_ms) if timeout_ms else bytes())  # to 32 bit unsigned each
+                        + pack(">L", int(frequency)) \
+                        + (pack(">L", int(timeout_ms)) if timeout_ms else bytes())  # to 32 bit unsigned each
         rx_payload = self.__data_exchange(tx_payload)
         self.__check_for_errors(rx_payload)
         return list(rx_payload)
