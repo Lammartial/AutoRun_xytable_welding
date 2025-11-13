@@ -102,6 +102,9 @@ class CANBus(Eth2CanPort):
         Returns:
             OrderedDict: _description_
         """
+
+        #print(list(buf))  # DEBUG
+
         state = unpack_from("<L", buf, 0)[0]
         _state_txt = (
             "STOPPED",
@@ -114,14 +117,14 @@ class CANBus(Eth2CanPort):
             "state": state,
             "state_txt": _state_txt[state & 0x03],
             "msgs_to_tx": unpack_from("<L", buf, 4)[0],
-            "msgs_to_rx": unpack_from("<L", buf, 12)[0],
-            "tx_error_counter": unpack_from("<L", buf, 16)[0],
-            "rx_error_counter": unpack_from("<L", buf, 20)[0],
-            "tx_failed_count": unpack_from("<L", buf, 24)[0],
-            "rx_missed_count": unpack_from("<L", buf, 28)[0],
-            "rx_overrun_count": unpack_from("<L", buf, 32)[0],
-            "arb_lost_count": unpack_from("<L", buf, 36)[0],
-            "bus_error_count": unpack_from("<L", buf, 40)[0],
+            "msgs_to_rx": unpack_from("<L", buf, 8)[0],
+            "tx_error_counter": unpack_from("<L", buf, 12)[0],
+            "rx_error_counter": unpack_from("<L", buf, 16)[0],
+            "tx_failed_count": unpack_from("<L", buf, 20)[0],
+            "rx_missed_count": unpack_from("<L", buf, 24)[0],
+            "rx_overrun_count": unpack_from("<L", buf, 28)[0],
+            "arb_lost_count": unpack_from("<L", buf, 32)[0],
+            "bus_error_count": unpack_from("<L", buf, 36)[0],
         })
         return self._twai_status
 
