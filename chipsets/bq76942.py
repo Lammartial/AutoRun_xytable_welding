@@ -1811,8 +1811,8 @@ class BQ76942:
         buf = pack("<H", 0x00d0)  # OTPW_EN = 1, PF_EN = 1, FET_EN = 1
         self.write_subcommand(0x9343, data=buf)
 
-        buf = self.read_subcommand(0x00a0, pause_before_data_available=0.15)  # SIMULATION
-        #buf = self.read_subcommand(0x00a1, pause_before_data_available=0.15)  # !!! HOT FUNCTION !!!
+        #buf = self.read_subcommand(0x00a0, pause_before_data_available=0.15)  # SIMULATION
+        buf = self.read_subcommand(0x00a1, pause_before_data_available=0.15)  # !!! HOT FUNCTION !!!
         results = unpack_from("<B", buf, 0)[0]
         data_fail_addr = unpack_from("<H", buf, 1)[0]
         return results, data_fail_addr
