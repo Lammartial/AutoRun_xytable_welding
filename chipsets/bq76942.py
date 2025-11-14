@@ -1819,7 +1819,7 @@ class BQ76942:
         return self.wait_for_battery_status_flag("CFGUPDATE", 0)
 
 
-    def shutdown(self) -> bool:
+    def shutdown(self) -> bool:        
         return self.write_subcommand(0x0010)
 
     def reset_device(self) -> bool:

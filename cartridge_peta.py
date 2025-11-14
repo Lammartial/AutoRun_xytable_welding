@@ -225,10 +225,11 @@ class CartridgePETA:
 
     def all_mosfets_to(self, state: int) -> bool:
         for p in range(4):
-            if state != 0:
-                self.gpio.set_pin(p)
+            if int(state) != 0:
+                return self.gpio.set_pin(p)
             else:
-                self.gpio.reset_pin(p)
+                return self.gpio.reset_pin(p)
+            
 
 
     def select_bus_to_micro(self, bustype: str) -> None:
