@@ -290,7 +290,7 @@ def rack_test(cartridge: CartridgePETA,
             afe.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets
 
             # AFE need always transfer into RAM
-            ff1 = BQStudioFileFlexFlasher(afe, base_path / "GG_3412185A-02_A_draft4_unsealed_PF_Fet_dis_CDFETOFF_PDwn_Petalite_AFE_settings.gm.fs" )
+            ff1 = BQStudioFileFlexFlasher(afe, base_path / "FS_3412185A-02_A_Petalite_AFE_settings.gm.fs" )
             ff1.validate_file()
             ff1.program_fw_file()
             
@@ -944,17 +944,7 @@ def rack_test(cartridge: CartridgePETA,
             gg.read_control_status()
             #print(gg._control_status)
 
-            #--------------------------------------------------------------------------------------
-            # === Enable Functions of AFE before writing OTP ===
             
-            afe.read_manufacturing_status()
-            print(afe._manufact_status)
-            afe.enable_fet_control()  # make sure FET_EN == 1
-            afe.enable_pf_control()   # make sure PF_EN == 1            
-            afe.read_manufacturing_status()
-            print(afe._manufact_status)
-
-
             #--------------------------------------------------------------------------------------
             # === write to OTP ===
 
@@ -974,13 +964,29 @@ def rack_test(cartridge: CartridgePETA,
                 print("Measure PSU1", psu1.get_all_measurements())
                 print("Measure PSU2", psu2.get_all_measurements())
                 print("Cells:", afe.read_cell_voltages())
-                print("TOS:", afe.read_tos_voltage())        
+                print("TOS:", afe.read_tos_voltage())      
+
                 afe.enter_config_update_mode()
+
+                # === Enable Functions of AFE before writing OTP ===
+                
+                afe.read_manufacturing_status()
+                print(afe._manufact_status)
+                afe.enable_fet_control()  # make sure FET_EN == 1
+                afe.enable_pf_control()   # make sure PF_EN == 1            
+                afe.read_manufacturing_status()
+                print(afe._manufact_status)
+
+                # Set Security configurations
+                afe.set_security_configuration(lock_cfg = False, perm_seal = False)
+
                 results, data_fail_addr = afe.read_otp_wr_check()
                 if results == 0x80:
                     # all ok -> write to OTP
                     print(f"AFE ready: 0x{results:02X} -> write to OTP")
-                    afe.write_otp()
+                    
+                    #afe.write_otp() # HOT COMMAND !!
+
                     sleep(0.5)
                     afe.exit_config_update_mode()
                     afe.disable_sleepmode()

@@ -574,16 +574,40 @@ class BQ76942:
         return True
 
 
+    def set_security_configuration(self, lock_cfg: bool = False, perm_seal: bool = False) -> bool:
+        """Sets the security configuration bits for sealing.
+        
+        Note: need FULL ACCESS mode and enter_config_update_mode() to perform this operation.
+
+        Args:
+            lock_cfg (bool, optional): if True, the configuration is locked after sealing. Defaults to True.
+            perm_seal (bool, optional): if True, the sealing is permanent. Defaults to True.
+
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+
+        #self.enter_config_update_mode()
+        b0 = 0x01  # SEAL bit
+        if lock_cfg:
+            b0 |= 0x02  # LOCK_CFG bit
+        if perm_seal:
+            b0 |= 0x04  # PERM_SEAL bit
+        ok = self.write_subcommand(0x9256, data=bytearray([b0]))  # b0=SEAL, b1=LOCK_CFG, b2=PERM_SEAL
+        #self.exit_config_update_mode()
+        return ok
+
+
     def seal_in_production(self) -> bool:
         if self.is_sealed(refresh=True): return True
         self.enter_config_update_mode()
         self.write_subcommand(0x9256, data=bytearray([0x01]))  # b0=SEAL, b1=LOCK_CFG, b2=PERM_SEAL
-        self.read_battery_status()  # DEBUG
+        #self.read_battery_status()  # DEBUG
         self.exit_config_update_mode()  # this activates the SEAL
-        #self.write_subcommand(0x0030)  # this is chipset specific! Send SEAL command
+        self.write_subcommand(0x0030)  # this is chipset specific! Send SEAL command
         #self.read_battery_status()  # DEBUG
         self.disable_sleepmode()
-        self.read_battery_status()  # DEBUG
+        #self.read_battery_status()  # DEBUG
         sleep(0.1)
         if not self.is_sealed(refresh=True): return False
         # After sealing quite a few commands are not recognised by the bq.
