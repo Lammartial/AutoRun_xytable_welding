@@ -932,7 +932,7 @@ class BQ76942:
         def _b_to_dict_A(b: bytearray) -> OrderedDict[str, bytes | bytearray | str | int]:
             os = unpack("<B", b)[0]
             return OrderedDict({
-                "block": _maybe_hexlify(b, hexi),
+                "block1": _maybe_hexlify(b, hexi),
                 # data come little endian
                 "SCD": ((os>>7) & 1),  #
                 "OCD2": ((os>>6) & 1),  #
@@ -947,13 +947,13 @@ class BQ76942:
         def _b_to_dict_B(b: bytearray) -> OrderedDict[str, bytes | bytearray | str | int]:
             os = unpack("<B", b)[0]
             return OrderedDict({
-                "block": _maybe_hexlify(b, hexi),
+                "block2": _maybe_hexlify(b, hexi),
                 # data come little endian
                 "OTF": ((os>>7) & 1),  #
                 "OTINT": ((os>>6) & 1),  #
                 "OTD": ((os>>5) & 1),  #
                 "OTC": ((os>>4) & 1),  #
-                "RSVD1": ((os>>3) & 1),  # Reserved. Do not use.
+                "RSVD3": ((os>>3) & 1),  # Reserved. Do not use.
                 "UTINT": ((os>>2) & 1),  #
                 "UTD": ((os>>1) & 1),  #
                 "UTC": ((os>>0) & 1),  #
@@ -962,16 +962,16 @@ class BQ76942:
         def _b_to_dict_C(b: bytearray) -> OrderedDict[str, bytes | bytearray | str | int]:
             os = unpack("<B", b)[0]
             return OrderedDict({
-                "block": _maybe_hexlify(b, hexi),
+                "block3": _maybe_hexlify(b, hexi),
                 # data come little endian
                 "OCD3": ((os>>7) & 1),  #
                 "SCDL": ((os>>6) & 1),  #
                 "OCDL": ((os>>5) & 1),  #
                 "COVL": ((os>>4) & 1),  #
-                "RSVD1": ((os>>3) & 1),  # Reserved. Do not use.
+                "RSVD4": ((os>>3) & 1),  # Reserved. Do not use.
                 "PTO": ((os>>2) & 1),  #
                 "HWDF": ((os>>1) & 1),  #
-                "RSVD2": ((os>>0) & 1),  # Reserved. Do not use.
+                "RSVD5": ((os>>0) & 1),  # Reserved. Do not use.
             })
 
         da_A = _b_to_dict_A(buf[0:1])
@@ -980,17 +980,23 @@ class BQ76942:
         ds_B = _b_to_dict_B(buf[3:4])
         da_C = _b_to_dict_C(buf[4:5])
         ds_C = _b_to_dict_C(buf[5:6])
-
         # combine the ordered dicts
-        d = da_A | ds_A | da_B | ds_B | da_C | ds_C
-        return d
+        d_alert = da_A | da_B | da_C
+        d_status = ds_A | ds_B | ds_C        
+        return d_alert, d_status
 
 
     def read_safety_status(self, hexi: bool | str | None = None) -> tuple:
         buf, ok = self.readBytes(self.address, 0x02, 6, use_pec=self.pec)
-        self._safety_status = self._decode_safety_status(buf, hexi=hexi)
+        self._safety_alert, self._safety_status = self._decode_safety_status(buf, hexi=hexi)
         return _od2t(self._safety_status)  # Teststand interface
-        #return self._safety_status
+       
+
+    def read_safety_alert(self, hexi: bool | str | None = None) -> tuple:
+        buf, ok = self.readBytes(self.address, 0x02, 6, use_pec=self.pec)
+        self._safety_alert, self._safety_status = self._decode_safety_status(buf, hexi=hexi)
+        return _od2t(self._safety_alert)  # Teststand interface
+    
 
 
     def _decode_fet_status(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:

@@ -27,6 +27,12 @@ class PetaMCU:
         self.can = can
 
 
+    def shutdown(self) -> bool:
+        ok1 = self.bus.writeWord(self.i2C_address, 0x00, 0x0010, use_pec=self.use_pec)
+        ok2 = self.bus.writeWord(self.i2C_address, 0x00, 0x0010, use_pec=self.use_pec)  # 2x in 4s        
+        return ok1 and ok2
+
+
     def setup_rtc(self) -> bool:
         now = dt.now()
         buf = bytes([6, # length 
@@ -232,7 +238,7 @@ class CartridgePETA:
             
 
 
-    def select_bus_to_micro(self, bustype: str) -> None:
+    def select_bus_to_micro(self, bustype: str) -> bool:
         """
         Set the state of the SDA line.
 
@@ -243,18 +249,19 @@ class CartridgePETA:
         #mask = self.gpio.get_output_shadow() & ~((0 << 6) | (0 << 5))  # clear both GPIO P5 (CANH) and P6 (SDA)
         if "CAN" in bustype.upper():
             #mask |= ((1 << 6) | (0 << 5))  # Set GPIO P6 (CANH) and P5 (SDA) for CAN
-            self.gpio.reset_pin(5)  # disable I2C
-            self.gpio.set_pin(6)  # enable CAN
+            ok1 = self.gpio.reset_pin(5)  # disable I2C
+            ok2 = self.gpio.set_pin(6)  # enable CAN
         elif "I2C" in bustype.upper():
             #mask |= ((0 << 6) | (1 << 5))  # Set GPIO P6 (CANH) and P5 (SDA) for I2C
-            self.gpio.reset_pin(6)  # disable CAN
-            self.gpio.set_pin(5)  # enable I2C
+            ok1 = self.gpio.reset_pin(6)  # disable CAN
+            ok2 = self.gpio.set_pin(5)  # enable I2C
         else:
-            self.gpio.reset_pin(6)  # disable I2C
-            self.gpio.reset_pin(5)  # disable CAN
+            ok1 = self.gpio.reset_pin(6)  # disable I2C
+            ok2 = self.gpio.reset_pin(5)  # disable CAN
             #pass  # open both GPIO P6 and P5 so that NO ONE works!
         #self.gpio.write_output(mask)  # modify the two port pins at the same time
-
+        return ok1 and ok2
+    
 
     def switch_some_io(self, pin_number: int, state: bool | int) -> bool:
         """
@@ -283,21 +290,29 @@ class CartridgePETA:
         return self.switch_some_io(7, 0)  # 0 on GPIO releases the RESET
 
 
-    def configure_communication_to_mcu(self, com_type: str = "i2c") -> None:
+    def configure_communication_to_mcu(self, com_type: str = "i2c") -> bool:
         self.switch_mosfet(0, 0)  # 0ohm
         self.switch_mosfet(3, 0)  # 400kohm
-        if com_type.lower() == "can":
+        if "CAN" in com_type.upper():
             # can
-            self.select_bus_to_micro("can")
+            #self.select_bus_to_micro("can")
             # signal to MCU
             self.switch_mosfet(1, 0)  # 20kohm
             self.switch_mosfet(2, 1)  # 200kohm
-        else:
+        elif "I2C" in com_type.upper():
             # i2c
-            self.select_bus_to_micro("i2c")
+            #self.select_bus_to_micro("i2c")
             # signal to MCU
             self.switch_mosfet(1, 1)  # 20kohm
             self.switch_mosfet(2, 0)  # 200kohm
+        else:
+            # disconnect everything from MCU
+            #self.select_bus_to_micro("garnix")            
+            self.switch_mosfet(1, 0)
+            self.switch_mosfet(2, 0)
+            self.switch_some_io(4, 0)  # Testmode ?            
+            #self.switch_some_io(7, 0)  # enable mcu
+        return self.select_bus_to_micro(com_type)
 
 
     def enable_valmod(self) -> bool:
