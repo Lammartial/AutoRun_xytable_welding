@@ -45,7 +45,7 @@ PRODUCT_CONFIGURATION_TABLE = [
     ("RRC2054S", "100568S-15", "RRC2054", "2054S",
             ("412085_RRC2054S",     "B", "412085-01"),     # Cell-Test (id,rev,pn)
             (None,                  "A", "412085-01"),     # Cell-Welding (id,rev,pn)
-            ("412100_RRC2054S",     "B", "412100-01"),     # PCBA-Test (id,rev,pn)
+            ("412100_RRC2054S",     "E", "412100-01"),     # PCBA-Test (id,rev,pn)
             ("412085_RRC2054S",     "D", "412085-01"),     # Corepack-Test (id,rev,pn)
             ("100568S_RRC2054S",    "C", "100568S-15")),   # EOL-Test (id,rev,pn)
     ("RRC2054-SO", "110062S-08", "RRC2054-SO", "2054-S0",
