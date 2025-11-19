@@ -6,7 +6,7 @@ from typing import Tuple, List
 from time import sleep
 from datetime import datetime as dt
 from binascii import hexlify
-from struct import unpack_from
+from struct import unpack, unpack_from
 from rrc.i2cbus import I2CBus, BusMux, I2CMuxedBus
 from rrc.smbus import BusMaster, BusMasterPetaPatch
 from rrc.smartbattery import Battery
@@ -58,12 +58,12 @@ class PetaMCU:
     def read_rtc(self) -> Tuple[dt, str]:
         buf = self.bus.readBytes(self.i2C_address, 0xE1, 7, use_pec=self.use_pec)
         _fmt = "<B"
-        year = unpack_from(_fmt, buf, offset=1)
-        month = unpack_from(_fmt, buf, offset=2)
-        day = unpack_from(_fmt, buf, offset=3)
-        hour = unpack_from(_fmt, buf, offset=4)
-        minute = unpack_from(_fmt, buf, offset=5)
-        second = unpack_from(_fmt, buf, offset=6)
+        year = unpack_from(_fmt, buf, offset=1)[0]
+        month = unpack_from(_fmt, buf, offset=2)[0]
+        day = unpack_from(_fmt, buf, offset=3)[0]
+        hour = unpack_from(_fmt, buf, offset=4)[0]
+        minute = unpack_from(_fmt, buf, offset=5)[0]
+        second = unpack_from(_fmt, buf, offset=6)[0]
         d = dt(year, month, day, hour, minute, second)
         return d, d.isoformat(sep=" ")
 
@@ -76,13 +76,16 @@ class PetaMCU:
 
 
     def start_selftesting(self) -> bool:
-        # ???
-        pass
+       buf = bytes([0x01, 0x00])  # start selftest  ??
+       return self.bus.writeBytes(self.i2C_address, 0xE0, buf, use_pec=self.use_pec)
 
 
     def read_pushbutton_status(self) -> int:
-        # ???
-        return 0
+        buf = self.bus.readBytes(self.i2C_address, 0xE6, 2, use_pec=self.use_pec)
+        _fmt = "<H"
+        state = unpack(_fmt, buf)[0]
+        return bool(state)
+        
 
 
     # CAN Bus Kommunikation
