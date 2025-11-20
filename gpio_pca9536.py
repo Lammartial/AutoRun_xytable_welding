@@ -270,14 +270,16 @@ if __name__ == '__main__':
     mux.setChannel(2)
 
     gpio = PCA9536(i2c_p)
-    gpio.configure_pins("0110", "0000", "0000")
+    gpio.configure_pins("0110", "0000", "1000")
 
     #gpio.set_pin_as_input(0)
     #gpio.set_pin_as_output(1)
     #gpio.set_pin(1)
 
     d = {}
-    for i in range(500):
+    samples = 100
+    pause = 0.010
+    for i in range(samples):
         for n in range(4):
             if not n in d:
                 d[n] = [0, 0]
@@ -287,9 +289,11 @@ if __name__ == '__main__':
             else:
                 d[n][1] += 1
             #print(f"Pin {n} as input: {_p}")
-        sleep(0.010)
-    
-    print(d)
+        sleep(pause)
+
+    print(f"After {samples} samples with pause {pause}s [0, 1]:")
+    for n in range(4):
+        print(f"Pin {n}: {d[n]}")
     
     #gpio.set_pin(3)
     #gpio.reset_pin(3)
