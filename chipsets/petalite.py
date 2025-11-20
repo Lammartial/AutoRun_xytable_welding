@@ -85,6 +85,20 @@ class PetaliteChipset(BQ40Z50R1):
         pass
 
 
+    def isReady(self):
+        #return super().isReady()
+        # return self.bus.isReady(self.address)
+        ok = False
+        try:
+            _, ok = self.bus.readWord(self.address, Cmd.VOLTAGE, self.pec)
+        except OSError as ex:
+            #if (ex.args[0] != errno.ENODEV) and (ex.args[0] != errno.ETIMEDOUT):
+            #    # only expected exception is "device not present" or "timed out"
+            #    # -> forward this exception
+            #    raise ex
+            pass
+        return ok
+
     def is_sealed(self, refresh: bool = True) -> bool:
         """Checks if the battery is sealed to disable write access to critical parameters.
 
@@ -182,9 +196,12 @@ class PetaliteChipset(BQ40Z50R1):
     def read_pcba_udi_block(self) -> str:
         """Reads the PCBA UDI block from the battery.
 
+        Note: This uses Manufacturer Block Access 0x44.
+
         Returns:
             bytes: PCBA UDI data block
         """
+
         # Petalite uses same PCBA UDI command as BQ40Z50
         return super().read_pcba_udi_block()
     
@@ -232,6 +249,27 @@ class PetaliteChipset(BQ40Z50R1):
 
     # SmartBattery forwards for Teststand
 
+    def manufacturer_access_func(self):
+        return super().manufacturer_access_func()
+    
+    def manufacturer_data_func(self):
+        return super().manufacturer_data_func()
+
+    def battery_status(self):
+        return super().battery_status()
+
+    def battery_mode(self):
+        return super().battery_mode()
+
+    def battery_mode(self):
+        return super().battery_mode()
+
+    def voltage(self):
+        return super().voltage()
+    
+    def current(self):
+        return super().current()
+
     def temperature(self) -> tuple:
         return super().temperature() 
     
@@ -247,12 +285,42 @@ class PetaliteChipset(BQ40Z50R1):
     def soh(self) -> tuple:
         return super().soh()
 
-
     def remaining_capacity(self) -> tuple:
         return super().remaining_capacity()
 
+    def serial_number(self):
+        return super().serial_number()
 
+    def manufacture_date(self):
+        return super().manufacture_date()
+    
+    def serial_number(self):
+        return super().serial_number()
+    
+    def device_name(self):
+        return super().device_name()
+    
 
+    def cell1_voltage(self):
+        return super().cell1_voltage()
+
+    def cell2_voltage(self):
+        return super().cell2_voltage()
+    
+    def cell3_voltage(self):
+        return super().cell3_voltage()
+
+    def cell4_voltage(self):
+        return super().cell4_voltage()
+
+    def cell5_voltage(self):
+        return super().cell5_voltage()  
+        
+    def cell6_voltage(self):
+        return super().cell6_voltage()
+
+    def cell7_voltage(self):
+        return super().cell7_voltage()
 
 
 

@@ -71,6 +71,11 @@ class Cmd:
     CELL3_VOLTAGE = (0x3D)
     CELL4_VOLTAGE = (0x3C)
 
+    # RRC related extensions for Petalite and followers
+    CELL5_VOLTAGE = (0x3B)
+    CELL6_VOLTAGE = (0x3A)
+    CELL7_VOLTAGE = (0x39)
+
     MANUFACTURER_BLOCK_ACCESS = (0x44)
 
     OPERATION_STATUS = 0x54
@@ -501,6 +506,9 @@ class Battery:
             Cmd.CELL2_VOLTAGE,
             Cmd.CELL3_VOLTAGE,
             Cmd.CELL4_VOLTAGE,
+            Cmd.CELL5_VOLTAGE,
+            Cmd.CELL6_VOLTAGE,
+            Cmd.CELL7_VOLTAGE,
 
             Cmd.OPERATION_STATUS,
 
@@ -521,7 +529,7 @@ class Battery:
             Cmd.MANUFACTURER_BLOCK_ACCESS
         ]: self.ds[c] = BlockData(_bat, c)
 
-        # specific special commands, e.g. self calcultaed SOH etc.
+        # specific special commands, e.g. self calculated SOH etc.
         self.ds[Cmd.SPEC_SOH] = SpecSOHData(_bat, Cmd.SPEC_SOH)
 
         # following are members to control a step-by-step times read of information from battery
@@ -820,6 +828,21 @@ class Battery:
 
     def cell4_voltage(self):
         c = self.ds[Cmd.CELL4_VOLTAGE];         return c.value * 1e-3, "V", "Cell 4 Volt.", c
+
+    #
+    # the following are RRC specific extensions for Petalite and followers
+    #
+
+    def cell5_voltage(self):
+        c = self.ds[Cmd.CELL5_VOLTAGE];         return c.value * 1e-3, "V", "Cell 5 Volt.", c
+
+    def cell6_voltage(self):
+        c = self.ds[Cmd.CELL6_VOLTAGE];         return c.value * 1e-3, "V", "Cell 6 Volt.", c
+    
+    def cell7_voltage(self):
+        c = self.ds[Cmd.CELL7_VOLTAGE];         return c.value * 1e-3, "V", "Cell 7 Volt.", c
+    
+    
 
     #
     # NOTE:

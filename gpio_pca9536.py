@@ -263,10 +263,11 @@ if __name__ == '__main__':
     from rrc.eth2i2c import I2CPort
     from rrc.i2cbus import I2CMuxedBus, BusMux
 
-    i2c_p = I2CPort("172.21.101.31:2101")
+
+    i2c_p = I2CPort("172.21.101.40:2101")  # Corepack test
     mux = BusMux(i2c_p, 0x77)
     #mux.setChannelMask(0xff)
-    mux.setChannel(7)
+    mux.setChannel(2)
 
     gpio = PCA9536(i2c_p)
     gpio.configure_pins("0110", "0000", "0000")
@@ -275,11 +276,21 @@ if __name__ == '__main__':
     #gpio.set_pin_as_output(1)
     #gpio.set_pin(1)
 
-    print(gpio.get_pin(0))
-    print(gpio.get_pin(1))
-    print(gpio.get_pin(2))
-    print(gpio.get_pin(3))
-
+    d = {}
+    for i in range(500):
+        for n in range(4):
+            if not n in d:
+                d[n] = [0, 0]
+            _p = gpio.get_pin(n)
+            if _p == False:
+                d[n][0] += 1
+            else:
+                d[n][1] += 1
+            #print(f"Pin {n} as input: {_p}")
+        sleep(0.010)
+    
+    print(d)
+    
     #gpio.set_pin(3)
     #gpio.reset_pin(3)
 

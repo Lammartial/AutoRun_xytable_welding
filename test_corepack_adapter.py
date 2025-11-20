@@ -282,10 +282,10 @@ if __name__ == "__main__":
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
 
-    #LINE_NETWORK = "172.21.101"  # HOM Warehouse
+    LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
     #LINE_NETWORK = "172.25.102"  # VN line 2
-    LINE_NETWORK = "172.25.103"  # VN line 3
+    #LINE_NETWORK = "172.25.103"  # VN line 3
 
     SOCKET = 0  # 0 or 1
 
@@ -298,15 +298,15 @@ if __name__ == "__main__":
         scan = create_barcode_scanner(f"{LINE_NETWORK}.43:2000")
         feasa = FEASA_CH9121(f"{LINE_NETWORK}.43:3000", termination="\n")
 
-    test_feasa_only(feasa)
+    #test_feasa_only(feasa)
 
     mux = BusMux(i2cbus, address=0x77)
     for i in range(8):
         mux.setChannel(i + 1)
         print("CH:", i, i2cbus.i2c_bus_scan())
 
-    temp = STS21(I2CMuxedBus(i2cbus, mux, 3), i2c_address_7bit="0x4A,64")  # hidden change from STS21 to SHT25 changed i2c address from 0x4A to 0x40
-    print(temp.start_measurement_no_hold())
+    #temp = STS21(I2CMuxedBus(i2cbus, mux, 3), i2c_address_7bit="0x4A,64")  # hidden change from STS21 to SHT25 changed i2c address from 0x4A to 0x40
+    #print(temp.start_measurement_no_hold())
 
     smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 1), retry_limit=7, verify_rounds=3, pause_us=50)
     bat = BQ40Z50R1(smbus)
@@ -316,10 +316,10 @@ if __name__ == "__main__":
 
 
     if SOCKET == 0:
-        psu = M3900(f"{LINE_NETWORK}.47:30000")  # socket 0
-        psu2 = M3900(f"{LINE_NETWORK}.46:30000")  # socket 1 for PSU test function
+        psu = M3900(f"{LINE_NETWORK}.46:30000")  # socket 0
+        #psu2 = M3900(f"{LINE_NETWORK}.46:30000")  # socket 1 for PSU test function
     if SOCKET == 1:
-        psu = M3900(f"{LINE_NETWORK}.46:30000")  # socket 1
+        psu = M3900(f"{LINE_NETWORK}.47:30000")  # socket 1
 
     #psu.set_output_state(0)
     #gpio.switch_to_battery_tester_measurement()
@@ -333,6 +333,18 @@ if __name__ == "__main__":
     bt.init()
     print(bt.measure())
 
+    psu.configure_supply(26.0, 0.05, 50, 1)
+
+    gpio.switch_rrc3570_tpin_open()    
+    gpio.switch_rrc3570_tpin_shorted()
+    
+    for i in range(8):
+        mux.setChannel(i + 1)
+        print("CH:", i, i2cbus.i2c_bus_scan())
+
+    print(bat.device_name())
+
+    psu.set_output_state(0)
 
     #relay_test(20, gpio, psu, bt)
     #psu_test(bat, gpio, psu, psu2)

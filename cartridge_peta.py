@@ -54,6 +54,33 @@ class PetaMCU:
 #Ist aber noch nicht alles implementiert
 
 
+    def read_udi(self) -> str:
+        buf, ok = self.bus.readBytes(self.i2C_address, 0xE2, 16, use_pec=self.use_pec)
+        udi = buf.decode("ascii").rstrip('\x00')
+        return udi
+    
+
+    def write_udi(self, udi_str: str) -> bool:
+        """Writes UDI string as is into the MCU Flash.
+        Make sure that exact 16 bytes are provided.
+
+        Args:
+            udi_str (str): _description_
+
+        Raises:
+            ValueError: _description_
+
+        Returns:
+            bool: _description_
+        """
+
+        if len(udi_str) != 16:
+            raise ValueError("UDI string too long, max 16 characters allowed.")
+        # pad with null bytes if shorter
+        udi_bytes = udi_str.encode("ascii").ljust(16, b'\x00')
+        #udi_bytes = udi_str.encode("ascii").rjust(16, b'\x00')
+        return self.bus.writeBytes(self.i2C_address, 0xE2, udi_bytes, use_pec=self.use_pec)
+    
 
     def read_rtc(self) -> Tuple[dt, str]:
         buf = self.bus.readBytes(self.i2C_address, 0xE1, 7, use_pec=self.use_pec)
