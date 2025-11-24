@@ -33,15 +33,7 @@ class PetaMCU:
         return ok1 and ok2
 
 
-    def setup_rtc(self) -> bool:
-        now = dt.now()
-        buf = bytes([6, # length 
-                    (now.year & 0xFF), (now.month & 0xFF), (now.day & 0xFF),
-                    (now.hour & 0xFF), (now.minute & 0xFF), (now.second& 0xFF)
-                    ])
-        print(hexlify(buf))   # DEBUG
-        return self.bus.writeBytes(self.i2C_address, 0xE1, buf, use_pec=self.use_pec)
-
+   
 
 #define RRC_VAL_SELF_TEST            0xE0  (Read/Write Word)
 #define RRC_VAL_RTC_TIME             0xE1 (Read/Write Block)
@@ -81,6 +73,16 @@ class PetaMCU:
         #udi_bytes = udi_str.encode("ascii").rjust(16, b'\x00')
         return self.bus.writeBytes(self.i2C_address, 0xE2, udi_bytes, use_pec=self.use_pec)
     
+
+    def setup_rtc(self) -> bool:
+        now = dt.now()
+        buf = bytes([6, # length 
+                    (now.year & 0xFF), (now.month & 0xFF), (now.day & 0xFF),
+                    (now.hour & 0xFF), (now.minute & 0xFF), (now.second& 0xFF)
+                    ])
+        print(hexlify(buf))   # DEBUG
+        return self.bus.writeBytes(self.i2C_address, 0xE1, buf, use_pec=self.use_pec)
+
 
     def read_rtc(self) -> Tuple[dt, str]:
         buf = self.bus.readBytes(self.i2C_address, 0xE1, 7, use_pec=self.use_pec)
@@ -133,7 +135,7 @@ class PetaMCU:
     def _can_helper_read(self, identifier: int = 0x5a0) -> Tuple[bool, List[int]]:
         done = False
         while not done:
-            ok, res, _info = self.can.receive_frame(identifier, flags=0, can_timeout_ms=900, timeout=1.2)
+            ok, res, _info = self.can.receive_frame(identifier, flags=0, can_timeout_ms=1700, timeout=2.0)
             print("CAN-RECEIVE:", ok, _info)  # DEBUG
             if ok:  # API says OK
                 _rid = int.from_bytes(res[4:8], "little")

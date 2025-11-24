@@ -1009,7 +1009,7 @@ def rack_test(cartridge: CartridgePETA,
 
         def program_mcu():
 
-            if 0:
+            if 1:
                 cartridge.enable_valmod()
                 cartridge.disable_valmod()
                 cartridge.enable_mcu()
@@ -1084,7 +1084,7 @@ def rack_test(cartridge: CartridgePETA,
                 sleep(0.5)
                 cartridge.disable_mcu()
 
-        #program_mcu()
+        program_mcu()
 
 
         def communication_i2c_with_mcu():
@@ -1111,6 +1111,9 @@ def rack_test(cartridge: CartridgePETA,
             cartridge.mcu.setup_rtc()
             sleep(2.0)
             #cartridge.mcu.check_rtc_against_systemtime()
+            print(mcu.setup_rtc())
+            print(mcu.read_rtc())
+               
             
             
             cartridge.disable_mcu()
@@ -1392,10 +1395,10 @@ if __name__ == "__main__":
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
     #LINE_NETWORK = "172.25.102"  # VN line 2
-    #LINE_NETWORK = "172.25.103"  # VN line 3
+    LINE_NETWORK = "172.25.103"  # VN line 3
 
 
-    SOCKET = 0  # 0, 1 or 2
+    SOCKET = 1  # 0, 1 or 2
     # following assumes own IF-OLIMEX breakout adapter
     if SOCKET == 0:
         psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=1)  # socket 0 / share
