@@ -69,10 +69,10 @@ class PetaliteChipset(BQ40Z50R1):
         super().__init__(smbus, slvAddress=slvAddress, pec=pec)
 
     def __str__(self) -> str:
-        return f"SmartBattery with Petalite-chipset at 0x{self.address} on {str(self.smbus)}"
+        return f"SmartBattery with Petalite-chipset at 0x{(self.address & 0xff):02X} on {str(self.bus)}"
 
     def __repr__(self) -> str:
-        return f"PetaliteBMS({repr(self.smbus)}, slvAddress={self.slvAddress}, pec={self.pec})"
+        return f"PetaliteBMS({repr(self.bus)}, slvAddress={(self.address & 0xff):02X}, pec={self.pec})"
 
     #----------------------------------------------------------------------------------------------
     @property

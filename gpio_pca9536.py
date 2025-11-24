@@ -270,14 +270,14 @@ if __name__ == '__main__':
     mux.setChannel(2)
 
     gpio = PCA9536(i2c_p)
-    gpio.configure_pins("0110", "0000", "1000")
+    gpio.configure_pins("0110", "0000", "1001")
 
     #gpio.set_pin_as_input(0)
     #gpio.set_pin_as_output(1)
     #gpio.set_pin(1)
 
     d = {}
-    samples = 100
+    samples = 500
     pause = 0.010
     for i in range(samples):
         for n in range(4):

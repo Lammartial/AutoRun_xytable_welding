@@ -5,8 +5,8 @@ from rrc.eth2i2c import I2CPort
 from rrc.i2cbus import BusMux
 from rrc.eth2i2c import I2CPort
 from rrc.i2cbus import BusMux, I2CMuxedBus
-from rrc.smbus import BusMaster
-from rrc.chipsets import BQ40Z50R1
+from rrc.smbus import BusMaster, BusMasterPetaPatch
+from rrc.chipsets import BQ40Z50R1, PetaliteChipset
 from rrc.relayboard_i2c_corepack import CorePackRelayBoard
 from rrc.temperature_sts21 import STS21
 from rrc.barcode_scanner import create_barcode_scanner
@@ -308,8 +308,10 @@ if __name__ == "__main__":
     #temp = STS21(I2CMuxedBus(i2cbus, mux, 3), i2c_address_7bit="0x4A,64")  # hidden change from STS21 to SHT25 changed i2c address from 0x4A to 0x40
     #print(temp.start_measurement_no_hold())
 
-    smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 1), retry_limit=7, verify_rounds=3, pause_us=50)
-    bat = BQ40Z50R1(smbus)
+    #smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 1), retry_limit=7, verify_rounds=3, pause_us=50)
+    #bat = BQ40Z50R1(smbus)
+    smbus = BusMasterPetaPatch(I2CMuxedBus(i2cbus, mux, 1), retry_limit=7, verify_rounds=3, pause_us=50)
+    bat = PetaliteChipset(smbus)
     gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
     gpio.switch_to_psu_measurement()
     sleep(0.5)
@@ -335,7 +337,7 @@ if __name__ == "__main__":
 
     psu.configure_supply(26.0, 0.05, 50, 1)
 
-    gpio.switch_rrc3570_tpin_open()    
+    #gpio.switch_rrc3570_tpin_open()    
     gpio.switch_rrc3570_tpin_shorted()
     
     for i in range(8):
@@ -343,8 +345,29 @@ if __name__ == "__main__":
         print("CH:", i, i2cbus.i2c_bus_scan())
 
     print(bat.device_name())
+    #print(bat.operation_status())
+    bat.manufacturer_block_access = 0x71
+    v = bat.manufacturer_block_access
+    x = bat.manufacturer_data
+    print(bat.voltage())
+    print(bat.current())
+    print(bat.temperature())
+    print(bat.remaining_capacity())
+    print(bat.full_charge_capacity())
+    fcc, unit, name, _ = bat.full_charge_capacity() 
+    dc, unit, name, _ = bat.design_capacity()
+    print(fcc * 100 / dc)
+    print(bat.soc())
+    print(bat.cell1_voltage())     
+    print(bat.cell2_voltage()) 
+    print(bat.cell3_voltage()) 
+    print(bat.cell4_voltage())
+    print(bat.cell5_voltage()) 
+    print(bat.cell6_voltage())
+    print(bat.cell7_voltage())
 
     psu.set_output_state(0)
+    exit()
 
     #relay_test(20, gpio, psu, bt)
     #psu_test(bat, gpio, psu, psu2)
