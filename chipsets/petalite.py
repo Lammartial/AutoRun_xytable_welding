@@ -17,11 +17,11 @@ from binascii import unhexlify
 from os import urandom
 from hashlib import sha1
 from itertools import chain
-from struct import unpack_from, iter_unpack
+from struct import unpack, unpack_from, iter_unpack
 from collections import OrderedDict
 #from rrc.battery_errors import BatteryError
 from rrc.smbus import BusMaster
-from rrc.smartbattery import Cmd
+from rrc.smartbattery import Cmd, BatteryError
 from rrc.chipsets.base import Chipset
 from rrc.chipsets.bq40z50 import BQ40Z50R1
 from datetime import datetime
@@ -124,6 +124,37 @@ class PetaliteChipset(BQ40Z50R1):
     
 
     #---HELPER FOR PRODUCTION----------------------------------------------------------------------
+
+
+    def read_manufacturer_block(self, command: int, length: int | None, max_retries: int = 5) -> bytearray:
+        """
+        Sends a command via Manufacturer Block Access and reads data.
+        Repeats up to 5 times if the command has been sent and recieved are not equal.
+
+        Args:
+            command (int): command number
+            length (int): length of the data buffer or None if unknown or may vary
+
+        Returns:
+            bytearray: data buffer
+        """
+        command = int(command)
+        if (length is not None):
+            length = int(length)
+        for i in range(int(max_retries)):
+            self.manufacturer_access = command  # write word to 0x00
+            #self.manufacturer_block_access = command
+            #res = self.bus.readBytes(self.address, Cmd.MANUFACTURER_BLOCK_ACCESS, 3, use_pec=self.pec)
+            res = self.manufacturer_block_access  # read from 0x44
+            print(list(res))            
+            # Peta-Patch: firt two bytes are NOT the command echo
+            return res
+            rcv_command = unpack("<H", res[:2])[0]
+            res = res[2:]  # slice the command
+            # if the expected length may variy you need to pass None to length
+            if (rcv_command == command) and (((length is not None) and (len(res) == length)) or (length is None)):
+                return res
+        raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(res)}, {len(res)}")
 
 
     def __manufacturing_dastatus1(self, hexi: bool | str | None = None) -> tuple:

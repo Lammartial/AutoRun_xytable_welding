@@ -310,8 +310,8 @@ if __name__ == "__main__":
 
     #smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 1), retry_limit=7, verify_rounds=3, pause_us=50)
     #bat = BQ40Z50R1(smbus)
-    smbus = BusMasterPetaPatch(I2CMuxedBus(i2cbus, mux, 1), retry_limit=7, verify_rounds=3, pause_us=50)
-    bat = PetaliteChipset(smbus)
+    smbus = BusMasterPetaPatch(I2CMuxedBus(i2cbus, mux, 1), retry_limit=3, verify_rounds=1, pause_us=50)
+    bat = PetaliteChipset(smbus, pec=True)
     gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
     gpio.switch_to_psu_measurement()
     sleep(0.5)
@@ -340,15 +340,16 @@ if __name__ == "__main__":
     #gpio.switch_rrc3570_tpin_open()    
     gpio.switch_rrc3570_tpin_shorted()
     
-    for i in range(8):
-        mux.setChannel(i + 1)
-        print("CH:", i, i2cbus.i2c_bus_scan())
+    # for i in range(8):
+    #     mux.setChannel(i + 1)
+    #     print("CH:", i, i2cbus.i2c_bus_scan())
 
     print(bat.device_name())
     #print(bat.operation_status())
-    bat.manufacturer_block_access = 0x71
-    v = bat.manufacturer_block_access
-    x = bat.manufacturer_data
+    print(bat.manufacturing_dastatus())
+    #bat.manufacturer_block_access = 0x71
+    #v = bat.manufacturer_block_access
+    #x = bat.manufacturer_data
     print(bat.voltage())
     print(bat.current())
     print(bat.temperature())
