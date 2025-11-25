@@ -238,7 +238,6 @@ def rack_test(cartridge: CartridgePETA,
     #    print(cartridge.get_muxed_i2c_bus_for(n).i2c_bus_scan())
 
 
-
     base_path = Path(__file__).parent / "../../Battery-PCBA-Test/filestore"
 
     try:
@@ -262,6 +261,9 @@ def rack_test(cartridge: CartridgePETA,
         
         control_vcc_voltages()
 
+
+        #cartridge.disable_mcu()
+        
         #
         # SEALED / UNSEALED CHECK
         #
@@ -285,7 +287,6 @@ def rack_test(cartridge: CartridgePETA,
 
         else:
             print("AFE unsealed -> need Calibration...")
-
 
             afe.read_temperature_calibration_offsets() # stores them into afe.temperature_calibration_offsets
 
@@ -320,6 +321,20 @@ def rack_test(cartridge: CartridgePETA,
             
            
             control_vcc_voltages()
+
+            cartridge.can.reinstall_can_driver_on_remote()  # CAN driver reset on OLIMEX
+            cartridge.configure_communication_to_mcu("can")        
+            cartridge.enable_mcu()
+            #print(ap.erase_flash())
+            #print(ap.program_flash())
+            sleep(5.1)
+            #print(mcu._can_helper_read())
+            print(mcu.can_read_voltage())
+            print(mcu.can_read_current())
+
+            raise Exception("ich will raus")
+
+
 
             cartridge.select_bus_to_micro("i2c")
 
@@ -1399,6 +1414,7 @@ if __name__ == "__main__":
 
 
     SOCKET = 1  # 0, 1 or 2
+
     # following assumes own IF-OLIMEX breakout adapter
     if SOCKET == 0:
         psu1 = M3400(f"{LINE_NETWORK}.37:30000", dev_channel=1)  # socket 0 / share

@@ -423,14 +423,16 @@ if __name__ == "__main__":
 
     #main()
     #test_crc()
-    RESOURCE_STR = "172.21.101.38:2101"
+
+    RESOURCE_STR = "172.25.103.39:2101"
     ap = AlgocraftProgrammer(RESOURCE_STR, Path(__file__).parent / "../../Battery-PCBA-Test/filestore/")
-    ap.set_filenames("petalite-test-image.wni", "petalite-test.wnp", erase_flash_project_file="petalite-flash-erase.wnp")
-    ap.send_all_files()
-    print("Integrity check MD5:", ap.verify_all_files_on_programmer("821C93A15324CC4E05E839E8D04521AE", "322D36DAE4DBA54A1B06164744D266E4", erase_project_file_hash="3A64ED4D9619D8CD6F644B537FA4196E"))
-    print("Integrity check CRC32:", ap.verify_all_files_on_programmer("h8440C68D", "hF5F0CA30", erase_project_file_hash="h90CEA5BB", hash_type="CRC32"))
+    ap.set_filenames("petalite-01_RC7-image.wni", "petalite-01_RC7.wnp", erase_flash_project_file="petalite-flash-erase.wnp")
+    #ap.set_filenames("petalite-test-image.wni", "petalite-test.wnp", erase_flash_project_file="petalite-flash-erase.wnp")
+    #ap.send_all_files()
+    #print("Integrity check MD5:", ap.verify_all_files_on_programmer("821C93A15324CC4E05E839E8D04521AE", "322D36DAE4DBA54A1B06164744D266E4", erase_project_file_hash="3A64ED4D9619D8CD6F644B537FA4196E"))
+    #print("Integrity check CRC32:", ap.verify_all_files_on_programmer("h8440C68D", "hF5F0CA30", erase_project_file_hash="h90CEA5BB", hash_type="CRC32"))
     print("Erase FLASH:", ap.erase_flash())
-    print("Program FLASH:", ap.program_flash())
+    #print("Program FLASH:", ap.program_flash())
    
 
 # END OF FILE
