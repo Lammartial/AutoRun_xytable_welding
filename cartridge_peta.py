@@ -132,7 +132,7 @@ class PetaMCU:
         return ok
 
 
-    def _can_helper_read(self, identifier: int = 0x5a0) -> Tuple[bool, List[int]]:
+    def _can_helper_read(self, identifier: int = 0x5a0) -> Tuple[bool, List[int], str]:
         done = False
         while not done:
             ok, res, _info = self.can.receive_frame(identifier, flags=0, can_timeout_ms=1700, timeout=2.0)
@@ -145,35 +145,37 @@ class PetaMCU:
                     print(f"got wrong identifier {_rid}, expected {identifier}")
             else:
                 done = True
-        return ok, res
+        return ok, res, str(_info)
 
 
     def can_read_voltage(self) -> Tuple[bool, float]:
         ok = False
-        v = None
+        v = float("nan")
+        errtxt = ""
         if self._can_helper_send(0x2009):  # fetch voltage
             #sleep(0.01)
-            ok, res = self._can_helper_read()
+            ok, res, errtxt = self._can_helper_read()
         if ok:
             print(list(res))
             cr = int.from_bytes(res[10:12], "little")
-            v = int.from_bytes(res[12:14], "little")
+            v = int.from_bytes(res[13:15], "little")
             print(hex(cr), v)
-        return ok, v
+        return ok, v, errtxt
 
 
     def can_read_current(self) -> Tuple[bool, float]:
         ok = False
-        v = None
+        v = float("nan")
+        errtxt = ""
         if self._can_helper_send(0x200a):  # fetch current
             #sleep(0.01)
-            ok, res = self._can_helper_read()
+            ok, res, errtxt = self._can_helper_read()
         if ok:
             print(list(res))
             cr = int.from_bytes(res[10:12], "little")
-            v = int.from_bytes(res[12:14], "little")
+            v = int.from_bytes(res[13:15], "little")
             print(hex(cr), v)
-        return ok, v
+        return ok, v, errtxt
 
 
 
