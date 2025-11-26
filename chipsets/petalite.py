@@ -142,11 +142,14 @@ class PetaliteChipset(BQ40Z50R1):
         if (length is not None):
             length = int(length)
         for i in range(int(max_retries)):
-            self.manufacturer_access = command  # write word to 0x00
-            #self.manufacturer_block_access = command
-            #res = self.bus.readBytes(self.address, Cmd.MANUFACTURER_BLOCK_ACCESS, 3, use_pec=self.pec)
-            res = self.manufacturer_block_access  # read from 0x44
-            print(list(res))            
+            #self.manufacturer_access = command  # write word to 0x00
+            self.manufacturer_access = ((command >> 8) & 0xff) | ((command << 8) & 0xff00)  # swap enidaness
+            res, ok = self.bus.readBytes(self.address, 0x23, length, use_pec=False)
+            print(list(res))
+            self.manufacturer_block_access = command
+            res, ok = self.bus.readBytes(self.address, 0x44, length, use_pec=False)
+            #res = self.manufacturer_block_access  # read from 0x44
+            print(list(res))          
             # Peta-Patch: firt two bytes are NOT the command echo
             return res
             rcv_command = unpack("<H", res[:2])[0]
@@ -204,10 +207,10 @@ class PetaliteChipset(BQ40Z50R1):
             Tuple[List[int], List[int]]: _description_
         """
 
-        buf1 = self.read_manufacturer_block(command=0x0071, length=32)  # DASTATUS1
-        buf2 = self.read_manufacturer_block(command=0x0072, length=32)  # DASTATUS2
-        buf3 = self.read_manufacturer_block(command=0x0073, length=32)  # DASTATUS3
-        #buf4 = self.read_manufacturer_block(command=0x0074, length=32)  # DASTATUS4
+        buf1 = self.read_manufacturer_block(0x0071, 14)  # DASTATUS1
+        buf2 = self.read_manufacturer_block(0x0072, 14)  # DASTATUS2
+        buf3 = self.read_manufacturer_block(0x0073, 14)  # DASTATUS3
+        #buf4 = self.read_manufacturer_block(0x0074, 32)  # DASTATUS4
 
         _fmt = "<L"  # unsigned long, 4 bytes
         all_items = [n[0] for n in list(chain.from_iterable([iter_unpack(_fmt, bytes(buffer)) for buffer in [buf1, buf2, buf3]]))]

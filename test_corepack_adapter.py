@@ -310,7 +310,8 @@ if __name__ == "__main__":
 
     #smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 1), retry_limit=7, verify_rounds=3, pause_us=50)
     #bat = BQ40Z50R1(smbus)
-    smbus = BusMasterPetaPatch(I2CMuxedBus(i2cbus, mux, 1), retry_limit=3, verify_rounds=1, pause_us=50)
+    #smbus = BusMasterPetaPatch(I2CMuxedBus(i2cbus, mux, 1), retry_limit=3, verify_rounds=1, pause_us=50)    
+    smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 1), retry_limit=3, verify_rounds=1, pause_us=50)
     bat = PetaliteChipset(smbus, pec=True)
     gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
     gpio.switch_to_psu_measurement()
