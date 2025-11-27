@@ -123,6 +123,24 @@ class PetaliteChipset(BQ40Z50R1):
         return super().enable_full_access()
     
 
+    def cell_voltages(self) -> tuple:
+        """ Returns the cell voltage registers of the chip as array.
+
+            Independent how many cells are connected, all four registers
+            are always read and returned. The array is [vcell1,vcell2,vcell3,vcell4,vcell5,vcell6,vcell7].
+        Returns:
+            array: integers
+        """
+        return (
+            self.readWordVerified(Cmd.CELL1_VOLTAGE)[0],
+            self.readWordVerified(Cmd.CELL2_VOLTAGE)[0],
+            self.readWordVerified(Cmd.CELL3_VOLTAGE)[0],
+            self.readWordVerified(Cmd.CELL4_VOLTAGE)[0],
+            self.readWordVerified(Cmd.CELL5_VOLTAGE)[0],
+            self.readWordVerified(Cmd.CELL6_VOLTAGE)[0],
+            self.readWordVerified(Cmd.CELL7_VOLTAGE)[0]
+        )
+
     #---HELPER FOR PRODUCTION----------------------------------------------------------------------
 
 
