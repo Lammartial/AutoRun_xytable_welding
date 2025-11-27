@@ -44,12 +44,13 @@ class AlgocraftProgrammer(Eth2SerialDevice):
 
     def execute_command(self, command: str) -> str:
         print(command)
+        answer = self.request(command, timeout=5.0, encoding="utf-8")
         while True:
-            answer = self.request(command, timeout=5.0, encoding="utf-8")
             if answer.endswith(('>','!')):
                 return answer  # done
             elif answer.endswith('*'):
                 print("busy...")
+            answer = self.execute_command(f"#status -o get -p err -v 0")
 
 
     def get_system_error(self, site: int = 0, level: int = 3) -> str:

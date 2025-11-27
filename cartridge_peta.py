@@ -74,6 +74,11 @@ class PetaMCU:
         return self.bus.writeBytes(self.i2C_address, 0xE2, udi_bytes, use_pec=self.use_pec)
     
 
+    def read_battery_voltage(self) -> float:
+        v, unit, dataid, _ = self.smartbattery.voltage()
+        return v
+
+
     def setup_rtc(self) -> bool:
         now = dt.now()
         buf = bytes([6, # length 
@@ -132,10 +137,10 @@ class PetaMCU:
         return ok
 
 
-    def _can_helper_read(self, identifier: int = 0x5a0) -> Tuple[bool, List[int], str]:
+    def _can_helper_read(self, identifier: int = 0x5a0, can_timeout: float = 1.7, timeout: float = 2.0) -> Tuple[bool, List[int], str]:
         done = False
         while not done:
-            ok, res, _info = self.can.receive_frame(identifier, flags=0, can_timeout_ms=1700, timeout=2.0)
+            ok, res, _info = self.can.receive_frame(identifier, flags=0, can_timeout_ms=int(round(can_timeout * 1e+3)), timeout=timeout)
             print("CAN-RECEIVE:", ok, _info)  # DEBUG
             if ok:  # API says OK
                 _rid = int.from_bytes(res[4:8], "little")
@@ -148,13 +153,36 @@ class PetaMCU:
         return ok, res, str(_info)
 
 
-    def can_read_voltage(self) -> Tuple[bool, float]:
-        ok = False
-        v = float("nan")
+    def _can_request_helper(self,  
+                            mcu_cmd: int, 
+                            send_identifier: int = 0x620, 
+                            recv_identifier: int = 0x5a0, 
+                            retries: int = 1, 
+                            pause_between: float = 0.1) -> Tuple[bool, List[int], str]:
+        # prepare CAN buffer for driver
+        buf = bytearray((
+            0x40,
+            mcu_cmd & 0xFF, ((mcu_cmd >> 8) & 0xFF),
+            0,0,0,0,0
+        ))
+        res = None
         errtxt = ""
-        if self._can_helper_send(0x2009):  # fetch voltage
-            #sleep(0.01)
-            ok, res, errtxt = self._can_helper_read()
+        while retries > 0:
+            retries -= 1
+            ok, _, _info = self.can.send_frame(send_identifier, buf, flags=0, can_timeout_ms=1000, timeout=1.5)
+            print("CAN-SEND:", ok, _info)  # DEBUG
+            if ok:
+                ok, res, errtxt = self._can_helper_read(identifier=recv_identifier, can_timeout=1.7, timeout=2.0)
+                if ok:
+                    return ok, res, errtxt
+            if pause_between and (retries > 0):
+                sleep(pause_between)
+        return ok, res, errtxt
+
+
+    def can_read_voltage(self) -> Tuple[bool, float]:
+        v = float("nan")
+        ok, res, errtxt = self._can_request_helper(0x2009, retries=3, pause_between=0.5)  # fetch voltage
         if ok:
             print(list(res))
             cr = int.from_bytes(res[10:12], "little")
@@ -164,12 +192,8 @@ class PetaMCU:
 
 
     def can_read_current(self) -> Tuple[bool, float]:
-        ok = False
         v = float("nan")
-        errtxt = ""
-        if self._can_helper_send(0x200a):  # fetch current
-            #sleep(0.01)
-            ok, res, errtxt = self._can_helper_read()
+        ok, res, errtxt = self._can_request_helper(0x200a, retries=3, pause_between=0.5)  # fetch current
         if ok:
             print(list(res))
             cr = int.from_bytes(res[10:12], "little")
@@ -177,6 +201,9 @@ class PetaMCU:
             print(hex(cr), v)
         return ok, v, errtxt
 
+
+    def reinstall_can_driver_on_gateway(self) -> Tuple[bool, str]:
+        return self.can.reinstall_can_driver_on_remote()
 
 
 #--------------------------------------------------------------------------------------------------
@@ -271,6 +298,9 @@ class CartridgePETA:
                 return self.gpio.reset_pin(p)
             
 
+    def read_gpio(self) -> str:
+        return str(hex(self.gpio.read_input()))
+
 
     def select_bus_to_micro(self, bustype: str) -> bool:
         """
@@ -327,6 +357,7 @@ class CartridgePETA:
     def configure_communication_to_mcu(self, com_type: str = "i2c") -> bool:
         self.switch_mosfet(0, 0)  # 0ohm
         self.switch_mosfet(3, 0)  # 400kohm
+        self.switch_some_io(4, 1)  # Testmode ON
         if "CAN" in com_type.upper():
             # can
             #self.select_bus_to_micro("can")
@@ -341,10 +372,10 @@ class CartridgePETA:
             self.switch_mosfet(2, 0)  # 200kohm
         else:
             # disconnect everything from MCU
-            #self.select_bus_to_micro("garnix")            
+            #self.select_bus_to_micro("garnix")
             self.switch_mosfet(1, 0)
             self.switch_mosfet(2, 0)
-            self.switch_some_io(4, 0)  # Testmode ?            
+            self.switch_some_io(4, 0)  # Testmode OFF ?
             #self.switch_some_io(7, 0)  # enable mcu
         return self.select_bus_to_micro(com_type)
 

@@ -181,6 +181,12 @@ def rack_test(cartridge: CartridgePETA,
         sleep(0.02)
         u_xtra += (daq.get_VDC(4),)   # pack+ voltage at connector side
         sleep(0.02)
+        # u_xtra += (daq.get_VDC(6),)   # should be +5.0v
+        # sleep(0.02)
+        # u_xtra += (daq.get_VDC(7),)   # should be +5.0v
+        # sleep(0.02)
+        # u_xtra += (daq.get_VDC(13),)   # should be +5.0v
+        # sleep(0.02)
         return u_cell, u_xtra
 
 
@@ -287,7 +293,7 @@ def rack_test(cartridge: CartridgePETA,
 
 
             cartridge.can.reinstall_can_driver_on_remote()  # CAN driver reset on OLIMEX
-            cartridge.configure_communication_to_mcu("can")        
+            #cartridge.configure_communication_to_mcu("can")        
             cartridge.enable_mcu()
             print(ap.erase_flash())
             #print(ap.program_flash())
@@ -335,9 +341,10 @@ def rack_test(cartridge: CartridgePETA,
            
             control_vcc_voltages()
 
-            cartridge.can.reinstall_can_driver_on_remote()  # CAN driver reset on OLIMEX
-            cartridge.configure_communication_to_mcu("can")        
+            #cartridge.can.reinstall_can_driver_on_remote()  # CAN driver reset on OLIMEX
+            cartridge.configure_communication_to_mcu("i2c")        
             cartridge.enable_mcu()
+            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
             print(ap.erase_flash())
             #print(ap.program_flash())
             #sleep(5.1)
