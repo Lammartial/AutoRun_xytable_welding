@@ -1,0 +1,78 @@
+{
+    "node_name": "PETA",
+    "ipv4_address": "172.21.101.40",
+    "ipv4_netmask": "255.255.255.0",
+    "ipv4_gateway": "172.21.101.254",
+    "ipv4_dns": "172.22.2.1",
+    "console_repl": {
+        "enabled": false,
+        "protocol": "SCPI",
+        "protocol_term_ascii_rxd": 10,
+        "protocol_start_ascii_rxd": -1,
+        "protocol_term_ascii_txd": 10,
+        "protocol_start_ascii_txd": -1
+    },
+    "can": {
+        "enabled": true,
+        "port": 3303,
+        "bitrate": 500000,
+        "mode": 0
+    },
+    "uart_1": {
+        "enabled": false,
+        "port": 2000,
+        "baud": 57600,
+        "databits": 8,
+        "parity": "N",
+        "stopbits": 1,
+        "clear_on_connect": true
+    },
+    "uart_2":{
+        "enabled": true,
+        "port": 3000,
+        "baud": 57600,
+        "databits": 8,
+        "parity": "N",
+        "stopbits": 1,
+        "clear_on_connect": true
+    },
+    "i2c": {
+        "enabled": true,
+        "port": 2101,
+        "protocol": "NCD",
+        "protocol_term_ascii_rxd": 10,
+        "protocol_start_ascii_rxd": -1,
+        "protocol_term_ascii_txd": 10,
+        "protocol_start_ascii_txd": -1,
+        "frequency_hz": 100000,
+        "timeout_ms": 50
+    },
+    "gpio_1":{
+        "enabled": false,
+        "port": 9001,
+        "pin_in": 12,
+        "pin_in_pullmode": 0,
+        "pin_out": 39,
+        "pin_out_mode": 0,
+        "pin_out_default_value": 0
+    },
+    "gpio_2":{
+        "enabled": false,
+        "port": -1,
+        "pin_in": 32,
+        "pin_in_pullmode": 0,
+        "pin_out": 35,
+        "pin_out_mode": 0,
+        "pin_out_default_value": 0
+    },
+    "gpio_3":{
+        "enabled": false,
+        "port": 9003,
+        "pin_in": 4,
+        "pin_in_pullmode": 0,
+        "pin_out": 13,
+        "pin_out_mode": 0,
+        "pin_out_default_value": 0
+    }
+
+}
