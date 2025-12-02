@@ -13,12 +13,14 @@ __author__ = "Markus Ruth"
 #import errno
 from typing import Tuple, List
 from time import sleep
-from binascii import unhexlify
+from binascii import unhexlify, hexlify
 from os import urandom
 from hashlib import sha1
 from itertools import chain
 from struct import unpack, unpack_from, iter_unpack
 from collections import OrderedDict
+from datetime import datetime as dt
+from scipy.constants import zero_Celsius as KELVIN_ZERO_DEGC
 #from rrc.battery_errors import BatteryError
 from rrc.smbus import BusMaster
 from rrc.smartbattery import Cmd, BatteryError
@@ -106,7 +108,8 @@ class PetaliteChipset(BQ40Z50R1):
             bool: True if sealed
         """
         # Petalite uses same seal command as BQ40Z50
-        return super().is_sealed(refresh=refresh)
+        #return super().is_sealed(refresh=refresh)
+        return False  # Peta-Patch: always unsealed
 
 
     def seal(self) -> bool:
@@ -120,7 +123,8 @@ class PetaliteChipset(BQ40Z50R1):
 
 
     def enable_full_access(self) -> bool:
-        return super().enable_full_access()
+        #return super().enable_full_access()
+        return True  # Peta-Patch: always unsealed
     
 
     def cell_voltages(self) -> tuple:
@@ -144,6 +148,24 @@ class PetaliteChipset(BQ40Z50R1):
     #---HELPER FOR PRODUCTION----------------------------------------------------------------------
 
 
+    def write_manufacturer_block(self, command: int, data: bytearray | bytes) -> None:
+        """
+        Sends a command via Manufacturer Block Access and reads data.
+        Repeats up to 5 times if the command has been sent and recieved are not equal.
+
+        Args:
+            command (int): command number
+            length (int): length of the data buffer or None if unknown or may vary
+
+        Returns:
+            bytearray: data buffer
+        """
+
+        command = int(command)
+        buf = bytearray([command & 0xFF, (command >> 8) & 0xFF]) + bytearray(data)
+        self.manufacturer_block_access = buf
+
+
     def read_manufacturer_block(self, command: int, length: int | None, max_retries: int = 5) -> bytearray:
         """
         Sends a command via Manufacturer Block Access and reads data.
@@ -161,15 +183,13 @@ class PetaliteChipset(BQ40Z50R1):
             length = int(length)
         for i in range(int(max_retries)):
             #self.manufacturer_access = command  # write word to 0x00
-            self.manufacturer_access = ((command >> 8) & 0xff) | ((command << 8) & 0xff00)  # swap enidaness
-            res, ok = self.bus.readBytes(self.address, 0x23, length, use_pec=False)
-            print(list(res))
+            # self.manufacturer_access = ((command >> 8) & 0xff) | ((command << 8) & 0xff00)  # swap enidaness
+            # res, ok = self.bus.readBytes(self.address, 0x23, length, use_pec=False)
+            # print(list(res))
             self.manufacturer_block_access = command
-            res, ok = self.bus.readBytes(self.address, 0x44, length, use_pec=False)
-            #res = self.manufacturer_block_access  # read from 0x44
-            print(list(res))          
-            # Peta-Patch: firt two bytes are NOT the command echo
-            return res
+            #res, ok = self.bus.readBytes(self.address, 0x44, length, use_pec=False)
+            res = self.manufacturer_block_access  # read from 0x44
+            #print(list(res))  # DEBUG          
             rcv_command = unpack("<H", res[:2])[0]
             res = res[2:]  # slice the command
             # if the expected length may variy you need to pass None to length
@@ -178,8 +198,8 @@ class PetaliteChipset(BQ40Z50R1):
         raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(res)}, {len(res)}")
 
 
-    def __manufacturing_dastatus1(self, hexi: bool | str | None = None) -> tuple:
-        """Read DAStatus1 and return the registers as they come.
+    def manufacturing_daqstatus1(self, hexi: bool | str | None = None) -> tuple:
+        """Read DAQ Status 1 and return the registers as they come.
 
         Raises:
             BatteryError: _description_
@@ -190,53 +210,86 @@ class PetaliteChipset(BQ40Z50R1):
 
         for _retry in range(5):
             try:
-                buf = self.read_manufacturer_block(command=0x0071, length=32)
-                self._manufacturing_dastatus1 = OrderedDict({
+                buf = self.read_manufacturer_block(command=0x20d6, length=None)
+                self._manufacturing_daqstatus1 = OrderedDict({
                     "block": self._maybe_hexlify(buf, hexi),
                     # data come little endian
-                    "cell_voltage_1": unpack_from("<H", buf,  0)[0] * 1e-3,  # mV, unsigned short, little endian
-                    "cell_voltage_2": unpack_from("<H", buf,  2)[0] * 1e-3,  # mV, unsigned short, little endian
-                    "cell_voltage_3": unpack_from("<H", buf,  4)[0] * 1e-3,  # mV, unsigned short, little endian
-                    "cell_voltage_4": unpack_from("<H", buf,  6)[0] * 1e-3,  # mV, unsigned short, little endian
-                    "cell_voltage_5": unpack_from("<H", buf,  8)[0] * 1e-3,  # mV, unsigned short, little endian
+                    "cell_voltage_1": unpack_from("<H", buf, 0)[0] * 1e-3,  # mV, unsigned short, little endian
+                    "cell_voltage_2": unpack_from("<H", buf, 2)[0] * 1e-3,  # mV, unsigned short, little endian
+                    "cell_voltage_3": unpack_from("<H", buf, 4)[0] * 1e-3,  # mV, unsigned short, little endian
+                    "cell_voltage_4": unpack_from("<H", buf, 6)[0] * 1e-3,  # mV, unsigned short, little endian
+                    "cell_voltage_5": unpack_from("<H", buf, 8)[0] * 1e-3,  # mV, unsigned short, little endian
                     "cell_voltage_6": unpack_from("<H", buf, 10)[0] * 1e-3,  # mV, unsigned short, little endian
                     "cell_voltage_7": unpack_from("<H", buf, 12)[0] * 1e-3,  # mV, unsigned short, little endian
-                    #
-                    # what is with the rest of the data?
-                    #
+                    "afe_tos_voltage":    unpack_from("<H", buf, 14)[0] * 1e-3,  # mV, unsigned short, little endian
+                    "afe_pack_voltage":   unpack_from("<H", buf, 16)[0] * 1e-3,  # mV, unsigned short, little endian
+                    "afe_led_pin_voltage": unpack_from("<H", buf, 18)[0] * 1e-3,  # mV, unsigned short, little endian
+                    "gg_voltage": unpack_from("<H", buf, 20)[0] * 1e-3,  # mV, unsigned short, little endian
+                    "afe_cc2_current": unpack_from("<h", buf, 22)[0] * 1e-3,  # mA, signed short, little endian
+                    "afe_cc3_current": unpack_from("<h", buf, 24)[0] * 1e-3,  # mA, signed short, little endian
+                    "gg_current":   unpack_from("<h", buf, 26)[0] * 1e-3,  # mA, signed short, little endian
+                    # 2 words reserve
                 })
-                if _retry > 1:  # force two times read
-                    return _od2t(self._manufacturing_dastatus1)  # Teststand interface
-                sleep(0.005)
+                return _od2t(self._manufacturing_daqstatus1)  # Teststand interface
             except Exception as ex:
                 sleep(0.020)
                 _last_exception = ex
-        raise Exception(f"DASTATUS 1: {_last_exception}")  # pass throuhg the last exeption
+        raise Exception(f"DAQSTATUS 1: {_last_exception}")  # pass throuhg the last exeption
 
 
+    def manufacturing_daqstatus2(self, celsius: bool = True, hexi: bool | str | None = None) -> tuple:
+        for _retry in range(5):
+            try:
+                buf = self.read_manufacturer_block(command=0x20d7, length=None)
+                self._manufacturing_daqstatus2 = OrderedDict({
+                    "block": self._maybe_hexlify(buf, hexi),
+                    # data come little endian
+                    "ts1_temperature": unpack_from("<H", buf, 0)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+                    "ts3_temperature": unpack_from("<H", buf, 2)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+                    "afe_hdq_temperature": unpack_from("<H", buf, 4)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+                    "afe_dchg_temperature": unpack_from("<H", buf, 6)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian                    
+                    "afe_ddsg_temperature": unpack_from("<H", buf, 8)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+                    "gg_temperature":    unpack_from("<H", buf, 10)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+                    # 10 words reserve                    
+                })
+                return _od2t(self._manufacturing_daqstatus2)  # Teststand interface
+            except Exception as ex:
+                sleep(0.020)
+                _last_exception = ex
+        raise Exception(f"DAQSTATUS 2: {_last_exception}")  # pass throuhg the last exeption
 
-    def manufacturing_dastatus(self) -> Tuple[List[int], List[int]]:
-        """Reads all DAStatus 1 to 3
 
-        Args:
-            hexi (bool | str | None, optional): _description_. Defaults to None.
+    def setup_rtc(self) -> bool:
+        now = dt.now()
+        print(now)
+        buf = bytes([ 
+                    ((now.year - 2000) & 0xFF), (now.month & 0xFF), (now.day & 0xFF),
+                    (now.hour & 0xFF), (now.minute & 0xFF), (now.second& 0xFF)
+                    ])
+        print(hexlify(buf))   # DEBUG
+        return self.write_manufacturer_block(0x20d9, buf)
+        
 
-        Returns:
-            Tuple[List[int], List[int]]: _description_
-        """
+    def read_rtc(self) -> Tuple[dt, str]:
+        buf = self.read_manufacturer_block(0x20d9, None)
+        _fmt = "<B"
+        year = unpack_from(_fmt, buf, offset=0)[0] - 41 + 2025
+        month = unpack_from(_fmt, buf, offset=1)[0]
+        day = unpack_from(_fmt, buf, offset=2)[0]
+        hour = unpack_from(_fmt, buf, offset=3)[0]
+        minute = unpack_from(_fmt, buf, offset=4)[0]
+        second = unpack_from(_fmt, buf, offset=5)[0]
+        print("BUG WARNING IN RTC YEAR! Offset of 41 ??") # DEBUG       
+        d = dt(year, month, day, hour, minute, second)
+        return d, d.isoformat(sep=" ")
 
-        buf1 = self.read_manufacturer_block(0x0071, 14)  # DASTATUS1
-        buf2 = self.read_manufacturer_block(0x0072, 14)  # DASTATUS2
-        buf3 = self.read_manufacturer_block(0x0073, 14)  # DASTATUS3
-        #buf4 = self.read_manufacturer_block(0x0074, 32)  # DASTATUS4
 
-        _fmt = "<L"  # unsigned long, 4 bytes
-        all_items = [n[0] for n in list(chain.from_iterable([iter_unpack(_fmt, bytes(buffer)) for buffer in [buf1, buf2, buf3]]))]
-        self.cell_voltage_counts = all_items[::2]  # every 2nd is a voltage count, starting from first element
-        self.cell_current_counts = all_items[1::2]  # every 2nd is a current count, starting from 2nd element
-        #print(self.cell_voltage_counts)
-        #print(self.cell_current_counts)
-        return self.cell_voltage_counts, self.cell_current_counts
+    def check_rtc_against_systemtime(self) -> float:
+        now = dt.now()
+        rtc, rtc_str = self.read_rtc()
+        _diff = now-rtc
+        return _diff.total_seconds()
+
 
 
 
@@ -254,13 +307,30 @@ class PetaliteChipset(BQ40Z50R1):
             bytes: PCBA UDI data block
         """
 
-        # Petalite uses same PCBA UDI command as BQ40Z50
-        return super().read_pcba_udi_block()
+        #return super().read_pcba_udi_block()
+        # self.manufacturer_block_access = 0xXXXX
+        # block = self.manufacturer_block_access
+        # udi = block.decode()
+        udi = "0PCBA01234567891"
+        return udi
+        
+
+
     
-
     def read_serial_number_block(self) -> str:
-        return super().read_serial_number_block()
+        """
+        Reads serial number from the Manufacturer info block.
+        Addresses: xx 
 
+        Returns:
+            str: serial number block
+        """
+        
+        # self.manufacturer_block_access = 0xXXXX
+        # block = self.manufacturer_block_access
+        # serial = block.decode()
+        serial = "0123456789012345"  # Peta-Patch: dummy serial
+        return serial
 
     def write_serial_number_block(self, sn: str) -> bool:
         return super().write_serial_number_block(sn)
@@ -375,6 +445,8 @@ class PetaliteChipset(BQ40Z50R1):
         return super().cell7_voltage()
 
 
+    def get_current(self):
+        return super().get_current()
 
 #--------------------------------------------------------------------------------------------------
 

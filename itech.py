@@ -226,24 +226,21 @@ class M3400(Eth2SerialDevice):
         return int(self.request("OUTP?"))
 
 
-    # def set_sense_state(self, state: int) -> None:
-    #     """
-    #     This command enables or disables the sense function.
-    #     IT M3400 devices.
+    def set_sense_state(self, state: int) -> None:
+        """
+        This command enables or disables the sense function.
+        IT M3400 devices.
 
-    #     Args:
-    #         state (int): state: int 1|0
+        Args:
+            state (int): state: int 1|0
 
-    #     Raises:
-    #         ValueError: invalid parameters
-    #     """
-    #     # trick to use function in NI Teststand
+        Raises:
+            ValueError: invalid parameters
+        """
+        # trick to use function in NI Teststand
 
-    #     self.send(f"SENS:STAT {1 if int(state) > 0 else 0}")
-    #     # _s = 1 if int(state) > 0 else 0
-    #     #r = self.request(f"SENS:STAT {_s}; STAT?")
-    #     #return int(r) == int(state)
-    #     #self._helper_wait_for_result("SENS?", [str(_s)])  # wait for correct output state
+        self.send(f"SENS:STAT {1 if int(state) > 0 else 0}")
+       
 
 
     # def get_sense_state(self) -> int:
@@ -797,8 +794,8 @@ class M3900(M3400):
             dev_channel (int, optional): 0=off, 1 .. n selects a proprietary device behind the gateway. Defaults to 0.
 
         """
-        super().__init__(resource_str, dev_channel)
-        pass
+        
+        super().__init__(resource_str, dev_channel)        
 
   
     def __str__(self) -> str:
@@ -883,6 +880,9 @@ class M3900(M3400):
         self.send("SYST:CLE")  # Clear error queue
         self.send("OUTP:PROT:CLE")  # clear protection status
 
+
+    def clear_output_protection(self) -> None:
+        self.send("OUTP:PROT:CLE")  # clear protection status
 
 
     #def set_remote_control(self) -> None:

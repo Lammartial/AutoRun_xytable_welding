@@ -300,6 +300,7 @@ if __name__ == "__main__":
 
     #test_feasa_only(feasa)
 
+    print("I2C Bus scan:", i2cbus.i2c_bus_scan())
     mux = BusMux(i2cbus, address=0x77)
     for i in range(8):
         mux.setChannel(i + 1)
@@ -313,20 +314,34 @@ if __name__ == "__main__":
     #smbus = BusMasterPetaPatch(I2CMuxedBus(i2cbus, mux, 1), retry_limit=3, verify_rounds=1, pause_us=50)    
     smbus = BusMaster(I2CMuxedBus(i2cbus, mux, 1), retry_limit=3, verify_rounds=1, pause_us=50)
     bat = PetaliteChipset(smbus, pec=True)
-    gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))
+    gpio = CorePackRelayBoard(I2CMuxedBus(i2cbus, mux, 2))    
     gpio.switch_to_psu_measurement()
     sleep(0.5)
 
-
+    
     if SOCKET == 0:
         psu = M3900(f"{LINE_NETWORK}.46:30000")  # socket 0
         #psu2 = M3900(f"{LINE_NETWORK}.46:30000")  # socket 1 for PSU test function
     if SOCKET == 1:
         psu = M3900(f"{LINE_NETWORK}.47:30000")  # socket 1
 
-    #psu.set_output_state(0)
-    #gpio.switch_to_battery_tester_measurement()
-    #sleep(0.5)
+    psu.set_output_state(0)
+    #psu.initialize_device()
+
+    if 0:
+        #psu.configure_sink(-0.04, 500, -0.08, 30.0, -5.0, 1)
+        while True:
+            voltage = psu.get_voltage_rounded(ndigits=3)
+            print("PSU Voltage:", voltage)
+            if voltage > 16.0:
+                break
+            sleep(0.5)
+        print("Found a battery!!")
+        exit()
+
+    psu.set_sense_state(0)
+    gpio.switch_to_battery_tester_measurement()
+    sleep(0.5)
 
     print("INIT Hioki")
     if SOCKET == 0:
@@ -334,9 +349,50 @@ if __name__ == "__main__":
     if SOCKET == 1:
         bt = Hioki_BT3561A(f"{LINE_NETWORK}.45:23", termination="\r\n")  # socket 1
     bt.init()
-    print(bt.measure())
+    bt.set_autorange(0)
+    bt.set_resistance_range(0.1)
+    bt.set_voltage_range(30)
+    
+    #print(bt.measure())
 
-    psu.configure_supply(26.0, 0.05, 50, 1)
+    if 0:   
+        n = 0
+        while True:
+            n += 1
+            if n & 1 == 0:
+                psu.set_sense_state(1)
+                gpio.switch_to_psu_measurement()
+                sleep(0.5)
+                voltage = psu.get_voltage_rounded(ndigits=3)
+                print("PSU Voltage:", voltage)
+            else:
+                psu.set_sense_state(0)
+                gpio.switch_to_battery_tester_measurement()
+                psu.clear_output_protection()
+                sleep(0.5)
+                impedance, voltage = bt.measure()
+                print("Hioki Measurement:", impedance, voltage)        
+            #sleep(0.5)
+
+    if 0:
+        #gpio.switch_to_psu_measurement()
+        #sleep(0.5)
+        #psu.configure_sink(-0.04, 500, -0.08, 30.0, -5.0, 1)
+        while True:
+            #v = psu.get_voltage_rounded(ndigits=3)
+            impedance, voltage = bt.measure()
+            print("Hioki Measurement:", impedance, voltage)
+            #print("PSU Voltage:", v)
+            if impedance < 0.100 and voltage > 16.0:
+                break
+            sleep(0.5)
+        print("Found a battery!!")
+        exit()
+
+    gpio.switch_to_psu_measurement()
+    psu.clear_output_protection()
+    psu.set_sense_state(1)
+    psu.configure_supply(26.0, 0.05, 50, 0)
 
     #gpio.switch_rrc3570_tpin_open()    
     gpio.switch_rrc3570_tpin_shorted()
@@ -347,10 +403,17 @@ if __name__ == "__main__":
 
     print(bat.device_name())
     #print(bat.operation_status())
-    print(bat.manufacturing_dastatus())
-    #bat.manufacturer_block_access = 0x71
-    #v = bat.manufacturer_block_access
-    #x = bat.manufacturer_data
+    bat.manufacturing_daqstatus1()
+    print(bat._manufacturing_daqstatus1)
+    bat.manufacturing_daqstatus2()    
+    print(bat._manufacturing_daqstatus2)
+    
+    bat.setup_rtc()
+    sleep(3)
+    print(bat.read_rtc())
+    print(bat.check_rtc_against_systemtime())
+
+
     print(bat.voltage())
     print(bat.current())
     print(bat.temperature())
