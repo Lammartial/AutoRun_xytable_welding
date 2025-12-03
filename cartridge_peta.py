@@ -10,6 +10,7 @@ from struct import unpack, unpack_from
 from rrc.i2cbus import I2CBus, BusMux, I2CMuxedBus
 from rrc.smbus import BusMaster, BusMasterPetaPatch
 from rrc.smartbattery import Battery
+from rrc.chipsets import PetaliteChipset
 from rrc.gpio_pcf8574 import PCF8574 as GPIOExtender
 from rrc.eth2can import CANBus
 
@@ -23,33 +24,19 @@ class PetaMCU:
         self.i2C_address = i2c_address_7bit
         self.use_pec = i2c_pec
         self.bus = BusMasterPetaPatch(i2c, retry_limit=1, verify_rounds=3, pause_us=50)
-        self.smartbattery = Battery(self.bus, pec=i2c_pec)  # this is to reuse already implemented functionality
+        self.smartbattery = PetaliteChipset(self.bus, slvAddress=i2c_address_7bit, pec=i2c_pec)  # this is to reuse already implemented functionality
         self.can = can
 
 
     def shutdown(self) -> bool:
-        ok1 = self.bus.writeWord(self.i2C_address, 0x00, 0x0010, use_pec=self.use_pec)
-        ok2 = self.bus.writeWord(self.i2C_address, 0x00, 0x0010, use_pec=self.use_pec)  # 2x in 4s        
-        return ok1 and ok2
-
-
-   
-
-#define RRC_VAL_SELF_TEST            0xE0  (Read/Write Word)
-#define RRC_VAL_RTC_TIME             0xE1 (Read/Write Block)
-#define RRC_VAL_UDI                  0xE2 (Read/Write Block)
-#define RRC_VAL_CHECK_EXTERNAL_FLASH 0xE3  (Read/Write Word)
-#define RRC_VAL_VCC_LED              0xE4  (Read/Write Word)
-#define RRC_VAL_SET_LED              0xE5 (Read/Write Block)
-#define RRC_VAL_GET_BUTTON_STATE     0xE6 (Read Word)
-#define RRC_VAL_BQ_READOUT           0xE7  (Read/Write Word)
-#Ist aber noch nicht alles implementiert
-
+        self.smartbattery.shutdown()
+        return True
+        # ok1 = self.bus.writeWord(self.i2C_address, 0x00, 0x0010, use_pec=self.use_pec)
+        # ok2 = self.bus.writeWord(self.i2C_address, 0x00, 0x0010, use_pec=self.use_pec)  # 2x in 4s        
+        # return ok1 and ok2
 
     def read_udi(self) -> str:
-        buf, ok = self.bus.readBytes(self.i2C_address, 0xE2, 16, use_pec=self.use_pec)
-        udi = buf.decode("ascii").rstrip('\x00')
-        return udi
+        return self.smartbattery.read_pcba_udi_block()       
     
 
     def write_udi(self, udi_str: str) -> bool:
@@ -66,13 +53,8 @@ class PetaMCU:
             bool: _description_
         """
 
-        if len(udi_str) != 16:
-            raise ValueError("UDI string too long, max 16 characters allowed.")
-        # pad with null bytes if shorter
-        udi_bytes = udi_str.encode("ascii").ljust(16, b'\x00')
-        #udi_bytes = udi_str.encode("ascii").rjust(16, b'\x00')
-        return self.bus.writeBytes(self.i2C_address, 0xE2, udi_bytes, use_pec=self.use_pec)
-    
+        self.smartbattery.write_pcba_udi_block(udi_str)
+        return True       
 
     def read_battery_voltage(self) -> float:
         v, unit, dataid, _ = self.smartbattery.voltage()
@@ -80,45 +62,21 @@ class PetaMCU:
 
 
     def setup_rtc(self) -> bool:
-        now = dt.now()
-        buf = bytes([6, # length 
-                    (now.year & 0xFF), (now.month & 0xFF), (now.day & 0xFF),
-                    (now.hour & 0xFF), (now.minute & 0xFF), (now.second& 0xFF)
-                    ])
-        print(hexlify(buf))   # DEBUG
-        return self.bus.writeBytes(self.i2C_address, 0xE1, buf, use_pec=self.use_pec)
-
+        return self.smartbattery.setup_rtc()      
 
     def read_rtc(self) -> Tuple[dt, str]:
-        buf = self.bus.readBytes(self.i2C_address, 0xE1, 7, use_pec=self.use_pec)
-        _fmt = "<B"
-        year = unpack_from(_fmt, buf, offset=1)[0]
-        month = unpack_from(_fmt, buf, offset=2)[0]
-        day = unpack_from(_fmt, buf, offset=3)[0]
-        hour = unpack_from(_fmt, buf, offset=4)[0]
-        minute = unpack_from(_fmt, buf, offset=5)[0]
-        second = unpack_from(_fmt, buf, offset=6)[0]
-        d = dt(year, month, day, hour, minute, second)
-        return d, d.isoformat(sep=" ")
-
-
+        return self.smartbattery.read_rtc()
+       
     def check_rtc_against_systemtime(self) -> float:
-        now = dt.now()
-        rtc, rtc_str = self.read_rtc()
-        _diff = now-rtc
-        return _diff.total_seconds()
+        return self.smartbattery.check_rtc_against_systemtime()
 
 
     def start_selftesting(self) -> bool:
-       buf = bytes([0x01, 0x00])  # start selftest  ??
-       return self.bus.writeBytes(self.i2C_address, 0xE0, buf, use_pec=self.use_pec)
+       return True  # not yet implemented
 
 
-    def read_pushbutton_status(self) -> int:
-        buf = self.bus.readBytes(self.i2C_address, 0xE6, 2, use_pec=self.use_pec)
-        _fmt = "<H"
-        state = unpack(_fmt, buf)[0]
-        return bool(state)
+    def pushbutton_state(self) -> int:
+        return self.smartbattery.pushbutton_state()
         
 
 
