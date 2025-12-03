@@ -193,7 +193,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         result = ()
         cmds = [0x0004, 0x0005, 0x0008]
         for c in cmds:
-            buf = self.read_manufacturer_block(c, 2)
+            buf = self._read_manufacturer_block(c, 2)
             if hexi is not None:
                 # return as tuple of hex strings of buffer as the bytes come over the bus
                 result += (self._maybe_hexlify(buf, hexi).upper(),)
@@ -433,7 +433,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         Returns:
             dict: decoded lifetime data of block 1 according the datasheet
         """
-        b1 = self.read_manufacturer_block(command=0x0060, length=32)
+        b1 = self._read_manufacturer_block(command=0x0060, length=32)
         return _od2t(OrderedDict({
             "block": self._maybe_hexlify(b1, hexi), # all blocks of bytes as they are - but hexlified as it looks better in JSON files later ...
             # decode block 1
@@ -953,7 +953,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         return self.change_authentication_key(decrypt(new_key_cipher, int(key_index)))
 
 
-    def read_manufacturer_block(self, command: int, length: int | None, max_retries: int = 5) -> bytearray:
+    def _read_manufacturer_block(self, command: int, length: int | None, max_retries: int = 5) -> bytearray:
         """
         Sends a command via Manufacturer Block Access and reads data.
         Repeats up to 5 times if the command has been sent and recieved are not equal.
@@ -994,7 +994,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
 
         for _retry in range(5):
             try:
-                buf = self.read_manufacturer_block(command=0x0071, length=32)
+                buf = self._read_manufacturer_block(command=0x0071, length=32)
                 self._manufacturing_dastatus1 = OrderedDict({
                     "block": self._maybe_hexlify(buf, hexi),
                     # data come little endian
@@ -1027,7 +1027,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     def manufacturing_dastatus2(self, celsius: bool = True, hexi: bool | str | None = None) -> tuple:
         for _retry in range(5):
             try:
-                buf = self.read_manufacturer_block(command=0x0072, length=16)
+                buf = self._read_manufacturer_block(command=0x0072, length=16)
                 self._manufacturing_dastatus2 = OrderedDict({
                     "block": self._maybe_hexlify(buf, hexi),
                     # data come little endian
@@ -1756,7 +1756,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
     #    self.manufacturer_access = 0x0012
 
     def get_afe_register(self, hexi: bool | str | None = None) -> tuple:
-        buf = self.read_manufacturer_block(command=0x0058, length=32)
+        buf = self._read_manufacturer_block(command=0x0058, length=32)
         return _od2t(OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
