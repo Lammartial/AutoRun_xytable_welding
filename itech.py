@@ -897,6 +897,10 @@ class M3900(M3400):
     def request_raw_query(self, cmd: str) -> str:
         return super().request_raw_query(cmd)
 
+
+    def set_sense_state(self, state: int) -> None:
+        super().set_sense_state(int(state))
+
     #def get_ADC_rounded(self, ndigits: int = 3) -> float:
     #    return super.get_ADC_rounded(ndigits=int(ndigits))
 
