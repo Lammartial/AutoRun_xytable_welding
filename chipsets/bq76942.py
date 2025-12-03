@@ -927,12 +927,16 @@ class BQ76942:
 
     #----------------------------------------------------------------------------------------------
 
-    def _decode_safety_status(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:
+    def _decode_safety_status_or_alert(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:
 
-        def _b_to_dict_A(b: bytearray) -> OrderedDict[str, bytes | bytearray | str | int]:
-            os = unpack("<B", b)[0]
-            return OrderedDict({
-                "block1": _maybe_hexlify(b, hexi),
+        def _do_the_work(buf: bytearray | bytes) -> OrderedDict:
+            #os = unpack_from("<L", buf, 0)[0] # 32 bits
+            d_0 = OrderedDict({
+                "block": _maybe_hexlify(buf, hexi),
+                #"value": os,
+            })
+            os = unpack_from("<B", buf, 0)[0]
+            d_A = OrderedDict({                
                 # data come little endian
                 "SCD": ((os>>7) & 1),  #
                 "OCD2": ((os>>6) & 1),  #
@@ -940,63 +944,130 @@ class BQ76942:
                 "OCC": ((os>>4) & 1),  #
                 "COV": ((os>>3) & 1),  #
                 "CUV": ((os>>2) & 1),  #
-                "RSVD1": ((os>>1) & 1),  # Reserved. Do not use.
-                "RSVD2": ((os>>0) & 1),  # Reserved. Do not use.
+                "RSVD0": ((os>>1) & 1),  # Reserved. Do not use.
+                "RSVD1": ((os>>0) & 1),  # Reserved. Do not use.
             })
-
-        def _b_to_dict_B(b: bytearray) -> OrderedDict[str, bytes | bytearray | str | int]:
-            os = unpack("<B", b)[0]
-            return OrderedDict({
-                "block2": _maybe_hexlify(b, hexi),
+            os = unpack_from("<B", buf, 1)[0]
+            d_B = OrderedDict({
                 # data come little endian
                 "OTF": ((os>>7) & 1),  #
                 "OTINT": ((os>>6) & 1),  #
                 "OTD": ((os>>5) & 1),  #
                 "OTC": ((os>>4) & 1),  #
-                "RSVD3": ((os>>3) & 1),  # Reserved. Do not use.
+                "RSVD2": ((os>>3) & 1),  # Reserved. Do not use.
                 "UTINT": ((os>>2) & 1),  #
                 "UTD": ((os>>1) & 1),  #
                 "UTC": ((os>>0) & 1),  #
             })
-
-        def _b_to_dict_C(b: bytearray) -> OrderedDict[str, bytes | bytearray | str | int]:
-            os = unpack("<B", b)[0]
-            return OrderedDict({
-                "block3": _maybe_hexlify(b, hexi),
+            os = unpack_from("<B", buf, 2)[0]
+            d_C = OrderedDict({
                 # data come little endian
                 "OCD3": ((os>>7) & 1),  #
                 "SCDL": ((os>>6) & 1),  #
                 "OCDL": ((os>>5) & 1),  #
                 "COVL": ((os>>4) & 1),  #
-                "RSVD4": ((os>>3) & 1),  # Reserved. Do not use.
+                "RSVD3": ((os>>3) & 1),  # Reserved. Do not use.
                 "PTO": ((os>>2) & 1),  #
                 "HWDF": ((os>>1) & 1),  #
-                "RSVD5": ((os>>0) & 1),  # Reserved. Do not use.
+                "RSVD4": ((os>>0) & 1),  # Reserved. Do not use.
             })
+            # combine the ordered dicts
+            d = d_0 | d_A | d_B | d_C
+            return d
 
-        da_A = _b_to_dict_A(buf[0:1])
-        ds_A = _b_to_dict_A(buf[1:2])
-        da_B = _b_to_dict_B(buf[2:3])
-        ds_B = _b_to_dict_B(buf[3:4])
-        da_C = _b_to_dict_C(buf[4:5])
-        ds_C = _b_to_dict_C(buf[5:6])
-        # combine the ordered dicts
-        d_alert = da_A | da_B | da_C
-        d_status = ds_A | ds_B | ds_C        
-        return d_alert, d_status
+        _alert = _do_the_work(buf[::2])  # every 2nd is a ALERT, starting from first element
+        _status = _do_the_work(buf[1::2])  # every 2nd is a STATUS, starting from 2nd element
+        return _alert, _status
 
 
     def read_safety_status(self, hexi: bool | str | None = None) -> tuple:
         buf, ok = self.readBytes(self.address, 0x02, 6, use_pec=self.pec)
-        self._safety_alert, self._safety_status = self._decode_safety_status(buf, hexi=hexi)
+        self._safety_alert, self._safety_status = self._decode_safety_status_or_alert(buf, hexi=hexi)
         return _od2t(self._safety_status)  # Teststand interface
        
 
-    def read_safety_alert(self, hexi: bool | str | None = None) -> tuple:
+    def read_safety_alert(self, hexi: bool | str | None = None) -> tuple:        
         buf, ok = self.readBytes(self.address, 0x02, 6, use_pec=self.pec)
-        self._safety_alert, self._safety_status = self._decode_safety_status(buf, hexi=hexi)
+        self._safety_alert, self._safety_status = self._decode_safety_status_or_alert(buf, hexi=hexi)
         return _od2t(self._safety_alert)  # Teststand interface
     
+
+    #----------------------------------------------------------------------------------------------
+
+    def _decode_pf_status_and_alert(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:
+
+        def _do_the_work(buf: bytearray | bytes) -> OrderedDict:
+            #os = unpack_from("<L", buf, 0)[0] # 32 bits
+            d_0 = OrderedDict({
+                "block": _maybe_hexlify(buf, hexi),
+                #"value": os,
+            })
+            # now use single byte decode to keep easier track of code
+            os = unpack_from("<B", buf, 0)[0]
+            d_A = OrderedDict({
+                "CUDEP": ((os>>7) & 1),
+                "SOTF": ((os>>6) & 1),
+                "RSVD0": ((os>>5) & 1),
+                "SOT": ((os>>4) & 1),
+                "SOCD": ((os>>3) & 1),
+                "SOCC": ((os>>2) & 1),
+                "SOV": ((os>>1) & 1),
+                "SUV": ((os>>0) & 1),
+            })
+            os = unpack_from("<B", buf, 1)[0]
+            d_B = OrderedDict({
+                "SCDL": ((os>>7) & 1),
+                "RSVD1": ((os>>6) & 1),
+                "RSVD2": ((os>>5) & 1),
+                "VIMA": ((os>>4) & 1),
+                "VIMR": ((os>>3) & 1),
+                "2LVL": ((os>>2) & 1),
+                "DFETF": ((os>>1) & 1),
+                "CFETF": ((os>>0) & 1),
+            })
+            os = unpack_from("<B", buf, 2)[0]
+            d_C = OrderedDict({
+                "CMDF": ((os>>7) & 1),
+                "HWMX": ((os>>6) & 1),
+                "VSSF": ((os>>5) & 1),
+                "VREF": ((os>>4) & 1),
+                "LFOF": ((os>>3) & 1),
+                "IRMF": ((os>>2) & 1),
+                "DRMF": ((os>>1) & 1),
+                "OTPF": ((os>>0) & 1),
+            })
+            os = unpack_from("<B", buf, 3)[0]
+            d_D = OrderedDict({
+                "RSVD3": ((os>>7) & 1),
+                "RSVD4": ((os>>6) & 1),
+                "RSVD5": ((os>>5) & 1),
+                "RSVD6": ((os>>4) & 1),
+                "RSVD7": ((os>>3) & 1),
+                "RSVD8": ((os>>2) & 1),
+                "RSVD9": ((os>>1) & 1),
+                "TOSF": ((os>>0) & 1),
+            })        
+            # combine the ordered dicts
+            d = d_0 | d_A | d_B | d_C | d_D
+            return d
+    
+        _alert = _do_the_work(buf[::2])  # every 2nd is a ALERT, starting from first element
+        _status = _do_the_work(buf[1::2])  # every 2nd is a STATUS, starting from 2nd element
+        return _alert, _status
+
+
+    def read_pf_status(self, hexi: bool | str| None = None) -> OrderedDict:
+        buf, ok = self.readBytes(self.address, 0x0A, 8, use_pec=self.pec)
+        self._pf_alert, self._pf_status = self._decode_pf_status_and_alert(buf, hexi=hexi)
+        return _od2t(self._pf_status) # Teststand interface
+    
+    def read_pf_alert(self, hexi: bool | str| None = None) -> OrderedDict:
+        buf, ok = self.readBytes(self.address, 0x0A, 8, use_pec=self.pec)
+        self._pf_alert, self._pf_status = self._decode_pf_status_and_alert(buf, hexi=hexi)
+        return _od2t(self._pf_alert)  # Teststand interface
+
+
+    #----------------------------------------------------------------------------------------------
 
 
     def _decode_fet_status(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:
