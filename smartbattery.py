@@ -709,13 +709,13 @@ class Battery:
         return self.specification_info()  # trampoline
 
     def remaining_capacity_alarm(self):
-        c = self.ds[Cmd.REMAINING_CAPACITY_ALARM]; return c.value * 1e-3, "Ah", "Rem.Cap.Alarm", c
+        c = self.ds[Cmd.REMAINING_CAPACITY_ALARM]; return round(c.value * 1e-3, 3), "Ah", "Rem.Cap.Alarm", c
 
     def remaining_time_alarm(self):
         c = self.ds[Cmd.REMAINING_TIME_ALARM];     return c.value, "min", "Rem.Cap.Alarm", c
 
     def at_rate(self):
-        c = self.ds[Cmd.AT_RATE];                  return c.value * 1e-3, "A", "At rate", c
+        c = self.ds[Cmd.AT_RATE];                  return round(c.value * 1e-3, 3), "A", "At rate", c
 
     def at_rate_ok(self):
         c = self.ds[Cmd.AT_RATE_OK];               return c.value, "", "At rate ok", c
@@ -727,19 +727,19 @@ class Battery:
         c = self.ds[Cmd.AT_RATE_TIME_TO_EMPTY];    return c.value, "min", "At rate empty", c
 
     def temperature(self):
-        c = self.ds[Cmd.TEMPERATURE];              return c.value * 1e-1 - KELVIN_ZERO_DEGC, "°C", "Temperature", c
+        c = self.ds[Cmd.TEMPERATURE];              return round(c.value * 1e-1 - KELVIN_ZERO_DEGC, 1), "°C", "Temperature", c
 
     def temperature_kelvin(self):
-        c = self.ds[Cmd.TEMPERATURE];              return c.value * 1e-1, "K", "Temperature", c
+        c = self.ds[Cmd.TEMPERATURE];              return round(c.value * 1e-1, 1), "K", "Temperature", c
 
     def voltage(self):
-        c = self.ds[Cmd.VOLTAGE];                  return c.value * 1e-3, "V", "Voltage", c
+        c = self.ds[Cmd.VOLTAGE];                  return round(c.value * 1e-3, 3), "V", "Voltage", c
 
     def current(self):
-        c = self.ds[Cmd.CURRENT];                  return c.value * 1e-3, "A", "Current", c
+        c = self.ds[Cmd.CURRENT];                  return round(c.value * 1e-3, 3), "A", "Current", c
 
     def average_current(self):
-        c = self.ds[Cmd.AVERAGE_CURRENT];          return c.value * 1e-3, "A", "Avg.Current", c
+        c = self.ds[Cmd.AVERAGE_CURRENT];          return round(c.value * 1e-3, 3), "A", "Avg.Current", c
 
     def max_error(self):
         c = self.ds[Cmd.MAX_ERROR];                return c.value, "%", "Max Error", c
@@ -754,13 +754,13 @@ class Battery:
         c = self.ds[Cmd.ABSOLUTE_STATE_OF_CHARGE]; return c.value, "%", "Absolute SOC", c
 
     def remaining_capacity(self):
-        c = self.ds[Cmd.REMAINING_CAPACITY];       return c.value * 1e-3, "Ah", "Remaining Capacity", c
+        c = self.ds[Cmd.REMAINING_CAPACITY];       return round(c.value * 1e-3, 3), "Ah", "Remaining Capacity", c
 
     def capacity(self):
         return self.remaining_capacity()  # trampoline
 
     def full_charge_capacity(self):
-        c = self.ds[Cmd.FULL_CHARGE_CAPACITY];     return c.value * 1e-3, "Ah", "Full Chg.Capacity", c
+        c = self.ds[Cmd.FULL_CHARGE_CAPACITY];     return round(c.value * 1e-3, 3), "Ah", "Full Chg.Capacity", c
 
     def run_time_to_empty(self):
         c = self.ds[Cmd.RUN_TIME_TO_EMPTY];        return c.value, "min", "Time to empty", c
@@ -772,10 +772,10 @@ class Battery:
         c = self.ds[Cmd.AVERAGE_TIME_TO_FULL];     return c.value, "min", "Avg.Time full", c
 
     def charging_current(self):
-        c = self.ds[Cmd.CHARGING_CURRENT];         return c.value * 1e-3, "A", "Charge Current", c
+        c = self.ds[Cmd.CHARGING_CURRENT];         return round(c.value * 1e-3, 3), "A", "Charge Current", c
 
     def charging_voltage(self):
-        c = self.ds[Cmd.CHARGING_VOLTAGE];         return c.value * 1e-3, "V", "Charge Voltage", c
+        c = self.ds[Cmd.CHARGING_VOLTAGE];         return round(c.value * 1e-3, 3), "V", "Charge Voltage", c
 
     def cycle_count(self):
         c = self.ds[Cmd.CYCLE_COUNT];              return c.value, "", "Cycles", c
@@ -785,10 +785,10 @@ class Battery:
 
     # constant stuff starts here
     def design_capacity(self):
-        c = self.ds[Cmd.DESIGN_CAPACITY];          return c.value * 1e-3, "Ah", "Design Capacity", c
+        c = self.ds[Cmd.DESIGN_CAPACITY];          return round(c.value * 1e-3, 3), "Ah", "Design Capacity", c
 
     def design_voltage(self):
-        c = self.ds[Cmd.DESIGN_VOLTAGE];           return c.value * 1e-3, "V", "Design Voltage", c
+        c = self.ds[Cmd.DESIGN_VOLTAGE];           return round(c.value * 1e-3, 3), "V", "Design Voltage", c
 
     def manufacture_date(self):
         c = self.ds[Cmd.MANUFACTURE_DATE]
@@ -818,29 +818,29 @@ class Battery:
     # This is not ideal but all TI chipsets so far have these functions
     #
     def cell1_voltage(self):
-        c = self.ds[Cmd.CELL1_VOLTAGE];         return c.value * 1e-3, "V", "Cell 1 Volt.", c
+        c = self.ds[Cmd.CELL1_VOLTAGE];         return round(c.value * 1e-3, 3), "V", "Cell 1 Volt.", c
 
     def cell2_voltage(self):
-        c = self.ds[Cmd.CELL2_VOLTAGE];         return c.value * 1e-3, "V", "Cell 2 Volt.", c
+        c = self.ds[Cmd.CELL2_VOLTAGE];         return round(c.value * 1e-3, 3), "V", "Cell 2 Volt.", c
 
     def cell3_voltage(self):
-        c = self.ds[Cmd.CELL3_VOLTAGE];         return c.value * 1e-3, "V", "Cell 3 Volt.", c
+        c = self.ds[Cmd.CELL3_VOLTAGE];         return round(c.value * 1e-3, 3), "V", "Cell 3 Volt.", c
 
     def cell4_voltage(self):
-        c = self.ds[Cmd.CELL4_VOLTAGE];         return c.value * 1e-3, "V", "Cell 4 Volt.", c
+        c = self.ds[Cmd.CELL4_VOLTAGE];         return round(c.value * 1e-3, 3), "V", "Cell 4 Volt.", c
 
     #
     # the following are RRC specific extensions for Petalite and followers
     #
 
     def cell5_voltage(self):
-        c = self.ds[Cmd.CELL5_VOLTAGE];         return c.value * 1e-3, "V", "Cell 5 Volt.", c
+        c = self.ds[Cmd.CELL5_VOLTAGE];         return round(c.value * 1e-3, 3), "V", "Cell 5 Volt.", c
 
     def cell6_voltage(self):
-        c = self.ds[Cmd.CELL6_VOLTAGE];         return c.value * 1e-3, "V", "Cell 6 Volt.", c
+        c = self.ds[Cmd.CELL6_VOLTAGE];         return round(c.value * 1e-3, 3), "V", "Cell 6 Volt.", c
     
     def cell7_voltage(self):
-        c = self.ds[Cmd.CELL7_VOLTAGE];         return c.value * 1e-3, "V", "Cell 7 Volt.", c
+        c = self.ds[Cmd.CELL7_VOLTAGE];         return round(c.value * 1e-3, 3), "V", "Cell 7 Volt.", c
     
     
 
