@@ -101,19 +101,30 @@ class PetaliteChipset(BQ40Z50R1):
             pass
         return ok
 
+
     def is_sealed(self, refresh: bool = True) -> bool:
         """Checks if the battery is sealed to disable write access to critical parameters.
 
         Returns:
             bool: True if sealed
         """
-        # Petalite uses same seal command as BQ40Z50
-        #return super().is_sealed(refresh=refresh)
-        return False  # Peta-Patch: always unsealed
+        
+        self.manufacturer_access = 0x20da
+        buf = self.manufacturer_data
+        if buf and len(buf) >= 1:
+            afe = buf[0]  # 0 = unsealed, 1 = sealed
+            gg = buf[1]   # 0 = unsealed, 1 = sealed
+        v, ok = self.readBlock(0xC2)  # try to update the value(s)
+        mcu = v[0]  # 0 = unsealed, 1 = sealed
+        return afe == 1 and gg == 1 and mcu == 1
+        
+
+    def is_unsealed(self, check_fullaccess: bool = False, refresh: bool = False) -> bool:
+        return not self.is_sealed(refresh=refresh)        
 
 
     def seal(self) -> bool:
-        """Seals the battery to disable write access to critical parameters.
+        """Seals the full chipset: AFE, GG and MCU to disable write access to critical parameters.
 
         Returns:
             bool: True if successful
@@ -123,8 +134,15 @@ class PetaliteChipset(BQ40Z50R1):
 
 
     def enable_full_access(self) -> bool:
-        #return super().enable_full_access()
-        return True  # Peta-Patch: always unsealed
+        # unseal MCU
+        ok = self.writeBlock(0xC2, bytes([0x20, 
+                                0xF3, 0xD8, 0x58, 0x94, 0x2E, 0x9B, 0x68, 0x02, 
+                                0x02, 0xE6, 0xD8, 0xD9, 0xE1, 0x55, 0x17, 0x5A, 
+                                0xD5, 0xAE, 0x49, 0x39, 0xCC, 0xB7, 0x87, 0x38, 
+                                0x8D, 0x2F, 0x3E, 0x7D, 0x16, 0x69, 0x1F, 0xDA]))
+        # unseal AFE and GG
+        # ...
+        return ok
     
 
     def cell_voltages(self) -> tuple:
@@ -148,7 +166,7 @@ class PetaliteChipset(BQ40Z50R1):
     #---HELPER FOR PRODUCTION----------------------------------------------------------------------
 
 
-    def write_manufacturer_block(self, command: int, data: bytearray | bytes) -> None:
+    def _write_manufacturer_block(self, command: int, data: bytearray | bytes) -> None:
         """
         Sends a command via Manufacturer Block Access and reads data.
         Repeats up to 5 times if the command has been sent and recieved are not equal.
@@ -163,10 +181,11 @@ class PetaliteChipset(BQ40Z50R1):
 
         command = int(command)
         buf = bytearray([command & 0xFF, (command >> 8) & 0xFF]) + bytearray(data)
+        print("WB:", hexlify(buf))   # DEBUG
         self.manufacturer_block_access = buf
 
 
-    def read_manufacturer_block(self, command: int, length: int | None, max_retries: int = 5) -> bytearray:
+    def _read_manufacturer_block(self, command: int, length: int | None = None) -> bytearray:
         """
         Sends a command via Manufacturer Block Access and reads data.
         Repeats up to 5 times if the command has been sent and recieved are not equal.
@@ -178,56 +197,65 @@ class PetaliteChipset(BQ40Z50R1):
         Returns:
             bytearray: data buffer
         """
+        
         command = int(command)
         if (length is not None):
-            length = int(length)
-        for i in range(int(max_retries)):
-            #self.manufacturer_access = command  # write word to 0x00
-            # self.manufacturer_access = ((command >> 8) & 0xff) | ((command << 8) & 0xff00)  # swap enidaness
-            # res, ok = self.bus.readBytes(self.address, 0x23, length, use_pec=False)
-            # print(list(res))
-            self.manufacturer_block_access = command
-            #res, ok = self.bus.readBytes(self.address, 0x44, length, use_pec=False)
-            res = self.manufacturer_block_access  # read from 0x44
-            #print(list(res))  # DEBUG          
-            rcv_command = unpack("<H", res[:2])[0]
-            res = res[2:]  # slice the command
-            # if the expected length may variy you need to pass None to length
-            if (rcv_command == command) and (((length is not None) and (len(res) == length)) or (length is None)):
-                return res
+            length = int(length)   # tribute to Teststand
+        #self.manufacturer_access = command  # write word to 0x00
+        # self.manufacturer_access = ((command >> 8) & 0xff) | ((command << 8) & 0xff00)  # swap enidaness
+        # res, ok = self.bus.readBytes(self.address, 0x23, length, use_pec=False)
+        # print(list(res))
+        self.manufacturer_block_access = command
+        #res, ok = self.bus.readBytes(self.address, 0x44, length, use_pec=False)
+        res = self.manufacturer_block_access  # read from 0x44
+        print("RB:", hexlify(res))   # DEBUG
+        #print(list(res))  # DEBUG          
+        rcv_command = unpack("<H", res[:2])[0]
+        if (length is not None) and (len(res) > length + 2):
+            res = res[2:2+length]  # slice the command and limit to length
+        else:
+            res = res[2:]  # slice the command and return all data
+        # if the expected length may variy you need to pass None to length
+        if (rcv_command == command):
+            return res
         raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(res)}, {len(res)}")
+
+    
+    #----------------------------------------------------------------------------------------------
 
 
     def manufacturing_daqstatus1(self, hexi: bool | str | None = None) -> tuple:
         """Read DAQ Status 1 and return the registers as they come.
 
+        Stores a OrderedDict in self._manufacturing_daqstatus1 with the converted data.
+
         Raises:
             BatteryError: _description_
 
         Returns:
-            OrderedDict: _description_
+            tuple: all values in order as a tuple for TestStand interface
         """
 
         for _retry in range(5):
             try:
-                buf = self.read_manufacturer_block(command=0x20d6, length=None)
+                buf = self._read_manufacturer_block(0x20d6)
                 self._manufacturing_daqstatus1 = OrderedDict({
                     "block": self._maybe_hexlify(buf, hexi),
                     # data come little endian
-                    "cell_voltage_1": unpack_from("<H", buf, 0)[0] * 1e-3,  # mV, unsigned short, little endian
-                    "cell_voltage_2": unpack_from("<H", buf, 2)[0] * 1e-3,  # mV, unsigned short, little endian
-                    "cell_voltage_3": unpack_from("<H", buf, 4)[0] * 1e-3,  # mV, unsigned short, little endian
-                    "cell_voltage_4": unpack_from("<H", buf, 6)[0] * 1e-3,  # mV, unsigned short, little endian
-                    "cell_voltage_5": unpack_from("<H", buf, 8)[0] * 1e-3,  # mV, unsigned short, little endian
-                    "cell_voltage_6": unpack_from("<H", buf, 10)[0] * 1e-3,  # mV, unsigned short, little endian
-                    "cell_voltage_7": unpack_from("<H", buf, 12)[0] * 1e-3,  # mV, unsigned short, little endian
-                    "afe_tos_voltage":    unpack_from("<H", buf, 14)[0] * 1e-3,  # mV, unsigned short, little endian
-                    "afe_pack_voltage":   unpack_from("<H", buf, 16)[0] * 1e-3,  # mV, unsigned short, little endian
-                    "afe_led_pin_voltage": unpack_from("<H", buf, 18)[0] * 1e-3,  # mV, unsigned short, little endian
-                    "gg_voltage": unpack_from("<H", buf, 20)[0] * 1e-3,  # mV, unsigned short, little endian
-                    "afe_cc2_current": unpack_from("<h", buf, 22)[0] * 1e-3,  # mA, signed short, little endian
-                    "afe_cc3_current": unpack_from("<h", buf, 24)[0] * 1e-3,  # mA, signed short, little endian
-                    "gg_current":   unpack_from("<h", buf, 26)[0] * 1e-3,  # mA, signed short, little endian
+                    "cell_voltage_1": round(unpack_from("<H", buf, 0)[0] * 1e-3, 3),  # mV, unsigned short, little endian
+                    "cell_voltage_2": round(unpack_from("<H", buf, 2)[0] * 1e-3, 3),  # mV, unsigned short, little endian
+                    "cell_voltage_3": round(unpack_from("<H", buf, 4)[0] * 1e-3, 3),  # mV, unsigned short, little endian
+                    "cell_voltage_4": round(unpack_from("<H", buf, 6)[0] * 1e-3, 3),  # mV, unsigned short, little endian
+                    "cell_voltage_5": round(unpack_from("<H", buf, 8)[0] * 1e-3, 3),  # mV, unsigned short, little endian
+                    "cell_voltage_6": round(unpack_from("<H", buf, 10)[0] * 1e-3, 3),  # mV, unsigned short, little endian
+                    "cell_voltage_7": round(unpack_from("<H", buf, 12)[0] * 1e-3, 3),  # mV, unsigned short, little endian
+                    "afe_tos_voltage":    round(unpack_from("<H", buf, 14)[0] * 1e-3, 3),  # mV, unsigned short, little endian
+                    "afe_pack_voltage":   round(unpack_from("<H", buf, 16)[0] * 1e-3, 3),  # mV, unsigned short, little endian
+                    "afe_ld_pin_voltage": round(unpack_from("<H", buf, 18)[0] * 1e-3, 3),  # mV, unsigned short, little endian
+                    "gg_voltage": round(unpack_from("<H", buf, 20)[0] * 1e-3, 3),  # mV, unsigned short, little endian
+                    "afe_cc2_current": round(unpack_from("<h", buf, 22)[0] * 1e-3, 3),  # mA, signed short, little endian
+                    "afe_cc3_current": round(unpack_from("<h", buf, 24)[0] * 1e-3, 3),  # mA, signed short, little endian
+                    "gg_current":   round(unpack_from("<h", buf, 26)[0] * 1e-3, 3),  # mA, signed short, little endian
                     # 2 words reserve
                 })
                 return _od2t(self._manufacturing_daqstatus1)  # Teststand interface
@@ -238,18 +266,29 @@ class PetaliteChipset(BQ40Z50R1):
 
 
     def manufacturing_daqstatus2(self, celsius: bool = True, hexi: bool | str | None = None) -> tuple:
+        """Read DAQ Status 2 and return the registers as they come.
+
+        Stores a OrderedDict in self._manufacturing_daqstatus2 with the converted data.
+
+        Raises:
+            BatteryError: _description_
+
+        Returns:
+            tuple: all values in order as a tuple for TestStand interface
+        """
+
         for _retry in range(5):
             try:
-                buf = self.read_manufacturer_block(command=0x20d7, length=None)
+                buf = self._read_manufacturer_block(0x20d7)
                 self._manufacturing_daqstatus2 = OrderedDict({
                     "block": self._maybe_hexlify(buf, hexi),
                     # data come little endian
-                    "ts1_temperature": unpack_from("<H", buf, 0)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-                    "ts3_temperature": unpack_from("<H", buf, 2)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-                    "afe_hdq_temperature": unpack_from("<H", buf, 4)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-                    "afe_dchg_temperature": unpack_from("<H", buf, 6)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian                    
-                    "afe_ddsg_temperature": unpack_from("<H", buf, 8)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
-                    "gg_temperature":    unpack_from("<H", buf, 10)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0),  # 0.1K, unsigned short, little endian
+                    "ts1_temperature": round(unpack_from("<H", buf, 0)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0), 1),  # 0.1K, unsigned short, little endian
+                    "ts3_temperature": round(unpack_from("<H", buf, 2)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0), 1),  # 0.1K, unsigned short, little endian
+                    "afe_hdq_temperature": round(unpack_from("<H", buf, 4)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0), 1),  # 0.1K, unsigned short, little endian
+                    "afe_dchg_temperature": round(unpack_from("<H", buf, 6)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0), 1),  # 0.1K, unsigned short, little endian                    
+                    "afe_ddsg_temperature": round(unpack_from("<H", buf, 8)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0), 1),  # 0.1K, unsigned short, little endian
+                    "gg_temperature":    round(unpack_from("<H", buf, 10)[0] * 1e-1 - (KELVIN_ZERO_DEGC if celsius else 0), 1),  # 0.1K, unsigned short, little endian
                     # 10 words reserve                    
                 })
                 return _od2t(self._manufacturing_daqstatus2)  # Teststand interface
@@ -267,11 +306,11 @@ class PetaliteChipset(BQ40Z50R1):
                     (now.hour & 0xFF), (now.minute & 0xFF), (now.second& 0xFF)
                     ])
         print(hexlify(buf))   # DEBUG
-        return self.write_manufacturer_block(0x20d9, buf)
+        return self._write_manufacturer_block(0x20d9, buf)
         
 
     def read_rtc(self) -> Tuple[dt, str]:
-        buf = self.read_manufacturer_block(0x20d9, None)
+        buf = self._read_manufacturer_block(0x20d9)        
         _fmt = "<B"
         year = unpack_from(_fmt, buf, offset=0)[0] - 41 + 2025
         month = unpack_from(_fmt, buf, offset=1)[0]
@@ -291,49 +330,111 @@ class PetaliteChipset(BQ40Z50R1):
         return _diff.total_seconds()
 
 
+    def read_manufacturer_info(self, hexi: bool | str | None = None) -> bytearray | str:
+        """Reads the Manufacturer Info block (MIB) from the battery.
 
+        Note: This uses Manufacturer Block Access 0x44 and limits to 32 bytes.
+
+        Returns:
+            bytearray: Manufacturer Info data block
+        """
+
+        buf = self._read_manufacturer_block(0x0070, 32)
+        return self._maybe_hexlify(buf, hexi)
+    
+    
+    def write_manufacturer_info(self, data: bytearray | bytes | str) -> None:
+        """Writes the Manufacturer Info block (MIB) to the battery.
+
+        Note: This uses Manufacturer Block Access 0x44 and limits to 32 bytes.
+              If provided data is less than 32 bytes it is padded with zeroes.
+
+        Args:
+            data (bytearray | bytes | str): Manufacturer Info data block. If provided as str it must be hex string.
+        """
+
+        if isinstance(data, str):
+            _data = unhexlify(data)
+        else:
+            _data = bytes(data)
+        if len(_data) > 32:
+            raise ValueError(f"Manufacturer Info block must be maximum 32 bytes long. You provided {len(_data)} bytes.")
+        buf = _data.ljust(32, b'\x00')  # pad to 32 bytes
+        self._write_manufacturer_block(0x0070, buf)
+
+
+    def lifetime_data(self, hexi = None):
+        # 0x0060
+        raise NotImplementedError("lifetime_data() not implemented yet for Petalite chipset.")
 
 
     def shutdown(self) -> None:
         super().shutdown()
     
 
-    def read_pcba_udi_block(self) -> str:
+    def read_pcba_udi_block(self, hexi: bool | str | None = None) -> str:
         """Reads the PCBA UDI block from the battery.
 
-        Note: This uses Manufacturer Block Access 0x44.
+        Note: This uses Manufacturer Block Access 0x44 and limits to 16 bytes.
 
         Returns:
-            bytes: PCBA UDI data block
+            bytes: UDI data block of 16 bytes either as bytearray or hex string.
         """
 
-        #return super().read_pcba_udi_block()
-        # self.manufacturer_block_access = 0xXXXX
-        # block = self.manufacturer_block_access
-        # udi = block.decode()
-        udi = "0PCBA01234567891"
-        return udi
+        return self.read_serial_number_block(hexi=hexi)
         
 
+    def write_pcba_udi_block(self, udi_block: str) -> None:
+        """Writes the UDI block to the battery which strips the "PCBA" term to save space.
+        Then it reuses the write_serial_number_block function.
 
+        Args:
+            udi_block (str): UDI to be written to the battery, potentially including the "PCBA" prefix.             
+        """
+
+        if "PCBA" in udi_block:
+            # strip PCBA from udi
+            clean_udi = udi_block.replace("PCBA", "")
+        else:
+            clean_udi = udi_block
+        assert(len(clean_udi) >= 2 and len(clean_udi) <= 15), ValueError(f"Clean UDI length={len(clean_udi)} not between 2 and 15.")
+        self.write_serial_number_block(clean_udi)  # also does the encoding and padding
     
-    def read_serial_number_block(self) -> str:
+
+    def read_serial_number_block(self, hexi: bool | str | None = None) -> str:
         """
-        Reads serial number from the Manufacturer info block.
-        Addresses: xx 
+        Reads serial number from the Manufacturer info block, which is also UDI block.
+        
+            Note: This uses Manufacturer Block Access 0x44 and limits to 16 bytes.
 
         Returns:
-            str: serial number block
+            bytes: UDI data block of 16 bytes either as bytearray or hex string.
         """
-        
-        # self.manufacturer_block_access = 0xXXXX
-        # block = self.manufacturer_block_access
-        # serial = block.decode()
-        serial = "0123456789012345"  # Peta-Patch: dummy serial
-        return serial
+    
+        buf = self._read_manufacturer_block(0x20C0, 16)
+        return self._maybe_hexlify(buf, hexi).decode(encoding="utf-8").rstrip('\x00')
+    
 
-    def write_serial_number_block(self, sn: str) -> bool:
-        return super().write_serial_number_block(sn)
+    def write_serial_number_block(self, data: bytearray | bytes | str) -> None:
+        """
+        Writes serial number to the Manufacturer info block, which is also UDI block.
+        
+            Note: This uses Manufacturer Block Access 0x44 and limits to 16 bytes.
+
+        Args:
+            data (bytearray | bytes | str): UDI data block of 16 bytes either as bytearray or string.
+        """
+    
+        if isinstance(data, str):
+            _data = bytes(data, encoding="utf-8")
+        else:
+            _data = bytes(data)
+        if len(_data) > 16:
+            raise ValueError(f"Manufacturer Info block must be maximum 16 bytes long. You provided {len(_data)} bytes.")
+        buf = _data.ljust(16, b'\x00')  # pad to 16 bytes
+        self._write_manufacturer_block(0x20C0, buf)
+    
+        
 
 
     def set_pack_sn(self, sn: str) -> bool:
@@ -348,11 +449,262 @@ class PetaliteChipset(BQ40Z50R1):
         return super().set_manufacturer_date()
 
 
+    def operation_status(self, hexi: bool | str | None = None) -> tuple:
+        """This command returns the AFE BatteryStatus as OperationStatus() flags. 
+
+        Args:
+            hexi (bool | str | None, optional): activates a conversion of data into "blocks"
+                if not None or bool and False. If bool and True "blocks" contains ascii hex nibbles.
+                Defaults to None.
+
+        Returns:
+            tuple: (
+                block: bytes or str with hex as ascii string, depending on hexi
+                value: the bitflag register as singned 64bit integer
+                bitflags: 0 or 1 values in descending bit order bit15 ... bit0
+            )
+        """
+
+        buf = self._read_manufacturer_block(0x0054)
+        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 2):
+            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}, {buf}")
+        os = unpack_from("<H", buf)[0]
+        self._operation_status = OrderedDict({
+            "block"     : self._maybe_hexlify(buf, hexi),
+            "value"     : os,
+            # data come little endian
+            "SLEEP":     ((os>>15) & 1),
+            "RSVD1":     ((os>>14) & 1),
+            "SDM":       ((os>>13) & 1),
+            "PF":        ((os>>12) & 1),
+            "SS":        ((os>>11) & 1),
+            "FUSE":      ((os>>10) & 1),
+            "SEC1":      ((os>>9) & 1),
+            "SEC0":      ((os>>8) & 1),
+            "OTPB":      ((os>>7) & 1),
+            "OTPW":      ((os>>6) & 1),
+            "COW_CHK":   ((os>>5) & 1),
+            "WD":        ((os>>4) & 1),
+            "POR":       ((os>>3) & 1),
+            "SLEEP_EN":  ((os>>2) & 1),
+            "PCHG_MODE": ((os>>1) & 1),
+            "CFGUPDATE": ((os>>0) & 1),
+        })
+        return _od2t(self._operation_status)   
+
+
+    def manufacturing_status(self, hexi: bool | str | None = None) -> tuple:
+        """This command returns the AFE ManufacturingStatus as ManufacturingStatus() flags.
+
+        Args:
+            hexi (bool | str | None, optional): activates a conversion of data into "blocks"
+                if not None or bool and False. If bool and True "blocks" contains ascii hex nibbles.
+                Defaults to None.
+
+        Returns:
+            tuple: (
+                block: bytes or str with hex as ascii string, depending on hexi
+                value: the bitflag register as singned 64bit integer
+                bitflags: 0 or 1 values in descending bit order bit15 ... bit0
+            )
+        """
+
+        buf = self._read_manufacturer_block(0x0057)       
+        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 1):
+            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")
+        os = unpack("<B", buf)[0]
+        self._manufacturing_status = OrderedDict({
+            "block": self._maybe_hexlify(buf, hexi),
+            "value"     : os,
+            # data come little endian
+            "OTPW_EN": ((os>>7) & 1),
+            "PF_EN": ((os>>6) & 1),
+            "PDSG_TEST": ((os>>5) & 1),
+            "FET_EN": ((os>>4) & 1),
+            "RSVD": ((os>>3) & 1),
+            "DSG_TEST": ((os>>2) & 1),
+            "CHG_TEST": ((os>>1) & 1),
+            "PCHG_TEST": ((os>>0) & 1),
+        })        
+        return _od2t(self._manufacturing_status)
+
+
+    def gauging_status(self, hexi: bool | str | None = None) -> tuple:
+        """This command returns the GaugingStatus as GG combined flags.
+
+        Args:
+            hexi (bool | str | None, optional): activates a conversion of data into "blocks"
+                if not None or bool and False. If bool and True "blocks" contains ascii hex nibbles.
+                Defaults to None.
+
+        Returns:
+            tuple: (
+                block: bytes or str with hex as ascii string, depending on hexi
+                value: the bitflag register as singned 64bit integer
+                bitflags: 0 or 1 values in descending bit order bit15 ... bit0
+            )   
+        """
+
+        buf = self._read_manufacturer_block(0x0056)       
+        if (not isinstance(buf, (bytes, bytearray)) or len(buf) != 6):
+            raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(buf)}, {len(buf)}")        
+        os = unpack_from("<Q", buf + bytes([0,0]))[0]  # unsigned long long need 8 bytes: pad by 2 zero bytes
+        self._gauging_status = OrderedDict({
+            "block": self._maybe_hexlify(buf, hexi),
+            "value"     : os,
+            # data come little endian
+            # bits 48 .. 63 reserved and 0
+            # Control Status
+            "RSVD1": ((os>>47) & 1),   # Reserved
+            "FAS": ((os>>46) & 1),     # Status bit that indicates the BQ34Z100-R2 is in FULL ACCESS SEALED state. Active when set.
+            "SS": ((os>>45) & 1),      # Status bit that indicates the BQ34Z100-R2 is in the SEALED State. Active when set.
+            "CALEN": ((os>>44) & 1),   # Status bit that indicates the BQ34Z100-R2 calibration function is active. True when set. Default is 0.
+            "CCA": ((os>>43) & 1),     # Status bit that indicates the BQ34Z100-R2 Coulomb Counter Calibration routine is active. Active when set.
+            "BCA": ((os>>42) & 1),     # Status bit that indicates the BQ34Z100-R2 Board Calibration routine is active. Active when set.
+            "CSV": ((os>>41) & 1),      # Status bit that indicates a valid data flash checksum has been generated. Active when set.
+            "RSVD2": ((os>>40) & 1),    # Reserved
+            "RSVD3": ((os>>39) & 1),    # Reserved
+            "RSVD4": ((os>>38) & 1),    # Reserved
+            "FULLSLEEP": ((os>>37) & 1), # Status bit that indicates the BQ34Z100-R2 is in FULL SLEEP mode. True when set. The state can only be detected by monitoring the power used by the BQ34Z100-R2 because any communication will automatically clear it.
+            "SLEEP": ((os>>36) & 1),    # Status bit that indicates the BQ34Z100-R2 is in SLEEP mode. True when set.
+            "LDMD": ((os>>35) & 1),     # Status bit that indicates the BQ34Z100-R2 Impedance Track algorithm using constant-power mode. True when set. Default is 0 (CONSTANT CURRENT mode).
+            "RUP_DIS": ((os>>34) & 1),  # Status bit that indicates the BQ34Z100-R2 Ra table updates are disabled. True when set.
+            "VOK": ((os>>33) & 1),      # Status bit that indicates cell voltages are OK for Qmax updates. True when set.
+            "QEN": ((os>>32) & 1),      # Status bit that indicates the BQ34Z100-R2 Qmax updates are enabled. True when set.
+            # Flags A
+            "OTC": ((os>>31) & 1),      # Overtemperature in Charge condition is detected. True when set
+            "OTD": ((os>>30) & 1),      # Overtemperature in Discharge condition is detected. True when set
+            "BATHI": ((os>>29) & 1),    # Battery High bit that indicates a high battery voltage condition. Refer to the data flash Cell BH parameters for threshold settings. True when set
+            "BATLOW": ((os>>28) & 1),   # Battery Low bit that indicates a low battery voltage condition. Refer to the data flash Cell BL parameters for threshold settings. True when set
+            "CHG_INH": ((os>>27) & 1),  # Charge Inhibit: unable to begin charging. Refer to the data flash [Charge Inhibit Temp Low, Charge Inhibit Temp High] parameters for threshold settings. True when set
+            "XCHG": ((os>>26) & 1), # Charging not allowed.
+            "FC": ((os>>25) & 1),    # (Fast) charging allowed. True when set
+            "CHG": ((os>>24) & 1),   # Instruction Flash Checksum Failure
+            "RESET": ((os>>23) & 1), # Set when OCV Reading is taken, cleared when not in RELAX or OCV Reading Not Taken.
+            "RSVD1": ((os>>22) & 1), # Reserved
+            "RSVD2": ((os>>21) & 1), # Reserved
+            "CF": ((os>>20) & 1),    # Condition Flag indicates that the gauge needs to run through an update cycle to optimize accuracy.
+            "RSVD3": ((os>>19) & 1), # Reserved
+            "SOC1": ((os>>18) & 1),  # State-of-Charge Threshold 1 reached. True when set
+            "SOCF": ((os>>17) & 1),  # State-of-Charge Threshold Final reached. True when set
+            "DSG": ((os>>16) & 1),   # Discharging detected. True when set
+            # Flags B
+            "SOH": ((os>>15) & 1),     # StateOfHealth() calculation is active.
+            "LIFE": ((os>>14) & 1),    # Indicates that LiFePO4 RELAX is enabled
+            "FIRSTDOD": ((os>>13) & 1),  # Set when RELAX mode is entered and then cleared upon valid DOD measurement for QMAX update or RELAX exit.
+            "RSVD1": ((os>>12) & 1),   # Battery Low bit that indicates a low battery voltage condition. Refer to the data flash Cell BL parameters for threshold settings. True when set
+            "RSVD2": ((os>>11) & 1),   # Charge Inhibit: unable to begin charging. Refer to the data flash [Charge Inhibit Temp Low, Charge Inhibit Temp High] parameters for threshold settings. True when set
+            "DODEOC": ((os>>10) & 1),  # DOD at End-of-Charge is updated.
+            "DTRC": ((os>>9) & 1),     # Indicates RemainingCapacity() has been changed due to change in temperature.
+            "RSVD3": ((os>>8) & 1),    # Instruction Flash Checksum Failure
+            "RSVD_BYTE": (os & 0xFF),  # Reserved Byte 
+        })        
+        return _od2t(self._gauging_status)
+
+    
+    #----------------------------------------------------------------------------------------------
+
+
+    def _decode_safety_status_or_alert(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:        
+        os = unpack_from("<B", buf, 0)[0]
+        d_A = OrderedDict({
+            "block": self._maybe_hexlify(buf, hexi),
+            # data come little endian
+            "SCD": ((os>>7) & 1),  #
+            "OCD2": ((os>>6) & 1),  #
+            "OCD1": ((os>>5) & 1),  #
+            "OCC": ((os>>4) & 1),  #
+            "COV": ((os>>3) & 1),  #
+            "CUV": ((os>>2) & 1),  #
+            "RSVD1": ((os>>1) & 1),  # Reserved. Do not use.
+            "RSVD2": ((os>>0) & 1),  # Reserved. Do not use.
+        })
+        os = unpack_from("<B", buf, 1)[0]
+        d_B = OrderedDict({
+            # data come little endian
+            "OTF": ((os>>7) & 1),  #
+            "OTINT": ((os>>6) & 1),  #
+            "OTD": ((os>>5) & 1),  #
+            "OTC": ((os>>4) & 1),  #
+            "RSVD3": ((os>>3) & 1),  # Reserved. Do not use.
+            "UTINT": ((os>>2) & 1),  #
+            "UTD": ((os>>1) & 1),  #
+            "UTC": ((os>>0) & 1),  #
+        })
+        os = unpack_from("<B", buf, 2)[0]
+        d_C = OrderedDict({
+            # data come little endian
+            "OCD3": ((os>>7) & 1),  #
+            "SCDL": ((os>>6) & 1),  #
+            "OCDL": ((os>>5) & 1),  #
+            "COVL": ((os>>4) & 1),  #
+            "RSVD4": ((os>>3) & 1),  # Reserved. Do not use.
+            "PTO": ((os>>2) & 1),  #
+            "HWDF": ((os>>1) & 1),  #
+            "RSVD5": ((os>>0) & 1),  # Reserved. Do not use.
+        })
+        # combine the ordered dicts
+        d = d_A | d_B | d_C
+        return d
+
+    # these are functions to provide AFE specific bitflags
+    def safety_alert(self) -> tuple:
+        buf = self._read_manufacturer_block(0x0050)
+        self._safety_alert = self._decode_safety_status_or_alert(buf)
+        return _od2t(self._safety_alert)        
+
+    def safety_status(self) -> tuple:
+        buf = self._read_manufacturer_block(0x0051)
+        self._safety_status = self._decode_safety_status_or_alert(buf)
+        return _od2t(self._safety_status)
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def pf_alert(self) -> tuple:
+        pass
+    
+    def pf_status(self) -> tuple:
+        pass
+    
+
+    #----------------------------------------------------------------------------------------------
+    
+    
+    def toggle_chg_fet(self):
+        pass
+
+    def toggle_dsg_fet(self):
+        pass
+
+
+    def toggle_led_onoff(self):
+        self.manufacturer_access = 0x002b
+
+
     def set_led_onoff(self, enable: bool) -> bool:
-        return super().set_led_onoff(enable)
+        if enable:
+            # RGB
+            buf = bytes([(0,0,255)*4])
+        else:
+            buf = bytes([(0,0,0)*4])
+        self._write_manufacturer_block(0x20d8, buf)
+        return True
+        #return super().set_led_onoff(enable)
+
 
     def is_led_on(self) -> bool:
-        return super().is_led_on()
+        buf = self._read_manufacturer_block(0x20d8)
+        # check if any of the RGB values is non-zero
+        for i in range(0, len(buf), 3):
+            r = buf[i]
+            g = buf[i+1]
+            b = buf[i+2]
+            if (r != 0) or (g != 0) or (b != 0):
+                return True
+        return False
+        #return super().is_led_on()
 
 
     def set_lifetime_data_collection(self, enable: bool) -> bool:
@@ -363,19 +715,32 @@ class PetaliteChipset(BQ40Z50R1):
         return super().shipping_mode(ship_delay)
 
 
+    # specials for chipset control
+    def afe_reset(self) -> bool:
+        #self.manufacturer_access = 0x0012
+        self.manufacturer_block_access = 0x0012
+
+    def gg_reset(self) -> bool:
+        #self.manufacturer_access = 0x0041
+        self.manufacturer_block_access = 0x0041  # uses the TI reset command code
+
+
 
     # def check_no_errors(self) -> bool:
     #     return super().check_no_errors()
     
 
 
-    # SmartBattery forwards for Teststand
+
+
+    # --- SmartBattery forwards for Teststand ---
 
     def manufacturer_access_func(self):
         return super().manufacturer_access_func()
     
     def manufacturer_data_func(self):
         return super().manufacturer_data_func()
+
 
     def battery_status(self):
         return super().battery_status()
