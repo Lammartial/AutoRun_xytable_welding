@@ -102,6 +102,16 @@ class PetaliteChipset(BQ40Z50R1):
         return ok
 
 
+    def _read_sealed_status(self) -> bytearray:
+        buf = self._read_manufacturer_block(0x20da)
+        if buf and len(buf) >= 1:
+            afe = int(buf[0])  # 0 = unsealed, 1 = sealed
+            gg = int(buf[1])   # 0 = unsealed, 1 = sealed
+        buf, ok = self.readBlock(0xC2)  # 0 = unsealed, 1 = sealed
+        mcu = int(buf[0])
+        return mcu, afe, gg
+
+
     def is_sealed(self, refresh: bool = True) -> bool:
         """Checks if the battery is sealed to disable write access to critical parameters.
 
@@ -109,18 +119,13 @@ class PetaliteChipset(BQ40Z50R1):
             bool: True if sealed
         """
         
-        self.manufacturer_access = 0x20da
-        buf = self.manufacturer_data
-        if buf and len(buf) >= 1:
-            afe = buf[0]  # 0 = unsealed, 1 = sealed
-            gg = buf[1]   # 0 = unsealed, 1 = sealed
-        v, ok = self.readBlock(0xC2)  # try to update the value(s)
-        mcu = v[0]  # 0 = unsealed, 1 = sealed
-        return afe == 1 and gg == 1 and mcu == 1
+        mcu, afe, gg = self._read_sealed_status()
+        return afe != 0 and gg != 0 and mcu != 0
         
 
     def is_unsealed(self, check_fullaccess: bool = False, refresh: bool = False) -> bool:
-        return not self.is_sealed(refresh=refresh)        
+        mcu, afe, gg = self._read_sealed_status()
+        return afe == 0 and gg == 0 and mcu == 0
 
 
     def seal(self) -> bool:
@@ -131,11 +136,12 @@ class PetaliteChipset(BQ40Z50R1):
         """
         # Petalite uses same seal command as BQ40Z50
         return super().seal()
+    
 
 
     def enable_full_access(self) -> bool:
         # unseal MCU
-        ok = self.writeBlock(0xC2, bytes([0x20, 
+        ok = self.writeBlock(0xC2, bytes([ 
                                 0xF3, 0xD8, 0x58, 0x94, 0x2E, 0x9B, 0x68, 0x02, 
                                 0x02, 0xE6, 0xD8, 0xD9, 0xE1, 0x55, 0x17, 0x5A, 
                                 0xD5, 0xAE, 0x49, 0x39, 0xCC, 0xB7, 0x87, 0x38, 
@@ -181,7 +187,7 @@ class PetaliteChipset(BQ40Z50R1):
 
         command = int(command)
         buf = bytearray([command & 0xFF, (command >> 8) & 0xFF]) + bytearray(data)
-        print("WB:", hexlify(buf))   # DEBUG
+        #print("WB:", hexlify(buf))   # DEBUG
         self.manufacturer_block_access = buf
 
 
@@ -201,15 +207,9 @@ class PetaliteChipset(BQ40Z50R1):
         command = int(command)
         if (length is not None):
             length = int(length)   # tribute to Teststand
-        #self.manufacturer_access = command  # write word to 0x00
-        # self.manufacturer_access = ((command >> 8) & 0xff) | ((command << 8) & 0xff00)  # swap enidaness
-        # res, ok = self.bus.readBytes(self.address, 0x23, length, use_pec=False)
-        # print(list(res))
         self.manufacturer_block_access = command
-        #res, ok = self.bus.readBytes(self.address, 0x44, length, use_pec=False)
         res = self.manufacturer_block_access  # read from 0x44
-        print("RB:", hexlify(res))   # DEBUG
-        #print(list(res))  # DEBUG          
+        #print("RB:", hexlify(res))   # DEBUG
         rcv_command = unpack("<H", res[:2])[0]
         if (length is not None) and (len(res) > length + 2):
             res = res[2:2+length]  # slice the command and limit to length
@@ -238,7 +238,12 @@ class PetaliteChipset(BQ40Z50R1):
 
         for _retry in range(5):
             try:
-                buf = self._read_manufacturer_block(0x20d6)
+                #buf = self._read_manufacturer_block(0x20d6)
+                # workaround for NCD.io 16 bytes read restriction
+                buf1 = self._read_manufacturer_block(0xda10)
+                buf2 = self._read_manufacturer_block(0xda11)
+                buf3 = self._read_manufacturer_block(0xda12)
+                buf = buf1 + buf2 + buf3
                 self._manufacturing_daqstatus1 = OrderedDict({
                     "block": self._maybe_hexlify(buf, hexi),
                     # data come little endian
@@ -309,10 +314,22 @@ class PetaliteChipset(BQ40Z50R1):
         return self._write_manufacturer_block(0x20d9, buf)
         
 
+    def pushbutton_state(self) -> int:
+        """Reads the state of the push button
+
+        Returns:
+            int: 1=pressed, 0=not pressed
+        """
+
+        buf = self._read_manufacturer_block(0x20db)
+        btn_state = unpack_from("<B", buf, 0)[0]
+        return btn_state
+
+
     def read_rtc(self) -> Tuple[dt, str]:
         buf = self._read_manufacturer_block(0x20d9)        
         _fmt = "<B"
-        year = unpack_from(_fmt, buf, offset=0)[0] - 41 + 2025
+        year = unpack_from(_fmt, buf, offset=0)[0] + 2000
         month = unpack_from(_fmt, buf, offset=1)[0]
         day = unpack_from(_fmt, buf, offset=2)[0]
         hour = unpack_from(_fmt, buf, offset=3)[0]
@@ -339,7 +356,12 @@ class PetaliteChipset(BQ40Z50R1):
             bytearray: Manufacturer Info data block
         """
 
-        buf = self._read_manufacturer_block(0x0070, 32)
+        #buf = self._read_manufacturer_block(0x0070, 32)
+        # workaround for NCD.io 16 bytes read restriction
+        buf1 = self._read_manufacturer_block(0xda30)
+        buf2 = self._read_manufacturer_block(0xda31)
+        buf3 = self._read_manufacturer_block(0xda32)
+        buf = buf1 + buf2 + buf3
         return self._maybe_hexlify(buf, hexi)
     
     
@@ -412,6 +434,10 @@ class PetaliteChipset(BQ40Z50R1):
         """
     
         buf = self._read_manufacturer_block(0x20C0, 16)
+        # # workaround for NCD.io 16 bytes read restriction
+        # buf1 = self._read_manufacturer_block(0xda20)
+        # buf2 = self._read_manufacturer_block(0xda21)
+        # buf = buf1 + buf2                
         return self._maybe_hexlify(buf, hexi).decode(encoding="utf-8").rstrip('\x00')
     
 
@@ -670,25 +696,36 @@ class PetaliteChipset(BQ40Z50R1):
     
 
     #----------------------------------------------------------------------------------------------
-    
-    
+  
+
     def toggle_chg_fet(self):
-        pass
+        raise NotImplementedError("toggle_chg_fet() not implemented yet for Petalite chipset.")
+        self._write_manufacturer_block(0x001f, bytes([0x01]))
+
 
     def toggle_dsg_fet(self):
-        pass
+        raise NotImplementedError("toggle_dsg_fet() not implemented yet for Petalite chipset.")
+        self._write_manufacturer_block(0x0020, bytes([0x01]))
 
 
-    def toggle_led_onoff(self):
-        self.manufacturer_access = 0x002b
+    def toggle_fuse(self):
+        raise NotImplementedError("toggle_fuse() not implemented yet for Petalite chipset.")
+        self._write_manufacturer_block(0x001d, bytes([0x01]))
 
 
-    def set_led_onoff(self, enable: bool) -> bool:
-        if enable:
-            # RGB
-            buf = bytes([(0,0,255)*4])
-        else:
-            buf = bytes([(0,0,0)*4])
+    def toggle_led(self):
+        raise NotImplementedError("toggle_led() not implemented yet for Petalite chipset.")
+        self._write_manufacturer_block(0x002d, bytes([0x01]))
+
+
+    def set_led_onoff(self, color: int) -> bool:
+        _cmap = [
+            (0,0,0),      # off
+            (0,0,255),    # blue
+            (0,255,0),    # green
+            (255,0,0),    # red
+        ]
+        buf = b''.join([bytes(_cmap[color]) for _ in range(4)])
         self._write_manufacturer_block(0x20d8, buf)
         return True
         #return super().set_led_onoff(enable)
@@ -704,11 +741,10 @@ class PetaliteChipset(BQ40Z50R1):
             if (r != 0) or (g != 0) or (b != 0):
                 return True
         return False
-        #return super().is_led_on()
-
+  
 
     def set_lifetime_data_collection(self, enable: bool) -> bool:
-        return super().set_lifetime_data_collection(enable)
+        raise NotImplementedError("set_lifetime_data_collection() not implemented yet for Petalite chipset.")
 
 
     def shipping_mode(self, ship_delay: float = 2.0) -> bool:
@@ -725,9 +761,15 @@ class PetaliteChipset(BQ40Z50R1):
         self.manufacturer_block_access = 0x0041  # uses the TI reset command code
 
 
+    def enable_impedance_track(self) -> None:
+        """Send IT enable to the GG chip.
 
-    # def check_no_errors(self) -> bool:
-    #     return super().check_no_errors()
+        Returns:
+            bool: _description_
+        """
+        
+        self.manufacturer_block_access = 0x0021
+
     
 
 
