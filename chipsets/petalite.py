@@ -207,6 +207,8 @@ class PetaliteChipset(BQ40Z50R1):
         command = int(command)
         if (length is not None):
             length = int(length)   # tribute to Teststand
+        # ok = self.writeBlock(0x44, command.to_bytes(2, "little"))  # try to update the value(s)
+        # res, ok = self.readBlock(0x44)
         self.manufacturer_block_access = command
         res = self.manufacturer_block_access  # read from 0x44
         #print("RB:", hexlify(res))   # DEBUG
@@ -303,19 +305,10 @@ class PetaliteChipset(BQ40Z50R1):
         raise Exception(f"DAQSTATUS 2: {_last_exception}")  # pass throuhg the last exeption
 
 
-    def setup_rtc(self) -> bool:
-        now = dt.now()
-        print(now)
-        buf = bytes([ 
-                    ((now.year - 2000) & 0xFF), (now.month & 0xFF), (now.day & 0xFF),
-                    (now.hour & 0xFF), (now.minute & 0xFF), (now.second& 0xFF)
-                    ])
-        print(hexlify(buf))   # DEBUG
-        return self._write_manufacturer_block(0x20d9, buf)
-        
-
     def pushbutton_state(self) -> int:
-        """Reads the state of the push button
+        """Reads the current state of the push button.
+
+        Note: this is the direct reading of the buttons input pin.
 
         Returns:
             int: 1=pressed, 0=not pressed
@@ -326,6 +319,18 @@ class PetaliteChipset(BQ40Z50R1):
         return btn_state
 
 
+    def setup_rtc(self) -> bool:
+        now = dt.now()
+        print(now)
+        buf = bytes([ 
+                    ((now.year - 2000) & 0xFF), (now.month & 0xFF), (now.day & 0xFF),
+                    (now.hour & 0xFF), (now.minute & 0xFF), (now.second& 0xFF)
+                    ])
+        #print(hexlify(buf))   # DEBUG
+        return self._write_manufacturer_block(0x20d9, buf)
+        
+
+    
     def read_rtc(self) -> Tuple[dt, str]:
         buf = self._read_manufacturer_block(0x20d9)        
         _fmt = "<B"
@@ -335,7 +340,6 @@ class PetaliteChipset(BQ40Z50R1):
         hour = unpack_from(_fmt, buf, offset=3)[0]
         minute = unpack_from(_fmt, buf, offset=4)[0]
         second = unpack_from(_fmt, buf, offset=5)[0]
-        print("BUG WARNING IN RTC YEAR! Offset of 41 ??") # DEBUG       
         d = dt(year, month, day, hour, minute, second)
         return d, d.isoformat(sep=" ")
 
@@ -365,7 +369,7 @@ class PetaliteChipset(BQ40Z50R1):
         return self._maybe_hexlify(buf, hexi)
     
     
-    def write_manufacturer_info(self, data: bytearray | bytes | str) -> None:
+    def write_manufacturer_info(self, data: bytearray | bytes | str) -> bool:
         """Writes the Manufacturer Info block (MIB) to the battery.
 
         Note: This uses Manufacturer Block Access 0x44 and limits to 32 bytes.
@@ -383,6 +387,7 @@ class PetaliteChipset(BQ40Z50R1):
             raise ValueError(f"Manufacturer Info block must be maximum 32 bytes long. You provided {len(_data)} bytes.")
         buf = _data.ljust(32, b'\x00')  # pad to 32 bytes
         self._write_manufacturer_block(0x0070, buf)
+        return True
 
 
     def lifetime_data(self, hexi = None):
@@ -403,7 +408,8 @@ class PetaliteChipset(BQ40Z50R1):
             bytes: UDI data block of 16 bytes either as bytearray or hex string.
         """
 
-        return self.read_serial_number_block(hexi=hexi)
+        b = self.read_serial_number_block(hexi=hexi)
+        return b[:1] + "PCBA" + b[1:] # insert PCBA after first character
         
 
     def write_pcba_udi_block(self, udi_block: str) -> None:
@@ -433,15 +439,15 @@ class PetaliteChipset(BQ40Z50R1):
             bytes: UDI data block of 16 bytes either as bytearray or hex string.
         """
     
-        buf = self._read_manufacturer_block(0x20C0, 16)
-        # # workaround for NCD.io 16 bytes read restriction
-        # buf1 = self._read_manufacturer_block(0xda20)
-        # buf2 = self._read_manufacturer_block(0xda21)
-        # buf = buf1 + buf2                
+        #buf = self._read_manufacturer_block(0x20C0, 16)
+        # workaround for NCD.io 16 bytes read restriction
+        buf1 = self._read_manufacturer_block(0xda20)
+        buf2 = self._read_manufacturer_block(0xda21)
+        buf = buf1 + buf2
         return self._maybe_hexlify(buf, hexi).decode(encoding="utf-8").rstrip('\x00')
     
 
-    def write_serial_number_block(self, data: bytearray | bytes | str) -> None:
+    def write_serial_number_block(self, data: bytearray | bytes | str) -> bool:
         """
         Writes serial number to the Manufacturer info block, which is also UDI block.
         
@@ -459,13 +465,14 @@ class PetaliteChipset(BQ40Z50R1):
             raise ValueError(f"Manufacturer Info block must be maximum 16 bytes long. You provided {len(_data)} bytes.")
         buf = _data.ljust(16, b'\x00')  # pad to 16 bytes
         self._write_manufacturer_block(0x20C0, buf)
-    
+        return True
         
 
 
     def set_pack_sn(self, sn: str) -> bool:
         return super().set_pack_sn(sn)
     
+
     def set_manufacturer_date(self):
         """Writes the current date to the battery as manufacture date.
 
