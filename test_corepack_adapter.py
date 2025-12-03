@@ -392,18 +392,24 @@ if __name__ == "__main__":
     gpio.switch_to_psu_measurement()
     psu.clear_output_protection()
     psu.set_sense_state(1)
-    psu.configure_supply(26.0, 0.05, 50, 0)
+    psu.configure_supply(26.0, 2.05, 80, 0)
 
 
     if 1:
         #gpio.switch_rrc3570_tpin_open()    
         gpio.switch_rrc3570_tpin_shorted()
+        sleep(1.5)
         
         # for i in range(8):
         #     mux.setChannel(i + 1)
         #     print("CH:", i, i2cbus.i2c_bus_scan())
 
         print(bat.device_name())
+        print(bat.is_sealed())
+        print(bat.is_unsealed())
+        bat.enable_full_access()
+        print(bat.is_sealed())
+        print(bat.is_unsealed())
         bat.operation_status()
         print(bat._operation_status)
         bat.manufacturing_status()
@@ -413,12 +419,29 @@ if __name__ == "__main__":
         bat.manufacturing_daqstatus2()    
         print(bat._manufacturing_daqstatus2)
         
+        bat.write_pcba_udi_block("0PCBA012345678901")
+        print(bat.read_pcba_udi_block())
+
+        
+        # for i in range(30):
+        #     print("Button:", bat.pushbutton_state())    
+        #     sleep(1)
+
+
+        for c in range(3, 0 - 1, -1):
+            print("Set LED color code:", c)
+            bat.set_led_onoff(c)
+            sleep(2)
+            print("Is LED on?", bat.is_led_on())        
+        bat.set_led_onoff(0)
+        
+
         bat.setup_rtc()
         sleep(3)
         print(bat.read_rtc())
         print(bat.check_rtc_against_systemtime())
 
-
+        
         print(bat.voltage())
         print(bat.current())
         print(bat.temperature())
