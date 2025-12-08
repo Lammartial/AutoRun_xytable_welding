@@ -8,6 +8,7 @@ __version__ = "0.5.0"
 # pylint: disable=line-too-long,C0103,C0321,C0413,W0703,W0107,R1702,R0904
 
 import errno
+from typing import Tuple
 from time import sleep, monotonic_ns
 from binascii import hexlify
 from struct import pack, unpack
@@ -619,7 +620,7 @@ class Battery:
     def readWordVerified(self, cmd):
         return self.bus.vReadWord(self.address, int(cmd), self.pec)  # VERIFIED by read-back!!!
 
-    def readWord(self, cmd):
+    def readWord(self, cmd) -> Tuple[int | None, bool]:
         return self.bus.readWord(self.address, int(cmd), self.pec)  # NO verification
 
     def writeBytesVerified(self, cmd, buffer) -> bool:

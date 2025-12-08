@@ -210,13 +210,13 @@ class PetaliteChipset(BQ40Z50R1):
         # ok = self.writeBlock(0x44, command.to_bytes(2, "little"))  # try to update the value(s)
         # res, ok = self.readBlock(0x44)
         self.manufacturer_block_access = command
-        res = self.manufacturer_block_access  # read from 0x44
+        buf = self.manufacturer_block_access  # read from 0x44
         #print("RB:", hexlify(res))   # DEBUG
-        rcv_command = unpack("<H", res[:2])[0]
-        if (length is not None) and (len(res) > length + 2):
-            res = res[2:2+length]  # slice the command and limit to length
+        rcv_command = unpack("<H", buf[:2])[0]
+        if (length is not None) and (len(buf) > length + 2):
+            res = buf[2:2+length]  # slice the command and limit to length
         else:
-            res = res[2:]  # slice the command and return all data
+            res = buf[2:]  # slice the command and return all data
         # if the expected length may variy you need to pass None to length
         if (rcv_command == command):
             return res
@@ -349,6 +349,9 @@ class PetaliteChipset(BQ40Z50R1):
         rtc, rtc_str = self.read_rtc()
         _diff = now-rtc
         return _diff.total_seconds()
+       
+
+    #----------------------------------------------------------------------------------------------
 
 
     def read_manufacturer_info(self, hexi: bool | str | None = None) -> bytearray | str:
@@ -366,6 +369,7 @@ class PetaliteChipset(BQ40Z50R1):
         buf2 = self._read_manufacturer_block(0xda31)
         buf3 = self._read_manufacturer_block(0xda32)
         buf = buf1 + buf2 + buf3
+        print("rMIB:", hexlify(buf))   # DEBUG
         return self._maybe_hexlify(buf, hexi)
     
     
@@ -382,77 +386,94 @@ class PetaliteChipset(BQ40Z50R1):
         if isinstance(data, str):
             _data = unhexlify(data)
         else:
-            _data = bytes(data)
+            _data = data
         if len(_data) > 32:
             raise ValueError(f"Manufacturer Info block must be maximum 32 bytes long. You provided {len(_data)} bytes.")
         buf = _data.ljust(32, b'\x00')  # pad to 32 bytes
+        print("wMIB:", hexlify(buf))   # DEBUG
         self._write_manufacturer_block(0x0070, buf)
         return True
 
 
-    def lifetime_data(self, hexi = None):
-        # 0x0060
-        raise NotImplementedError("lifetime_data() not implemented yet for Petalite chipset.")
+   
+    #----------------------------------------------------------------------------------------------
 
 
-    def shutdown(self) -> None:
-        super().shutdown()
-    
-
-    def read_pcba_udi_block(self, hexi: bool | str | None = None) -> str:
-        """Reads the PCBA UDI block from the battery.
-
-        Note: This uses Manufacturer Block Access 0x44 and limits to 16 bytes.
+    def read_pcba_udi_block(self, insertstr_pcba: bool = False, hexi: bool | str | None = None) -> str:
+        """Reads the PCBA UDI block from the Manufacturer info block (MIB):
+        
+        A01-A15, 15 bytes
+        stripping 0's at the end.
+                
+        Args:
+            insertstr_pcba (bool): If true, inserts "PCBA" after first character.
+            hexi (bool | str | None, optional): If set to true, returns hex string. Defaults to None.
 
         Returns:
-            bytes: UDI data block of 16 bytes either as bytearray or hex string.
+            bytes: UDI data block of max. 15 bytes either as bytearray or hex string.
+        
         """
 
-        b = self.read_serial_number_block(hexi=hexi)
-        return b[:1] + "PCBA" + b[1:] # insert PCBA after first character
+        mib = self.read_manufacturer_info()  # read the full block (32 bytes)
+        udi = self._maybe_hexlify(mib[:15], hexi).decode(encoding="utf-8").rstrip('\x00') # get the first 15 bytes and strip trailing zeroes
+        #print(udi)  # DEBUG
+        if insertstr_pcba:
+            _udi = udi[:1] + "PCBA" + udi[1:] # insert PCBA after first character
+        else:
+            _udi = udi
+        return _udi
         
 
-    def write_pcba_udi_block(self, udi_block: str) -> None:
-        """Writes the UDI block to the battery which strips the "PCBA" term to save space.
-        Then it reuses the write_serial_number_block function.
+    def write_pcba_udi_block(self, udi_block: str | bytes | bytearray) -> bool:
+        """Writes the UDI block to the battery's MIB which strips the "PCBA" term to save space.
+       
+        A01-A15, 15 bytes
+        padding 0's at the end.
 
         Args:
             udi_block (str): UDI to be written to the battery, potentially including the "PCBA" prefix.             
         """
 
-        if "PCBA" in udi_block:
-            # strip PCBA from udi
-            clean_udi = udi_block.replace("PCBA", "")
+        if isinstance(udi_block, str):
+            if "PCBA" in udi_block:
+                # strip PCBA from udi
+                _data = bytes(udi_block.replace("PCBA", ""), encoding="utf-8")
+            else:
+                _data = bytes(udi_block, encoding="utf-8")
         else:
-            clean_udi = udi_block
-        assert(len(clean_udi) >= 2 and len(clean_udi) <= 15), ValueError(f"Clean UDI length={len(clean_udi)} not between 2 and 15.")
-        self.write_serial_number_block(clean_udi)  # also does the encoding and padding
+            pass  # is already bytes or bytearray
+        assert (len(_data) >= 2 and len(_data) <= 15), ValueError(f"Clean UDI length={len(_data)} not between 2 and 15.")
+        mib = self.read_manufacturer_info()  # read the full block (32 bytes)
+        buf = _data.ljust(15, b'\x00') + mib[15:32]  # preserve bytes 15..31 of MIB
+        #print(hexlify(buf))   # DEBUG
+        return self.write_manufacturer_info(buf)
     
+    
+    #----------------------------------------------------------------------------------------------
+
 
     def read_serial_number_block(self, hexi: bool | str | None = None) -> str:
-        """
-        Reads serial number from the Manufacturer info block, which is also UDI block.
+        """Reads our serial number block from the Manufacturer info block (MIB): 
         
-            Note: This uses Manufacturer Block Access 0x44 and limits to 16 bytes.
+        A17-A30, 14bytes
+
+        Args:
+            hexi (bool | str | None, optional): If set to true, returns hex string. Defaults to None.
 
         Returns:
-            bytes: UDI data block of 16 bytes either as bytearray or hex string.
+            bytes: UDI data block of 14 bytes either as bytearray or hex string.
         """
     
-        #buf = self._read_manufacturer_block(0x20C0, 16)
-        # workaround for NCD.io 16 bytes read restriction
-        buf1 = self._read_manufacturer_block(0xda20)
-        buf2 = self._read_manufacturer_block(0xda21)
-        buf = buf1 + buf2
-        return self._maybe_hexlify(buf, hexi).decode(encoding="utf-8").rstrip('\x00')
+        mib = self.read_manufacturer_info()  # read the full block (32 bytes)
+        sn = mib[16:30]  # get bytes 16..29
+        return self._maybe_hexlify(sn, hexi).decode(encoding="utf-8").rstrip('\x00')
     
 
     def write_serial_number_block(self, data: bytearray | bytes | str) -> bool:
-        """
-        Writes serial number to the Manufacturer info block, which is also UDI block.
+        """Writes serial number to the Manufacturer info block MIB at:
         
-            Note: This uses Manufacturer Block Access 0x44 and limits to 16 bytes.
-
+        A17-A30, 14 bytes
+            
         Args:
             data (bytearray | bytes | str): UDI data block of 16 bytes either as bytearray or string.
         """
@@ -461,12 +482,13 @@ class PetaliteChipset(BQ40Z50R1):
             _data = bytes(data, encoding="utf-8")
         else:
             _data = bytes(data)
-        if len(_data) > 16:
-            raise ValueError(f"Manufacturer Info block must be maximum 16 bytes long. You provided {len(_data)} bytes.")
-        buf = _data.ljust(16, b'\x00')  # pad to 16 bytes
-        self._write_manufacturer_block(0x20C0, buf)
-        return True
+        assert (len(_data) <= 16), ValueError(f"Manufacturer Info block must be maximum 16 bytes long. You provided {len(_data)} bytes.")
+        mib = self.read_manufacturer_info()  # read the full block (32 bytes)
+        buf = mib[:16] + _data.ljust(14, b'\x00') + mib[30:32]  # preserve bytes 0..15 and 30..31 of MIB
+        return self.write_manufacturer_info(buf)        
         
+
+    #----------------------------------------------------------------------------------------------
 
 
     def set_pack_sn(self, sn: str) -> bool:
@@ -504,7 +526,7 @@ class PetaliteChipset(BQ40Z50R1):
         os = unpack_from("<H", buf)[0]
         self._operation_status = OrderedDict({
             "block"     : self._maybe_hexlify(buf, hexi),
-            "value"     : os,
+            #"value"     : os,
             # data come little endian
             "SLEEP":     ((os>>15) & 1),
             "RSVD1":     ((os>>14) & 1),
@@ -548,7 +570,7 @@ class PetaliteChipset(BQ40Z50R1):
         os = unpack("<B", buf)[0]
         self._manufacturing_status = OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
-            "value"     : os,
+            #"value"     : os,
             # data come little endian
             "OTPW_EN": ((os>>7) & 1),
             "PF_EN": ((os>>6) & 1),
@@ -584,7 +606,7 @@ class PetaliteChipset(BQ40Z50R1):
         os = unpack_from("<Q", buf + bytes([0,0]))[0]  # unsigned long long need 8 bytes: pad by 2 zero bytes
         self._gauging_status = OrderedDict({
             "block": self._maybe_hexlify(buf, hexi),
-            "value"     : os,
+            #"value"     : os,
             # data come little endian
             # bits 48 .. 63 reserved and 0
             # Control Status
@@ -614,10 +636,10 @@ class PetaliteChipset(BQ40Z50R1):
             "FC": ((os>>25) & 1),    # (Fast) charging allowed. True when set
             "CHG": ((os>>24) & 1),   # Instruction Flash Checksum Failure
             "RESET": ((os>>23) & 1), # Set when OCV Reading is taken, cleared when not in RELAX or OCV Reading Not Taken.
-            "RSVD1": ((os>>22) & 1), # Reserved
-            "RSVD2": ((os>>21) & 1), # Reserved
+            "RSVD5": ((os>>22) & 1), # Reserved
+            "RSVD6": ((os>>21) & 1), # Reserved
             "CF": ((os>>20) & 1),    # Condition Flag indicates that the gauge needs to run through an update cycle to optimize accuracy.
-            "RSVD3": ((os>>19) & 1), # Reserved
+            "RSVD7": ((os>>19) & 1), # Reserved
             "SOC1": ((os>>18) & 1),  # State-of-Charge Threshold 1 reached. True when set
             "SOCF": ((os>>17) & 1),  # State-of-Charge Threshold Final reached. True when set
             "DSG": ((os>>16) & 1),   # Discharging detected. True when set
@@ -625,11 +647,11 @@ class PetaliteChipset(BQ40Z50R1):
             "SOH": ((os>>15) & 1),     # StateOfHealth() calculation is active.
             "LIFE": ((os>>14) & 1),    # Indicates that LiFePO4 RELAX is enabled
             "FIRSTDOD": ((os>>13) & 1),  # Set when RELAX mode is entered and then cleared upon valid DOD measurement for QMAX update or RELAX exit.
-            "RSVD1": ((os>>12) & 1),   # Battery Low bit that indicates a low battery voltage condition. Refer to the data flash Cell BL parameters for threshold settings. True when set
-            "RSVD2": ((os>>11) & 1),   # Charge Inhibit: unable to begin charging. Refer to the data flash [Charge Inhibit Temp Low, Charge Inhibit Temp High] parameters for threshold settings. True when set
+            "RSVD8": ((os>>12) & 1),   # Battery Low bit that indicates a low battery voltage condition. Refer to the data flash Cell BL parameters for threshold settings. True when set
+            "RSVD9": ((os>>11) & 1),   # Charge Inhibit: unable to begin charging. Refer to the data flash [Charge Inhibit Temp Low, Charge Inhibit Temp High] parameters for threshold settings. True when set
             "DODEOC": ((os>>10) & 1),  # DOD at End-of-Charge is updated.
             "DTRC": ((os>>9) & 1),     # Indicates RemainingCapacity() has been changed due to change in temperature.
-            "RSVD3": ((os>>8) & 1),    # Instruction Flash Checksum Failure
+            "RSVD10": ((os>>8) & 1),    # Instruction Flash Checksum Failure
             "RSVD_BYTE": (os & 0xFF),  # Reserved Byte 
         })        
         return _od2t(self._gauging_status)
@@ -639,9 +661,13 @@ class PetaliteChipset(BQ40Z50R1):
 
 
     def _decode_safety_status_or_alert(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:        
+        os = unpack_from("<L", buf.ljust(4, b'\x00'), 0)[0]
+        d_0 = OrderedDict({
+            "block": self._maybe_hexlify(buf, hexi),
+            #"value": os,
+        })
         os = unpack_from("<B", buf, 0)[0]
         d_A = OrderedDict({
-            "block": self._maybe_hexlify(buf, hexi),
             # data come little endian
             "SCD": ((os>>7) & 1),  #
             "OCD2": ((os>>6) & 1),  #
@@ -677,30 +703,127 @@ class PetaliteChipset(BQ40Z50R1):
             "RSVD5": ((os>>0) & 1),  # Reserved. Do not use.
         })
         # combine the ordered dicts
-        d = d_A | d_B | d_C
+        d = d_0 | d_A | d_B | d_C
         return d
 
     # these are functions to provide AFE specific bitflags
-    def safety_alert(self) -> tuple:
+    def safety_alert(self, hexi: bool | str | None = None) -> tuple:
         buf = self._read_manufacturer_block(0x0050)
-        self._safety_alert = self._decode_safety_status_or_alert(buf)
-        return _od2t(self._safety_alert)        
+        self._safety_alert = self._decode_safety_status_or_alert(buf, hexi=hexi)
+        return _od2t(self._safety_alert)
 
-    def safety_status(self) -> tuple:
+    def safety_status(self, hexi: bool | str | None = None) -> tuple:
         buf = self._read_manufacturer_block(0x0051)
-        self._safety_status = self._decode_safety_status_or_alert(buf)
+        self._safety_status = self._decode_safety_status_or_alert(buf, hexi=hexi)
         return _od2t(self._safety_status)
 
 
     #----------------------------------------------------------------------------------------------
 
+    def _decode_pf_status_or_alert(self, buf: bytearray| bytes, hexi: bool | str | None = None) -> OrderedDict:        
+        os = unpack_from("<L", buf, 0)[0]
+        d_0 = OrderedDict({
+            "block": self._maybe_hexlify(buf, hexi),
+            #"value": os,
+        })
+        os = unpack_from("<B", buf, 0)[0]
+        d_A = OrderedDict({
+            # data come little endian
+            "CUDEP": ((os>>7) & 1),
+            "SOTF": ((os>>6) & 1),
+            "RSVD0": ((os>>5) & 1),  # Reserved. Do not use.
+            "SOT": ((os>>4) & 1),
+            "SOCD": ((os>>3) & 1),
+            "SOCC": ((os>>2) & 1),
+            "SOV": ((os>>1) & 1),
+            "SUV": ((os>>0) & 1),
+        })
+        os = unpack_from("<B", buf, 1)[0]
+        d_B = OrderedDict({
+            # data come little endian
+            "SCDL": ((os>>7) & 1),
+            "RSVD1": ((os>>6) & 1),
+            "RSVD2": ((os>>5) & 1),
+            "VIMA": ((os>>4) & 1),
+            "VIMR": ((os>>3) & 1),
+            "2LVL": ((os>>2) & 1),
+            "DFETF": ((os>>1) & 1),
+            "CFETF": ((os>>0) & 1),
+        })
+        os = unpack_from("<B", buf, 2)[0]
+        d_C = OrderedDict({
+            # data come little endian
+            "CMDF": ((os>>7) & 1),
+            "HWMX": ((os>>6) & 1),
+            "VSSF": ((os>>5) & 1),
+            "VREF": ((os>>4) & 1),
+            "LFOF": ((os>>3) & 1),
+            "IRMF": ((os>>2) & 1),
+            "DRMF": ((os>>1) & 1),
+            "OTPF": ((os>>0) & 1),
+        })
+        os = unpack_from("<B", buf, 3)[0]
+        d_D = OrderedDict({
+            # data come little endian
+            "RSVD3": ((os>>7) & 1),
+            "RSVD4": ((os>>6) & 1),
+            "RSVD5": ((os>>5) & 1),
+            "RSVD6": ((os>>4) & 1),
+            "RSVD7": ((os>>3) & 1),
+            "RSVD8": ((os>>2) & 1),
+            "RSVD9": ((os>>1) & 1),
+            "TOSF": ((os>>0) & 1),
+        })
 
-    def pf_alert(self) -> tuple:
-        pass
+        # combine the ordered dicts
+        d = d_0 | d_A | d_B | d_C | d_D
+        return d
+
+    def pf_alert(self, hexi: bool | str | None = None) -> tuple:
+        buf = self._read_manufacturer_block(0x0052)
+        self._pf_alert = self._decode_pf_status_or_alert(buf, hexi=hexi)
+        return _od2t(self._safety_alert)
+
     
-    def pf_status(self) -> tuple:
-        pass
+    def pf_status(self,hexi: bool | str | None = None) -> tuple:
+        buf = self._read_manufacturer_block(0x0053)
+        self._pf_status = self._decode_pf_status_or_alert(buf, hexi=hexi)
+        return _od2t(self._pf_status)
     
+  
+    #----------------------------------------------------------------------------------------------
+  
+
+    def check_no_errors(self) -> bool:
+        """Checks Safety Status and Permanent Fail Status.
+
+        Returns:
+            bool: True - no errors, False - errors detected.
+        """
+        no_errs = True
+        # Safety status
+        buf =  self._read_manufacturer_block(0x0051)
+        if not all(v == 0 for v in buf):
+            no_errs = False
+        # PF status
+        buf =  self._read_manufacturer_block(0x0053)
+        if not all(v == 0 for v in buf):            
+            no_errs = False
+        return no_errs
+
+    
+    #----------------------------------------------------------------------------------------------
+
+    def reset_device(self) -> bool:
+        ok1 = self.afe_reset()
+        ok2 = self.gg_reset()
+        # ... ? more ? ...
+        return ok1 and ok2
+
+
+    def reset_errors(self) -> bool:
+        return self.afe_reset()
+        
 
     #----------------------------------------------------------------------------------------------
   
@@ -748,27 +871,41 @@ class PetaliteChipset(BQ40Z50R1):
             if (r != 0) or (g != 0) or (b != 0):
                 return True
         return False
-  
+    
 
-    def set_lifetime_data_collection(self, enable: bool) -> bool:
-        raise NotImplementedError("set_lifetime_data_collection() not implemented yet for Petalite chipset.")
+    #----------------------------------------------------------------------------------------------
+
+    
+    def shutdown(self) -> None:
+        """Sets the battery into shioping mode.
+        If you want to check the effect, use shipping_mode() function instead.
+        """
+        super().shutdown()
 
 
     def shipping_mode(self, ship_delay: float = 2.0) -> bool:
         return super().shipping_mode(ship_delay)
 
 
+    #----------------------------------------------------------------------------------------------
+
+
     # specials for chipset control
     def afe_reset(self) -> bool:
         #self.manufacturer_access = 0x0012
         self.manufacturer_block_access = 0x0012
+       
 
     def gg_reset(self) -> bool:
         #self.manufacturer_access = 0x0041
         self.manufacturer_block_access = 0x0041  # uses the TI reset command code
+       
 
 
-    def enable_impedance_track(self) -> None:
+    #----------------------------------------------------------------------------------------------
+
+
+    def enable_impedance_track(self) -> bool:
         """Send IT enable to the GG chip.
 
         Returns:
@@ -776,11 +913,23 @@ class PetaliteChipset(BQ40Z50R1):
         """
         
         self.manufacturer_block_access = 0x0021
+        
+    
+    def lifetime_data(self, hexi = None):
+        # 0x0060
+        raise NotImplementedError("lifetime_data() not implemented yet for Petalite chipset.")
 
+
+    def reset_lifetime_data_collection(self) -> bool:
+        return self.writeWord(0xC3, 0x6666)  # Reset lifetime logging
+
+
+    def is_lifetime_logging_enabled(self) -> bool:  
+        lt_logging, ok = self.readWord(0xC3)  # read back lifetime logging status
+        return (ok and (lt_logging != 0))
     
 
-
-
+    #----------------------------------------------------------------------------------------------
 
     # --- SmartBattery forwards for Teststand ---
 
@@ -861,6 +1010,10 @@ class PetaliteChipset(BQ40Z50R1):
 
     def get_current(self):
         return super().get_current()
+
+    def get_rsoc(self):
+        return super().get_rsoc()
+
 
 #--------------------------------------------------------------------------------------------------
 

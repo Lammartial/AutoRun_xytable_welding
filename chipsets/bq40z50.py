@@ -2131,6 +2131,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         self.manufacturer_access = 0x0029
         #dummy = self.read_manufacturer_block(command=0x0029, length=None)
 
+
     def check_no_errors(self) -> bool:
         """
         Checks Safety Status and Permanent Fail Status.
@@ -2140,7 +2141,6 @@ class BQ40Z50R1(ChipsetTexasInstruments):
         """
         no_errs = True
         # Safety status
-
         self.manufacturer_access = 0x0051
         buf = self.manufacturer_data
         for i in range(len(buf)):
@@ -2153,6 +2153,7 @@ class BQ40Z50R1(ChipsetTexasInstruments):
             if (buf[i] != 0):
                 no_errs = False
         return no_errs
+
 
     def ts_DeviceName(self) -> str:
         pass

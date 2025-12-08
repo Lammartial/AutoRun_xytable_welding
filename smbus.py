@@ -309,7 +309,7 @@ class BusMaster:
         return False
 
     # ---simple-versions----------------------------------------------------------------------------
-    def readWord(self, slvAddress: int, cmd: int, use_pec: bool = False) -> int | None:
+    def readWord(self, slvAddress: int, cmd: int, use_pec: bool = False) -> Tuple[int | None, bool]:
         buf, ok = self.readBytes(slvAddress, cmd, 2, use_pec=use_pec)
         if ok:
             # generate a little endian WORD value from the two bytes
@@ -348,7 +348,7 @@ class BusMaster:
 
     # ---verified versions--------------------------------------------------------------------------
 
-    def vReadWord(self, slvAddress: int, cmd: int, use_pec: bool = False) -> int | None:
+    def vReadWord(self, slvAddress: int, cmd: int, use_pec: bool = False) -> Tuple[int | None, bool]:
         buf, ok = self.vReadBytes(slvAddress, cmd, 2, use_pec=use_pec)
         if ok:
             # generate a little endian WORD value from the two bytes

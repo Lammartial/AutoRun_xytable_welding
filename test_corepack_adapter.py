@@ -392,7 +392,7 @@ if __name__ == "__main__":
     gpio.switch_to_psu_measurement()
     psu.clear_output_protection()
     psu.set_sense_state(1)
-    psu.configure_supply(26.0, 2.05, 80, 0)
+    psu.configure_supply(26.0, 2.05, 80, 1)
 
 
     if 1:
@@ -419,6 +419,16 @@ if __name__ == "__main__":
         bat.manufacturing_daqstatus2()    
         print(bat._manufacturing_daqstatus2)
         
+        print(bat.is_lifetime_logging_enabled())
+
+
+        bat.set_manufacturer_date()
+        print(bat.manufacture_date())
+
+        bat.set_pack_sn("1234")
+        print(bat.serial_number())
+
+
         bat.write_pcba_udi_block("0PCBA012345678901")
         print(bat.read_pcba_udi_block())
 
