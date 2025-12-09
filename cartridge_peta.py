@@ -65,7 +65,7 @@ class PetaMCU:
         return self.smartbattery.setup_rtc()      
 
     def read_rtc(self) -> Tuple[dt, str]:
-        return self.smartbattery.read_rtc()
+        return self.smartbattery.read_rtc()[1]
        
     def check_rtc_against_systemtime(self) -> float:
         return self.smartbattery.check_rtc_against_systemtime()

@@ -87,14 +87,14 @@ def rack_test(cartridge: CartridgePETA,
     can: CANBus = cart.can
 
     # prepare the microcontroller programming
-    ap.set_filenames("petalite-01_RC7-image.wni", 
-                     "petalite-01_RC7.wnp", 
+    ap.set_filenames("petalite-01_RC14-image.wni", 
+                     "petalite-01_RC14.wnp", 
                      erase_flash_project_file="petalite-flash-erase.wnp")
     print("Integrity check MD5: ")
     if ap.verify_all_files_on_programmer(
-        "1556729B7469A0FF36878C46E174A61B",
-        "172FEED2F957142034B5488C88851D7D",
-        erase_project_file_hash="3A64ED4D9619D8CD6F644B537FA4196E"):
+        "69AF5EEDEC77D99AB752FA127344036D",
+        "B44262DC77353598CF8DF6B05A57809E",
+        erase_project_file_hash="0711D04EFD02FA4E3317F3D6829FDA0D"):
         print("Ok.")
     else:
         print("Need to send Files to the programmer.")
@@ -342,15 +342,18 @@ def rack_test(cartridge: CartridgePETA,
             control_vcc_voltages()
 
             #cartridge.can.reinstall_can_driver_on_remote()  # CAN driver reset on OLIMEX
-            cartridge.configure_communication_to_mcu("i2c")        
+            cartridge.configure_communication_to_mcu("i2c")
             cartridge.enable_mcu()
             print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
             print(ap.erase_flash())
-            #print(ap.program_flash())
-            #sleep(5.1)
+            print(ap.program_flash())
+            sleep(5.1)
+            cartridge.can.reinstall_can_driver_on_remote()  # CAN driver reset on OLIMEX
+            cartridge.configure_communication_to_mcu("can")
             #print(mcu._can_helper_read())
-            #print(mcu.can_read_voltage())
-            #print(mcu.can_read_current())
+
+            print(mcu.can_read_voltage())
+            print(mcu.can_read_current())
 
             raise Exception("ich will raus")
 
@@ -1430,10 +1433,10 @@ if __name__ == "__main__":
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
     #LINE_NETWORK = "172.25.102"  # VN line 2
-    LINE_NETWORK = "172.25.103"  # VN line 3
+    #LINE_NETWORK = "172.25.103"  # VN line 3
 
 
-    SOCKET = 1  # 0, 1 or 2
+    SOCKET = 0  # 0, 1 or 2
 
     # following assumes own IF-OLIMEX breakout adapter
     if SOCKET == 0:
