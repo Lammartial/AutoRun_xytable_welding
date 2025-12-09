@@ -327,8 +327,8 @@ class PetaliteChipset(BQ40Z50R1):
                     (now.hour & 0xFF), (now.minute & 0xFF), (now.second& 0xFF)
                     ])
         #print(hexlify(buf))   # DEBUG
-        return self._write_manufacturer_block(0x20d9, buf)
-        
+        self._write_manufacturer_block(0x20d9, buf)
+        return True  # Teststand interface
 
     
     def read_rtc(self) -> Tuple[dt, str]:

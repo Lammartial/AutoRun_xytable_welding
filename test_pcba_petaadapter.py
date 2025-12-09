@@ -282,6 +282,8 @@ def rack_test(cartridge: CartridgePETA,
             print("AFE: enable full access ...", afe.enable_full_access())
             print("AFE: FULL ACCESS?", afe.is_unsealed(check_fullaccess=True, refresh=True))
 
+            psu1.set_output_state(0)
+
             afe.read_manufacturing_status()
             print(afe._manufact_status)
             afe.disable_fet_control()  # make sure FET_EN == 0
@@ -291,11 +293,47 @@ def rack_test(cartridge: CartridgePETA,
             afe.disable_sleepmode()
             afe.disable_checksum() # for MCU communication to the AFE
 
+            print(cartridge.backyard_bus.i2c_bus_scan())
 
-            cartridge.can.reinstall_can_driver_on_remote()  # CAN driver reset on OLIMEX
-            #cartridge.configure_communication_to_mcu("can")        
+            cartridge.disable_mcu()
+            cartridge.configure_communication_to_mcu("i2c")
             cartridge.enable_mcu()
-            print(ap.erase_flash())
+            print("GPIO Cartridge:", hex(cartridge.gpio.read_input()))
+            #print(ap.erase_flash())
+            print(ap.program_flash())
+            for i in range(30):
+                print("Vcc3.3:", daq.get_VDC(8))
+                sleep(0.5)
+                if mcu.smartbattery.isReady():
+                    print("MCU is responding", i)
+                    break
+                print("wait for MCU...")
+            
+            print("unseal MCU:", mcu.smartbattery.enable_full_access())
+            
+            #print(cartridge.bus_to_gpio.i2c_bus_scan())
+            #print(cartridge.bus_to_mirco.i2c_bus_scan())
+            #print(mcu.smartbattery.device_name())
+            for i in range(20):
+                print("Vcc3.3:", daq.get_VDC(8))
+                if mcu.is_mcu_unsealed():
+                    print("Unseal success", i)
+                    break
+                print("unseal MCU:", mcu.smartbattery.enable_full_access())
+                sleep(0.5)            
+            print(mcu.is_mcu_unsealed())
+            
+            mcu.setup_rtc()
+            mcu.write_udi("0PCBA012345678901")
+            print(mcu.read_mib(hexi=True))
+            print(mcu.read_udi())
+            print(mcu.read_rtc())
+            
+
+            # cartridge.can.reinstall_can_driver_on_remote()  # CAN driver reset on OLIMEX
+            # #cartridge.configure_communication_to_mcu("can")        
+            # cartridge.enable_mcu()
+            # print(ap.erase_flash())
             #print(ap.program_flash())
             #sleep(5.1)
             #print(mcu._can_helper_read())
@@ -1433,10 +1471,10 @@ if __name__ == "__main__":
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
     #LINE_NETWORK = "172.25.102"  # VN line 2
-    #LINE_NETWORK = "172.25.103"  # VN line 3
+    LINE_NETWORK = "172.25.103"  # VN line 3
 
 
-    SOCKET = 0  # 0, 1 or 2
+    SOCKET = 1  # 0, 1 or 2
 
     # following assumes own IF-OLIMEX breakout adapter
     if SOCKET == 0:

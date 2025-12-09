@@ -23,7 +23,7 @@ class PetaMCU:
         self._i2c = i2c
         self.i2C_address = i2c_address_7bit
         self.use_pec = i2c_pec
-        self.bus = BusMasterPetaPatch(i2c, retry_limit=1, verify_rounds=3, pause_us=50)
+        self.bus = BusMaster(i2c, retry_limit=1, verify_rounds=3, pause_us=50)
         self.smartbattery = PetaliteChipset(self.bus, slvAddress=i2c_address_7bit, pec=i2c_pec)  # this is to reuse already implemented functionality
         self.can = can
 
@@ -35,8 +35,16 @@ class PetaMCU:
         # ok2 = self.bus.writeWord(self.i2C_address, 0x00, 0x0010, use_pec=self.use_pec)  # 2x in 4s        
         # return ok1 and ok2
 
-    def read_udi(self) -> str:
-        return self.smartbattery.read_pcba_udi_block()       
+    def read_udi(self, hexi: bool | str | None = None) -> bytes | bytearray | str:
+        return self.smartbattery.read_pcba_udi_block(hexi=hexi)
+    
+    def read_mib(self, hexi: bool | str | None = None) -> bytes | bytearray | str:
+        return self.smartbattery.read_manufacturer_info(hexi=hexi)
+    
+
+    
+    def isReady(self) -> bool:
+        return self.smartbattery.isReady()
     
 
     def write_udi(self, udi_str: str) -> bool:
@@ -60,6 +68,20 @@ class PetaMCU:
         v, unit, dataid, _ = self.smartbattery.voltage()
         return v
 
+
+    def is_mcu_unsealed(self) -> bool:
+        mcu, afe, gg = self.smartbattery._read_sealed_status()
+        return mcu == 0
+    
+
+    def enable_full_access(self) -> bool:
+        """Unseal the MCU.
+
+        Returns:
+            bool: _description_
+        """
+        return self.smartbattery.enable_full_access()
+    
 
     def setup_rtc(self) -> bool:
         return self.smartbattery.setup_rtc()      
