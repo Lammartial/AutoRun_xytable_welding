@@ -1086,7 +1086,7 @@ class BQ76942:
         })
 
 
-    def read_fet_status(self, hexi: bool | str| None = None) -> OrderedDict:
+    def read_fet_status(self, hexi: bool | str | None = None) -> OrderedDict:
         buf, ok = self.readBytes(self.address, 0x7F, 1, use_pec=self.pec)
         self._fet_status = self._decode_fet_status(buf, hexi=hexi)
         return _od2t(self._fet_status)
