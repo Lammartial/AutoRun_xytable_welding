@@ -39,7 +39,7 @@ class PetaMCU:
         return self.smartbattery.read_pcba_udi_block(hexi=hexi)
     
     def read_mib(self, hexi: bool | str | None = None) -> bytes | bytearray | str:
-        return self.smartbattery.read_manufacturer_info(hexi=hexi)
+        return self.smartbattery.read_manufacturer_info_block(hexi=hexi)
     
 
     

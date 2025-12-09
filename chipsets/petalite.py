@@ -319,7 +319,12 @@ class PetaliteChipset(BQ40Z50R1):
         return btn_state
 
 
-    def setup_rtc(self) -> bool:
+    def setup_rtc(self) -> float:
+        """Returns readback check time difference in s
+
+        Returns:
+            float: _description_
+        """
         now = dt.now()
         print(now)
         buf = bytes([ 
@@ -328,8 +333,10 @@ class PetaliteChipset(BQ40Z50R1):
                     ])
         #print(hexlify(buf))   # DEBUG
         self._write_manufacturer_block(0x20d9, buf)
-        return True  # Teststand interface
-
+        return self.check_rtc_against_systemtime()
+        ##print("DIFF:", d) # DEBUG 
+        #return (d < 2.0)  # within 2 seconds
+        
     
     def read_rtc(self) -> Tuple[dt, str]:
         buf = self._read_manufacturer_block(0x20d9)        
@@ -354,7 +361,7 @@ class PetaliteChipset(BQ40Z50R1):
     #----------------------------------------------------------------------------------------------
 
 
-    def read_manufacturer_info(self, hexi: bool | str | None = None) -> bytearray | str:
+    def read_manufacturer_info_block(self, hexi: bool | str | None = None) -> bytearray | str:
         """Reads the Manufacturer Info block (MIB) from the battery.
 
         Note: This uses Manufacturer Block Access 0x44 and limits to 32 bytes.
@@ -373,7 +380,7 @@ class PetaliteChipset(BQ40Z50R1):
         return self._maybe_hexlify(buf, hexi)
     
     
-    def write_manufacturer_info(self, data: bytearray | bytes | str) -> bool:
+    def write_manufacturer_info_block(self, data: bytearray | bytes | str) -> bool:
         """Writes the Manufacturer Info block (MIB) to the battery.
 
         Note: This uses Manufacturer Block Access 0x44 and limits to 32 bytes.
@@ -414,14 +421,17 @@ class PetaliteChipset(BQ40Z50R1):
         
         """
 
-        mib = self.read_manufacturer_info()  # read the full block (32 bytes)
-        udi = self._maybe_hexlify(mib[:15], hexi).decode(encoding="utf-8").rstrip('\x00') # get the first 15 bytes and strip trailing zeroes
-        #print(udi)  # DEBUG
+        mib = self.read_manufacturer_info_block()  # read the full block (32 bytes)
         if insertstr_pcba:
-            _udi = udi[:1] + "PCBA" + udi[1:] # insert PCBA after first character
+            _udi =mib[:1] + b'PCBA' + mib[1:15] # insert PCBA after first character/byte
         else:
-            _udi = udi
-        return _udi
+            _udi = mib[:15]
+        if hexi:
+            udi = self._maybe_hexlify(_udi, hexi)
+        else:
+            udi = _udi.rstrip(b'\x00').decode(encoding="utf-8") # get the first 15 bytes and strip trailing zeroes
+        #print(udi)  # DEBUG       
+        return udi
         
 
     def write_pcba_udi_block(self, udi_block: str | bytes | bytearray) -> bool:
@@ -443,10 +453,12 @@ class PetaliteChipset(BQ40Z50R1):
         else:
             pass  # is already bytes or bytearray
         assert (len(_data) >= 2 and len(_data) <= 15), ValueError(f"Clean UDI length={len(_data)} not between 2 and 15.")
-        mib = self.read_manufacturer_info()  # read the full block (32 bytes)
+        mib = self.read_manufacturer_info_block()  # read the full block (32 bytes)
         buf = _data.ljust(15, b'\x00') + mib[15:32]  # preserve bytes 15..31 of MIB
         #print(hexlify(buf))   # DEBUG
-        return self.write_manufacturer_info(buf)
+        ok = self.write_manufacturer_info_block(buf)
+        sleep(0.090) # wait for FLASH WRITE DONE: 80 ms worst case
+        return ok
     
     
     #----------------------------------------------------------------------------------------------
@@ -464,7 +476,7 @@ class PetaliteChipset(BQ40Z50R1):
             bytes: UDI data block of 14 bytes either as bytearray or hex string.
         """
     
-        mib = self.read_manufacturer_info()  # read the full block (32 bytes)
+        mib = self.read_manufacturer_info_block()  # read the full block (32 bytes)
         sn = mib[16:30]  # get bytes 16..29
         return self._maybe_hexlify(sn, hexi).decode(encoding="utf-8").rstrip('\x00')
     
@@ -483,9 +495,9 @@ class PetaliteChipset(BQ40Z50R1):
         else:
             _data = bytes(data)
         assert (len(_data) <= 16), ValueError(f"Manufacturer Info block must be maximum 16 bytes long. You provided {len(_data)} bytes.")
-        mib = self.read_manufacturer_info()  # read the full block (32 bytes)
+        mib = self.read_manufacturer_info_block()  # read the full block (32 bytes)
         buf = mib[:16] + _data.ljust(14, b'\x00') + mib[30:32]  # preserve bytes 0..15 and 30..31 of MIB
-        return self.write_manufacturer_info(buf)        
+        return self.write_manufacturer_info_block(buf)        
         
 
     #----------------------------------------------------------------------------------------------
