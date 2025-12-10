@@ -947,6 +947,9 @@ class M3900(M3400):
     def set_function(self, func: str) -> None:
         super().set_function(func)
 
+    def read_system_error(self):
+        return super().read_system_error()
+
     #----------------------------------------------------------------------------------------------
     #def set_resistance_mode(self, mode: int):
     #    """M3900 device only."""
@@ -1043,6 +1046,7 @@ class M3900(M3400):
             # not possible without throwing an error.
             #
             self.send(f"VOLT {voltage_limit_high:0.2f}")
+            #self.send(f"VOLT 0")
             #print(self.read_system_error())
             self.send(f"CURR:LIM:NEG MIN")
             #print(self.read_system_error())
@@ -1093,8 +1097,33 @@ class M3900(M3400):
     
 
     def configure_supply(self, voltage: float, current_limit: float, power_limit: float, set_output: bool = False) -> None:
-        # because of TS does not see base class
-        super().configure_supply(voltage, current_limit, power_limit, set_output=set_output)  
+        _outp = self.get_output_state()
+        if _outp and self.last_mode != "VOLT":
+            self.set_output_state(0)  # make sure output is OFF
+            _outp = 0  # switched off
+        self.set_function("VOLT")
+        self.send(f"POW:LIM:NEG -1") # always fixed!
+        self.send(f"POW:LIM:POS {abs(power_limit):0.2f}")
+        self.send(f"CURR:LIM:NEG 0.0") # always fixed!
+        self.send(f"CURR:LIM:POS {abs(current_limit):0.3f}")
+        #self.send(f"VOLT:LIM:LOW 0.0") # always fixed!
+        #self.send(f"VOLT:LIM:HIGH {voltage:0.2f}")
+        #self.send(f"CURR {abs(current_limit):0.3f}")
+        self.send(f"VOLT {voltage:0.2f}")
+        #self.send("SINK:RES:STATE 0") # does not work here
+        # make sure that we do not send another OUTP=0
+        # if the output is disabled already. This would 
+        # reset resistance priority! 
+        if not _outp and set_output:
+            # need to switch on
+            self.set_output_state(1)
+        if _outp and not set_output:
+            # need to switch off
+            self.set_output_state(0)
+        # in any other case: do not send the OUTP command
+        # to avoid a reset of some parameters.
+        #self.set_output_state(1 if set_output else 0)
+ 
 
 
 #--------------------------------------------------------------------------------------------------
