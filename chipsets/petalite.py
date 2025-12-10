@@ -191,7 +191,7 @@ class PetaliteChipset(BQ40Z50R1):
         self.manufacturer_block_access = buf
 
 
-    def _read_manufacturer_block(self, command: int, length: int | None = None) -> bytearray:
+    def _read_manufacturer_block(self, command: int, length: int | None = None, retry_limit: int = 3, pause_between: float = 0.250) -> bytearray:
         """
         Sends a command via Manufacturer Block Access and reads data.
         Repeats up to 5 times if the command has been sent and recieved are not equal.
@@ -199,29 +199,43 @@ class PetaliteChipset(BQ40Z50R1):
         Args:
             command (int): command number
             length (int): length of the data buffer or None if unknown or may vary
+            retry_limit (int): number of retries.
+            pause_between (float): pause time between retries in seconds, 0=no pause.
 
         Returns:
             bytearray: data buffer
         """
-        
+
         command = int(command)
         if (length is not None):
             length = int(length)   # tribute to Teststand
-        # ok = self.writeBlock(0x44, command.to_bytes(2, "little"))  # try to update the value(s)
-        # res, ok = self.readBlock(0x44)
-        self.manufacturer_block_access = command
-        buf = self.manufacturer_block_access  # read from 0x44
-        #print("RB:", hexlify(res))   # DEBUG
-        rcv_command = unpack("<H", buf[:2])[0]
-        if (length is not None) and (len(buf) > length + 2):
-            res = buf[2:2+length]  # slice the command and limit to length
-        else:
-            res = buf[2:]  # slice the command and return all data
-        # if the expected length may variy you need to pass None to length
-        if (rcv_command == command):
-            return res
-        raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(res)}, {len(res)}")
-
+        retries = retry_limit
+        while retries > 0:
+            retries -= 1
+            try:
+                #self.manufacturer_block_access = command
+                #buf = self.manufacturer_block_access  # read from 0x44                    
+                ok = self.writeBlock(0x44, command.to_bytes(2, "little"))  # try to update the value(s)
+                if ok:
+                    buf, ok = self.readBlock(0x44)
+                    if ok:
+                        #print("RB:", hexlify(buf))   # DEBUG
+                        rcv_command = unpack("<H", buf[:2])[0]
+                        if (length is not None) and (len(buf) > length + 2):
+                            res = buf[2:2+length]  # slice the command and limit to length
+                        else:
+                            res = buf[2:]  # slice the command and return all data
+                        #print("RB:", hexlify(res))   # DEBUG
+                        # if the expected length may variy you need to pass None to length
+                        if (rcv_command == command):
+                            return res
+                        raise BatteryError(f"Readings implausible: Unexpected return value or length mismatch {type(res)}, {len(res)}")
+            except OSError as ex:
+                if retries == 0:
+                    raise  # propagate the Exception
+            if pause_between > 0:
+                sleep(pause_between)
+        raise BatteryError(f"Readings failed: No valid response after {retry_limit} retries.")
     
     #----------------------------------------------------------------------------------------------
 
