@@ -392,14 +392,18 @@ if __name__ == "__main__":
     gpio.switch_to_psu_measurement()
     psu.clear_output_protection()
     psu.set_sense_state(1)
-    psu.configure_supply(26.0, 2.05, 80, 1)
-
-
+    #psu.configure_supply(26.0, 2.05, 80, 1)
+    
     if 1:
         #gpio.switch_rrc3570_tpin_open()    
         gpio.switch_rrc3570_tpin_shorted()
         sleep(1.5)
-        
+        psu.configure_sink(-2.0, 10, -4, 30, -80, 1)
+        sleep(5)
+        psu.configure_sink(-15.0, 1.5, -20, 30, -400, 1)
+        sleep(5)
+        psu.configure_sink(-25.0, 0.8, -29, 30, -650, 1)
+
         # for i in range(8):
         #     mux.setChannel(i + 1)
         #     print("CH:", i, i2cbus.i2c_bus_scan())
@@ -420,6 +424,15 @@ if __name__ == "__main__":
         print(bat._manufacturing_daqstatus2)
         
         print(bat.is_lifetime_logging_enabled())
+
+        soc = -1
+        while soc < 15 or soc > 35:
+            soc = bat.soc()[0]            
+            print("State of Charge:", soc)
+            sleep(5)
+
+        psu.set_output_state(0)
+        exit()
 
 
         bat.set_manufacturer_date()
