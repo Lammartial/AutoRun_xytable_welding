@@ -639,10 +639,10 @@ class BQ76942:
         })
 
 
-    def read_control_status(self) -> Tuple[int]:
+    def read_control_status(self, hexi: None | bool | str = None) -> Tuple[int]:
         buf, ok = self.readBytes(self.address, 0x00, 2)
         if ok:
-            self._control_status = self._control_status_to_dict(buf)
+            self._control_status = self._control_status_to_dict(buf, hexi=hexi)
         return _od2t(self._control_status)
 
 
@@ -709,7 +709,7 @@ class BQ76942:
             "MSK_PFALERT": ((os>>11) & 1),
             "INITSTART": ((os>>10) & 1),
             "INITCOMP": ((os>>9) & 1),
-            "RSVD1":    ((os>>8) & 1),
+            "RSVD":    ((os>>8) & 1),
             "FULLSCAN": ((os>>7) & 1),
             "XCHG":     ((os>>6) & 1),
             "XDSG":     ((os>>5) & 1),
@@ -720,11 +720,11 @@ class BQ76942:
             "WAKE":     ((os>>0) & 1),
         })
 
-    def read_alarm_status(self) -> Tuple[int]:
+    def read_alarm_status(self, hexi: None | bool | str = None) -> Tuple[int]:
         buf, ok = self.readBytes(self.address, 0x62, 2)
         if ok:
-            self._alarm_status = self._alarm_status_to_dict(buf)
-        _od2t(self._alarm_status)
+            self._alarm_status = self._alarm_status_to_dict(buf, hexi=hexi)
+        return _od2t(self._alarm_status)
 
 
     #----------------------------------------------------------------------------------------------

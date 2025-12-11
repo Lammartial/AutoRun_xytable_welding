@@ -1518,10 +1518,10 @@ if __name__ == "__main__":
     LINE_NETWORK = "172.21.101"  # HOM Warehouse
     #LINE_NETWORK = "172.25.101"  # VN line 1
     #LINE_NETWORK = "172.25.102"  # VN line 2
-    #LINE_NETWORK = "172.25.103"  # VN line 3
+    LINE_NETWORK = "172.25.103"  # VN line 3
 
 
-    SOCKET = 0  # 0, 1 or 2
+    SOCKET = 1  # 0, 1 or 2
 
     # following assumes own IF-OLIMEX breakout adapter
     if SOCKET == 0:
