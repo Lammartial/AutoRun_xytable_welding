@@ -125,7 +125,7 @@ class PetaliteChipset(BQ40Z50R1):
 
     def is_unsealed(self, check_fullaccess: bool = False, refresh: bool = False) -> bool:
         mcu, afe, gg = self._read_sealed_status()
-        return afe == 0 and gg == 0 and mcu == 0
+        return (afe == 0 and gg == 0 and mcu == 0) if check_fullaccess else (mcu == 0) 
 
 
     def seal(self) -> bool:
@@ -875,6 +875,8 @@ class PetaliteChipset(BQ40Z50R1):
 
 
     def set_led_onoff(self, color: int) -> bool:
+        color = int(color)  # Teststand 
+        assert (color >= 0 and color < 4), ValueError(f"Color value must be in 0..3, but was {color}.")
         _cmap = [
             (0,0,0),      # off
             (0,0,255),    # blue
@@ -903,10 +905,23 @@ class PetaliteChipset(BQ40Z50R1):
 
     
     def shutdown(self) -> None:
-        """Sets the battery into shioping mode.
-        If you want to check the effect, use shipping_mode() function instead.
+        """Sends a shutdown command to the battery.
+
+        Available in seald AND unsealed but with different delay times. (See Note)
+
+        NOTE: from Datasheet
+              If the device is SEALED, this feature requires the command to be sent twice in a row
+              within 4 seconds (for safety purposes).
+              If the device is in UNSEALED or FULL ACCESS mode, sending the command the
+              second time will cancel the delay and enter shutdown immediately.
+
+        Exceptions:
+            OSError on smbus communication fail
         """
-        super().shutdown()
+
+        self.manufacturer_access = 0x0010
+        sleep(0.1)  # MCU time
+        self.manufacturer_access = 0x0010
 
 
     def shipping_mode(self, ship_delay: float = 2.0) -> bool:
