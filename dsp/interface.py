@@ -514,24 +514,26 @@ def test_teststand_line_interfaces(
         # ... more sockets ?
         if 1:
             _udi_to_send = ",".join([udi_cell, udi_pcba])
+            _udi_to_send = "".join([udi_cell, udi_pcba])  # DEBUG
             ok, serial = dsp_eol.ts_get_serial_number_for_udi(_udi_to_send)
             _log.info(f"SERIAL from cell,pcba udi: {serial}")
 
         # simulate test
         sleep(1)
         # # send result to DSP (EOL like, so the serial has to be NONE ZERO!)
-        if 1:
+        if 0:
             # REWORK Test (Label reprint needs date code appended on SN)
             serial = ",".join((serial, datetime.strftime(datetime.now(), "%Y-%m-%d")))
-        # #dsp_lean_res.api = dsp_lean_par.api.copy()
-        dsp_eol.ts_send_result_for_testrun(
-            test_result,
-            #datetime.now(UTC).isoformat(),  # only Python 3.11 and newer
-            datetime.utcnow().isoformat(),  # for Python 3.10
-            (2 + random()*3),  # simulate execution time
-            _udi_to_send,
-            serial
-        )
+        if 1:
+            # #dsp_lean_res.api = dsp_lean_par.api.copy()
+            dsp_eol.ts_send_result_for_testrun(
+                test_result,
+                #datetime.now(UTC).isoformat(),  # only Python 3.11 and newer
+                datetime.utcnow().isoformat(),  # for Python 3.10
+                (2 + random()*3),  # simulate execution time
+                _udi_to_send,
+                serial
+            )
 
     # ...
 
@@ -584,15 +586,17 @@ if __name__ == "__main__":
     #API_URL = "http://172.22.2.40"     # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
     #API_URL = "http://mes-dsp-de.rrc"  # Orbis DSP REST API @RRC
     #API_URL = "http://172.25.100.9"   # ports 9925..9929 Orbis DSP REST API @RRCVN
+    API_URL = "http://172.25.100.9:9928"   # EOL Orbis DSP REST API @RRCVN
 
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
 
-    for loops in range(10):
+    for loops in range(1):
 
         #test_interface(dsp)
         #test_teststand_line_interfaces(API_URL, udi_cell="1CELL000000020E2", udi_pcba="", test_result="P", line_id=2)
         #test_teststand_line_interfaces(API_URL, udi_cell="1CELL000000020F0", udi_pcba="", test_result="P", line_id=2)
-        test_teststand_line_interfaces(API_URL, udi_cell="0CELL9000001CD67", udi_pcba="0PCBA9000001CD67", test_result="P", line_id=2)
+        #test_teststand_line_interfaces(API_URL, udi_cell="0CELL9000001CD67", udi_pcba="0PCBA9000001CD67", test_result="P", line_id=2)
+        test_teststand_line_interfaces(API_URL, udi_cell="", udi_pcba="1PCBA0000008AE93", test_result="P", line_id=3)
         #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000254", udi_pcba="1PCBA00000000254")
         #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000255", udi_pcba="1PCBA00000000255", test_result="P")
         #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000256", udi_pcba="1PCBA00000000256")
