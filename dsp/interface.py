@@ -508,22 +508,40 @@ def test_teststand_line_interfaces(
     #----------------------
     # EOL TEST
     if 1:
-        _test_run_4 = dsp_eol.ts_get_parameter_for_testrun("EOL_TEST", "DUMMY_5", line_id, 0)
+        _test_run_4 = dsp_eol.ts_get_parameter_for_testrun("EOL_TEST", "3_A11", line_id, 0)
         _log.info(f"TESTRUN: {_test_run_4}")
-
+        
         # ... more sockets ?
         if 1:
             _udi_to_send = ",".join([udi_cell, udi_pcba])
             _udi_to_send = "".join([udi_cell, udi_pcba])  # DEBUG
             ok, serial = dsp_eol.ts_get_serial_number_for_udi(_udi_to_send)
             _log.info(f"SERIAL from cell,pcba udi: {serial}")
-
+        if _test_run_4[0] == "":
+            # we need filled API for next tests even if no test parameter 
+            dsp_eol.api = {
+                "test_type": "EOL_TEST",
+                "station_id": "TSDEV-WS-10",
+                "line_id": 3,
+                "test_socket": 0,
+                "test_program_id": "110338_RRC3570-4_EOL-Test_B",
+                "part_number": "110338-01",
+                "serial_number": f"{serial},{_udi_to_send}",
+                "udi": "",
+                "result": None,
+                "execution_time": None,
+                "start_datetime": None,
+                "identifier": None,
+            }
         # simulate test
         sleep(1)
         # # send result to DSP (EOL like, so the serial has to be NONE ZERO!)
         if 0:
             # REWORK Test (Label reprint needs date code appended on SN)
             serial = ",".join((serial, datetime.strftime(datetime.now(), "%Y-%m-%d")))
+        if 1:
+            serial = f"{serial},{_udi_to_send}"
+            _udi_to_send = ""
         if 1:
             # #dsp_lean_res.api = dsp_lean_par.api.copy()
             dsp_eol.ts_send_result_for_testrun(
@@ -585,9 +603,8 @@ if __name__ == "__main__":
     API_URL = "http://127.0.0.1:8000"  # our mockup-server
     #API_URL = "http://172.22.2.40"     # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
     #API_URL = "http://mes-dsp-de.rrc"  # Orbis DSP REST API @RRC
-    #API_URL = "http://172.25.100.9"   # ports 9925..9929 Orbis DSP REST API @RRCVN
-    API_URL = "http://172.25.100.9:9928"   # EOL Orbis DSP REST API @RRCVN
-
+    API_URL = "http://172.25.100.9"   # ports 9925..9929 Orbis DSP REST API @RRCVN
+    
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
 
     for loops in range(1):
