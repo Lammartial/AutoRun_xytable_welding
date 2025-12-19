@@ -540,7 +540,7 @@ def test_teststand_line_interfaces(
             # REWORK Test (Label reprint needs date code appended on SN)
             serial = ",".join((serial, datetime.strftime(datetime.now(), "%Y-%m-%d")))
         if 1:
-            serial = f"{serial},{_udi_to_send}"
+            #serial = f"{serial},{_udi_to_send}"
             _udi_to_send = ""
         if 1:
             # #dsp_lean_res.api = dsp_lean_par.api.copy()
@@ -614,6 +614,7 @@ if __name__ == "__main__":
         #test_teststand_line_interfaces(API_URL, udi_cell="1CELL000000020F0", udi_pcba="", test_result="P", line_id=2)
         #test_teststand_line_interfaces(API_URL, udi_cell="0CELL9000001CD67", udi_pcba="0PCBA9000001CD67", test_result="P", line_id=2)
         test_teststand_line_interfaces(API_URL, udi_cell="", udi_pcba="1PCBA0000008AE93", test_result="P", line_id=3)
+        #test_teststand_line_interfaces(API_URL, udi_cell="1CELL000000BAF4A", udi_pcba="1PCBA0000008AE93", test_result="P", line_id=3)
         #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000254", udi_pcba="1PCBA00000000254")
         #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000255", udi_pcba="1PCBA00000000255", test_result="P")
         #test_teststand_line_interfaces(API_URL, udi_cell="1CELL00000000256", udi_pcba="1PCBA00000000256")
