@@ -3,6 +3,7 @@ import serial_asyncio
 import serial
 import time
 from binascii import hexlify
+from typing import Tuple, List
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -19,18 +20,29 @@ from rrc.custom_logging import getLogger, logger_init
 
 class SerialComportDevice(object):
 
-    def __init__(self, resource_str: str, termination: str = "\r\n", trim_termination: bool = True, xonxff: bool = False) -> None:
+    def __init__(self, resource_str: str, termination: str | Tuple[str, str] | List[str, str] = "\r\n", trim_termination: bool = True, xonxff: bool = False) -> None:
         """Serial line communication the object with IP address and port number given by URL style resource string.
 
         Args:
             resource_str (str): String of url form '{portname},{baudrate},{line settings in the form 8N1}'
-            termination (str, optional): Defines the line termination. Defaults to '\r\n'
+            termination (str | Tuple[str, str], optional): Defines the line termination for both directions if string otherwise
+                if tuple first is termination for send and second for receive. Defaults to '\r\n'.
             trim_termination (bool, ooptional): If True the termination chars on incomming responses will be trimmed, otherwise unchanged. Defaults to True.
             xonxff (bool, optional): True enables Xon/Xoff handshake protocoll, False disables it. Defaults to False.
 
         """
-        self.termination = termination
-        self._termination_as_bytes = bytes(termination, "utf-8")  # need them also as bytes
+
+        if isinstance(termination, (tuple, list)):
+            # different send and receive termination
+            self._send_termination = termination[0]
+            self._receive_termination = termination[1]
+        else:
+            # using the same termination for send and receive (default usage for all manufacturing devices until 2026)
+            self._send_termination = termination
+            self._receive_termination = termination
+        # need them also as bytes
+        self._send_termination_as_bytes = bytes(self._send_termination, "utf-8")
+        self._receive_termination_as_bytes = bytes(self._receive_termination, "utf-8")
         self.trim_termination = trim_termination
         self._resource_str = resource_str  # for debug information in __repr__
         _sar = resource_str.split(",")
@@ -50,9 +62,12 @@ class SerialComportDevice(object):
         return f"Serial comport device at {self.comport},{self.baudrate},{self.linesettings}"
 
     def __repr__(self) -> str:
-        return f"SerialComportDevice({self._resource_str}, termination={hexlify(self._termination_as_bytes).decode()})"
+        _t_str = f"S:{hexlify(self._send_termination_as_bytes).decode()},R:{hexlify(self._receive_termination_as_bytes).decode()}" if self._send_termination != self._receive_termination else hexlify(self._send_termination_as_bytes).decode()
+        return f"SerialComportDevice({self._resource_str}, termination='{_t_str}', trim_termination={self.trim_termination})"
+
 
     #----------------------------------------------------------------------------------------------
+
 
     def send(self, msg: str,
              timeout: float = 3.0,
@@ -74,7 +89,7 @@ class SerialComportDevice(object):
                             bytesize=int(self.linesettings[0]), parity=self.linesettings[1], stopbits=int(self.linesettings[2]),
                             timeout=timeout)
         try:
-            _s.write(bytes(msg, encoding) + self._termination_as_bytes)
+            _s.write(bytes(msg, encoding) + self._send_termination_as_bytes)
             if pause_after_write:
                 time.sleep(pause_after_write/1000)
         except TimeoutError as ex:
@@ -83,7 +98,9 @@ class SerialComportDevice(object):
         finally:
             _s.close()
 
+
     #----------------------------------------------------------------------------------------------
+
 
     def request(self, msg: str | None,
                 timeout: float | None = 3.0,
@@ -113,7 +130,7 @@ class SerialComportDevice(object):
                            timeout=timeout)
         try:
             if msg:
-                _s.write(bytes(msg, encoding) + self._termination_as_bytes)
+                _s.write(bytes(msg, encoding) + self._send_termination_as_bytes)
                 if pause_after_write:
                     time.sleep(pause_after_write/1000)
             # now read data until termination or timeout
@@ -126,10 +143,10 @@ class SerialComportDevice(object):
                 if (limit) and (len(rcvdata) > limit):
                     rcvdata = rcvdata[:limit]  # slice the received data
                     break
-                if (rcvdata.rfind(self._termination_as_bytes) >= 0):
+                if (rcvdata.rfind(self._receive_termination_as_bytes) >= 0):
                     break
             if self.trim_termination:
-                _t = rcvdata.rfind(self._termination_as_bytes)
+                _t = rcvdata.rfind(self._receive_termination_as_bytes)
                 if _t > 0:
                     rcvdata = rcvdata[:_t]
             if encoding:
@@ -148,6 +165,9 @@ class SerialComportDevice(object):
             _s.close()
         return result
 
+
+    #----------------------------------------------------------------------------------------------
+    # this is legacy, do not use it anymore
 
     async def request_async(self,  message: str | None, limit: None | str | bytes | int = None, encoding: str | None = "utf-8") -> str:
         """_summary_
@@ -171,8 +191,8 @@ class SerialComportDevice(object):
                 writer.write(message.encode())
                 await writer.drain()
             if limit is None:
-                rcvdata = await reader.readuntil(separator=self._termination_as_bytes)
-                rcvdata = rcvdata[:-len(self._termination_as_bytes)]
+                rcvdata = await reader.readuntil(separator=self._receive_termination_as_bytes)
+                rcvdata = rcvdata[:-len(self._receive_termination_as_bytes)]
             elif isinstance(limit, int):
                 #rcvdata = await reader.read()  # read until limit bytes or EOF
                 rcvdata = bytes()
@@ -217,7 +237,8 @@ class SerialComportDevice(object):
 
 
 #--------------------------------------------------------------------------------------------------
-async def test_async_request():
+
+async def test_async_request() -> None:
     global DEBUG
 
     _log = getLogger(__name__, DEBUG)
@@ -225,7 +246,9 @@ async def test_async_request():
     r = await c.request_async(None)
     _log.info(r)
 
+
 #--------------------------------------------------------------------------------------------------
+
 if __name__ == "__main__":
     from time import perf_counter
 
@@ -245,5 +268,6 @@ if __name__ == "__main__":
 
     toc = perf_counter()
     _log.info(f"DONE in {toc - tic:0.4f} seconds.")
+
 
 # END OF FILE

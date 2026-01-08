@@ -7,6 +7,7 @@ import errno
 import asyncio
 import time
 from binascii import hexlify
+from typing import Tuple, List
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -68,20 +69,31 @@ def is_socket_closed(sock: socket.socket) -> bool:
 
 class Eth2SerialDevice(object):
 
-    def __init__(self, resource_str: str, termination: str = "\r\n", trim_termination: bool = True, open_connection: bool = True, pause_on_retry: int | None = 10):
+    def __init__(self, resource_str: str, termination: str | Tuple[str, str] | List[str, str] = "\r\n", trim_termination: bool = True, open_connection: bool = True, pause_on_retry: int | None = 10) -> None:
         """Initialize the object with IP address and port number given by URL style resource string.
 
         Args:
             resource_str (str): String of url form '{hostname or IPv4 address}:{port number}'
-            termination (str, optional): Defines the line termination. Defaults to '\r\n'
+            ermination (str | Tuple[str, str], optional): Defines the line termination for both directions if string otherwise
+                if tuple first is termination for send and second for receive. Defaults to '\r\n'.
             trim_termination (bool, ooptional): If True the termination chars on incomming responses will be trimmed, otherwise unchanged. Defaults to True.
             open_connection (bool, optional): If True, the connection is opened once on creation and never actively closed.
                 If False, the connection is opened on each send/request. Defaults to True.
             pause_on_retry (int, optional): If retries is > 1 on send/request, the pause in milliseconds is held before next try. Defaults to 10.
 
         """
-        self.termination = termination
-        self._termination_as_bytes = bytes(termination, "utf-8")  # need them also as bytes
+
+        if isinstance(termination, (tuple, list)):
+            # different send and receive termination
+            self._send_termination = termination[0]
+            self._receive_termination = termination[1]
+        else:
+            # using the same termination for send and receive (default usage for all manufacturing devices until 2026)
+            self._send_termination = termination
+            self._receive_termination = termination
+        # need them also as bytes
+        self._send_termination_as_bytes = bytes(self._send_termination, "utf-8")
+        self._receive_termination_as_bytes = bytes(self._receive_termination, "utf-8")
         self.trim_termination = trim_termination
         self._resource_str = resource_str  # for debug information in __repr__
         lst = resource_str.split(":")
@@ -97,9 +109,12 @@ class Eth2SerialDevice(object):
         return f"ETH to SERIAL bridge at {self.host}:{self.port}"
 
     def __repr__(self) -> str:
-        return f"Eth2SerialDevice('{self.host}:{self.port}', termination='{hexlify(self._termination_as_bytes).decode()}', trim_termination={self.trim_termination}, open_connection={self._keep_connection_open}, pause_on_retry={self.pause_on_retry})"
+        _t_str = f"S:{hexlify(self._send_termination_as_bytes).decode()},R:{hexlify(self._receive_termination_as_bytes).decode()}" if self._send_termination != self._receive_termination else hexlify(self._send_termination_as_bytes).decode()
+        return f"Eth2SerialDevice('{self.host}:{self.port}', termination='{_t_str}', trim_termination={self.trim_termination}, open_connection={self._keep_connection_open}, pause_on_retry={self.pause_on_retry})"
+
 
     #----------------------------------------------------------------------------------------------
+
 
     def connect_socket(self, timeout: float | None = None) -> socket:
         # setting self._keep_connection_open to True leaves the connection
@@ -145,6 +160,7 @@ class Eth2SerialDevice(object):
 
     #----------------------------------------------------------------------------------------------
 
+
     def send(self, msg: str | bytes | bytearray,
              timeout: float = 3.0,
              pause_after_write: int | None = None,
@@ -169,7 +185,7 @@ class Eth2SerialDevice(object):
             if encoding is None:
                 self.socket.sendall(bytes(msg))  # send it raw
             else:
-                self.socket.sendall(bytes(msg, encoding) + self._termination_as_bytes)
+                self.socket.sendall(bytes(msg, encoding) + self._send_termination_as_bytes)
             if pause_after_write:
                 time.sleep(pause_after_write/1000)
         except TimeoutError as ex:
@@ -182,7 +198,9 @@ class Eth2SerialDevice(object):
         finally:
             self.close_connection()
 
+
     #----------------------------------------------------------------------------------------------
+
 
     def request(self, msg: str | None,
                 timeout: float | None = 3.0,
@@ -212,7 +230,7 @@ class Eth2SerialDevice(object):
         try:
             self.connect_socket(timeout=timeout)
             if msg:
-                self.socket.sendall(bytes(msg, encoding) + self._termination_as_bytes)
+                self.socket.sendall(bytes(msg, encoding) + self._send_termination_as_bytes)
                 if pause_after_write:
                     time.sleep(pause_after_write/1000)
             # now read data until termination or timeout
@@ -225,10 +243,10 @@ class Eth2SerialDevice(object):
                 if (limit) and (len(rcvdata) > limit):
                     rcvdata = rcvdata[:limit]  # slice the received data
                     break
-                if (rcvdata.rfind(self._termination_as_bytes) >= 0):
+                if (rcvdata.rfind(self._receive_termination_as_bytes) >= 0):
                     break
             if self.trim_termination:
-                _t = rcvdata.rfind(self._termination_as_bytes)
+                _t = rcvdata.rfind(self._receive_termination_as_bytes)
                 if _t > 0:
                     rcvdata = rcvdata[:_t]
             if encoding:
@@ -248,7 +266,10 @@ class Eth2SerialDevice(object):
 
         return result
 
+
     #----------------------------------------------------------------------------------------------
+    # this is legacy, do not use it anymore
+
 
     async def request_async(self,  message: str | None, limit: None | str | bytes | int = None, encoding: str | None = "utf-8") -> str:
         """_summary_
@@ -272,8 +293,8 @@ class Eth2SerialDevice(object):
                 writer.write(message.encode())
                 await writer.drain()
             if limit is None:
-                rcvdata = await reader.readuntil(separator=self._termination_as_bytes)
-                rcvdata = rcvdata[:-len(self._termination_as_bytes)]
+                rcvdata = await reader.readuntil(separator=self._receive_termination_as_bytes)
+                rcvdata = rcvdata[:-len(self._receive_termination_as_bytes)]
             elif isinstance(limit, int):
                 #rcvdata = await reader.read()  # read until limit bytes or EOF
                 rcvdata = bytes()
