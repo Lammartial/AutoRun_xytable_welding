@@ -3,7 +3,7 @@
 Contains the drivers for stepper motor controller MOC-01/MOC-02 from Optics Focus Instruments Co., Ltd.
 """
 
-from inspect import _V_contra
+from encodings.punycode import T
 from typing import Tuple, Literal
 from urllib import response
 from rrc.eth2serial import Eth2SerialDevice
@@ -21,136 +21,244 @@ from rrc.custom_logging import getLogger, logger_init
 
 # --------------------------------------------------------------------------- #
 
+
 #--------------------------------------------------------------------------------------------------
-class LinearStage():
+
+
+class BaseOfStage():
 
     def __init__(self,
-                name: str,  # either 'X' or 'Y' or 'Z'
-                stage_type: str,  # either 'translation_stage', 'rotation_stage', 'goniometer_stage' or 'lab_jack'
-                subdivision: int,  # from back of motion controller: e.g. 2
-                step_angle: float, # from the side of the stage: either 0.9 or 1.8
-                pitch: float,      # in mm - from the optics focus website, e.g. 4
-                max_position: int, # maximum stage position in controller pulse units, e.g. 10000
-                device: Eth2SerialDevice | SerialComportDevice = None,
-                ) -> None:
+            name: str,  # either 'X' or 'Y' or 'Z' or 'R' or 'T1' or 'T2'
+            step_angle: float, # from stage motor's data sheet: either 0.9 or 1.8
+        ) -> None:
 
-        self.name = name.upper()
-        self.stage_type = stage_type
+        _AXIS_NAME_TO_CONTROLLER_NAME = {
+            'X': 'X',
+            'Y': 'Y',
+            'Z': 'Z',
+            'R': 'r',
+            'T1': 't',
+            'T2': 'T',
+        }
+        n = name.upper()
+        assert n in _AXIS_NAME_TO_CONTROLLER_NAME.keys(), f"Stage name '{n}' is not valid. Must be one of {_AXIS_NAME_TO_CONTROLLER_NAME.keys()}"
+        self.name = n
+        self.axis_name = _AXIS_NAME_TO_CONTROLLER_NAME[n]
+        assert step_angle in (0.9, 1.8), "Step angle must be either 0.9 or 1.8 degrees."
+        self.step_angle = step_angle
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def home_command(self) -> Tuple[str, str]:
+        """Get the command string to reset/home the stage position so that the absolute position is defined as 0."""
+        return f"H{self.axis_name}0", f"Resetting stage '{self.name}'..."  # HOME command of stage to motion controller
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def read_position_command(self) -> Tuple[str, str]:
+        """Get the command string to get the current position on the linear stage.
+
+        Returns:
+            Tuple[str, str]: command to motion controller and log message.
+        """
+
+        return f"?{self.axis_name}", f'Reading {self.name}-position'  # command to motion controller
+
+
+    #----------------------------------------------------------------------------------------------
+
+    def convert_stage_speed_to_velocity(self, speed_value: int) -> float:
+        # virtual method to be overridden in child classes
+        pass
+
+    def convert_velocity_to_stage_speed(self, velocity_mm_s: float) -> int:
+        # virtual method to be overridden in child classes
+        pass
+
+    def physical_displacement_to_motion_command(self, displacement_mm: float | int) -> Tuple[str, str]:
+        #virtual method to be overridden in child classes
+        pass
+
+    def absolute_position_to_motion_command(self, new_position: float | int | str) -> Tuple[str | None, str]:
+        # virtual method to be overridden in child classes
+        pass
+
+    def convert_mm_to_steps(self, mm: float | int) -> int:
+        # virtual method to be overridden in child classes
+        pass
+
+    def convert_steps_to_mm(self, steps: int) -> float:
+        # virtual method to be overridden in child classes
+        pass
+
+
+#--------------------------------------------------------------------------------------------------
+
+
+class RotaryStage(BaseOfStage):
+
+    def __init__(self,
+            name: str,  # either 'X' or 'Y' or 'Z' or 'R' or 'T1' or 'T2'
+            subdivision: int = 2,    # from back panel of motion controller (DIP setting): e.g. 2
+            step_angle: float = 1.8, # from the side of the stage: either 0.9 or 1.8
+            transmission_ratio: float = 180.0, # depending on the product
+        ) -> None:
+
+        super().__init__(name, step_angle)
+        self.stage_type: str = "rotary_stage"
+        self.unit: str = "degree"
+        self.position: int = None  # current position of the stage unkonwn at start
         # calculation depending on the type of stage
         self.subdivision = subdivision
-        self.step_angle = step_angle
-        self.pitch = pitch
-        self.max_position = max_position
-        # precalculate pulse equivalent in mm
-        self.pulse_equiv = pitch * step_angle / (360 * subdivision)
+        self.transmission_ratio = transmission_ratio  # for rotation stages
+        # precalculate pulse equivalent in degrees
+        self.pulse_equiv = step_angle / (transmission_ratio * subdivision)  # from manufacturers manual
+
+
+#--------------------------------------------------------------------------------------------------
+
+
+class GoniometerStage(BaseOfStage):
+
+    def __init__(self,
+            name: str,  # either 'X' or 'Y' or 'Z' or 'R' or 'T1' or 'T2'
+            step_angle: float, # from the side of the stage: either 0.9 or 1.8
+            subdivision: int,  # from back of motion controller: e.g. 2
+            transmission_ratio: float,
+            travel_range_mm: int, # maximum stage travel range in mm; will be converted into controller steps and stored in max_position
+        ) -> None:
+
+        super().__init__(name, step_angle)
+        self.stage_type = "goniometer_stage"
+        self.unit = "degree"
+        self.position: int = None  # current position of the stage unkonwn at start
+        # calculation depending on the type of stage
+        self.subdivision = subdivision
+        self.transmission_ratio = transmission_ratio  # for rotation stages
+        self.travel_range_mm = travel_range_mm
+        # precalculate pulse equivalent in degrees
+        self.pulse_equiv = step_angle / (transmission_ratio * subdivision)  # from manufacturers manual
+        self.max_position = int(round(travel_range_mm / self.pulse_equiv))  # in controller pulse units
+
+#--------------------------------------------------------------------------------------------------
+
+
+class LabJackStage(BaseOfStage):
+
+    def __init__(self,
+            name: str,  # either 'X' or 'Y' or 'Z' or 'R' or 'T1' or 'T2'
+            subdivision: int,  # from back of motion controller: e.g. 2
+            step_angle: float, # from the side of the stage: either 0.9 or 1.8
+            pitch_of_lead_screw: float, # in mm - from the optics focus website, e.g. 1.25
+            travel_range_mm: int, # maximum stage travel range in mm; will be converted into controller steps and stored in max_position
+        ) -> None:
+
+        super().__init__(name, step_angle)
+        self.stage_type = "lab_jack_stage"
+        self.unit = "step"
         self.position = None  # current position of the stage unkonwn at start
-        self.dev = device
+        # calculation depending on the type of stage
+        self.subdivision = subdivision
+        self.pitch_of_lead_screw = pitch_of_lead_screw
+        self.transmission_ratio = 1.0  # for lab jack stages
+        self.travel_range_mm = travel_range_mm
+        # precalculate pulse equivalent in mm
+        self.pulse_equiv = pitch_of_lead_screw * step_angle / (360 * subdivision)  # from manufacturers manual
+        self.max_position = int(round(travel_range_mm / self.pulse_equiv))  # in controller pulse units
+
+
+#--------------------------------------------------------------------------------------------------
+
+class LinearStage(BaseOfStage):
+
+    def __init__(self,
+            name: str,  # either 'X' or 'Y' or 'Z' or 'R' or 'T1' or 'T2'
+            subdivision: int,  # from back of motion controller: e.g. 2
+            step_angle: float, # from the side of the stage: either 0.9 or 1.8
+            pitch_of_lead_screw: float,  # in mm - from the optics focus website, e.g. 1.0
+            travel_range_mm: int, # maximum stage travel range in mm; will be converted into controller steps and stored in max_position
+        ) -> None:
+
+        super().__init__(name, step_angle)
+        self.stage_type = "translation_stage"
+        self.unit = "mm"
+        self.position = None  # current position of the stage unkonwn at start
+        # calculation depending on the type of stage
+        self.subdivision = subdivision
+        self.pitch_of_lead_screw = pitch_of_lead_screw
+        self.travel_range_mm = travel_range_mm
+        # precalculate pulse equivalent in mm
+        self.pulse_equiv = pitch_of_lead_screw * step_angle / (360 * subdivision)  # from manufacturers manual
+        self.max_position = int(round(travel_range_mm / self.pulse_equiv))  # in controller pulse units
+
 
     #----------------------------------------------------------------------------------------------
 
-    def setup_device(self, device: Eth2SerialDevice | SerialComportDevice) -> None:
-        """Sets up the device connection for the linear stage
 
-        :param device: device connection to be used for the linear stage
-        :type device: Eth2SerialDevice | SerialComportDevice
-        """
-        self.dev = device
+    def convert_stage_speed_to_velocity(self, speed_value: int) -> float:
+        """Converts a stage speed value (0..255) into physical (mm/s)"""
+        return round((speed_value + 1) * self.pulse_equiv * (22000 / 720), 2)  # convert from speed value to mm/s
+
+    def convert_velocity_to_stage_speed(self, velocity_mm_s: float) -> int:
+        """Converts a physical speed given in mm/s into a speed value recognisable by the stage (0..255)"""
+        return int(round((velocity_mm_s / (22000 / 720) / self.pulse_equiv) - 1))  # convert from mm/s to speed value
+
+    def convert_mm_to_steps(self, mm: float | int) -> int:
+        """Converts a physical displacement given in mm into steps for the motion controller"""
+        return int(round(mm / self.pulse_equiv))
+
+    def convert_steps_to_mm(self, steps: int) -> float:
+        """Converts a displacement given in steps into physical mm"""
+        return round(steps * self.pulse_equiv, 4)
+
 
     #----------------------------------------------------------------------------------------------
 
-    def command(self, command, message: str = None) -> int | Literal[True]:
-        if message:
-            global DEBUG
-            _log = getLogger(__name__, DEBUG)
-            _log.info(message)
-        response = self.dev.request(command)
-        #self.Ins.clear()
-        #response = self.Ins.query_ascii_values(command, converter='s')[0]
-        if 'OK' in response:
-            return True
-        elif not 'ERR' in response:
-            return int(''.join(x for x in response if x.isdigit()))
-        else:
-            # decode error message
-            _err_msg = {
-                "ERR1": "communication error/sent invalid commands/communication is a timeout ",
-                "ERR2": "communication not established",
-                "ERR3": "invalid command",
-                "ERR4": "stop command",
-                "ERR5": "limit switch is valid"
-            }
-            if response in _err_msg:
-                raise Exception(f"Stage error: {response} -> {_err_msg[response]}")
-            else:
-                raise Exception(f"Something wen't wrong: {response}")
 
-    #----------------------------------------------------------------------------------------------
+    def physical_displacement_to_motion_command(self, displacement_mm: float | int) -> Tuple[str, str]:
+        """Converts a positive or negative displacement (in mm) into a motion command for the stage"""
 
-    def _convert_speed_stage_to_physical(self, v_speed: float | int) -> float:
-        """Converts a stage speed into mm/s"""
-        return round((v_speed + 1) * self.pulse_equiv * (22000 / 720), 2)  # convert from Vspeed to mm/s
-
-    def _convert_speed_physical_to_stage(self, speed_mm_s: float | int) -> float:
-        """Converts a speed given in mm/s into a speed value recognisable by the stage"""
-        return (speed_mm_s / (22000 / 720) / self.pulse_equiv) - 1  # convert from mm/s to Vspeed
-
-
-    def _convert_displacement_to_command(self, displacement: float | int) -> str:
-        """Converts a positive or negative displacement (in mm) into a command recognisable by the stage"""
-
-        direction = '+' if displacement > 0 else '-'
+        direction = '+' if displacement_mm > 0 else '-'
         # convert from mm to steps for motioncontroller
-        magnitude = int(abs(displacement) / self.pulse_equiv)
-        return f"{self.name}{direction}{magnitude}"  # command for motion controller
-
+        magnitude = self.convert_mm_to_steps(abs(displacement_mm))
+        return f"{self.axis_name}{direction}{magnitude}", f"Setting {self.name}-displacement of {displacement_mm}mm"   # command for motion controller
 
     #----------------------------------------------------------------------------------------------
 
-    def get_speed(self) -> float:
-        """Get the speed of the stage and return it in mm/s."""
-        response = self.command("?V", message="Getting stage speed")
-        _v_speed = int(response.split('\r')[-1][1:])  # returns "?V\rV 0000\n"
-        return self._convert_speed_stage_to_physical(_v_speed)
 
-    def set_speed(self, speed: float | int) -> bool:
-        """Set the speed of the stage
+    def displacement_to_motion_command(self, displacement: int) -> Tuple[str, str]:
+        """Converts a positive or negative displacement (in steps) into a motion command for the stage"""
 
-        :param speed: speed of the stage in mm/s
-        :type stage_speed: float, int
+        return f"{self.axis_name}{displacement:+}", f"Setting {self.name}-displacement of {displacement} steps"   # command for motion controller
+
+
+   #----------------------------------------------------------------------------------------------
+
+
+    def absolute_position_to_motion_command(self, new_position: float | int | str) -> Tuple[str | None, str]:
+        """Calculates the absolute new position on the linear stage based on
+        the current position and returns the displacement to reach this position.
+        If the current position is unknown, it returns None.
+
+        Args:
+            new_position (float | int | str): _description_
+
+        Raises:
+            ValueError: if new_position is an unknown string.
+
+        Returns:
+            tuple[str, str] | None: The displacement command in mm to reach the new position, or None if current position is unknown.
+                Second value is a log message.
         """
-
-        _v_speed = self._convert_speed_physical_to_stage(speed)
-        return self.command(f"V{int(round(_v_speed))}", message="Setting stage speed")
-
-    #----------------------------------------------------------------------------------------------
-
-    @property
-    def position(self) -> Tuple[int, int]:
-        response = self.command(f"?{self.name}", message=f'Getting {self.name}-position')
-        position = int(response.split('\r')[-1][1:])  # returns "?X\rX+0000\n" with X=stage name
-        self.position = position
-        return self.position
-
-    #----------------------------------------------------------------------------------------------
-
-    def is_connected(self) -> int | Literal[True]:
-        return self.command('?R')
-
-    #----------------------------------------------------------------------------------------------
-
-
-    def goto(self, new_position: float | int | str) -> Tuple[str, str]:
-        """Get the command string to go to an absolute position on the linear stage
-
-        :param position: absolute position of stage in controller pulse units - see manual
-        :type position: float, int
-        """
-
-        if not new_position or new_position == 'start':
-            return self.reset()
 
         if isinstance(new_position, str):
-            if new_position == 'center':
+            if new_position == 'start':
+                return self.home_command()
+            elif new_position == 'center':
                 new_position = self.max_position / 2
             elif new_position == 'end':
                 new_position = self.max_position
@@ -160,44 +268,21 @@ class LinearStage():
         if new_position > self.max_position:
             new_position = self.max_position  # limit to max position
         elif new_position <= 0:
-            return self.reset()
+            return self.home_command()
 
         if self.position is None:
-            return False  # not yet on defined position -> need to HOME or MAX first
+            return None, "Not yet on defined position"  # need to HOME or MAX first
 
-        displacement = int(new_position - self.position)
+        displacement = int(round(new_position - self.position))
         if not displacement:
-            return True  # already on position
+            return "", f"Already on position '{new_position}'"  # already on position
 
-        return self.command(f"{self.name}{displacement:+}", message=f"Setting {self.name}-position")  # command to motion controller
-
-
-
-    def center(self) -> int | bool:
-        """Moves stage to the absolute center"""
-        return self.goto('center')
+        cmd, msg = self.displacement_to_motion_command(displacement)
+        return cmd, f"Setting {self.name}-position: {msg}"  # command to motion controller
 
 
-    def move(self, displacement: float | int) -> int | Literal[True]:
-        """Moves the stage in the positive or negative direction
 
-        :param displacement: positive or negative displacement [in mm]
-        :type displacement: float, int
-        """
-
-        command = self._convert_displacement_to_command(displacement)
-        return self.command(command, message=f"Moving stage '{self.name}' {displacement}mm")
-
-
-    def reset(self) -> Tuple[str, str]:
-        """Get the command string to reset the stage position so that the absolute position = 0"""
-        self.position = 0  # to only way to set position
-        return self.command(f"H{self.name}0", message=f"Resetting stage '{self.name}'...")  # HOME command of stage to motion controller
-
-
-    def stop(self) -> Tuple[str, str]:
-        """Get the command string to stop the stage movement immediately"""
-        return self.command("S", message=f"Stopping stage '{self.name}'...")  # STOP command of stage to motion controller
+    #----------------------------------------------------------------------------------------------
 
 
 
@@ -242,114 +327,222 @@ class XYLinearStage():
             # now the connection is open with timeout setting
             self.dev.connect_socket(timeout=timeout)
 
-        X.setup_device(self.dev)
-        self.X_stage = X
-        Y.setup_device(self.dev)
-        self.Y_stage = Y
-
+        # create a tuple of stages
+        self.stages = (X, Y)
 
 
     #----------------------------------------------------------------------------------------------
 
+    def clear(self) -> None:
+        """Clears the input and output buffer of the device."""
+        _ = self.dev.request(None, timeout=0.2)  # clear buffers
 
-    def command(self, command, message: str = None) -> int | Literal[True]:
+    #----------------------------------------------------------------------------------------------
+
+    def command(self, command, message: str = None) -> Tuple[int | bool, str | None]:
         if message:
             global DEBUG
             _log = getLogger(__name__, DEBUG)
             _log.info(message)
-        response = self.dev.request(command)
-        #self.Ins.clear()
-        #response = self.Ins.query_ascii_values(command, converter='s')[0]
+
+        response = self.dev.request(command, timeout=1.0, pause_after_write=0.1)
         if 'OK' in response:
-            return True
+            return True, response
         elif not 'ERR' in response:
-            return int(''.join(x for x in response if x.isdigit()))
+            # a number with sign
+            return True, int(''.join(x for x in response if x.isdigit()))
         else:
-            raise Exception("Something wen't wrong")
+            # ERR found -> decode error message
+            _err = int(response.split('ERR')[-1])
+            _err_msg = {
+                1: "communication error/sent invalid commands/communication is a timeout ",
+                2: "communication not established",
+                3: "invalid command",
+                4: "stop command",
+                5: "limit switch is valid",
+            }
+            if _err in _err_msg:
+                return False, f"Stage error '{response}': {_err_msg[_err]}"
+
+        raise Exception(f"Something wen't wrong: {response}")
 
 
     #----------------------------------------------------------------------------------------------
 
 
+    def _exctract_position_from_response(self, from_string: str) -> int:
+        position = int(from_string.split('\r')[-1][1:])  # returns "?X\rX+0000\n" with X=stage name
+        return position
+
+
+    #----------------------------------------------------------------------------------------------
+
     @property
     def position(self) -> Tuple[int, int]:
-        x = self.X_stage.position
-        y = self.Y_stage.position
-        return x, y
+        for stage in self.stages:
+            cmd, msg = stage.read_position_command()
+            response = self.command(cmd, message=msg)
+            # update stage position from motion controller response
+            stage.position = self._exctract_position_from_response(response)
+        return tuple([stage.position for stage in self.stages])
+
+    #----------------------------------------------------------------------------------------------
 
 
-    def is_connected(self) -> int | Literal[True]:
-        return self.X_stage.is_connected()
+    def get_current_stage_speed(self) -> int | None:
+        """Get the speed of the current stage and return it plain.
 
-
-    def center(self) -> bool:
-        """Moves both stages to the absolute center"""
-        ok1 = self.X_stage.center()
-        ok2 = self.Y_stage.center()
-        return ok1 and ok2
-
-
-    def move(self, displacement_x: float | int, displacement_y: float | int) -> bool:
-        """Moves the stages in the positive or negative direction
-
-        :param displacement_x: positive or negative displacement in x direction [in mm]
-        :type displacement_x: float, int
-        :param displacement_y: positive or negative displacement in y direction [in mm]
-        :type displacement_y: float, int
+        Returns:
+            int, float: _description_
         """
 
-        ok1 = self.X_stage.move(displacement_x)
-        ok2 =self.Y_stage.move(displacement_y)
-        return ok1 and ok2
+        ok, response = self.command("?V", message="Getting stage speed")
+        if ok:
+            _v_speed = int(response.split('\r')[-1][1:])  # returns "?V\rV 0000\n"
+            return _v_speed
+        return None
 
 
-    def goto(self, x: float | int | str, y: float | int | str) -> bool:
-        """Go to an absolute position on the linear stages
+    #----------------------------------------------------------------------------------------------
 
-        :param x: absolute position of stage in controller pulse units - see manual
-        :type x: float, int, str
-        :param y: absolute position of stage in controller pulse units - see manual
-        :type y: float, int, str
+
+    def set_current_stage_speed(self, v_speed: float | int) -> bool:
+        """Set the velocity of the current stage as stage speed value.
+
+        Args:
+            speed (float | int): speed of the stage in mm/s
+
+        Returns:
+            bool: _description_
         """
 
-        ok1 = self.X_stage.goto(x)
-        ok2 = self.Y_stage.goto(y)
-        return ok1 and ok2
+        _v_speed = int(round(v_speed))
+        assert _v_speed >= 0 and _v_speed <= 255, "Stage speed must be between 0 and 255."
+        ok, _ = self.command(f"V{_v_speed}", message="Setting stage speed")
+        return ok
 
 
-    def set_speed(self, stage_speed: float | int) -> bool:
-        """Get or set the speed of the stage
+    #----------------------------------------------------------------------------------------------
 
-        :param stage_speed: speed of the stage in mm/s
-        :type stage_speed: float, int
+    def is_connected(self) -> bool:
+        # this command is for all stages
+        response = self.command('?R')
+        if 'OK' in response:
+            return True
+        else:
+            return False
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def goto_position(self, new_position_x: float | int | str, new_position_y: float | int | str, units_in_mm: bool = True) -> bool:
+        """Calculates the absolute new position on the linear stages and moves them to this position.
+
+        Args:
+            new_position_x (float | int | str): _description_
+            new_position_y (float | int | str): _description_
+
+        Raises:
+            ValueError: _description_
+
+        Returns:
+            bool: _description_
         """
 
-        ok = self.X_stage.set_speed(stage_speed)
-        #self.Y_stage.set_speed(stage_speed)
+        for stage, new_position in zip(self.stages, (new_position_x, new_position_y)):
+            if units_in_mm:
+                _new_position = stage.convert_mm_to_steps(new_position)
+            else:
+                _new_position = new_position
+            cmd, msg = stage.absolute_position_to_motion_command(_new_position)
+            ok, response = self.command(cmd, message=msg)
+            if not ok:
+                return False  # error during motion command
+        x, y = self.position # update positions after motion
+        return True
 
 
-    def get_speed(self) -> float:
-        """Get the speed of the stage and return it in mm/s."""
-        return self.X_stage.get_speed()
+    #----------------------------------------------------------------------------------------------
 
 
-    def go_home(self) -> bool:
-        """Moves furnace to the center of the stage (x = 5000)
+    def center_position(self) -> int | bool:
+        """Moves stage to the absolute center"""
+        return self.goto_position('center', 'center')
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def end_position(self) -> int | bool:
+        """Moves stage to the absolute end"""
+        return self.goto_position('end', 'end')
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def move(self, x_displacement: float | int, y_displacement: float | int, units_in_mm: bool = True) -> bool:
+        """Moves the stage in the positive or negative direction depending on the displacement value's sign.
+
+        Args:
+            x_displacement (float | int): positive or negative displacement in x direction [in mm if units_in_mm=True]
+            y_displacement (float | int): positive or negative displacement in y direction [in mm if units_in_mm=True]
+            units_in_mm (bool, optional): If true, displacements are interpreted as millimeters otherwise in steps. Defaults to True.
+
+        Returns:
+            int | Literal[True]: _description_
         """
-        ok1 = self.X_stage.go_home()
-        ok2 = self.Y_stage.go_home()
-        return ok1 and ok2
+
+        for stage, displacement in zip(self.stages, (x_displacement, y_displacement)):
+            if units_in_mm:
+                cmd, msg = stage.physical_displacement_to_motion_command(displacement)
+            else:
+                cmd, msg = stage.displacement_to_motion_command(displacement)
+            ok, response = self.command(cmd, message=f"Moving stage {msg}")
+            if not ok:
+                return False  # error during motion command
+        return True
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def home(self) -> bool:
+        """Get the command string to reset the stage position so that the absolute zero position (home)."""
+
+        for stage in self.stages:
+            ok, _ = self.command(stage.home_command())
+            if ok:
+                stage.position = 0  # to only way to set position initially
+            else:
+                return False  # error during homing
+        return True
+
+
+    #----------------------------------------------------------------------------------------------
 
 
     def reset(self) -> bool:
-        """Resets the stages positions so that the absolute position = 0 (origin)"""
-        ok1 = self.X_stage.reset()
-        ok2 = self.Y_stage.reset()
-        return ok1 and ok2
+        return self.home()
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def stop(self) -> bool:
+        """Get the command string to stop the stage movement immediately"""
+
+        ok, msg = self.command("S", message=f"Stopping current stage ")  # STOP command of stage to motion controller
+        # response should contain an ERRx code then it sends an OK.
+        if ok:
+            self.clear()
+        return ok
+
 
 
 
 #--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+
 
 def test_xydevice(resource_string: str) -> None:
     """Test function for the XY device driver."""
@@ -357,47 +550,38 @@ def test_xydevice(resource_string: str) -> None:
 
     X_stage = LinearStage(
         name = 'X',
-        #stage_type = 'translation_stage',  # either 'translation_stage', 'rotation_stage', 'goniometer_stage' or 'lab_jack'
-        #running_unit = 'mm',  # either 'mm','degree' or 'step'
-        step_angle = 0.9,
         subdivision = 2,
-        #screw_lead = 1,
-        pitch = 4,
-        #transmission_ratio = None,
-        #travel_range = 50,
-        max_position = 10000,
+        step_angle = 0.9,
+        pitch_of_lead_screw = 1.0,
+        travel_range_mm = 400.0,
     )
 
     Y_stage = LinearStage(
         name = 'Y',
-        #stage_type = 'translation_stage',  # either 'translation_stage', 'rotation_stage', 'goniometer_stage' or 'lab_jack'
-        #running_unit = 'mm',  # either 'mm','degree' or 'step'
-        step_angle = 0.9,
         subdivision = 2,
-        #screw_lead = 1,
-        pitch = 4,
-        #transmission_ratio = None,
-        #travel_range = 50,
-        max_position = 20000,
+        step_angle = 0.9,
+        pitch_of_lead_screw = 1.0,
+        travel_range_mm = 400.0,
     )
     dev = XYLinearStage(X_stage, Y_stage, resource_string)
-    X_stage.setup_device(dev.dev)
-    Y_stage.setup_device(dev.dev)
+    print(f"Connected: {dev.is_connected()}")
+    dev.clear()
 
-    POSITIONS_OF_PART = [  # RRC3570 42 positions
-        (50,100),
-        (150,100),
-        (250,100),
-        (350,100),
+
+    POSITIONS_OF_PART = [  # RRC3570 42 positions (define them in mm)
+        ( 50.0, 100.5),
+        (150.0, 100.0),
+        (250.0, 100.0),
+        (350.0, 100.0),
+        # ... (add more positions as needed) ...
     ]
 
-    for _x,_y in POSITIONS_OF_PART[2:5]:
-        dev.goto(_x, _y)
-        print(f"Moved to position X={_x} Y={_y}, current position: {dev.position}")
+    for _x, _y in POSITIONS_OF_PART[:]:
+        if not dev.goto_position(_x, _y, units_in_mm=True):
+            print(f"Error moving to position X={_x} Y={_y}")
+        else:
+            print(f"Moved to position X={_x} Y={_y}, current position: {dev.position}")
         sleep(0.3)
-
-    #print(dev.request("POS?"))
-    print(dev.position)
 
 
 #--------------------------------------------------------------------------------------------------
