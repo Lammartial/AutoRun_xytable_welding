@@ -175,7 +175,7 @@ class LinearStage():
 
     def center(self) -> int | bool:
         """Moves stage to the absolute center"""
-        return self.goto(self.max_position / 2)
+        return self.goto('center')
 
 
     def move(self, displacement: float | int) -> int | Literal[True]:
@@ -353,11 +353,12 @@ class XYLinearStage():
 
 def test_xydevice(resource_string: str) -> None:
     """Test function for the XY device driver."""
+    from time import sleep
 
     X_stage = LinearStage(
         name = 'X',
-        stage_type = 'translation_stage',  # either 'translation_stage', 'rotation_stage', 'goniometer_stage' or 'lab_jack'
-        running_unit = 'mm',  # either 'mm','degree' or 'step'
+        #stage_type = 'translation_stage',  # either 'translation_stage', 'rotation_stage', 'goniometer_stage' or 'lab_jack'
+        #running_unit = 'mm',  # either 'mm','degree' or 'step'
         step_angle = 0.9,
         subdivision = 2,
         #screw_lead = 1,
@@ -369,8 +370,8 @@ def test_xydevice(resource_string: str) -> None:
 
     Y_stage = LinearStage(
         name = 'Y',
-        stage_type = 'translation_stage',  # either 'translation_stage', 'rotation_stage', 'goniometer_stage' or 'lab_jack'
-        running_unit = 'mm',  # either 'mm','degree' or 'step'
+        #stage_type = 'translation_stage',  # either 'translation_stage', 'rotation_stage', 'goniometer_stage' or 'lab_jack'
+        #running_unit = 'mm',  # either 'mm','degree' or 'step'
         step_angle = 0.9,
         subdivision = 2,
         #screw_lead = 1,
@@ -379,9 +380,21 @@ def test_xydevice(resource_string: str) -> None:
         #travel_range = 50,
         max_position = 20000,
     )
-    dev = XYLinearStage(X_stage, Y_stage, RESOURCE_STR)
+    dev = XYLinearStage(X_stage, Y_stage, resource_string)
     X_stage.setup_device(dev.dev)
     Y_stage.setup_device(dev.dev)
+
+    POSITIONS_OF_PART = [  # RRC3570 42 positions
+        (50,100),
+        (150,100),
+        (250,100),
+        (350,100),
+    ]
+
+    for _x,_y in POSITIONS_OF_PART[2:5]:
+        dev.goto(_x, _y)
+        print(f"Moved to position X={_x} Y={_y}, current position: {dev.position}")
+        sleep(0.3)
 
     #print(dev.request("POS?"))
     print(dev.position)
