@@ -1,1 +1,1 @@
-from .base import SerialComportDevice
+from .base import SerialComportDevice, SerialComportDevicePermanentlyOpen

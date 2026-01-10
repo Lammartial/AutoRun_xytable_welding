@@ -7,8 +7,7 @@ from encodings.punycode import T
 from typing import Tuple, Literal
 from urllib import response
 from rrc.eth2serial import Eth2SerialDevice
-from rrc.serialport import SerialComportDevice
-
+from rrc.serialport import SerialComportDevice, SerialComportDevicePermanentlyOpen
 
 
 # --------------------------------------------------------------------------- #
@@ -319,8 +318,10 @@ class XYLinearStage():
         """
 
         if "," in resource_string:
-            # serial port which connects only on send or receive respecting the given timeouts in the send/request call.
-            self.dev = SerialComportDevice(resource_string, termination=("\n", "\r"))
+            ## serial port which connects only on send or receive respecting the given timeouts in the send/request call.
+            #self.dev = SerialComportDevice(resource_string, termination=("\n", "\r"))
+            # serial com port which keeps the connection open all the time
+            self.dev = SerialComportDevicePermanentlyOpen(resource_string, termination=("\n", "\r"))
         else:
             # socket port which needs an open connection with timeout. The first call does not set the timeout.
             self.dev = Eth2SerialDevice(resource_string, termination=("\n", "\r"), open_connection=True)

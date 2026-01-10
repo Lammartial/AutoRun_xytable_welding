@@ -1,5 +1,5 @@
 from cProfile import label
-from typing import List, Tuple
+from typing import List, Tuple, Self
 from enum import Enum
 import multiprocessing as mp
 import itertools
@@ -8,6 +8,7 @@ import tkinter.ttk as ttk
 import json
 import uuid
 from fastapi import background
+from pkg_resources import resource_string
 import yaml
 from hashlib import md5
 from base64 import b64decode, b64encode
@@ -515,7 +516,7 @@ class SPSStates(Enum):
 
 class SPSStateMachineBase(object):
 
-    def __init__(self, dev: AWS3Modbus | str, program_sequence: List[int] = [1], have_read_measurements: bool = False) -> None:
+    def __init__(self, dev: AWS3Modbus | str, extra_parameter: dict = None, program_sequence: List[int] = [1], have_read_measurements: bool = False) -> None:
         self.state: SPSStates = SPSStates.START
         self.program_sequence = program_sequence
         self.sequence_pos = 0
@@ -548,6 +549,27 @@ class SPSStateMachineBase(object):
             self.dev = dev
         #self._machine_locked = self.dev.read_machine_lock_status()
         self._machine_locked = None
+
+        # XY table extension (optional)
+        if extra_parameter is not None and "automation" in extra_parameter:
+            _resource_string = extra_parameter["automation"]["resource_str"]
+            if extra_parameter["automation"]["type"] == "XYLinearStage":
+                stages = ()
+                for stage in extra_parameter["automation"]["stages"]:
+                    # adds x,y etc. stages as they come from configuration
+                    stages += (LinearStage(
+                        name = stage["name"],
+                        subdivision = stage["subdivision"],
+                        step_angle = stage["step_angle"],
+                        pitch_of_lead_screw = stage["pitch_of_lead_screw"],
+                        travel_range_mm = stage["travel_range_mm"],
+                    ),)
+            # create the XY table driver
+            self.xy_table = XYLinearStage(stages[0], stages[1], _resource_string)
+        else:
+            self.xy_table: XYLinearStage | None = None
+
+
         print(f"Poor man's SPS machine: {self.dev.machine_name}, at {repr(self.dev)}")
 
 
@@ -560,14 +582,14 @@ class SPSStateMachineBase(object):
     #----------------------------------------------------------------------------------------------
 
     # to provide the with ... statement protector
-    def __enter__(self):
+    def __enter__(self) -> Self:
         self.dev.open()
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
         self.close()
 
-    def close(self):
+    def close(self) -> None:
         self.dev.close()
 
     #----------------------------------------------------------------------------------------------
@@ -1181,7 +1203,7 @@ class ProcessSPS(mp.Process):
         self.welding_for_process_validation = False  # setting this to True hinders the SPS to transmit the result to MES service
         self.verification_support = VERIFICATION_SUPPORT
 
-    def collect_parameters(self, cfg: StationConfiguration, dsp: DspInterface) -> Tuple[List[int], str, str, str]:
+    def collect_parameters(self, cfg: StationConfiguration, dsp: DspInterface) -> Tuple[dict, List[int], str, str, str]:
         """ Read configuration from DSP + DB connection
 
         Note: this is called from process context,
@@ -1220,7 +1242,24 @@ class ProcessSPS(mp.Process):
             # not found! -> do not proceed
             raise Exception(f"No Data in Database for part {_part_number} found, cannot proceed!")
         print(f"Got record: {rows[0]}")
-        return [int(i) for i in rows[0][1].split(",")], str(rows[0][0]), _controller_resource_str, _part_number, session_maker, _line_id, _station_id
+        # in rows[0][2] we have the welding parameter set as JSON string
+        #
+        # {
+        #   "sequence_to_cell_pole": "Cell2-,Cell2+,Cell1-,Cell2+",
+        #   "xytable_positions": {
+        #     "start": (150, 20),  # can be used to move the table to a safe position
+        #     "welding": [(100,100),(100,100), ... ],
+        #     "end": (150, 20)     # can be used to move the table to a safe position
+        #    }
+        # }
+        #
+        _parameter = json.loads(rows[0][2])  # NOTE: this will raise exception if JSON is invalid!!!
+        # we insert the xy table resource string into the parameter set for later use
+        _parameter["xytable_resource_str"] = _xytable_resource_str
+        return _parameter, \
+                [int(i) for i in rows[0][1].split(",")], \
+                str(rows[0][0]), \
+               _controller_resource_str, _part_number, session_maker, _line_id, _station_id
 
 
     def run(self) -> None:
@@ -1359,7 +1398,9 @@ class ProcessSPS(mp.Process):
                     _execution_start = perf_counter()  # we use _execution_time as start timestamp
                     # need to create a new State Machine to work with
                     # get configuration from DSP + DB connection
-                    program_sequence, sequence_revision, resource_str, part_number, db_session_maker, line_id, station_id = self.collect_parameters(_cfg, _dsp)
+                    xy_parameter, program_sequence, sequence_revision, \
+                        resource_str, part_number, \
+                        db_session_maker, line_id, station_id = self.collect_parameters(_cfg, _dsp)
                     print("Create new SPS state machine")
                     if self.verification_support:
                         print("VERIFICATION SUPPORT ENABLED!")
