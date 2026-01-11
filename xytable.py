@@ -3,9 +3,10 @@
 Contains the drivers for stepper motor controller MOC-01/MOC-02 from Optics Focus Instruments Co., Ltd.
 """
 
-from encodings.punycode import T
-from typing import Tuple, Literal
-from urllib import response
+
+from math import e
+from typing import Tuple, List
+from enum import Enum
 from rrc.eth2serial import Eth2SerialDevice
 from rrc.serialport import SerialComportDevice, SerialComportDevicePermanentlyOpen
 
@@ -512,7 +513,8 @@ class XYLinearStage():
         """Get the command string to reset the stage position so that the absolute zero position (home)."""
 
         for stage in self.stages:
-            ok, _ = self.command(stage.home_command())
+            cmd, msg = stage.home_command()
+            ok, _ = self.command(cmd, message=msg)
             if ok:
                 stage.position = 0  # to only way to set position initially
             else:
@@ -539,6 +541,202 @@ class XYLinearStage():
         return ok
 
 
+
+
+#--------------------------------------------------------------------------------------------------
+# this definition can be stored herein or into a separate configuration file (.yaml)
+DEFINITION_OF_STAGES = {
+    "xytable_A" :{
+        "resource_str": "COM5,9600,8N1",  # can also come from station_config.yaml
+        "type": "translation_stage",
+        "axis": [
+            {
+                "name": "X",
+                'subdivision': 2,
+                'step_angle': 1.8,
+                'pitch_of_lead_screw': 4,
+                'travel_range_mm': 350.0,
+            },
+            {
+                "name": "Y",
+                'subdivision': 2,
+                'step_angle': 1.8,
+                'pitch_of_lead_screw': 4,
+                'travel_range_mm': 400.0,
+            },
+        ],
+    },
+    # define more stages here as needed
+    # reference it by name in the database table `spsconfig`, column `parameter`
+}
+
+
+#
+# from the database table `spsconfig`, column `parameter`
+#
+
+
+DEMO_PARAMETERS = {
+    # already existing parameters used to show the cell position on screen
+    "sequence_to_cell_pole": "Cell1-,Cell2+,Cell3-Cell4+,Cell5-,Cell6+,Cell7-,Cell8-,Cell9+,Cell10-,Cell11+,Cell12-,Cell13+,Cell14-,Cell15-,Cell16+,Cell17-,Cell18+,Cell19-,Cell20+,Cell21-,Cell15+,Cell16-,Cell17+,Cell18-,Cell19+,Cell20-,Cell21+,Cell8+,Cell9-,Cell10+,Cell11-,Cell12+,Cell13-,Cell14+,Cell1+,Cell2-,Cell3+,Cell4-,Cell5+,Cell6-,Cell7+",
+    # this is for xy table automation
+    "automation": {
+        "stage": "xytable_A",
+        "positions": {
+            "units_in_mm": True,
+            "home": (50.0, 100.5),  # position to insert the cellstack for start or to flip its side at 50% of welding
+            "welding": [
+                (150.0, 100.0),
+                (150.0, 118.0),
+                (150.0, 136.0),
+                # ... 41 positions total ...
+            ],
+        }
+    },
+}
+
+#----------------------------------------------------------
+
+def generate_stage_from_parameter(parameter: dict) -> None | XYLinearStage:
+    """Generates a LinearStage object from the given parameters dictionary.
+
+    Args:
+        parameters (dict): Dictionary containing stage parameters.
+        name (str): Name of the stage ('X' or 'Y').
+
+    Returns:
+        LinearStage: Configured LinearStage object.
+    """
+
+    global DEFINITION_OF_STAGES
+
+    stage = None
+    if parameter is not None and "automation" in parameter:
+        if "stage" in parameter["automation"]:
+            if parameter["automation"]["stage"] in DEFINITION_OF_STAGES:
+                stage_definition = DEFINITION_OF_STAGES[parameter["automation"]["stage"]]
+                _resource_string = stage_definition["resource_str"]
+                if "translation_stage" == stage_definition["type"]:
+                    # prepare the stages of a linear XY table
+                    stages = ()
+                    for stage in stage_definition["axis"]:
+                        # adds x,y etc. stages as they come from configuration
+                        stages += (LinearStage(
+                            name = stage["name"],
+                            subdivision = stage["subdivision"],
+                            step_angle = stage["step_angle"],
+                            pitch_of_lead_screw = stage["pitch_of_lead_screw"],
+                            travel_range_mm = stage["travel_range_mm"],
+                        ),)
+                    # create the XY table driver
+                stage = XYLinearStage(stages[0], stages[1], _resource_string)
+
+    return stage
+
+
+#--------------------------------------------------------------------------------------------------
+
+class StageStates(Enum):
+    INIT = 0
+    START = 1
+    MOVE_POSITION = 4
+    WAIT_POSITION_REACHED = 5
+    POSITION_REACHED = 6
+    FLIP_STACK = 8
+    FEEDBACK_FROM_USER = 9
+    END = 10
+    STOP = 99
+
+
+#--------------------------------------------------------------------------------------------------
+
+class SatgeStateMachineBase(object):
+
+    def __init__(self, dev: XYLinearStage, extra_parameter: dict = None) -> None:
+        self.state: StageStates = StageStates.INIT
+        self.dev = dev
+        self.positions = extra_parameter["automation"]["positions"]
+        self.units_in_mm = self.positions.get("units_in_mm", True)
+        global DEBUG
+        self._log = getLogger(__name__, DEBUG)
+        self.is_sequence_done = False
+        self.position_index = 0
+
+
+    def set_state(self, new_state: StageStates) -> None:
+        self.state = new_state
+
+
+    # --- Rotating loop ---
+    def do_one_loop(self) -> None:
+        try:
+            match self.state:
+
+                case StageStates.INIT:
+                    self.set_state(StageStates.START)
+
+                case StageStates.START:
+                    self.dev.reset()
+                    x, y = self.positions["home"]
+                    self.dev.goto_position(x, y, units_in_mm=self.units_in_mm)
+                    # ???? how to get feedback from user that stage is ready ?
+
+                case StageStates.MOVE_POSITION:
+                    num_positions = len(self.positions)
+                    self.position_index += 1
+                    if self.position_index >= num_positions - 1:
+                        self.is_sequence_done = True
+                        self.set_state(StageStates.END)
+                    elif self.position_index == num_positions / 2:
+                        # need to flip the stack
+                        self.set_state(StageStates.FLIP_STACK)
+                    else:
+                        x, y = self.positions[self.position_index]
+                        self.dev.goto_position(x, y, units_in_mm=self.units_in_mm)
+                        self.set_state(StageStates.WAIT_POSITION_REACHED)
+
+                case StageStates.WAIT_POSITION_REACHED:
+                    x, y = self.positions["welding"][self.position_index]
+                    current_x, current_y = self.dev.position
+                    if abs(current_x - x) < 0.01 and abs(current_y - y) < 0.01:
+                        self.set_state(StageStates.POSITION_REACHED)
+
+
+                case StageStates.POSITION_REACHED:
+                    # trigger welding process here
+                    # check for welding done
+                    # if welding done:
+                    self.set_state(StageStates.MOVE_POSITION)
+
+
+                case StageStates.FLIP_STACK:
+                    self.dev.reset()
+                    # how do we get a feedback from the user ?
+                    # if user confirmed:
+                    x, y = self.positions["welding"][self.position_index]
+                    self.dev.goto_position(x, y, units_in_mm=self.units_in_mm)
+                    self.set_state(StageStates.WAIT_POSITION_REACHED)
+
+
+                case StageStates.END:
+                    self.dev.reset()
+                    x, y = self.positions["home"]
+                    self.dev.goto_position(x, y, units_in_mm=self.units_in_mm)
+
+
+                #
+                # Note: here we do not have a STOP
+                #
+                case other:
+                    self.set_state(StageStates.START)
+
+        except Exception as ex:
+            self._log.critical(f"Stage complains: {type(ex)}:{ex}")
+            #raise
+            pass  # swallow
+        finally:
+            # do not change the state here
+            pass
 
 
 #--------------------------------------------------------------------------------------------------
@@ -584,6 +782,21 @@ def test_xydevice(resource_string: str) -> None:
             print(f"Moved to position X={_x} Y={_y}, current position: {dev.position}")
         sleep(0.3)
 
+#--------------------------------------------------------------------------------------------------
+
+def test_db_driven_stage() -> None:
+    from time import sleep
+
+    global DEMO_PARAMETERS
+
+    dev = generate_stage_from_parameter(DEMO_PARAMETERS)
+    SM = SatgeStateMachineBase(dev, DEMO_PARAMETERS)
+
+    while SM.state != StageStates.END:
+        SM.do_one_loop()  # call this in a timed loop
+        sleep(0.2)
+
+
 
 #--------------------------------------------------------------------------------------------------
 
@@ -596,10 +809,10 @@ if __name__ == "__main__":
 
     tic = perf_counter()
 
-    RESOURCE_STR = "COM5,9600,8N1"
+    #RESOURCE_STR = "COM5,9600,8N1"
+    #test_xydevice(RESOURCE_STR)
 
-    test_xydevice(RESOURCE_STR)
-
+    test_db_driven_stage()
 
     toc = perf_counter()
     _log.info(f"DONE in {toc - tic:0.4f} seconds.")

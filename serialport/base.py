@@ -21,7 +21,7 @@ from rrc.custom_logging import getLogger, logger_init
 
 class SerialComportDevice(object):
 
-    def __init__(self, resource_str: str, termination: str | Tuple[str, str] | List[str, str] = "\r\n", trim_termination: bool = True, xonxff: bool = False) -> None:
+    def __init__(self, resource_str: str, termination: str | Tuple[str, str] | List[str] = "\r\n", trim_termination: bool = True, xonxff: bool = False) -> None:
         """Serial line communication the object with IP address and port number given by URL style resource string.
 
         Args:
@@ -236,12 +236,13 @@ class SerialComportDevice(object):
 
 
 #--------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 
 
 class SerialComportDevicePermanentlyOpen(SerialComportDevice):
 
     def __init__(self, resource_str: str,
-                 termination: str | Tuple[str, str] | List[str, str] = "\r\n", #
+                 termination: str | Tuple[str, str] | List[str] = "\r\n", #
                  trim_termination: bool = True,
                  xonxff: bool = False,
                  timeout: float = 3.0) -> None:
@@ -259,6 +260,7 @@ class SerialComportDevicePermanentlyOpen(SerialComportDevice):
         """
         super().__init__(resource_str, termination, trim_termination, xonxff)
         self.timeout = timeout
+        self._serial_instance: serial.Serial | None = None
 
     #------------------------------------------------------
     # these functions are context manager functions

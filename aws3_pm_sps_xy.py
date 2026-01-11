@@ -29,7 +29,7 @@ from rrc.barcode_scanner import create_barcode_scanner, decode_rrc_udi_label
 from pymodbus.exceptions import ModbusException
 from pymodbus import version as modbus_version
 from rrc.modbus.aws3 import AWS3Modbus, AWS3Modbus_DUMMY
-from rrc.xytable import XYLinearStage, LinearStage
+from rrc.xytable import XYLinearStage, generate_stage_from_parameter
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -549,27 +549,8 @@ class SPSStateMachineBase(object):
             self.dev = dev
         #self._machine_locked = self.dev.read_machine_lock_status()
         self._machine_locked = None
-
         # XY table extension (optional)
-        if extra_parameter is not None and "automation" in extra_parameter:
-            _resource_string = extra_parameter["automation"]["resource_str"]
-            if extra_parameter["automation"]["type"] == "XYLinearStage":
-                stages = ()
-                for stage in extra_parameter["automation"]["stages"]:
-                    # adds x,y etc. stages as they come from configuration
-                    stages += (LinearStage(
-                        name = stage["name"],
-                        subdivision = stage["subdivision"],
-                        step_angle = stage["step_angle"],
-                        pitch_of_lead_screw = stage["pitch_of_lead_screw"],
-                        travel_range_mm = stage["travel_range_mm"],
-                    ),)
-            # create the XY table driver
-            self.xy_table = XYLinearStage(stages[0], stages[1], _resource_string)
-        else:
-            self.xy_table: XYLinearStage | None = None
-
-
+        self.xy_table = generate_stage_from_parameter(extra_parameter)
         print(f"Poor man's SPS machine: {self.dev.machine_name}, at {repr(self.dev)}")
 
 

@@ -69,7 +69,7 @@ def is_socket_closed(sock: socket.socket) -> bool:
 
 class Eth2SerialDevice(object):
 
-    def __init__(self, resource_str: str, termination: str | Tuple[str, str] | List[str, str] = "\r\n", trim_termination: bool = True, open_connection: bool = True, pause_on_retry: int | None = 10) -> None:
+    def __init__(self, resource_str: str, termination: str | Tuple[str, str] | List[str] = "\r\n", trim_termination: bool = True, open_connection: bool = True, pause_on_retry: int | None = 10) -> None:
         """Initialize the object with IP address and port number given by URL style resource string.
 
         Args:
