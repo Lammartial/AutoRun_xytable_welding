@@ -1,5 +1,5 @@
 from cProfile import label
-from typing import List, Tuple, Self
+from typing import List, Tuple
 from enum import Enum
 import multiprocessing as mp
 import itertools
@@ -563,7 +563,7 @@ class SPSStateMachineBase(object):
     #----------------------------------------------------------------------------------------------
 
     # to provide the with ... statement protector
-    def __enter__(self) -> Self:
+    def __enter__(self):
         self.dev.open()
         return self
 

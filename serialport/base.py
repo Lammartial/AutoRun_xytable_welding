@@ -4,7 +4,7 @@ import serial_asyncio
 import serial
 import time
 from binascii import hexlify
-from typing import Tuple, List, Self
+from typing import Tuple, List
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -265,7 +265,7 @@ class SerialComportDevicePermanentlyOpen(SerialComportDevice):
     #------------------------------------------------------
     # these functions are context manager functions
 
-    def __enter__(self) -> Self:
+    def __enter__(self):
         self.open()
         atexit.register(self.__exit__)
         return self
