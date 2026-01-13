@@ -3,7 +3,7 @@
 Contains the drivers for stepper motor controller MOC-01/MOC-02 from Optics Focus Instruments Co., Ltd.
 """
 
-
+from time import sleep
 from math import e
 from typing import Tuple, List
 from enum import Enum
@@ -276,7 +276,6 @@ class LinearStage(BaseOfStage):
         displacement = int(round(new_position - self.position))
         if not displacement:
             return "", f"Already on position '{new_position}'"  # already on position
-
         cmd, msg = self.displacement_to_motion_command(displacement)
         return cmd, f"Setting {self.name}-position: {msg}"  # command to motion controller
 
@@ -284,6 +283,91 @@ class LinearStage(BaseOfStage):
 
     #----------------------------------------------------------------------------------------------
 
+
+
+#--------------------------------------------------------------------------------------------------
+
+class ParsingStage():
+    """Driver for a stages that is just parsing scripts."""
+
+    def __init__(self, resource_string: str, timeout: float = 5.0) -> None:
+
+        if "," in resource_string:
+            # serial com port which keeps the connection open all the time
+            self.dev = SerialComportDevicePermanentlyOpen(resource_string, termination=("\n", "\r"))
+        else:
+            # socket port which needs an open connection with timeout. The first call does not set the timeout.
+            self.dev = Eth2SerialDevice(resource_string, termination=("\n", "\r"), open_connection=True)
+            # now the connection is open with timeout setting
+            self.dev.connect_socket(timeout=timeout)
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def is_connected(self) -> bool:
+        #
+        # this command is for all stages
+        #
+        cmd = "?R"
+        response = self.dev.request(cmd)
+        r = response.strip().split("\r")
+        if (r[0] == cmd) and ("OK" in r[1]):
+            return True
+        else:
+            return False
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def parse_script(self, script: str) -> Tuple[bool, Tuple[str, str, float | str]]:
+        """Parses a script containing commands .
+
+        Args:
+            script (str): Multiline string with each line containing "X_mm,Y_mm"
+
+        Returns:
+            Tuple[bool, Tuple[str, str, float | str]]: list of tuples with (command, response, value)
+        """
+
+        log = []
+        # clear CR, use ; as line separator, accept line separator
+        lines = script.replace("\r", "").replace(";", "\n").strip().split('\n')
+        for line in lines:
+            try:
+                if line == "UI":
+                    # wait for user input
+                    pass
+                elif line[0] == "W":
+                    # wait
+                    w = float(line[1:])
+                    sleep(w / 1000.0)  # w is in ms
+                    v = w
+                else:
+                    # send the lines to the motion controller as they come
+                    response = self.dev.request(line, timeout=1.0, pause_after_write=0.1)
+                    # the response should include the command, split by CR
+                    r = response.split("\r")
+                    if r[0] != line:
+                        raise ValueError(f"Response '{response}' does not match command '{line}'")
+                    # parse the position from the response
+                    if "OK" in r[1]:
+                        # command executed successfully
+                        v = r[1].strip()
+                    elif not 'ERR' in r[1]:
+                        # got a number
+                        v = float(r[1].strip())
+                        # ... what should we do with it ?
+                    else:
+                        # ERR found -> decode error message
+                        v = r[1].strip()
+                        #raise ValueError(f"Stage error '{response}'")
+                # collect the log of positions
+                log.append((line, response, v))
+            except ValueError as e:
+                raise ValueError(f"Invalid line in script: '{line}'. Error: {e}")
+        return log
 
 
 #--------------------------------------------------------------------------------------------------
@@ -331,6 +415,8 @@ class XYLinearStage():
 
         # create a tuple of stages
         self.stages = (X, Y)
+        self.pulse_period = 30 / (0 + 1)  # assuming the initial speed is 0  -> pulses/ms
+        # -> _duration = abs(displacement) / self.pulse_period   # in ms
 
 
     #----------------------------------------------------------------------------------------------
@@ -401,6 +487,7 @@ class XYLinearStage():
         ok, response = self.command("?V", message="Getting stage speed")
         if ok:
             _v_speed = int(response.split('\r')[-1][1:])  # returns "?V\rV 0000\n"
+            self.pulse_period = 30 / (_v_speed + 1)  # update pulse period -> pulses/ms
             return _v_speed
         return None
 
@@ -745,7 +832,6 @@ class SatgeStateMachineBase(object):
 
 def test_xydevice(resource_string: str) -> None:
     """Test function for the XY device driver."""
-    from time import sleep
 
     X_stage = LinearStage(
         name = 'X',
@@ -785,7 +871,6 @@ def test_xydevice(resource_string: str) -> None:
 #--------------------------------------------------------------------------------------------------
 
 def test_db_driven_stage() -> None:
-    from time import sleep
 
     global DEMO_PARAMETERS
 
