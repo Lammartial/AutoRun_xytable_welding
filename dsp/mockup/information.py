@@ -70,19 +70,19 @@ PRODUCT_CONFIGURATION_TABLE = [
             ("412080_RRC2054-2S",   "B", "412080-01"),     # Corepack-Test (id,rev,pn)
             ("110186S_RRC2054-2-LM","A", "110186S-04")),   # EOL-Test (id,rev,pn)
     # ("QSB2040", "150003B-02"),
-    ("QSB2040B", "150003B-02", "QSB2040", "QSB2040B",
+    ("QSB2040B", "150003B-04", "QSB2040", "QSB2040B",
             ("412169_QSB2040B",     "B", "412169-01"),     # Cell-Test (id,rev,pn)
             (None,                  "A", "412158-02"),     # Cell-Welding (id,rev,pn)
             ("412169_QSB2040B",     "C", "411829-01"),     # PCBA-Test (id,rev,pn)
             ("412169_QSB2040B",     "C", "412185-01"),     # Corepack-Test (id,rev,pn)
             ("150003B_QSB2040",    "C", "150003B-02")),   # EOL-Test (id,rev,pn)
     # ("QSB2040-2", "150004B-02"),
-    ("QSB2054B", "150001B-02", "QSB2054", "QSB2054B",
-            ("412158_QSB2054B",     "B", "412158-01"),     # Cell-Test (id,rev,pn)
+    ("QSB2054B", "150001B-04", "QSB2054", "QSB2054B",
+            ("412158_QSB2054B",     "B", "412158-03"),     # Cell-Test (id,rev,pn)
             (None,                  "A", "412158-02"),     # Cell-Welding (id,rev,pn)
-            ("412158_QSB2054B",     "C", "412100-01"),     # PCBA-Test (id,rev,pn)
-            ("412185_QSB2054B",     "D", "412185-01"),     # Corepack-Test (id,rev,pn)
-            ("150001B_QSB2054",    "C", "150001B-02")),   # EOL-Test (id,rev,pn)
+            ("412158_QSB2054B",     "C", "412158-03"),     # PCBA-Test (id,rev,pn)
+            ("412158_QSB2054B",     "C", "412158-03"),     # Corepack-Test (id,rev,pn)
+            ("150001B_QSB2054",    "B", "150001B-04")),   # EOL-Test (id,rev,pn)
     ("QSB2054-2B", "150002B-02", "QSB2054-2", "Q2054-2B",
             ("412159_QSB2054-2B",   "B", "412159-01"),     # Cell-Test (id,rev,pn)
             (None,                  "A", "412159-01"),     # Cell-Welding (id,rev,pn)
