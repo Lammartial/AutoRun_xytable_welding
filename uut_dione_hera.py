@@ -305,6 +305,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
 
     def set_power_path(self, mode: int) -> bool:
+        mode = int(mode)
         buf = pack("<B", 1) + pack("<B", mode)
         #self.cpu.I2C_Master_set_PEC(1)
         #  0 = Automatic
