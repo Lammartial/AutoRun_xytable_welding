@@ -54,6 +54,8 @@ I2C_CMD_Write_Input_Current_Limit = 0x46  # new to Dione
 I2C_CMD_Write_UDI = 0x47  # new to Dione / Hera
 I2C_CMD_Write_AdapterCurrentOffset = 0x48  # new to Dione / Hera
 I2C_CMD_Write_ChargePump = 0x49  # new to Dione / Hera
+I2C_CMD_Write_SysPresent = 0x4A
+I2C_CMD_Write_EnterLowPowerMode = 0x4B
 
 
 #--------------------------------------------------------------------------------------------------
@@ -100,20 +102,20 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
     def set_bat_ntc_300_ohm(self, onoff) -> bool:
         return super().set_bat_ntc_300_ohm(onoff)
-    
+
 
     def set_uut_into_testmode(self, onoff) -> bool:
         return super().set_uut_into_testmode(onoff)
 
-   
+
     def read_battery_detection_from_uut(self) -> bool:
         return super().read_battery_detection_from_uut()
 
 
     def read_battery_measurements_from_uut(self) -> Tuple[float, float]:
         return super().read_battery_measurements_from_uut()
-    
-    
+
+
     def read_charger_measurements_from_uut(self) -> Tuple[float, float, float, float]:
         """Read charger measurements from UUT.
 
@@ -124,7 +126,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         """
 
         #self.cpu.I2C_Master_set_PEC(0)
-        buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_CHG_Values, 9)        
+        buf = self.cpu.I2C_Master_ReadBytes(self.i2c_address, I2C_CMD_Read_CHG_Values, 9)
         #self.cpu.I2C_Master_set_PEC(1)
         VIN = unpack_from(">H", buf, 1)[0] / 1e+3  # data come big endian
         V_SYS = unpack_from(">H", buf, 3)[0] / 1e+3  # data come big endian
@@ -148,7 +150,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         #R_SNS_BAT = unpack_from(">H", buf, 1)[0] / 1e+2  # data come big endian
         R_SNS_BAT = unpack_from(">H", buf, 1)[0] / 10 / 5  # this was the precalc of Hera DLL
         return R_SNS_BAT
-    
+
 
     def read_r_sense_dc_in_from_uut(self) -> float:
         """Reads the UUT's measurement of R-Sense of DC IN pin.
@@ -165,11 +167,11 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         #R_SNS_BAT = unpack_from(">H", buf, 1)[0] / 1e+2  # data come big endian
         R_SNS_BAT = unpack_from(">H", buf, 1)[0] / 10 / 5  # this was the precalc of Hera DLL
         return R_SNS_BAT
-    
+
 
     def read_bq_charge_option(self) -> bytearray:
         return super().read_bq_charge_option()
-    
+
 
     def set_bq_charge_option(self, onoff: bool) -> bool:
         """_summary_
@@ -190,7 +192,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
 
     def set_u_bat_i_bat(self, voltage: float, current: float) -> bool:
-        """Sets the charger of UUT to charge voltage and chareg current.        
+        """Sets the charger of UUT to charge voltage and chareg current.
 
         Args:
             voltage (float): battery voltage limit in V
@@ -199,14 +201,14 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         Returns:
             bool: _description_
         """
-        
+
         return super().set_u_bat_i_bat(voltage, current)
-    
+
 
     def calibrate_r_sns_bat(self, reference_current: float, r_sense_ohm: float = 0.010) -> int:
         """
         Calculates the current calibration value for UUT's battery path and also writes this
-        value to the UUT. An uncalibrated measurement of current by UUT is performed as preparation. 
+        value to the UUT. An uncalibrated measurement of current by UUT is performed as preparation.
 
         Args:
             reference_current (float): With high accuracy measured current.
@@ -218,11 +220,11 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
         return super().calibrate_r_sns_bat(reference_current, r_sense_ohm=r_sense_ohm)
 
- 
+
     def calibrate_r_sns_dc_in(self, reference_current: float, r_sense_ohm: float = 0.002) -> int:
         """
         Calculates the current calibration value for UUT's DC IN path and also writes this
-        value to the UUT. An uncalibrated measurement of current by UUT is performed 
+        value to the UUT. An uncalibrated measurement of current by UUT is performed
         as preparation.
 
         Args:
@@ -245,8 +247,8 @@ class UUT_Dione_Hera(UUT_MiniCharger):
 
     def calibrate_input_current_offset(self, reference_current: float) -> int:
         """
-        Calibrates input current measurement offset correction. 
-        An measurement of current by UUT is performed as preparation. 
+        Calibrates input current measurement offset correction.
+        An measurement of current by UUT is performed as preparation.
         Thus the calibration of this should be done before.
 
         Args:
@@ -265,7 +267,25 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         else:
             return -1
 
+    def set_charge_pump(self, charge_pump_on_off: bool) -> bool:
+        if charge_pump_on_off:
+            value = 0  # Automatic mode
+        else:
+            value = 2  # Manual off
+        buf = pack("<B", 1) + pack(">h", value)
+        return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_ChargePump, buf)
 
+    def set_sys_present(self, enable_disable_battery: bool) -> bool:
+        if enable_disable_battery:
+            value = 0  # Leave GPIO for SysPresent floating -> Enables the 3570
+        else:
+            value = 1  # Set the GPIO to push-pull and set it high  -> Disables the battery
+        buf = pack("<B", 1) + pack(">h", value)
+        return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_SysPresent, buf)
+
+    def enter_low_power_mode(self):
+        buf = pack("<B", 1)
+        self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_EnterLowPowerMode, buf)
 
     def toggle_gpio(self, bit: int, onoff: bool) -> bool:  # overwrite inherited function as command code is different
         self._set_gpio_pattern(int(bit), bool(onoff))
@@ -274,7 +294,7 @@ class UUT_Dione_Hera(UUT_MiniCharger):
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_GPIOs, buf)
 
 
-    
+
 
     # NEW FUNCTIONS to DIONE / HERA
 
@@ -287,6 +307,10 @@ class UUT_Dione_Hera(UUT_MiniCharger):
     def set_power_path(self, mode: int) -> bool:
         buf = pack("<B", 1) + pack("<B", mode)
         #self.cpu.I2C_Master_set_PEC(1)
+        #  0 = Automatic
+        #  1 = Manual - PSU
+        #  2 = Manual - Battery
+        #  3 = Manual - Connect nothing
         return self.cpu.I2C_Master_WriteBytes(self.i2c_address, I2C_CMD_Write_APP_ON_OFF, buf)  # uses the same command as APP ON/OFF
 
 
@@ -377,10 +401,10 @@ def test_myself():
     print(psu2.ident())
     psu2.initialize_device()
     daq = daq_class_selector("192.168.31.106:5025", 1)
-    #daq = AGILENT34972A("192.168.31.106:5025", card_slot=1)    
+    #daq = AGILENT34972A("192.168.31.106:5025", card_slot=1)
     print(daq.ident())
     #daq.send("*RST")
-    #sleep(0.5)    
+    #sleep(0.5)
     #daq.send("MEAS:TEMP:FRTD? 100,(@106)")
     daq.wait_response_ready()
     # daq.send("SENS:TEMP:TRAN:FRTD:TYPE 85,(@106)")
@@ -391,10 +415,10 @@ def test_myself():
     # print(daq.read_error_status())
     # print(daq.get_temp_rounded(6, "FRTD", 100, 0, "", 2))
 
-    #print(daq.selftest())      
+    #print(daq.selftest())
     dev = UUT_Dione_Hera(0x33, 0x09, resource_str="COM3,115200,8N1")
     print(dev.cpu.ident())
-    dev.initialize_cpu_ports()    
+    dev.initialize_cpu_ports()
     #psu1.set_output(0)
     #sleep(2)
     psu1.set_voltage(24.0)
@@ -417,18 +441,18 @@ def test_myself():
     print(psu1.set_output(1))
     print(load2.set_load_output(0))
     print(load2.set_load_mode("CCH"))
-    print(load2.set_measure_sense_to("UUT"))    
+    print(load2.set_measure_sense_to("UUT"))
     print(load2.activate_device_display())
     print(load2.measure_voltage())
     print(load2.measure_current())
     print(dev.read_battery_measurements_from_uut())
-    print(dev.read_charger_measurements_from_uut())    
+    print(dev.read_charger_measurements_from_uut())
     print(dev.switch_application_on_off(0))
     dev.set_u_bat_i_bat(0, 0)  # dummy action, next one will set correctly
     print(load2.set_load_mode("CRL"))
     print(load2.get_load_mode())
     print(load2.set_load_output(1))
-    load2.set_load_resistance(10.0)    
+    load2.set_load_resistance(10.0)
     load2.set_load_resistance(5.0)
     load2.set_load_resistance(3.0)
     #dev.set_u_bat_i_bat(12.05, 3.6)
@@ -442,7 +466,7 @@ def test_myself():
         _nc: float = (cc / c) if c > 0 else 0
         print(f"Set current {_nc:.3f}A")
         load2.set_load_current(_nc)
-        load2.set_load_output(1)                
+        load2.set_load_output(1)
         sleep(0.75)
         #print(dev.read_battery_measurements_from_uut())
         #print(dev.read_charger_measurements_from_uut())
@@ -451,13 +475,13 @@ def test_myself():
         #print(load1.measure_voltage())
         #print(load1.measure_current())
         load2.set_load_output(0)
-    
+
     # OFF
     print(load2.set_load_output(0))
     print(load1.set_load_output(0))
     print(psu2.set_output(0))
     print(psu1.set_output(0))
-    
+
 
 
 
