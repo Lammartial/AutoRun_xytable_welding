@@ -7,6 +7,8 @@ from time import sleep
 from math import e
 from typing import Tuple, List
 from enum import Enum
+
+from humanfriendly import time_units
 from rrc.eth2serial import Eth2SerialDevice
 from rrc.serialport import SerialComportDevice, SerialComportDevicePermanentlyOpen
 
@@ -15,7 +17,7 @@ from rrc.serialport import SerialComportDevice, SerialComportDevicePermanentlyOp
 # Logging
 # --------------------------------------------------------------------------- #
 
-DEBUG = 0
+DEBUG = 2
 
 from rrc.custom_logging import getLogger, logger_init
 
@@ -46,7 +48,7 @@ class BaseOfStage():
         self.axis_name = _AXIS_NAME_TO_CONTROLLER_NAME[n]
         assert step_angle in (0.9, 1.8), "Step angle must be either 0.9 or 1.8 degrees."
         self.step_angle = step_angle
-
+        self.position = None
 
     #----------------------------------------------------------------------------------------------
 
@@ -111,7 +113,7 @@ class RotaryStage(BaseOfStage):
         super().__init__(name, step_angle)
         self.stage_type: str = "rotary_stage"
         self.unit: str = "degree"
-        self.position: int = None  # current position of the stage unkonwn at start
+        self.position = None  # current position of the stage unkonwn at start
         # calculation depending on the type of stage
         self.subdivision = subdivision
         self.transmission_ratio = transmission_ratio  # for rotation stages
@@ -135,7 +137,7 @@ class GoniometerStage(BaseOfStage):
         super().__init__(name, step_angle)
         self.stage_type = "goniometer_stage"
         self.unit = "degree"
-        self.position: int = None  # current position of the stage unkonwn at start
+        self.position = None  # current position of the stage unkonwn at start
         # calculation depending on the type of stage
         self.subdivision = subdivision
         self.transmission_ratio = transmission_ratio  # for rotation stages
@@ -180,7 +182,7 @@ class LinearStage(BaseOfStage):
             subdivision: int,  # from back of motion controller: e.g. 2
             step_angle: float, # from the side of the stage: either 0.9 or 1.8
             pitch_of_lead_screw: float,  # in mm - from the optics focus website, e.g. 1.0
-            travel_range_mm: int, # maximum stage travel range in mm; will be converted into controller steps and stored in max_position
+            travel_range_mm: float, # maximum stage travel range in mm; will be converted into controller steps and stored in max_position
         ) -> None:
 
         super().__init__(name, step_angle)
@@ -195,9 +197,7 @@ class LinearStage(BaseOfStage):
         self.pulse_equiv = pitch_of_lead_screw * step_angle / (360 * subdivision)  # from manufacturers manual
         self.max_position = int(round(travel_range_mm / self.pulse_equiv))  # in controller pulse units
 
-
     #----------------------------------------------------------------------------------------------
-
 
     def convert_stage_speed_to_velocity(self, speed_value: int) -> float:
         """Converts a stage speed value (0..255) into physical (mm/s)"""
@@ -234,7 +234,6 @@ class LinearStage(BaseOfStage):
         """Converts a positive or negative displacement (in steps) into a motion command for the stage"""
 
         return f"{self.axis_name}{displacement:+}", f"Setting {self.name}-displacement of {displacement} steps"   # command for motion controller
-
 
    #----------------------------------------------------------------------------------------------
 
@@ -346,7 +345,7 @@ class ParsingStage():
                     v = w
                 else:
                     # send the lines to the motion controller as they come
-                    response = self.dev.request(line, timeout=1.0, pause_after_write=0.1)
+                    response = self.dev.request(line, timeout=5.0, pause_after_write=5)
                     # the response should include the command, split by CR
                     r = response.split("\r")
                     if r[0] != line:
@@ -406,10 +405,10 @@ class XYLinearStage():
             ## serial port which connects only on send or receive respecting the given timeouts in the send/request call.
             #self.dev = SerialComportDevice(resource_string, termination=("\n", "\r"))
             # serial com port which keeps the connection open all the time
-            self.dev = SerialComportDevicePermanentlyOpen(resource_string, termination=("\n", "\r"))
+            self.dev = SerialComportDevicePermanentlyOpen(resource_string, termination=("\r","\n"), timeout=timeout)
         else:
             # socket port which needs an open connection with timeout. The first call does not set the timeout.
-            self.dev = Eth2SerialDevice(resource_string, termination=("\n", "\r"), open_connection=True)
+            self.dev = Eth2SerialDevice(resource_string, termination=("\r","\n"), open_connection=True)
             # now the connection is open with timeout setting
             self.dev.connect_socket(timeout=timeout)
 
@@ -431,9 +430,10 @@ class XYLinearStage():
         if message:
             global DEBUG
             _log = getLogger(__name__, DEBUG)
-            _log.info(message)
+            _log.debug(message)
 
-        response = self.dev.request(command, timeout=1.0, pause_after_write=0.1)
+        response = self.dev.request(command, timeout=5.0, pause_after_write=5)
+
         if 'OK' in response:
             return True, response
         elif not 'ERR' in response:
@@ -452,13 +452,13 @@ class XYLinearStage():
             if _err in _err_msg:
                 return False, f"Stage error '{response}': {_err_msg[_err]}"
 
-        raise Exception(f"Something wen't wrong: {response}")
+        raise Exception(f"Something went wrong: {response}")
 
 
     #----------------------------------------------------------------------------------------------
 
 
-    def _exctract_position_from_response(self, from_string: str) -> int:
+    def _extract_position_from_response(self, from_string: str) -> int:
         position = int(from_string.split('\r')[-1][1:])  # returns "?X\rX+0000\n" with X=stage name
         return position
 
@@ -469,9 +469,11 @@ class XYLinearStage():
     def position(self) -> Tuple[int, int]:
         for stage in self.stages:
             cmd, msg = stage.read_position_command()
-            response = self.command(cmd, message=msg)
-            # update stage position from motion controller response
-            stage.position = self._exctract_position_from_response(response)
+            ok, response = self.command(cmd, message=msg)
+            if ok:
+                # update stage position from motion controller response
+                # stage.position = self._extract_position_from_response(response)
+                stage.position = int(response)
         return tuple([stage.position for stage in self.stages])
 
     #----------------------------------------------------------------------------------------------
@@ -515,11 +517,12 @@ class XYLinearStage():
 
     def is_connected(self) -> bool:
         # this command is for all stages
-        response = self.command('?R')
-        if 'OK' in response:
-            return True
-        else:
-            return False
+        ok, response = self.command('?R')
+        # if 'OK' in response:
+        #     return True
+        # else:
+        #     return False
+        return ok
 
     #----------------------------------------------------------------------------------------------
 
@@ -544,9 +547,10 @@ class XYLinearStage():
             else:
                 _new_position = new_position
             cmd, msg = stage.absolute_position_to_motion_command(_new_position)
-            ok, response = self.command(cmd, message=msg)
-            if not ok:
-                return False  # error during motion command
+            if cmd is not None and cmd != "":
+                ok, response = self.command(cmd, message=msg)
+                if not ok:
+                    return False  # error during motion command
         x, y = self.position # update positions after motion
         return True
 
@@ -703,9 +707,9 @@ def generate_stage_from_parameter(parameter: dict) -> None | XYLinearStage:
             if parameter["automation"]["stage"] in DEFINITION_OF_STAGES:
                 stage_definition = DEFINITION_OF_STAGES[parameter["automation"]["stage"]]
                 _resource_string = stage_definition["resource_str"]
+                # prepare the stages of a linear XY table
+                stages = ()
                 if "translation_stage" == stage_definition["type"]:
-                    # prepare the stages of a linear XY table
-                    stages = ()
                     for stage in stage_definition["axis"]:
                         # adds x,y etc. stages as they come from configuration
                         stages += (LinearStage(
@@ -716,7 +720,8 @@ def generate_stage_from_parameter(parameter: dict) -> None | XYLinearStage:
                             travel_range_mm = stage["travel_range_mm"],
                         ),)
                     # create the XY table driver
-                stage = XYLinearStage(stages[0], stages[1], _resource_string)
+                    if len(stages) > 1:
+                        stage = XYLinearStage(stages[0], stages[1], _resource_string)
 
     return stage
 
@@ -836,16 +841,16 @@ def test_xydevice(resource_string: str) -> None:
     X_stage = LinearStage(
         name = 'X',
         subdivision = 2,
-        step_angle = 0.9,
-        pitch_of_lead_screw = 1.0,
+        step_angle = 1.8,
+        pitch_of_lead_screw = 5,
         travel_range_mm = 400.0,
     )
 
     Y_stage = LinearStage(
         name = 'Y',
         subdivision = 2,
-        step_angle = 0.9,
-        pitch_of_lead_screw = 1.0,
+        step_angle = 1.8,
+        pitch_of_lead_screw = 5,
         travel_range_mm = 400.0,
     )
     dev = XYLinearStage(X_stage, Y_stage, resource_string)
@@ -853,20 +858,28 @@ def test_xydevice(resource_string: str) -> None:
     dev.clear()
 
 
-    POSITIONS_OF_PART = [  # RRC3570 42 positions (define them in mm)
-        ( 50.0, 100.5),
-        (150.0, 100.0),
-        (250.0, 100.0),
-        (350.0, 100.0),
-        # ... (add more positions as needed) ...
-    ]
+    # POSITIONS_OF_PART = [  # RRC3570 42 positions (define them in mm)
+    #     (50.0, 100.0),
+    #     (150.0, 110.0),
+    #     (250.0, 120.0),
+    #     (350.0, 130.0),
+    #     # ... (add more positions as needed) ...
+    # ]
 
-    for _x, _y in POSITIONS_OF_PART[:]:
-        if not dev.goto_position(_x, _y, units_in_mm=True):
-            print(f"Error moving to position X={_x} Y={_y}")
-        else:
-            print(f"Moved to position X={_x} Y={_y}, current position: {dev.position}")
-        sleep(0.3)
+    # for _x, _y in POSITIONS_OF_PART[:]:
+    #     if not dev.goto_position(_x, _y, units_in_mm=True):
+    #         print(f"Error moving to position X={_x} Y={_y}")
+    #     else:
+    #         print(f"Moved to position X={_x} Y={_y}, current position: {dev.position}")
+    #     sleep(0.3)
+    # Test movement
+
+    dev.home()
+    dev.goto_position(50.0, 100.0)
+    dev.goto_position(100.0, 110.0)
+    dev.goto_position(150.0, 110.0)
+    dev.goto_position(200.0, 100.0)
+    # dev.goto_position(266.1, 180.0)
 
 #--------------------------------------------------------------------------------------------------
 
@@ -881,8 +894,6 @@ def test_db_driven_stage() -> None:
         SM.do_one_loop()  # call this in a timed loop
         sleep(0.2)
 
-
-
 #--------------------------------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -894,10 +905,10 @@ if __name__ == "__main__":
 
     tic = perf_counter()
 
-    #RESOURCE_STR = "COM5,9600,8N1"
-    #test_xydevice(RESOURCE_STR)
+    RESOURCE_STR = "COM6,9600,8N1"  # Port for motion controller
+    test_xydevice(RESOURCE_STR)
 
-    test_db_driven_stage()
+    # test_db_driven_stage()
 
     toc = perf_counter()
     _log.info(f"DONE in {toc - tic:0.4f} seconds.")
