@@ -28,7 +28,6 @@ from rrc.barcode_scanner import create_barcode_scanner, decode_rrc_udi_label
 from pymodbus.exceptions import ModbusException
 from pymodbus import version as modbus_version
 from rrc.modbus.aws3 import AWS3Modbus, AWS3Modbus_DUMMY
-from rrc.xytable import XYLinearStage, LinearStage
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -878,11 +877,6 @@ class SPSStateMachine(SPSStateMachineBase):
     def move_seqence_step(self, step: int) -> SPSStates:
         if self.sequence_pos + step >= len(self.program_sequence):
             # sequence is done, do not proceed by wrap around
-
-            #
-            # reset XY linear stage or move to a good handle position for worker
-            #
-
             return SPSStates.PASSED
         else:
             self._offset_sequence(step)
@@ -890,11 +884,6 @@ class SPSStateMachine(SPSStateMachineBase):
             print(f"Move program step to {self.sequence_pos} with program no {self.next_program_no}")
             self.last_counter_ax1 = self.counter_ax1
             # next welding to be prepared
-
-            #
-            # set XY tabel to position for program no ...
-            #
-
             #return SPSStates.WAIT_READY_TO_SET_PROGRAM
             return SPSStates.SET_PROGRAM_ON_MACHINE
 
@@ -902,11 +891,6 @@ class SPSStateMachine(SPSStateMachineBase):
     def reset_seqence(self) -> None:
         self.sequence_pos = 0
         self.next_program_no = self.program_sequence[self.sequence_pos]
-
-        #
-        # reset XY linear stage
-        #
-
         #self.set_state(SPSStates.WAIT_READY_TO_SET_PROGRAM)
         self.set_state(SPSStates.SET_PROGRAM_ON_MACHINE)
 
@@ -1202,7 +1186,6 @@ class ProcessSPS(mp.Process):
         # 3. with station config we can get the IP resource for the welder MODBUS
         _resources = cfg.get_resource_strings_for_socket(0)
         _controller_resource_str = _resources[0]
-        _xytable_resource_str = _resources[2]  # XY linear stage controller resource string
         print(f"PART NUMBER: {_part_number}")
         # 4. we need the program sequence of the AWS welder for the given part number
         print("Requesting database for sequence...")
@@ -1584,7 +1567,8 @@ class ProcessScanner(mp.Process):
 
         proc_name = self.name
         _cfg, _dsp = _create_interfaces()
-        _, resource_str = _cfg.get_resource_strings_for_socket(0)
+        resources = _cfg.get_resource_strings_for_socket(0) # get list of resources
+        resource_str = resources[1]  # pick 2nd resource (need to be the scanner!)
         scanner = None
         _retry_timeout = 1
         if not self.simulate_scan:
