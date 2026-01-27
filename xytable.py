@@ -7,8 +7,6 @@ from time import sleep
 from math import e
 from typing import Tuple, List
 from enum import Enum
-
-from humanfriendly import time_units
 from rrc.eth2serial import Eth2SerialDevice
 from rrc.serialport import SerialComportDevice, SerialComportDevicePermanentlyOpen
 
@@ -293,7 +291,7 @@ class ParsingStage():
 
         if "," in resource_string:
             # serial com port which keeps the connection open all the time
-            self.dev = SerialComportDevicePermanentlyOpen(resource_string, termination=("\n", "\r"))
+            self.dev = SerialComportDevicePermanentlyOpen(resource_string, termination=("\n", "\r"), timeout=timeout)
         else:
             # socket port which needs an open connection with timeout. The first call does not set the timeout.
             self.dev = Eth2SerialDevice(resource_string, termination=("\n", "\r"), open_connection=True)
@@ -858,27 +856,39 @@ def test_xydevice(resource_string: str) -> None:
     dev.clear()
 
 
-    # POSITIONS_OF_PART = [  # RRC3570 42 positions (define them in mm)
-    #     (50.0, 100.0),
-    #     (150.0, 110.0),
-    #     (250.0, 120.0),
-    #     (350.0, 130.0),
-    #     # ... (add more positions as needed) ...
-    # ]
-
-    # for _x, _y in POSITIONS_OF_PART[:]:
-    #     if not dev.goto_position(_x, _y, units_in_mm=True):
-    #         print(f"Error moving to position X={_x} Y={_y}")
-    #     else:
-    #         print(f"Moved to position X={_x} Y={_y}, current position: {dev.position}")
-    #     sleep(0.3)
-    # Test movement
+    POSITIONS_OF_PART = [  # RRC3570 42 positions (define them in mm)
+        (50.0, 100.0),
+        (150.0, 110.0),
+        ("PAUSE", 2.5),
+        (250.0, 120.0),
+        (350.0, 130.0),
+        # ... (add more positions as needed) ...
+    ]
 
     dev.home()
-    dev.goto_position(50.0, 100.0)
-    dev.goto_position(100.0, 110.0)
-    dev.goto_position(150.0, 110.0)
-    dev.goto_position(200.0, 100.0)
+    for _x, _y in POSITIONS_OF_PART[:]:
+        if isinstance(_x, str):
+            if _x == "PAUSE" and _y is not None:
+                print(f"Pause for {_y} seconds!")
+                sleep(_y)
+            elif _x == "USER":
+                # Need to interact with user (read io port, etc.)
+                pass
+            else:
+                print(f"Unknown statement {_x}!")
+            continue
+        if not dev.goto_position(_x, _y, units_in_mm=True):
+            print(f"Error moving to position X={_x} Y={_y}")
+        else:
+            print(f"Moved to position X={_x} Y={_y}, current position: {dev.position}")
+            # Start welding here
+        sleep(0.3)
+
+    # Test movement
+    # dev.goto_position(50.0, 100.0)
+    # dev.goto_position(100.0, 110.0)
+    # dev.goto_position(150.0, 110.0)
+    # dev.goto_position(200.0, 100.0)
     # dev.goto_position(266.1, 180.0)
 
 #--------------------------------------------------------------------------------------------------
