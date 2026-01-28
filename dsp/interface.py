@@ -190,14 +190,21 @@ class DspInterface:
         if not self.LOCAL_RESULT_FILE:
             return []  # no file set -> always empty list to start with
         _local_result_file = self.LOCAL_RESULT_FILE
-        if not _local_result_file.exists():
-            # write empty JSON list
+        try:
+            # try to open it and then try to read it
+            with open(_local_result_file, "rt") as in_file:
+                _result_list = json.load(in_file)
+            # if we come here, we have a valid file and the list of records in _result_list
+        except (FileNotFoundError, json.JSONDecodeError):
+            if _local_result_file.exists():
+               # delete and recreate it properly
+                _local_result_file.unlink()
+            # write empty JSON list creating the file
             with open(_local_result_file, "wt") as out_file:
                 empty = []
                 json.dump(empty, out_file, indent=4)
-
-        with open(_local_result_file, "rt") as in_file:
-            _result_list = json.load(in_file)
+                _result_list = empty
+        # here we have a valid file and the list of records in _result_list
         return _result_list
 
     #--------------------------------------------------------------------------------------------------
@@ -510,7 +517,7 @@ def test_teststand_line_interfaces(
     if 1:
         _test_run_4 = dsp_eol.ts_get_parameter_for_testrun("EOL_TEST", "3_A11", line_id, 0)
         _log.info(f"TESTRUN: {_test_run_4}")
-        
+
         # ... more sockets ?
         if 1:
             _udi_to_send = ",".join([udi_cell, udi_pcba])
@@ -518,7 +525,7 @@ def test_teststand_line_interfaces(
             ok, serial = dsp_eol.ts_get_serial_number_for_udi(_udi_to_send)
             _log.info(f"SERIAL from cell,pcba udi: {serial}")
         if _test_run_4[0] == "":
-            # we need filled API for next tests even if no test parameter 
+            # we need filled API for next tests even if no test parameter
             dsp_eol.api = {
                 "test_type": "EOL_TEST",
                 "station_id": "TSDEV-WS-10",
@@ -604,7 +611,7 @@ if __name__ == "__main__":
     #API_URL = "http://172.22.2.40"     # Orbis DSP REST API @RRC (hostname MES-DSP-DE)
     #API_URL = "http://mes-dsp-de.rrc"  # Orbis DSP REST API @RRC
     API_URL = "http://172.25.100.9"   # ports 9925..9929 Orbis DSP REST API @RRCVN
-    
+
     #dsp = DspInterface(API_URL, LOCAL_RESULT_FILE)
 
     for loops in range(1):
