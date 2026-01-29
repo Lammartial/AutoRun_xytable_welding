@@ -8,6 +8,7 @@ from math import e
 from typing import Tuple, List
 from enum import Enum
 from rrc.eth2serial import Eth2SerialDevice
+from rrc.gcode.machine import Machine
 from rrc.serialport import SerialComportDevice, SerialComportDevicePermanentlyOpen
 
 
@@ -833,6 +834,37 @@ class SatgeStateMachineBase(object):
 #--------------------------------------------------------------------------------------------------
 
 
+def test_gcode_parser() -> None:
+    from rrc.gcode import gcodes, words
+    from rrc.gcode import Machine
+
+    gcs = gcodes.text2gcodes('G91 S1000 G1 X1 Y2 M3')
+    print(gcs)
+    gcs = gcodes.text2gcodes('G1 X1 Y2 G90')
+    print(gcs)
+    assert (len(gcs) == 2)
+    # G1 X1 Y2
+    assert (gcs[0].word == words.Word('G', 1))
+    assert (gcs[0].X == 1)
+    assert (gcs[0].Y == 2)
+    # G90
+    assert (gcs[1].word == words.Word('G', 90))
+
+    m = Machine()
+
+    gcs = gcodes.text2gcodes('G18 G1 X1 Y2 G90 G1 X100 Y100 F1500')
+    print(gcs)
+    m.process_gcodes(*gcs)  # has a DEBUG print of position changes
+    print(m.pos)
+    gcs = gcodes.text2gcodes('G1X1Y2G90G1X100Y100F1500')
+    print(gcs)
+    gcs = gcodes.text2gcodes('G1 X0 Y0 G2 X0 Y10 I5 J5')
+    print(gcs)
+    m.process_gcodes(*gcs)  # has a DEBUG print of position changes
+
+
+
+
 def test_xydevice(resource_string: str) -> None:
     """Test function for the XY device driver."""
 
@@ -860,6 +892,7 @@ def test_xydevice(resource_string: str) -> None:
         (50.0, 100.0),
         (150.0, 110.0),
         ("PAUSE", 2.5),
+        #("SCRIPT", "G01 X1000 Y1000;W500;UI;G01 X0 Y0;W500"),
         (250.0, 120.0),
         (350.0, 130.0),
         # ... (add more positions as needed) ...
@@ -915,8 +948,10 @@ if __name__ == "__main__":
 
     tic = perf_counter()
 
-    RESOURCE_STR = "COM6,9600,8N1"  # Port for motion controller
-    test_xydevice(RESOURCE_STR)
+    test_gcode_parser()
+
+    #RESOURCE_STR = "COM6,9600,8N1"  # Port for motion controller
+    #test_xydevice(RESOURCE_STR)
 
     # test_db_driven_stage()
 
