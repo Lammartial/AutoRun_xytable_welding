@@ -8,6 +8,7 @@ from .gcodes import GCodeAbsoluteArcDistanceMode, GCodeIncrementalArcDistanceMod
 from .gcodes import GCodeCannedCycle
 from .gcodes import GCodeDrillingCyclePeck, GCodeDrillingCycleDwell, GCodeDrillingCycleChipBreaking
 from .gcodes import GCodeCannedReturnMode, GCodeCannedCycleReturnPrevLevel, GCodeCannedCycleReturnToR
+from .gcodes import GCodeDwell
 from .gcodes import _gcodes_abs2rel
 
 from .machine import Position
