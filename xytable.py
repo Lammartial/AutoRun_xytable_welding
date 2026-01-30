@@ -7,9 +7,13 @@ from time import sleep
 from math import e
 from typing import Tuple, List
 from enum import Enum
+
+import test
 from rrc.eth2serial import Eth2SerialDevice
 from rrc.gcode.machine import Machine
+from rrc.modbus.aws3 import AWS3Modbus
 from rrc.serialport import SerialComportDevice, SerialComportDevicePermanentlyOpen
+from rrc.modbus.aws3 import AWS3Modbus
 
 
 # --------------------------------------------------------------------------- #
@@ -926,6 +930,49 @@ def test_xydevice(resource_string: str) -> None:
 
 #--------------------------------------------------------------------------------------------------
 
+class OurXYAWS3Modbus(AWS3Modbus):
+
+    def setup_device(self):
+        self.machine_name = self.read_name().strip()
+        self._toggle_bits = self._read_toggle_bits()
+
+    def is_machine_ready(self) -> tuple:
+        self._sync_modbus_timing()
+        # following includes a verification helper to simulate a weld process with
+        # a real machinge but without really doing the welding process (saves material and time)
+        bits = self.read_coils(97-1, 8, unit_address=3) if not self._verification_weld_resultbits else self._verification_weld_resultbits
+        d = {
+            "ready": 1 if bits[0] else 0,
+            "operational_mode": 1 if bits[1] else 0,  # 0=auto, 1=step
+            "reject": 1 if (bits[2] or bits[4]) else 0,  # combine both axes: either one fails
+            "hfi_device_fault": 1 if bits[5] else 0,
+            "ok": 1 if (bits[6] and bits[7]) else 0  # combine both axes: both need to be good
+        }
+        return bits[0], d
+
+
+def test_aws3_communication(resource_str: str) -> None:
+
+    try:
+        dev = OurXYAWS3Modbus(resource_str)
+        dev.open()
+        dev.setup_device()
+        # keep open
+
+        while True:
+            print(f"Machine name: {dev.machine_name}")
+            print(dev.is_machine_ready())
+            sleep(1.0)
+
+    except Exception as ex:
+        print(ex)
+        print("Using dummy AWS3 Modbus driver for test purposes.")
+
+
+
+
+#--------------------------------------------------------------------------------------------------
+
 def test_db_driven_stage() -> None:
 
     global DEMO_PARAMETERS
@@ -948,10 +995,11 @@ if __name__ == "__main__":
 
     tic = perf_counter()
 
-    test_gcode_parser()
+    #test_gcode_parser()
 
     #RESOURCE_STR = "COM6,9600,8N1"  # Port for motion controller
     #test_xydevice(RESOURCE_STR)
+    test_aws3_communication("tcp:172.25.103.100:502")
 
     # test_db_driven_stage()
 
