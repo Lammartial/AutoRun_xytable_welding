@@ -8,13 +8,10 @@ from math import e
 from typing import Tuple, List
 from enum import Enum
 
-import test
 from rrc.eth2serial import Eth2SerialDevice
-from rrc.gcode.machine import Machine
+# from rrc.gcode.machine import Machine
 from rrc.modbus.aws3 import AWS3Modbus
 from rrc.serialport import SerialComportDevice, SerialComportDevicePermanentlyOpen
-from rrc.modbus.aws3 import AWS3Modbus
-
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -244,7 +241,7 @@ class LinearStage(BaseOfStage):
     def absolute_position_to_motion_command(self, new_position: float | int | str) -> Tuple[str | None, str]:
         """Calculates the absolute new position on the linear stage based on
         the current position and returns the displacement to reach this position.
-        If the current position is unknown, it returns None.
+        If the current position is unknown, Freturns None.
 
         Args:
             new_position (float | int | str): _description_
@@ -838,35 +835,33 @@ class SatgeStateMachineBase(object):
 #--------------------------------------------------------------------------------------------------
 
 
-def test_gcode_parser() -> None:
-    from rrc.gcode import gcodes, words
-    from rrc.gcode import Machine
+# def test_gcode_parser() -> None:
+#     from rrc.gcode import gcodes, words
+#     from rrc.gcode import Machine
 
-    gcs = gcodes.text2gcodes('G91 S1000 G1 X1 Y2 M3')
-    print(gcs)
-    gcs = gcodes.text2gcodes('G1 X1 Y2 G90')
-    print(gcs)
-    assert (len(gcs) == 2)
-    # G1 X1 Y2
-    assert (gcs[0].word == words.Word('G', 1))
-    assert (gcs[0].X == 1)
-    assert (gcs[0].Y == 2)
-    # G90
-    assert (gcs[1].word == words.Word('G', 90))
+#     gcs = gcodes.text2gcodes('G91 S1000 G1 X1 Y2 M3')
+#     print(gcs)
+#     gcs = gcodes.text2gcodes('G1 X1 Y2 G90')
+#     print(gcs)
+#     assert (len(gcs) == 2)
+#     # G1 X1 Y2
+#     assert (gcs[0].word == words.Word('G', 1))
+#     assert (gcs[0].X == 1)
+#     assert (gcs[0].Y == 2)
+#     # G90
+#     assert (gcs[1].word == words.Word('G', 90))
 
-    m = Machine()
+#     m = Machine()
 
-    gcs = gcodes.text2gcodes('G18 G1 X1 Y2 G90 G1 X100 Y100 F1500')
-    print(gcs)
-    m.process_gcodes(*gcs)  # has a DEBUG print of position changes
-    print(m.pos)
-    gcs = gcodes.text2gcodes('G1X1Y2G90G1X100Y100F1500')
-    print(gcs)
-    gcs = gcodes.text2gcodes('G1 X0 Y0 G2 X0 Y10 I5 J5')
-    print(gcs)
-    m.process_gcodes(*gcs)  # has a DEBUG print of position changes
-
-
+#     gcs = gcodes.text2gcodes('G18 G1 X1 Y2 G90 G1 X100 Y100 F1500')
+#     print(gcs)
+#     m.process_gcodes(*gcs)  # has a DEBUG print of position changes
+#     print(m.pos)
+#     gcs = gcodes.text2gcodes('G1X1Y2G90G1X100Y100F1500')
+#     print(gcs)
+#     gcs = gcodes.text2gcodes('G1 X0 Y0 G2 X0 Y10 I5 J5')
+#     print(gcs)
+#     m.process_gcodes(*gcs)  # has a DEBUG print of position changes
 
 
 def test_xydevice(resource_string: str) -> None:
@@ -877,7 +872,7 @@ def test_xydevice(resource_string: str) -> None:
         subdivision = 2,
         step_angle = 1.8,
         pitch_of_lead_screw = 5,
-        travel_range_mm = 400.0,
+        travel_range_mm = 216.0,
     )
 
     Y_stage = LinearStage(
@@ -893,40 +888,124 @@ def test_xydevice(resource_string: str) -> None:
 
 
     POSITIONS_OF_PART = [  # RRC3570 42 positions (define them in mm)
-        (50.0, 100.0),
-        (150.0, 110.0),
-        ("PAUSE", 2.5),
-        #("SCRIPT", "G01 X1000 Y1000;W500;UI;G01 X0 Y0;W500"),
-        (250.0, 120.0),
-        (350.0, 130.0),
+        (165.738, 62.525),       # Worker position
+        ("PAUSE", 1.0),
+        (165.738, 162.525),       # First welding position - Face 1
+        ("PAUSE", 1.0),
+        (165.738, 185.975),
+        ("PAUSE", 1.0),
+        (165.738, 209.425),
+        ("PAUSE", 1.0),
+        (165.738, 232.875),
+        ("PAUSE", 1.0),
+        (165.738, 256.325),
+        ("PAUSE", 1.0),
+        (165.738, 279.775),
+        ("PAUSE", 1.0),
+        (165.738, 303.225),    
+        ("PAUSE", 1.0),
+        (145.428, 291.505),      # Start position of column 2 - Face 1
+        ("PAUSE", 1.0),
+        (145.428, 268.055),
+        ("PAUSE", 1.0),
+        (145.428, 244.605),
+        ("PAUSE", 1.0),
+        (145.428, 221.155),
+        ("PAUSE", 1.0),
+        (145.428, 197.705),
+        ("PAUSE", 1.0),
+        (145.428, 174.255),
+        ("PAUSE", 1.0),
+        (145.428, 150.805),      
+        ("PAUSE", 1.0),   
+        (125.118, 162.525),      # Start position of column 3 - Face 1
+        ("PAUSE", 1.0),  
+        (125.118, 185.975),
+        ("PAUSE", 1.0), 
+        (125.118, 209.425),
+        ("PAUSE", 1.0), 
+        (125.118, 232.875),
+        ("PAUSE", 1.0),
+        (125.118, 256.325),
+        ("PAUSE", 1.0),    
+        (125.118, 279.775),
+        ("PAUSE", 1.0),
+        (125.118, 303.225),      
+        ("PAUSE", 1.0),
+        (165.738, 62.525),       # Worker position (flip)
+        ("PAUSE", 10.0),          
+        (165.738, 162.525),      # First welding position - Face 2
+        ("PAUSE", 1.0),
+        (165.738, 185.975),
+        ("PAUSE", 1.0),
+        (165.738, 209.425),
+        ("PAUSE", 1.0),
+        (165.738, 232.875),
+        ("PAUSE", 1.0),
+        (165.738, 256.325),
+        ("PAUSE", 1.0),
+        (165.738, 279.775),    
+        ("PAUSE", 1.0),
+        (165.738, 303.225),
+        ("PAUSE", 1.0),
+        (145.428, 291.505),     # Start position of column 2 - Face 2
+        ("PAUSE", 1.0),
+        (145.428, 268.055),
+        ("PAUSE", 1.0),
+        (145.428, 244.605),
+        ("PAUSE", 1.0),
+        (145.428, 221.155),
+        ("PAUSE", 1.0),
+        (145.428, 197.705),
+        ("PAUSE", 1.0),
+        (145.428, 174.255),      
+        ("PAUSE", 1.0),   
+        (145.428, 150.805),
+        ("PAUSE", 1.0),  
+        (125.118, 162.525),      # Start position of column 3 - Face 2
+        ("PAUSE", 1.0), 
+        (125.118, 185.975),
+        ("PAUSE", 1.0), 
+        (125.118, 209.425),
+        ("PAUSE", 1.0),
+        (125.118, 232.875),
+        ("PAUSE", 1.0),    
+        (125.118, 256.325),
+        ("PAUSE", 1.0), 
+        (125.118, 279.775),
+        ("PAUSE", 1.0), 
+        (125.118, 303.225),
+        ("PAUSE", 1.0), 
+        (165.738, 62.525),
+        ("PAUSE", 1.0),     
         # ... (add more positions as needed) ...
     ]
 
     dev.home()
-    for _x, _y in POSITIONS_OF_PART[:]:
-        if isinstance(_x, str):
-            if _x == "PAUSE" and _y is not None:
-                print(f"Pause for {_y} seconds!")
-                sleep(_y)
-            elif _x == "USER":
-                # Need to interact with user (read io port, etc.)
-                pass
-            else:
-                print(f"Unknown statement {_x}!")
-            continue
-        if not dev.goto_position(_x, _y, units_in_mm=True):
-            print(f"Error moving to position X={_x} Y={_y}")
-        else:
-            print(f"Moved to position X={_x} Y={_y}, current position: {dev.position}")
-            # Start welding here
-        sleep(0.3)
+    # for _x, _y in POSITIONS_OF_PART[:]:
+    #     if isinstance(_x, str):
+    #         if _x == "PAUSE" and _y is not None:
+    #             print(f"Pause for {_y} seconds!")
+    #             sleep(_y)
+    #         elif _x == "USER":
+    #             # Need to interact with user (read io port, etc.)
+    #             pass
+    #         else:
+    #             print(f"Unknown statement {_x}!")
+    #         continue
+    #     if not dev.goto_position(_x, _y, units_in_mm=True):
+    #         print(f"Error moving to position X={_x} Y={_y}")
+    #     else:
+    #         print(f"Moved to position X={_x} Y={_y}, current position: {dev.position}")
+    #         # Start welding here
+    #     sleep(0.3)
 
     # Test movement
-    # dev.goto_position(50.0, 100.0)
+    # dev.home()
+    dev.goto_position(165.738, 62.525)
     # dev.goto_position(100.0, 110.0)
     # dev.goto_position(150.0, 110.0)
-    # dev.goto_position(200.0, 100.0)
-    # dev.goto_position(266.1, 180.0)
+
 
 #--------------------------------------------------------------------------------------------------
 
@@ -962,6 +1041,9 @@ def test_aws3_communication(resource_str: str) -> None:
         while True:
             print(f"Machine name: {dev.machine_name}")
             print(dev.is_machine_ready())
+            print(dev.read_program_name(axis=1), dev.read_program_no())
+            print(dev.read_axis_counter(1))
+            print(dev.read_machine_lock_status())
             sleep(1.0)
 
     except Exception as ex:
@@ -969,6 +1051,216 @@ def test_aws3_communication(resource_str: str) -> None:
         print("Using dummy AWS3 Modbus driver for test purposes.")
 
 
+def auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y):
+    welding_position = 0
+
+    for _x, _y in POSITIONS_OF_PART[:]:
+        if isinstance(_x, str):
+            if _x == "PAUSE" and _y is not None:
+                print(f"Pause for {_y} seconds!")
+                sleep(_y)
+            elif _x == "USER":
+                # Need to interact with user (read io port, etc.)
+                c = input("Please press 'c' to continue or 's' to stop: ").strip()
+                if c.lower() == 's':
+                    print(f"Process stopped at welding position {welding_position}.")
+                    xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y)
+                    return
+                
+            elif _x == "RESTART":
+                # Need to rerun the process from the beginning (or run the next process)
+                return auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
+                
+            elif _x == "WELD":
+                welding_position += 1
+                # Need to trigger welding machine and wait for finish
+                while True:
+                    _ready, _ = welder.is_machine_ready()
+                    if _ready:
+                        break
+                    sleep(0.01)
+                
+                # Make sure program is set
+                welder.write_program_no(int(_y))
+                sleep(0.01)
+                while welder.read_program_no() != int(_y):
+                    sleep(0.01)
+                pass
+
+                # Welding automated start could be implemented here (Full automation)
+                # Write your code here
+
+                print(f"Welding position {welding_position}.")
+                print("Wait until welding is done.")
+                while True: 
+                    sleep(0.01)
+                    _ready, _ = welder.is_machine_ready()
+                    if not _ready:
+                        continue
+
+                    if welder.is_toggle_bit_changed():
+                        break  # Welding is done
+                
+                # Get welding results
+                _, weld_result = welder.is_machine_ready()
+                if weld_result["ok"] == 1:          # Case when welding result is ok
+                    print("Welding ok")
+                    continue
+                elif weld_result["reject"] == 1:    # Case when welding failed
+                    print("Welding failed")
+                    # Stops welding at failed position. Then, operator changes to new pack, then scans in new label -> xy table moves back to worker position to restart new welding process
+                    # xy_table.goto_position(WORKER_POSITION_X,WORKER_POSITION_Y)
+                    return  
+                else:
+                    # Case when no welding signal is received
+                    # In this case, xytable stops. Operator moves battey pack out, and puts pack back in position
+                    # Then, operator can press 'c' to continue moving the xytable to the next welding position
+                    
+                    print("No welding signal received!")
+                    c = input("Please press 'c' to continue or 's' to stop: ").strip()
+                    if c.lower() == 's':
+                        print(f"Process stopped at welding position {welding_position}.")
+                        xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y)
+                    else:
+                        continue
+
+                # Stop parsing
+                break
+
+            else:
+                print(f"Unknown statement {_x}!")
+            continue
+
+        if not xy_table.goto_position(_x, _y, units_in_mm=True):
+            print(f"Error moving to position X={_x} Y={_y}")
+        else:
+            print(f"Moved to position X={_x} Y={_y}, current position: {xy_table.position}")
+            # Start welding here
+        sleep(0.3)
+
+
+def test_combined_controllers(resource_str_aws: str, resource_str_xy: str):
+    welder = OurXYAWS3Modbus(resource_str_aws)
+    welder.open()
+    welder.setup_device()
+
+    X_stage = LinearStage(
+        name = 'X',
+        subdivision = 2,
+        step_angle = 1.8,
+        pitch_of_lead_screw = 5,
+        travel_range_mm = 1000.0,
+    )
+
+    Y_stage = LinearStage(
+        name = 'Y',
+        subdivision = 2,
+        step_angle = 1.8,
+        pitch_of_lead_screw = 5,
+        travel_range_mm = 1000.0,
+    )
+
+    xy_table = XYLinearStage(X_stage, Y_stage, resource_str_xy)
+    print(f"Connected: {xy_table.is_connected()}")
+    xy_table.clear()
+    WORKER_POSITION_X, WORKER_POSITION_Y = 165.738, 62.525
+    POSITIONS_OF_PART = [  # RRC3570 42 positions (define them in mm)
+        
+        (WORKER_POSITION_X, WORKER_POSITION_Y),       # Worker position
+        (165.738, 162.525),       # First welding position - Face 1
+        ("WELD", 1),             # Trigger welding with program number
+        (165.738, 185.975),
+        ("WELD", 2),
+        (165.738, 209.425),
+        ("WELD", 3),
+        (165.738, 232.875),
+        ("WELD", 4),
+        (165.738, 256.325),
+        ("WELD", 5),
+        (165.738, 279.775),
+        ("WELD", 6),
+        (165.738, 303.225),    
+        ("WELD", 7),
+        (145.428, 291.505),      # Start position of column 2 - Face 1
+        ("WELD", 8),
+        (145.428, 268.055),
+        ("WELD", 9),
+        (145.428, 244.605),
+        ("WELD", 10),
+        (145.428, 221.155),
+        ("WELD", 11),
+        (145.428, 197.705),
+        ("WELD", 12),
+        (145.428, 174.255),
+        ("WELD", 13),
+        (145.428, 150.805),      
+        ("WELD", 14), 
+        (125.118, 162.525),      # Start position of column 3 - Face 1
+        ("WELD", 15), 
+        (125.118, 185.975),
+        ("WELD", 16),
+        (125.118, 209.425),
+        ("WELD", 17),
+        (125.118, 232.875),
+        ("WELD", 18),
+        (125.118, 256.325),
+        ("WELD", 19), 
+        (125.118, 279.775),
+        ("WELD", 20),
+        (125.118, 303.225),      
+        ("WELD", 21),
+        (WORKER_POSITION_X, WORKER_POSITION_Y),       # Worker position (flip)
+        ("USER", None),          # Operator stops to flip pack, then press 'c' to continue.
+        (165.738, 162.525),      # First welding position - Face 2
+        ("WELD", 22),
+        (165.738, 185.975),
+        ("WELD", 23),
+        (165.738, 209.425),
+        ("WELD", 24),
+        (165.738, 232.875),
+        ("WELD", 25),
+        (165.738, 256.325),
+        ("WELD", 26),
+        (165.738, 279.775),    
+        ("WELD", 27),
+        (165.738, 303.225),
+        ("WELD", 28),
+        (145.428, 291.505),     # Start position of column 2 - Face 2
+        ("WELD", 29),
+        (145.428, 268.055),
+        ("WELD", 30),
+        (145.428, 244.605),
+        ("WELD", 31),
+        (145.428, 221.155),
+        ("WELD", 32),
+        (145.428, 197.705),
+        ("WELD", 33),
+        (145.428, 174.255),      
+        ("WELD", 34),  
+        (145.428, 150.805),
+        ("WELD", 35),  
+        (125.118, 162.525),      # Start position of column 3 - Face 2
+        ("WELD", 36),
+        (125.118, 185.975),
+        ("WELD", 37),
+        (125.118, 209.425),
+        ("WELD", 38),
+        (125.118, 232.875),
+        ("WELD", 39),  
+        (125.118, 256.325),
+        ("WELD", 40),
+        (125.118, 279.775),
+        ("WELD", 41),
+        (125.118, 303.225),
+        ("WELD", 42),
+        (WORKER_POSITION_X, WORKER_POSITION_Y),
+        # ("USER", "Restart"),      # Go back home, let operator change to new pack and continue with new welding   
+        # ... (add more positions as needed) ...
+    ]
+
+    # Combine control for controller and reading from welding machine
+    xy_table.home()
+    auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
 
 
 #--------------------------------------------------------------------------------------------------
@@ -997,14 +1289,15 @@ if __name__ == "__main__":
 
     #test_gcode_parser()
 
-    #RESOURCE_STR = "COM6,9600,8N1"  # Port for motion controller
-    #test_xydevice(RESOURCE_STR)
-    test_aws3_communication("tcp:172.25.103.100:502")
+    RESOURCE_STR_MOTION_CONTROLLER = "COM9,9600,8N1"  # Port for motion controller
+    RESOURCE_STR_AWS = "tcp:172.25.103.100:502"
+    # test_xydevice(RESOURCE_STR_MOTION_CONTROLLER)
+    test_combined_controllers(RESOURCE_STR_AWS, RESOURCE_STR_MOTION_CONTROLLER)
+    # test_aws3_communication("tcp:172.25.103.100:502")
 
     # test_db_driven_stage()
 
     toc = perf_counter()
     _log.info(f"DONE in {toc - tic:0.4f} seconds.")
-
 
 # END OF FILE
