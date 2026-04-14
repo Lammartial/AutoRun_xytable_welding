@@ -13,6 +13,11 @@ from rrc.eth2serial import Eth2SerialDevice
 from rrc.modbus.aws3 import AWS3Modbus
 from rrc.serialport import SerialComportDevice, SerialComportDevicePermanentlyOpen
 
+# UI interactive libraries
+import tkinter as tk
+from threading import Event
+from pynput import keyboard
+
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
@@ -864,6 +869,142 @@ class SatgeStateMachineBase(object):
 #     m.process_gcodes(*gcs)  # has a DEBUG print of position changes
 
 
+# UI Pop up for operator to take actions
+def wait_for_continue_or_stop():
+    result = {"action": None}
+    done = Event()
+
+    def finish(action):
+        if not done.is_set():
+            result["action"] = action
+            done.set()
+
+    def on_press(key):
+        if done.is_set():
+            return False
+
+        if key == keyboard.Key.enter:
+            finish("continue")
+            return False
+
+        if key == keyboard.Key.space:
+            finish("stop")
+            return False
+
+    root = tk.Tk()
+    root.withdraw()
+
+    dialog = tk.Toplevel(root)
+    dialog.title("Action Required")
+    dialog.geometry("760x420")
+    dialog.resizable(False, False)
+    dialog.configure(bg="#f4f6f8")
+    dialog.attributes("-topmost", True)
+    dialog.grab_set()
+
+    def center_window(win, width, height):
+        win.update_idletasks()
+        screen_width = win.winfo_screenwidth()
+        screen_height = win.winfo_screenheight()
+        x = (screen_width // 2) - (width // 2)
+        y = (screen_height // 2) - (height // 2)
+        win.geometry(f"{width}x{height}+{x}+{y}")
+
+    center_window(dialog, 760, 420)
+
+    container = tk.Frame(dialog, bg="#f4f6f8", padx=32, pady=28)
+    container.pack(fill="both", expand=True)
+
+    title_label = tk.Label(
+        container,
+        text="Choose how to proceed",
+        font=("Segoe UI", 22, "bold"),
+        bg="#f4f6f8",
+        fg="#1f2937",
+    )
+    title_label.pack(pady=(0, 14))
+
+    instruction_label = tk.Label(
+        container,
+        text="Press Enter to Continue\nPress Space to Stop",
+        font=("Segoe UI", 15),
+        bg="#f4f6f8",
+        fg="#4b5563",
+        justify="center",
+    )
+    instruction_label.pack(pady=(0, 30))
+
+    button_frame = tk.Frame(container, bg="#f4f6f8")
+    button_frame.pack()
+
+    continue_btn = tk.Button(
+        button_frame,
+        text="Press Enter to Continue",
+        font=("Segoe UI", 14, "bold"),
+        bg="#2563eb",
+        fg="white",
+        activebackground="#1d4ed8",
+        activeforeground="white",
+        relief="flat",
+        padx=24,
+        pady=16,
+        width=26,
+        anchor="center",
+        justify="center",
+        cursor="hand2",
+        command=lambda: finish("continue"),
+    )
+    continue_btn.grid(row=0, column=0, padx=14, pady=10)
+
+    stop_btn = tk.Button(
+        button_frame,
+        text="Press Space to Stop",
+        font=("Segoe UI", 14, "bold"),
+        bg="#dc2626",
+        fg="white",
+        activebackground="#b91c1c",
+        activeforeground="white",
+        relief="flat",
+        padx=24,
+        pady=16,
+        width=26,
+        anchor="center",
+        justify="center",
+        cursor="hand2",
+        command=lambda: finish("stop"),
+    )
+    stop_btn.grid(row=0, column=1, padx=14, pady=10)
+
+    dialog.protocol("WM_DELETE_WINDOW", lambda: finish("stop"))
+
+    dialog.lift()
+    dialog.focus_force()
+    continue_btn.focus_set()
+
+    listener = keyboard.Listener(on_press=on_press)
+    listener.start()
+
+    def check_done():
+        if done.is_set():
+            try:
+                listener.stop()
+            except Exception:
+                pass
+            try:
+                dialog.destroy()
+            except tk.TclError:
+                pass
+            root.quit()
+        else:
+            dialog.after(50, check_done)
+
+    dialog.after(50, check_done)
+    root.mainloop()
+    root.destroy()
+
+    return result["action"]
+
+
 def test_xydevice(resource_string: str) -> None:
     """Test function for the XY device driver."""
 
@@ -1059,17 +1200,36 @@ def auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSI
             if _x == "PAUSE" and _y is not None:
                 print(f"Pause for {_y} seconds!")
                 sleep(_y)
+
             elif _x == "USER":
                 # Need to interact with user (read io port, etc.)
-                c = input("Please press 'c' to continue or 's' to stop: ").strip()
-                if c.lower() == 's':
+                # c = input("Please press 'c' to continue or 's' to stop: ").strip()
+                # if c.lower() == 's':
+                #     print(f"Process stopped at welding position {welding_position}.")
+                #     xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y)
+                #     return
+                
+                # UI Implementation
+                action = wait_for_continue_or_stop()
+                if action != "continue":
                     print(f"Process stopped at welding position {welding_position}.")
                     xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y)
                     return
                 
             elif _x == "RESTART":
                 # Need to rerun the process from the beginning (or run the next process)
-                return auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
+                # c = input("Please press 'c' to continue or 's' to stop: ").strip()
+                # if c.lower() == 'c':
+                #     auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
+                # else:
+                #     return
+            
+                # UI Implementation
+                action = wait_for_continue_or_stop()
+                if action != "continue":
+                    return
+                else:
+                    auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
                 
             elif _x == "WELD":
                 welding_position += 1
@@ -1092,25 +1252,44 @@ def auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSI
 
                 print(f"Welding position {welding_position}.")
                 print("Wait until welding is done.")
-                while True: 
-                    sleep(0.01)
-                    _ready, _ = welder.is_machine_ready()
-                    if not _ready:
-                        continue
+                # while True: 
+                #     sleep(0.01)
+                #     _ready, _ = welder.is_machine_ready()
+                #     if not _ready:
+                #         continue
 
-                    if welder.is_toggle_bit_changed():
-                        break  # Welding is done
+                #     if welder.is_toggle_bit_changed():
+                #         break  # Welding is done
                 
-                # Get welding results
+                # # Get welding results
                 _, weld_result = welder.is_machine_ready()
-                if weld_result["ok"] == 1:          # Case when welding result is ok
+
+                ''' SIMULATION MOVING XYTABLE IN CASE WELDING MACHINE DOES NOT WORK'''
+                weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
+                # weld_test_result = ""
+
+                if weld_result["ok"] == 1 or weld_test_result == "ok":          # Case when welding result is ok
                     print("Welding ok")
                     continue
-                elif weld_result["reject"] == 1:    # Case when welding failed
+                elif weld_result["reject"] == 1 or weld_test_result == "failed":    # Case when welding failed
                     print("Welding failed")
-                    # Stops welding at failed position. Then, operator changes to new pack, then scans in new label -> xy table moves back to worker position to restart new welding process
-                    # xy_table.goto_position(WORKER_POSITION_X,WORKER_POSITION_Y)
-                    return  
+                    # Stops welding at failed position. Then, operator changes to new pack, then scans in new label -> 
+                    # xy table moves back to worker position to restart new welding process
+                    xy_table.goto_position(WORKER_POSITION_X,WORKER_POSITION_Y)
+
+                    # c = input("Please press 'c' to continue or 's' to stop: ").strip()
+                    # if c.lower() == 'c':
+                    #     break
+                    # else:
+                    #     return
+
+                    # UI Implementation
+                    action = wait_for_continue_or_stop()
+                    if action != "continue":
+                        return
+                    else:
+                        break
+                
                 else:
                     # Case when no welding signal is received
                     # In this case, xytable stops. Operator moves battey pack out, and puts pack back in position
@@ -1137,8 +1316,10 @@ def auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSI
             print(f"Moved to position X={_x} Y={_y}, current position: {xy_table.position}")
             # Start welding here
         sleep(0.3)
+    
+    auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
 
-
+    
 def test_combined_controllers(resource_str_aws: str, resource_str_xy: str):
     welder = OurXYAWS3Modbus(resource_str_aws)
     welder.open()
@@ -1166,7 +1347,6 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str):
     WORKER_POSITION_X, WORKER_POSITION_Y = 165.738, 62.525
     POSITIONS_OF_PART = [  # RRC3570 42 positions (define them in mm)
         
-        (WORKER_POSITION_X, WORKER_POSITION_Y),       # Worker position
         (165.738, 162.525),       # First welding position - Face 1
         ("WELD", 1),             # Trigger welding with program number
         (165.738, 185.975),
@@ -1175,6 +1355,7 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str):
         ("WELD", 3),
         (165.738, 232.875),
         ("WELD", 4),
+        ("USER", None),
         (165.738, 256.325),
         ("WELD", 5),
         (165.738, 279.775),
@@ -1254,7 +1435,7 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str):
         (125.118, 303.225),
         ("WELD", 42),
         (WORKER_POSITION_X, WORKER_POSITION_Y),
-        # ("USER", "Restart"),      # Go back home, let operator change to new pack and continue with new welding   
+        ("RESTART", None),      # Go back home, let operator change to new pack and continue with new welding process  
         # ... (add more positions as needed) ...
     ]
 
