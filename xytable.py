@@ -9,14 +9,10 @@ from typing import Tuple, List
 from enum import Enum
 
 from rrc.eth2serial import Eth2SerialDevice
-# from rrc.gcode.machine import Machine
+# from rrc.gcode.machine import Machine 
 from rrc.modbus.aws3 import AWS3Modbus
 from rrc.serialport import SerialComportDevice, SerialComportDevicePermanentlyOpen
-
-# UI interactive libraries
-import tkinter as tk
-from threading import Event
-from pynput import keyboard
+from adam6xxx import ADAM6052
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -869,142 +865,6 @@ class SatgeStateMachineBase(object):
 #     m.process_gcodes(*gcs)  # has a DEBUG print of position changes
 
 
-# UI Pop up for operator to take actions
-def wait_for_continue_or_stop():
-    result = {"action": None}
-    done = Event()
-
-    def finish(action):
-        if not done.is_set():
-            result["action"] = action
-            done.set()
-
-    def on_press(key):
-        if done.is_set():
-            return False
-
-        if key == keyboard.Key.enter:
-            finish("continue")
-            return False
-
-        if key == keyboard.Key.space:
-            finish("stop")
-            return False
-
-    root = tk.Tk()
-    root.withdraw()
-
-    dialog = tk.Toplevel(root)
-    dialog.title("Action Required")
-    dialog.geometry("760x420")
-    dialog.resizable(False, False)
-    dialog.configure(bg="#f4f6f8")
-    dialog.attributes("-topmost", True)
-    dialog.grab_set()
-
-    def center_window(win, width, height):
-        win.update_idletasks()
-        screen_width = win.winfo_screenwidth()
-        screen_height = win.winfo_screenheight()
-        x = (screen_width // 2) - (width // 2)
-        y = (screen_height // 2) - (height // 2)
-        win.geometry(f"{width}x{height}+{x}+{y}")
-
-    center_window(dialog, 760, 420)
-
-    container = tk.Frame(dialog, bg="#f4f6f8", padx=32, pady=28)
-    container.pack(fill="both", expand=True)
-
-    title_label = tk.Label(
-        container,
-        text="Choose how to proceed",
-        font=("Segoe UI", 22, "bold"),
-        bg="#f4f6f8",
-        fg="#1f2937",
-    )
-    title_label.pack(pady=(0, 14))
-
-    instruction_label = tk.Label(
-        container,
-        text="Press Enter to Continue\nPress Space to Stop",
-        font=("Segoe UI", 15),
-        bg="#f4f6f8",
-        fg="#4b5563",
-        justify="center",
-    )
-    instruction_label.pack(pady=(0, 30))
-
-    button_frame = tk.Frame(container, bg="#f4f6f8")
-    button_frame.pack()
-
-    continue_btn = tk.Button(
-        button_frame,
-        text="Press Enter to Continue",
-        font=("Segoe UI", 14, "bold"),
-        bg="#2563eb",
-        fg="white",
-        activebackground="#1d4ed8",
-        activeforeground="white",
-        relief="flat",
-        padx=24,
-        pady=16,
-        width=26,
-        anchor="center",
-        justify="center",
-        cursor="hand2",
-        command=lambda: finish("continue"),
-    )
-    continue_btn.grid(row=0, column=0, padx=14, pady=10)
-
-    stop_btn = tk.Button(
-        button_frame,
-        text="Press Space to Stop",
-        font=("Segoe UI", 14, "bold"),
-        bg="#dc2626",
-        fg="white",
-        activebackground="#b91c1c",
-        activeforeground="white",
-        relief="flat",
-        padx=24,
-        pady=16,
-        width=26,
-        anchor="center",
-        justify="center",
-        cursor="hand2",
-        command=lambda: finish("stop"),
-    )
-    stop_btn.grid(row=0, column=1, padx=14, pady=10)
-
-    dialog.protocol("WM_DELETE_WINDOW", lambda: finish("stop"))
-
-    dialog.lift()
-    dialog.focus_force()
-    continue_btn.focus_set()
-
-    listener = keyboard.Listener(on_press=on_press)
-    listener.start()
-
-    def check_done():
-        if done.is_set():
-            try:
-                listener.stop()
-            except Exception:
-                pass
-            try:
-                dialog.destroy()
-            except tk.TclError:
-                pass
-            root.quit()
-        else:
-            dialog.after(50, check_done)
-
-    dialog.after(50, check_done)
-    root.mainloop()
-    root.destroy()
-
-    return result["action"]
-
-
 def test_xydevice(resource_string: str) -> None:
     """Test function for the XY device driver."""
 
@@ -1026,7 +886,6 @@ def test_xydevice(resource_string: str) -> None:
     dev = XYLinearStage(X_stage, Y_stage, resource_string)
     print(f"Connected: {dev.is_connected()}")
     dev.clear()
-
 
     POSITIONS_OF_PART = [  # RRC3570 42 positions (define them in mm)
         (165.738, 62.525),       # Worker position
@@ -1192,6 +1051,127 @@ def test_aws3_communication(resource_str: str) -> None:
         print("Using dummy AWS3 Modbus driver for test purposes.")
 
 
+def is_move_button_pressed() -> bool:
+            
+        button_state = adam.get_digital_input(index=7)
+        # time.sleep(0.1)
+        return button_state 
+ 
+ 
+def table_state_machine(current_state: int, table_of_positions: list, table_index: int, welding_position: int) -> Tuple[int, int, int]:
+
+    _next_state = current_state
+    sleep(0.01)    # Limit communication on LAN
+    match current_state:
+
+        case 0:  # initialize
+            # move to home position
+            dev.home()
+            table_index = 0  # reset table index
+            welding_position = 0  # reset welding position
+            _next_state = 1  # move to next state
+
+        case 1:
+            # check move button or other user input to move to next position
+            if is_move_button_pressed():
+                _next_state = 2  # move to next position
+            # stay in current state until user input
+
+        case 2:
+            # move to next position
+            table_index += 1
+            # Check if table is finished
+            if table_index >= len(table_of_positions):
+                _next_state = 0
+            else:
+                _next_state = 3  # evaluate table entry
+
+        case 3:
+            # evaluate table entry
+            x, y = table_of_positions[table_index]
+
+            if isinstance(x, str):
+                if x == "PAUSE" and y is not None:
+                    print(f"Pause for {y} seconds!")
+                    sleep(y)  # wait a bit before moving to the next position
+                    _next_state = 2  # next table position
+                elif x == "USER":
+                    # Need to interact with user (read io port, etc.)
+                    _next_state = 1  # wait for user input
+                elif x == "WELD":
+                    # trigger welding process here
+                    # check for welding done
+                    _next_state = 4  # next table position
+                else:
+                    print(f"Unknown statement {x}!")
+            else:
+                # position change
+                # dev.goto_position(x, y, units_in_mm=True)
+                _next_state = 3
+
+        case 4:
+            _next_state = 5   
+            # # wait for welding process to complete
+            # _ready, _ = welder.is_machine_ready()
+            # if _ready:
+            #     if welder.is_toggle_bit_changed():
+            #         _next_state = 5  # check welding result
+
+        case 5:
+
+            # Get welding results
+            _, weld_result = welder.is_machine_ready()
+            # ''' SIMULATION MOVING XYTABLE IN CASE WELDING MACHINE DOES NOT WORK'''
+            # weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
+            weld_test_result = ""
+
+            if weld_result["ok"] == 1 or weld_test_result == "ok":          # Case when welding result is ok
+                #is_operator_button_ok()   # Check operator press
+                print("Welding ok")
+                _next_state = 6  # wait for user input to move to next position
+
+            elif weld_result["reject"] == 1 or weld_test_result == "failed":    # Case when welding failed
+
+                print("Welding failed")
+                _next_state = 7  # move to error handling state
+
+            else:
+                # Case when no welding signal is received
+                # In this case, xytable stops. Operator moves battey pack out, and puts pack back in position
+                # Then, operator can press 'c' to continue moving the xytable to the next welding position
+                
+                print("No welding signal received!")
+                _next_state = 4
+
+        case 6:
+            # wait for user input to move to next position or another welding result
+            if is_move_button_pressed():
+                # position done, move to next position
+                welding_position += 1
+                _next_state = 2
+            if is_welding_done():
+                _next_state = 5  # check result again
+
+
+        case 7:
+            # error handling state
+            print("Error during welding process! Please check the machine and try again.")
+
+            dev.home()
+            _next_state = 0  # reset to initial state
+
+
+        case _:
+            # reset to initial state if something goes wrong
+            _next_state = 0
+
+    return _next_state, table_index, welding_position
+
+
+def read_input_from_scanner() -> str:
+    return ""  # TODO: implement this function to read from a barcode scanner or other input device
+
+
 def auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y):
     welding_position = 0
 
@@ -1200,36 +1180,24 @@ def auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSI
             if _x == "PAUSE" and _y is not None:
                 print(f"Pause for {_y} seconds!")
                 sleep(_y)
-
             elif _x == "USER":
-                # Need to interact with user (read io port, etc.)
-                # c = input("Please press 'c' to continue or 's' to stop: ").strip()
-                # if c.lower() == 's':
-                #     print(f"Process stopped at welding position {welding_position}.")
-                #     xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y)
-                #     return
-                
-                # UI Implementation
-                action = wait_for_continue_or_stop()
-                if action != "continue":
+                # Wait for operator to press "MOVE" button (connected with ADAM-6052)
+
+                c = input("Please press 'c' to continue or 's' to stop: ").strip()
+                if c.lower() == 's':
                     print(f"Process stopped at welding position {welding_position}.")
                     xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y)
                     return
                 
             elif _x == "RESTART":
+                pass
                 # Need to rerun the process from the beginning (or run the next process)
                 # c = input("Please press 'c' to continue or 's' to stop: ").strip()
                 # if c.lower() == 'c':
                 #     auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
                 # else:
                 #     return
-            
-                # UI Implementation
-                action = wait_for_continue_or_stop()
-                if action != "continue":
-                    return
-                else:
-                    auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
+                
                 
             elif _x == "WELD":
                 welding_position += 1
@@ -1252,26 +1220,28 @@ def auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSI
 
                 print(f"Welding position {welding_position}.")
                 print("Wait until welding is done.")
-                # while True: 
-                #     sleep(0.01)
-                #     _ready, _ = welder.is_machine_ready()
-                #     if not _ready:
-                #         continue
+                while True: 
+                    sleep(0.01)
+                    _ready, _ = welder.is_machine_ready()
+                    if not _ready:
+                        continue
 
-                #     if welder.is_toggle_bit_changed():
-                #         break  # Welding is done
+                    if welder.is_toggle_bit_changed():
+                        break  # Welding is done
                 
-                # # Get welding results
+                # Get welding results
                 _, weld_result = welder.is_machine_ready()
-
-                ''' SIMULATION MOVING XYTABLE IN CASE WELDING MACHINE DOES NOT WORK'''
-                weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
-                # weld_test_result = ""
+                # ''' SIMULATION MOVING XYTABLE IN CASE WELDING MACHINE DOES NOT WORK'''
+                # weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
+                weld_test_result = ""
 
                 if weld_result["ok"] == 1 or weld_test_result == "ok":          # Case when welding result is ok
+                    #is_operator_button_ok()   # Check operator press
                     print("Welding ok")
+
                     continue
                 elif weld_result["reject"] == 1 or weld_test_result == "failed":    # Case when welding failed
+
                     print("Welding failed")
                     # Stops welding at failed position. Then, operator changes to new pack, then scans in new label -> 
                     # xy table moves back to worker position to restart new welding process
@@ -1283,13 +1253,7 @@ def auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSI
                     # else:
                     #     return
 
-                    # UI Implementation
-                    action = wait_for_continue_or_stop()
-                    if action != "continue":
-                        return
-                    else:
-                        break
-                
+
                 else:
                     # Case when no welding signal is received
                     # In this case, xytable stops. Operator moves battey pack out, and puts pack back in position
@@ -1317,10 +1281,9 @@ def auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSI
             # Start welding here
         sleep(0.3)
     
-    auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
 
-    
-def test_combined_controllers(resource_str_aws: str, resource_str_xy: str):
+def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resource_str_adam: str):
+    adam = ADAM6052(ip=resource_str_adam, connect=True)
     welder = OurXYAWS3Modbus(resource_str_aws)
     welder.open()
     welder.setup_device()
@@ -1347,6 +1310,7 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str):
     WORKER_POSITION_X, WORKER_POSITION_Y = 165.738, 62.525
     POSITIONS_OF_PART = [  # RRC3570 42 positions (define them in mm)
         
+        # (WORKER_POSITION_X, WORKER_POSITION_Y),       # Worker position
         (165.738, 162.525),       # First welding position - Face 1
         ("WELD", 1),             # Trigger welding with program number
         (165.738, 185.975),
@@ -1355,7 +1319,6 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str):
         ("WELD", 3),
         (165.738, 232.875),
         ("WELD", 4),
-        ("USER", None),
         (165.738, 256.325),
         ("WELD", 5),
         (165.738, 279.775),
@@ -1375,9 +1338,9 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str):
         (145.428, 174.255),
         ("WELD", 13),
         (145.428, 150.805),      
-        ("WELD", 14), 
+        ("WELD", 14),
         (125.118, 162.525),      # Start position of column 3 - Face 1
-        ("WELD", 15), 
+        ("WELD", 15),
         (125.118, 185.975),
         ("WELD", 16),
         (125.118, 209.425),
@@ -1385,13 +1348,13 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str):
         (125.118, 232.875),
         ("WELD", 18),
         (125.118, 256.325),
-        ("WELD", 19), 
+        ("WELD", 19),
         (125.118, 279.775),
         ("WELD", 20),
         (125.118, 303.225),      
         ("WELD", 21),
         (WORKER_POSITION_X, WORKER_POSITION_Y),       # Worker position (flip)
-        ("USER", None),          # Operator stops to flip pack, then press 'c' to continue.
+        ("USER", None),          # Operator stops to flip pack, then press 'MOVE' button to continue.
         (165.738, 162.525),      # First welding position - Face 2
         ("WELD", 22),
         (165.738, 185.975),
@@ -1435,13 +1398,27 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str):
         (125.118, 303.225),
         ("WELD", 42),
         (WORKER_POSITION_X, WORKER_POSITION_Y),
-        ("RESTART", None),      # Go back home, let operator change to new pack and continue with new welding process  
+        ("USER", None),      # Go back home, let operator change to new pack and continue with new welding process  
         # ... (add more positions as needed) ...
     ]
 
     # Combine control for controller and reading from welding machine
     xy_table.home()
-    auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
+
+    welding_position = 0
+    table_index = 0
+    state_of_machine = 0
+    while True:
+        _udi = read_input_from_scanner()
+        if _udi != "":
+            print(f"Received input: {_udi}")
+            # reset state machine which then resets table index and welding position
+            state_of_machine = 0
+        # call the state machine in a loop to process the positions and user input
+        state_of_machine , table_index, welding_position = table_state_machine(state_of_machine, POSITIONS_OF_PART, table_index, welding_position, _move_button_pressed)
+
+
+    # auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
 
 
 #--------------------------------------------------------------------------------------------------
@@ -1472,8 +1449,9 @@ if __name__ == "__main__":
 
     RESOURCE_STR_MOTION_CONTROLLER = "COM9,9600,8N1"  # Port for motion controller
     RESOURCE_STR_AWS = "tcp:172.25.103.100:502"
+    RESOURCE_STR_ADAM = "172.25.103.202"
     # test_xydevice(RESOURCE_STR_MOTION_CONTROLLER)
-    test_combined_controllers(RESOURCE_STR_AWS, RESOURCE_STR_MOTION_CONTROLLER)
+    test_combined_controllers(RESOURCE_STR_AWS, RESOURCE_STR_MOTION_CONTROLLER, RESOURCE_STR_ADAM)
     # test_aws3_communication("tcp:172.25.103.100:502")
 
     # test_db_driven_stage()
