@@ -1051,127 +1051,6 @@ def test_aws3_communication(resource_str: str) -> None:
         print("Using dummy AWS3 Modbus driver for test purposes.")
 
 
-def is_move_button_pressed() -> bool:
-            
-        button_state = adam.get_digital_input(index=7)
-        # time.sleep(0.1)
-        return button_state 
- 
- 
-def table_state_machine(current_state: int, table_of_positions: list, table_index: int, welding_position: int) -> Tuple[int, int, int]:
-
-    _next_state = current_state
-    sleep(0.01)    # Limit communication on LAN
-    match current_state:
-
-        case 0:  # initialize
-            # move to home position
-            dev.home()
-            table_index = 0  # reset table index
-            welding_position = 0  # reset welding position
-            _next_state = 1  # move to next state
-
-        case 1:
-            # check move button or other user input to move to next position
-            if is_move_button_pressed():
-                _next_state = 2  # move to next position
-            # stay in current state until user input
-
-        case 2:
-            # move to next position
-            table_index += 1
-            # Check if table is finished
-            if table_index >= len(table_of_positions):
-                _next_state = 0
-            else:
-                _next_state = 3  # evaluate table entry
-
-        case 3:
-            # evaluate table entry
-            x, y = table_of_positions[table_index]
-
-            if isinstance(x, str):
-                if x == "PAUSE" and y is not None:
-                    print(f"Pause for {y} seconds!")
-                    sleep(y)  # wait a bit before moving to the next position
-                    _next_state = 2  # next table position
-                elif x == "USER":
-                    # Need to interact with user (read io port, etc.)
-                    _next_state = 1  # wait for user input
-                elif x == "WELD":
-                    # trigger welding process here
-                    # check for welding done
-                    _next_state = 4  # next table position
-                else:
-                    print(f"Unknown statement {x}!")
-            else:
-                # position change
-                # dev.goto_position(x, y, units_in_mm=True)
-                _next_state = 3
-
-        case 4:
-            _next_state = 5   
-            # # wait for welding process to complete
-            # _ready, _ = welder.is_machine_ready()
-            # if _ready:
-            #     if welder.is_toggle_bit_changed():
-            #         _next_state = 5  # check welding result
-
-        case 5:
-
-            # Get welding results
-            _, weld_result = welder.is_machine_ready()
-            # ''' SIMULATION MOVING XYTABLE IN CASE WELDING MACHINE DOES NOT WORK'''
-            # weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
-            weld_test_result = ""
-
-            if weld_result["ok"] == 1 or weld_test_result == "ok":          # Case when welding result is ok
-                #is_operator_button_ok()   # Check operator press
-                print("Welding ok")
-                _next_state = 6  # wait for user input to move to next position
-
-            elif weld_result["reject"] == 1 or weld_test_result == "failed":    # Case when welding failed
-
-                print("Welding failed")
-                _next_state = 7  # move to error handling state
-
-            else:
-                # Case when no welding signal is received
-                # In this case, xytable stops. Operator moves battey pack out, and puts pack back in position
-                # Then, operator can press 'c' to continue moving the xytable to the next welding position
-                
-                print("No welding signal received!")
-                _next_state = 4
-
-        case 6:
-            # wait for user input to move to next position or another welding result
-            if is_move_button_pressed():
-                # position done, move to next position
-                welding_position += 1
-                _next_state = 2
-            if is_welding_done():
-                _next_state = 5  # check result again
-
-
-        case 7:
-            # error handling state
-            print("Error during welding process! Please check the machine and try again.")
-
-            dev.home()
-            _next_state = 0  # reset to initial state
-
-
-        case _:
-            # reset to initial state if something goes wrong
-            _next_state = 0
-
-    return _next_state, table_index, welding_position
-
-
-def read_input_from_scanner() -> str:
-    return ""  # TODO: implement this function to read from a barcode scanner or other input device
-
-
 def auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y):
     welding_position = 0
 
@@ -1281,6 +1160,150 @@ def auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSI
             # Start welding here
         sleep(0.3)
     
+def is_move_button_pressed(adam) -> bool:
+            
+    # button_state = adam.get_digital_input(index=7)
+    # # time.sleep(0.1)
+    
+    # return button_state 
+
+    print("Waiting for Operator to press 'MOVE'...")
+    
+    while True:
+        # 1. Read the button state
+        button_state = adam.get_digital_input(index=7)
+        
+        # 2. If pressed, exit the loop and return
+        if button_state:
+            print("Button pressed! Moving to next position...")
+            return button_state
+        
+        # 3. VERY IMPORTANT: Sleep for a short time
+        # This prevents your laptop CPU from hitting 100% 
+        sleep(0.1)
+
+def table_state_machine(xy_table, welder, adam, current_state: int, table_of_positions: list, table_index: int, welding_position: int) -> Tuple[int, int, int]:
+
+    _next_state = current_state
+    sleep(0.01)    # Limit communication on LAN
+    match current_state:
+
+        case 0:  # initialize
+            # move to home position
+            xy_table.home()
+            table_index = -1  # reset table index
+            welding_position = 0  # reset welding position
+            print("Move to state 1")
+            _next_state = 1  # move to next state
+
+        case 1:
+            # check move button or other user input to move to next position
+            if is_move_button_pressed(adam):
+                _next_state = 2  # move to next position
+            # stay in current state until user input
+
+        case 2:
+            # move to next position
+            table_index += 1
+            # Check if table is finished
+            if table_index >= len(table_of_positions):
+                _next_state = 0
+            else:
+                print("Moved to state 3")
+                _next_state = 3  # evaluate table entry
+
+        case 3:
+            # evaluate table entry
+            x, y = table_of_positions[table_index]
+
+            if isinstance(x, str):
+                if x == "PAUSE" and y is not None:
+                    print(f"Pause for {y} seconds!")
+                    sleep(y)  # wait a bit before moving to the next position
+                    _next_state = 2  # next table position
+                elif x == "USER":
+                    # Need to interact with user (read io port, etc.)
+                    print("Move to state 1")
+                    _next_state = 1  # wait for user input
+                elif x == "WELD":
+                    # trigger welding process here
+                    # check for welding done
+                    print("Move to state 4")
+                    _next_state = 4  # next table position                    
+                else:
+                    print(f"Unknown statement {x}!")
+            else:  
+                # position change
+                xy_table.goto_position(x, y, units_in_mm=True)
+                _next_state = 3
+                table_index += 1  # Move to next command
+
+        case 4:
+            _next_state = 5     # This line is for testing in case welder is not working
+            print(f"Welding position {welding_position}.")
+            print("Wait until welding is done.")
+            # _ready, _ = welder.is_machine_ready()
+            # if _ready:
+            #     if welder.is_toggle_bit_changed():
+            #         print("Move to state 5")
+            #         _next_state = 5  # check welding result
+
+        case 5:
+            # Get welding results
+            _, weld_result = welder.is_machine_ready()
+
+            # ''' SIMULATION MOVING XYTABLE IN CASE WELDING MACHINE DOES NOT WORK'''
+            weld_test_result = ""
+            weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
+
+            if weld_test_result == "ok":
+            # if weld_result["ok"] == 1:          # Case when welding result is ok
+                #is_operator_button_ok()   # Check operator press
+                print("Welding ok")
+                print("Move to state 6")
+                _next_state = 6  # wait for user input to move to next position
+
+            elif weld_test_result == "failed":
+            # elif weld_result["reject"] == 1:    # Case when welding failed
+
+                print("Welding failed")
+                print("Move to state 7")
+                _next_state = 7  # move to error handling state
+
+            else:
+                # Case when no welding signal is received
+                # In this case, xytable stops. Operator moves battey pack out, and puts pack back in position
+                # Then, operator can press 'c' to continue moving the xytable to the next welding position
+                
+                print("No welding signal received!")
+                _next_state = 4
+
+        case 6:
+            # wait for user input to move to next position or another welding result
+            if is_move_button_pressed(adam):
+                # position done, move to next position
+                welding_position += 1
+                print("Move to state 2")
+                _next_state = 2
+            # if is_welding_done():
+            _ready, _ = welder.is_machine_ready()
+            if _ready:
+                if welder.is_toggle_bit_changed():
+                    _next_state = 5  # check welding result again
+
+        case 7:
+            # error handling state
+            print("Error during welding process! Please check the machine and try again.")
+            _next_state = 0  # reset to initial state
+
+        case _:
+            # reset to initial state if something goes wrong
+            _next_state = 0
+
+    return _next_state, table_index, welding_position
+
+def read_input_from_scanner() -> str:
+    return ""  # TODO: implement this function to read from a barcode scanner or other input device
 
 def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resource_str_adam: str):
     adam = ADAM6052(ip=resource_str_adam, connect=True)
@@ -1403,8 +1426,6 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
     ]
 
     # Combine control for controller and reading from welding machine
-    xy_table.home()
-
     welding_position = 0
     table_index = 0
     state_of_machine = 0
@@ -1415,7 +1436,7 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
             # reset state machine which then resets table index and welding position
             state_of_machine = 0
         # call the state machine in a loop to process the positions and user input
-        state_of_machine , table_index, welding_position = table_state_machine(state_of_machine, POSITIONS_OF_PART, table_index, welding_position, _move_button_pressed)
+        state_of_machine , table_index, welding_position = table_state_machine(xy_table, welder, adam, state_of_machine, POSITIONS_OF_PART, table_index, welding_position)
 
 
     # auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
@@ -1447,13 +1468,13 @@ if __name__ == "__main__":
 
     #test_gcode_parser()
 
-    RESOURCE_STR_MOTION_CONTROLLER = "COM9,9600,8N1"  # Port for motion controller
+    RESOURCE_STR_MOTION_CONTROLLER = "COM6,9600,8N1"  # Port for motion controller
     RESOURCE_STR_AWS = "tcp:172.25.103.100:502"
     RESOURCE_STR_ADAM = "172.25.103.202"
     # test_xydevice(RESOURCE_STR_MOTION_CONTROLLER)
     test_combined_controllers(RESOURCE_STR_AWS, RESOURCE_STR_MOTION_CONTROLLER, RESOURCE_STR_ADAM)
-    # test_aws3_communication("tcp:172.25.103.100:502")
 
+    # test_aws3_communication("tcp:172.25.103.100:502")
     # test_db_driven_stage()
 
     toc = perf_counter()
