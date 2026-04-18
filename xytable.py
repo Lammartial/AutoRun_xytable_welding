@@ -981,7 +981,6 @@ def test_xydevice(resource_string: str) -> None:
         # ... (add more positions as needed) ...
     ]
 
-    dev.home()
     # for _x, _y in POSITIONS_OF_PART[:]:
     #     if isinstance(_x, str):
     #         if _x == "PAUSE" and _y is not None:
@@ -1001,8 +1000,9 @@ def test_xydevice(resource_string: str) -> None:
     #     sleep(0.3)
 
     # Test movement
-    # dev.home()
+    dev.home()
     dev.goto_position(165.738, 62.525)
+    dev.goto_position(165.738, 162.525)
     # dev.goto_position(100.0, 110.0)
     # dev.goto_position(150.0, 110.0)
 
@@ -1171,7 +1171,7 @@ def is_move_button_pressed(adam) -> bool:
     
     while True:
         # 1. Read the button state
-        button_state = adam.get_digital_input(index=7)
+        button_state = adam.get_digital_input(index=0)
         
         # 2. If pressed, exit the loop and return
         if button_state:
@@ -1182,19 +1182,28 @@ def is_move_button_pressed(adam) -> bool:
         # This prevents your laptop CPU from hitting 100% 
         sleep(0.1)
 
+def is_light_curtain_activated(adam) -> bool:
+    return not adam.get_digital_input(index=1)
+
 def table_state_machine(xy_table, welder, adam, current_state: int, table_of_positions: list, table_index: int, welding_position: int) -> Tuple[int, int, int]:
 
     _next_state = current_state
     sleep(0.01)    # Limit communication on LAN
+    light_curtain_active = is_light_curtain_activated(adam)
+
+
     match current_state:
 
         case 0:  # initialize
-            # move to home position
-            xy_table.home()
+
+            # if not light_curtain_active
+            xy_table.goto_position(165.738, 62.525, units_in_mm=True)  # Go to worker position
+
             table_index = -1  # reset table index
             welding_position = 0  # reset welding position
             print("Move to state 1")
             _next_state = 1  # move to next state
+
 
         case 1:
             # check move button or other user input to move to next position
@@ -1203,7 +1212,7 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
             # stay in current state until user input
 
         case 2:
-            # move to next position
+            # move to next 
             table_index += 1
             # Check if table is finished
             if table_index >= len(table_of_positions):
@@ -1215,7 +1224,13 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
         case 3:
             # evaluate table entry
             x, y = table_of_positions[table_index]
-
+            if is_light_curtain_activated(adam):
+                try:
+                    xy_table.stop()
+                except Exception:
+                    pass
+                print("⚠️ Light curtain activated -> state 99")
+                return 99, table_index, welding_position
             if isinstance(x, str):
                 if x == "PAUSE" and y is not None:
                     print(f"Pause for {y} seconds!")
@@ -1232,9 +1247,17 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
                     _next_state = 4  # next table position                    
                 else:
                     print(f"Unknown statement {x}!")
+                    _next_state = 0
             else:  
                 # position change
                 xy_table.goto_position(x, y, units_in_mm=True)
+                if is_light_curtain_activated(adam):
+                    try:
+                        xy_table.stop()
+                    except Exception:
+                        pass
+                    print("⚠️ Light curtain activated -> state 99")
+                    return 99, table_index, welding_position
                 _next_state = 3
                 table_index += 1  # Move to next command
 
@@ -1260,8 +1283,12 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
             # if weld_result["ok"] == 1:          # Case when welding result is ok
                 #is_operator_button_ok()   # Check operator press
                 print("Welding ok")
-                print("Move to state 6")
-                _next_state = 6  # wait for user input to move to next position
+                # print("Move to state 6")
+                # _next_state = 6   # wait for user input to move to next position
+
+                welding_position += 1
+                print("Move to state 2")
+                _next_state = 2
 
             elif weld_test_result == "failed":
             # elif weld_result["reject"] == 1:    # Case when welding failed
@@ -1286,15 +1313,28 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
                 print("Move to state 2")
                 _next_state = 2
             # if is_welding_done():
-            _ready, _ = welder.is_machine_ready()
-            if _ready:
-                if welder.is_toggle_bit_changed():
-                    _next_state = 5  # check welding result again
+            # _ready, _ = welder.is_machine_ready()
+            # if _ready:
+            #     if welder.is_toggle_bit_changed():
+            #         _next_state = 5  # check welding result again
 
         case 7:
             # error handling state
             print("Error during welding process! Please check the machine and try again.")
             _next_state = 0  # reset to initial state
+
+        case 99: # SAFETY LOCK STATE
+            # Stay here as long as the curtain is blocked
+            try:
+                xy_table.stop()
+            except Exception:
+                pass
+
+            if not is_light_curtain_activated(adam):
+                print("✅ Light curtain clear. Press MOVE button to resume.")
+                if is_move_button_pressed(adam):
+                    print("Resume to state 2")
+                    _next_state = 2
 
         case _:
             # reset to initial state if something goes wrong
@@ -1426,6 +1466,8 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
     ]
 
     # Combine control for controller and reading from welding machine
+    xy_table.home()
+
     welding_position = 0
     table_index = 0
     state_of_machine = 0
@@ -1435,6 +1477,7 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
             print(f"Received input: {_udi}")
             # reset state machine which then resets table index and welding position
             state_of_machine = 0
+
         # call the state machine in a loop to process the positions and user input
         state_of_machine , table_index, welding_position = table_state_machine(xy_table, welder, adam, state_of_machine, POSITIONS_OF_PART, table_index, welding_position)
 
@@ -1468,7 +1511,7 @@ if __name__ == "__main__":
 
     #test_gcode_parser()
 
-    RESOURCE_STR_MOTION_CONTROLLER = "COM6,9600,8N1"  # Port for motion controller
+    RESOURCE_STR_MOTION_CONTROLLER = "COM9,9600,8N1"  # Port for motion controller
     RESOURCE_STR_AWS = "tcp:172.25.103.100:502"
     RESOURCE_STR_ADAM = "172.25.103.202"
     # test_xydevice(RESOURCE_STR_MOTION_CONTROLLER)
