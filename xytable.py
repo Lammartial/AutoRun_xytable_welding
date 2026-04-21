@@ -1171,12 +1171,12 @@ def is_move_button_pressed(adam) -> bool:
     
     while True:
         # 1. Read the button state
-        button_state = adam.get_digital_input(index=0)
+        is_pressed = adam.get_digital_input(index=0)
         
         # 2. If pressed, exit the loop and return
-        if button_state:
+        if is_pressed:
             print("Button pressed! Moving to next position...")
-            return button_state
+            return is_pressed
         
         # 3. VERY IMPORTANT: Sleep for a short time
         # This prevents your laptop CPU from hitting 100% 
@@ -1185,18 +1185,26 @@ def is_move_button_pressed(adam) -> bool:
 def is_light_curtain_activated(adam) -> bool:
     return not adam.get_digital_input(index=1)
 
+def is_emergency_button_pressed(adam) -> bool:
+    return adam.get_digital_input(index=2)
+
 def table_state_machine(xy_table, welder, adam, current_state: int, table_of_positions: list, table_index: int, welding_position: int) -> Tuple[int, int, int]:
 
     _next_state = current_state
     sleep(0.01)    # Limit communication on LAN
-    light_curtain_active = is_light_curtain_activated(adam)
-
+    if current_state != 99 and (is_light_curtain_activated(adam) or is_emergency_button_pressed(adam)):
+        try:
+            xy_table.stop()
+        except Exception:
+            pass
+        print("Light curtain activated -> Move to state 99")
+        return 99, table_index, welding_position
 
     match current_state:
 
         case 0:  # initialize
 
-            # if not light_curtain_active
+            # if not is_light_curtain_activated(adam):
             xy_table.goto_position(165.738, 62.525, units_in_mm=True)  # Go to worker position
 
             table_index = -1  # reset table index
@@ -1224,13 +1232,6 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
         case 3:
             # evaluate table entry
             x, y = table_of_positions[table_index]
-            if is_light_curtain_activated(adam):
-                try:
-                    xy_table.stop()
-                except Exception:
-                    pass
-                print("⚠️ Light curtain activated -> state 99")
-                return 99, table_index, welding_position
             if isinstance(x, str):
                 if x == "PAUSE" and y is not None:
                     print(f"Pause for {y} seconds!")
@@ -1251,13 +1252,6 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
             else:  
                 # position change
                 xy_table.goto_position(x, y, units_in_mm=True)
-                if is_light_curtain_activated(adam):
-                    try:
-                        xy_table.stop()
-                    except Exception:
-                        pass
-                    print("⚠️ Light curtain activated -> state 99")
-                    return 99, table_index, welding_position
                 _next_state = 3
                 table_index += 1  # Move to next command
 
@@ -1305,6 +1299,8 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
                 print("No welding signal received!")
                 _next_state = 4
 
+            # sleep(3) Delay time to wait for welding head to move up + operator detect if sticky electrode happens
+
         case 6:
             # wait for user input to move to next position or another welding result
             if is_move_button_pressed(adam):
@@ -1325,16 +1321,11 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
 
         case 99: # SAFETY LOCK STATE
             # Stay here as long as the curtain is blocked
-            try:
-                xy_table.stop()
-            except Exception:
-                pass
 
-            if not is_light_curtain_activated(adam):
-                print("✅ Light curtain clear. Press MOVE button to resume.")
-                if is_move_button_pressed(adam):
-                    print("Resume to state 2")
-                    _next_state = 2
+            if not is_light_curtain_activated(adam) and not is_emergency_button_pressed(adam):
+                print("Light curtain clear and Emergency button released. Press MOVE button to resume.")
+                print("Move to state 1")
+                _next_state = 1  # Move to state 1 to check for move button pressed
 
         case _:
             # reset to initial state if something goes wrong
