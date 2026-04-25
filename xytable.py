@@ -23,7 +23,7 @@ DEBUG = 2
 from rrc.custom_logging import getLogger, logger_init
 
 # --------------------------------------------------------------------------- #
-
+ 
 
 #--------------------------------------------------------------------------------------------------
 
@@ -477,8 +477,21 @@ class XYLinearStage():
                 stage.position = int(response)
         return tuple([stage.position for stage in self.stages])
 
-    #----------------------------------------------------------------------------------------------
+    @property
+    def positions_in_mm(self) -> Tuple[int, int]:
+        positions_in_mm = ()
+        for stage in self.stages:
+            cmd, msg = stage.read_position_command()
+            ok, response = self.command(cmd, message=msg)
+            if ok:
+                # update stage position from motion controller response
+                # stage.position = self._extract_position_from_response(response)
+                stage.position = int(response)
+                positions_in_mm += (stage.convert_steps_to_mm(response),)
+                
+        return positions_in_mm
 
+    #----------------------------------------------------------------------------------------------
 
     def get_current_stage_speed(self) -> int | None:
         """Get the speed of the current stage and return it plain.
@@ -1001,8 +1014,8 @@ def test_xydevice(resource_string: str) -> None:
 
     # Test movement
     dev.home()
-    dev.goto_position(165.738, 62.525)
-    dev.goto_position(165.738, 162.525)
+    dev.goto_position(165.738, 62.825)
+    dev.goto_position(165.738, 162.825)
     # dev.goto_position(100.0, 110.0)
     # dev.goto_position(150.0, 110.0)
 
@@ -1019,7 +1032,7 @@ class OurXYAWS3Modbus(AWS3Modbus):
         self._sync_modbus_timing()
         # following includes a verification helper to simulate a weld process with
         # a real machinge but without really doing the welding process (saves material and time)
-        bits = self.read_coils(97-1, 8, unit_address=3) if not self._verification_weld_resultbits else self._verification_weld_resultbits
+        bits = self.read_coils(97-1, 8, unit_address=3) #if not self._verification_weld_resultbits else self._verification_weld_resultbits
         d = {
             "ready": 1 if bits[0] else 0,
             "operational_mode": 1 if bits[1] else 0,  # 0=auto, 1=step
@@ -1183,18 +1196,38 @@ def is_move_button_pressed(adam) -> bool:
         sleep(0.1)
 
 def is_light_curtain_activated(adam) -> bool:
-    return not adam.get_digital_input(index=1)
+    return adam.get_digital_input(index=1)
 
 def is_emergency_button_pressed(adam) -> bool:
     return adam.get_digital_input(index=2)
 
+def is_position_close_to(position: tuple, target_position: tuple, tolerance: float) -> bool:
+    """
+    Check if position is close to target_position within tolerance percent.
+    """
+    if len(position) != 2 or len(target_position) != 2:
+        raise ValueError("Position and target_position must both be (x, y) tuples")
+
+    x, y = position
+    tx, ty = target_position
+
+    def within_tolerance(value: float, target: float) -> bool:
+        # Handle zero target safely
+        if target == 0:
+            return abs(value - target) <= tolerance
+        return abs(value - target) <= abs(target) * tolerance
+
+    return within_tolerance(x, tx) and within_tolerance(y, ty)
+
 def table_state_machine(xy_table, welder, adam, current_state: int, table_of_positions: list, table_index: int, welding_position: int) -> Tuple[int, int, int]:
+    global weld_test_result
+    WORKER_POSITION_X, WORKER_POSITION_Y = 165.738, 62.825
 
     _next_state = current_state
     sleep(0.01)    # Limit communication on LAN
     if current_state != 99 and (is_light_curtain_activated(adam) or is_emergency_button_pressed(adam)):
         try:
-            xy_table.stop()
+            xy_table.stop() # Must connect adam output with input of motion controller
         except Exception:
             pass
         print("Light curtain activated -> Move to state 99")
@@ -1204,33 +1237,53 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
 
         case 0:  # initialize
 
-            # if not is_light_curtain_activated(adam):
-            xy_table.goto_position(165.738, 62.525, units_in_mm=True)  # Go to worker position
+            # if not is_light_curtain_activated(adam) and not is_emergency_button_pressed(adam):
+            xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y, units_in_mm=True)  # Go to worker position
 
             table_index = -1  # reset table index
             welding_position = 0  # reset welding position
+            weld_test_result = ""
             print("Move to state 1")
             _next_state = 1  # move to next state
 
 
         case 1:
-            # check move button or other user input to move to next position
-            if is_move_button_pressed(adam):
-                _next_state = 2  # move to next position
-            # stay in current state until user input
+            # Get xy_table's current position
+            current_pos = xy_table.positions_in_mm
+            print(current_pos)
+
+            # current_pos = ()
+            # for stage, new_position in zip((X_stage, Y_stage), xy_table.position):
+            #     _new_position = stage.convert_steps_to_mm(new_position)
+            #     _new_position = round(_new_position,3)
+            #     current_pos += (_new_position,)
+            # print(current_pos)
+
+            # Check if current position is not at worker position and at first welding point
+            # if current_pos != (165.738, 63.425) and welding_position == 0:
+            if is_position_close_to(current_pos, (WORKER_POSITION_X, WORKER_POSITION_Y), 0.02) == False and welding_position == 0:
+                print("XY_table is not at worker position!")
+                xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y, units_in_mm=True)  # Go to worker position
+                _next_state = 0
+            else:
+                # check move button to move to next position
+                if is_move_button_pressed(adam):
+                    _next_state = 2  # move to next position
+                # stay in current state until user input
 
         case 2:
-            # move to next 
+            # move to next command in POSITIONS_OF_PART list
             table_index += 1
+
             # Check if table is finished
             if table_index >= len(table_of_positions):
                 _next_state = 0
             else:
                 print("Moved to state 3")
-                _next_state = 3  # evaluate table entry
+                _next_state = 3 
 
         case 3:
-            # evaluate table entry
+            # evaluate table command
             x, y = table_of_positions[table_index]
             if isinstance(x, str):
                 if x == "PAUSE" and y is not None:
@@ -1243,9 +1296,12 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
                     _next_state = 1  # wait for user input
                 elif x == "WELD":
                     # trigger welding process here
-                    # check for welding done
+                    welding_position += 1
                     print("Move to state 4")
-                    _next_state = 4  # next table position                    
+                    _next_state = 4  # next table position    
+
+                    if adam.get_digital_input(index=7) == False:
+                        print("Welding head up or not: Yes")                
                 else:
                     print(f"Unknown statement {x}!")
                     _next_state = 0
@@ -1256,37 +1312,43 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
                 table_index += 1  # Move to next command
 
         case 4:
-            _next_state = 5     # This line is for testing in case welder is not working
-            print(f"Welding position {welding_position}.")
-            print("Wait until welding is done.")
-            # _ready, _ = welder.is_machine_ready()
-            # if _ready:
-            #     if welder.is_toggle_bit_changed():
-            #         print("Move to state 5")
-            #         _next_state = 5  # check welding result
-
+            # _next_state = 5     # This line is for testing in case welder is not working
+            # print(f"Welding position {welding_position}.")
+            # print("Wait until welding is done.")
+            _ready, _ = welder.is_machine_ready()
+            if _ready:
+                if welder.is_toggle_bit_changed():
+                    print("Move to state 5")
+                    _next_state = 5  # check welding result
+                    
         case 5:
             # Get welding results
             _, weld_result = welder.is_machine_ready()
 
             # ''' SIMULATION MOVING XYTABLE IN CASE WELDING MACHINE DOES NOT WORK'''
-            weld_test_result = ""
-            weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
+            # weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
 
-            if weld_test_result == "ok":
-            # if weld_result["ok"] == 1:          # Case when welding result is ok
-                #is_operator_button_ok()   # Check operator press
+            # if weld_test_result == "ok":
+
+            if weld_result["ok"] == 1:          # Case when welding result is ok
+
                 print("Welding ok")
-                # print("Move to state 6")
-                # _next_state = 6   # wait for user input to move to next position
-
-                welding_position += 1
+                weld_test_result = 'ok'
                 print("Move to state 2")
                 _next_state = 2
 
-            elif weld_test_result == "failed":
-            # elif weld_result["reject"] == 1:    # Case when welding failed
+                if adam.get_digital_input(index=7) == False:
+                    print("Welding head moved up or not after welding: Yes")
+                else: 
+                    print("Welding head moved up or not after welding: No")
 
+                # print("Move to state 6")
+                # _next_state = 6   # wait for user input to move to next position
+
+            # elif weld_test_result == "failed":
+            elif weld_result["reject"] == 1:    # Case when welding failed
+
+                weld_test_result = 'failed'
                 print("Welding failed")
                 print("Move to state 7")
                 _next_state = 7  # move to error handling state
@@ -1301,18 +1363,19 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
 
             # sleep(3) Delay time to wait for welding head to move up + operator detect if sticky electrode happens
 
+
         case 6:
-            # wait for user input to move to next position or another welding result
-            if is_move_button_pressed(adam):
-                # position done, move to next position
-                welding_position += 1
-                print("Move to state 2")
-                _next_state = 2
-            # if is_welding_done():
-            # _ready, _ = welder.is_machine_ready()
-            # if _ready:
-            #     if welder.is_toggle_bit_changed():
-            #         _next_state = 5  # check welding result again
+
+            # position done, move to next position
+            print("Welding ok")
+            weld_test_result = 'ok'
+            print("Move to state 2")
+            _next_state = 2
+
+            _ready, _ = welder.is_machine_ready()
+            if _ready:
+                if welder.is_toggle_bit_changed():
+                    _next_state = 5  # check welding result again
 
         case 7:
             # error handling state
@@ -1323,10 +1386,19 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
             # Stay here as long as the curtain is blocked
 
             if not is_light_curtain_activated(adam) and not is_emergency_button_pressed(adam):
-                print("Light curtain clear and Emergency button released. Press MOVE button to resume.")
-                print("Move to state 1")
-                _next_state = 1  # Move to state 1 to check for move button pressed
+                print("Light curtain clear and Emergency button released.")
 
+                if welding_position in (0, 21):  # If position == 0 or 21, operator needs to press Move button
+                    print("Move to state 1")
+                    print("Press Move Button to continue.")
+                    _next_state = 1  # Move to state 1 to check for move button pressed
+                else:    # If not, automatically move to corresponding state based on welding results.
+                    
+                    if weld_test_result == 'ok':
+                        _next_state = 2
+                    elif weld_test_result == 'failed':
+                        _next_state = 7
+                
         case _:
             # reset to initial state if something goes wrong
             _next_state = 0
@@ -1361,106 +1433,121 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
     xy_table = XYLinearStage(X_stage, Y_stage, resource_str_xy)
     print(f"Connected: {xy_table.is_connected()}")
     xy_table.clear()
-    WORKER_POSITION_X, WORKER_POSITION_Y = 165.738, 62.525
-    POSITIONS_OF_PART = [  # RRC3570 42 positions (define them in mm)
+
+    WORKER_POSITION_X, WORKER_POSITION_Y = 165.738, 62.825
+    POSITIONS_OF_PART = [  # RRC3570 42 positions (updated with +0.300mm offset)
         
+        # Face 1 - Column 1
         # (WORKER_POSITION_X, WORKER_POSITION_Y),       # Worker position
-        (165.738, 162.525),       # First welding position - Face 1
-        ("WELD", 1),             # Trigger welding with program number
-        (165.738, 185.975),
+        (165.738, 162.825), 
+        ("WELD", 1),       # Trigger welding with program number
+        (165.738, 186.275),
         ("WELD", 2),
-        (165.738, 209.425),
+        (165.738, 209.725),
         ("WELD", 3),
-        (165.738, 232.875),
+        (165.738, 233.175),
         ("WELD", 4),
-        (165.738, 256.325),
+        (165.738, 256.625),
         ("WELD", 5),
-        (165.738, 279.775),
+        (165.738, 280.075),
         ("WELD", 6),
-        (165.738, 303.225),    
+        (165.738, 303.525),    
         ("WELD", 7),
-        (145.428, 291.505),      # Start position of column 2 - Face 1
+
+        # Face 1 - Column 2
+        (145.428, 291.805), 
         ("WELD", 8),
-        (145.428, 268.055),
+        (145.428, 268.355),
         ("WELD", 9),
-        (145.428, 244.605),
+        (145.428, 244.905),
         ("WELD", 10),
-        (145.428, 221.155),
+        (145.428, 221.455),
         ("WELD", 11),
-        (145.428, 197.705),
+        (145.428, 198.005),
         ("WELD", 12),
-        (145.428, 174.255),
+        (145.428, 174.555),
         ("WELD", 13),
-        (145.428, 150.805),      
+        (145.428, 151.105),      
         ("WELD", 14),
-        (125.118, 162.525),      # Start position of column 3 - Face 1
+
+        # Face 1 - Column 3
+        (125.118, 162.825), 
         ("WELD", 15),
-        (125.118, 185.975),
+        (125.118, 186.275),
         ("WELD", 16),
-        (125.118, 209.425),
+        (125.118, 209.725),
         ("WELD", 17),
-        (125.118, 232.875),
+        (125.118, 233.175),
         ("WELD", 18),
-        (125.118, 256.325),
+        (125.118, 256.625),
         ("WELD", 19),
-        (125.118, 279.775),
+        (125.118, 280.075),
         ("WELD", 20),
-        (125.118, 303.225),      
+        (125.118, 303.525),      
         ("WELD", 21),
-        (WORKER_POSITION_X, WORKER_POSITION_Y),       # Worker position (flip)
-        ("USER", None),          # Operator stops to flip pack, then press 'MOVE' button to continue.
-        (165.738, 162.525),      # First welding position - Face 2
+
+        # Flip Action
+        (WORKER_POSITION_X, WORKER_POSITION_Y), 
+        ("USER", None),    # Operator stops to flip pack, then press 'MOVE' button to continue.
+
+        # Face 2 - Column 1
+        (165.738, 162.825), 
         ("WELD", 22),
-        (165.738, 185.975),
+        (165.738, 186.275),
         ("WELD", 23),
-        (165.738, 209.425),
+        (165.738, 209.725),
         ("WELD", 24),
-        (165.738, 232.875),
+        (165.738, 233.175),
         ("WELD", 25),
-        (165.738, 256.325),
+        (165.738, 256.625),
         ("WELD", 26),
-        (165.738, 279.775),    
+        (165.738, 280.075),    
         ("WELD", 27),
-        (165.738, 303.225),
+        (165.738, 303.525),
         ("WELD", 28),
-        (145.428, 291.505),     # Start position of column 2 - Face 2
+
+        # Face 2 - Column 2
+        (145.428, 291.805), 
         ("WELD", 29),
-        (145.428, 268.055),
+        (145.428, 268.355),
         ("WELD", 30),
-        (145.428, 244.605),
+        (145.428, 244.905),
         ("WELD", 31),
-        (145.428, 221.155),
+        (145.428, 221.455),
         ("WELD", 32),
-        (145.428, 197.705),
+        (145.428, 198.005),
         ("WELD", 33),
-        (145.428, 174.255),      
+        (145.428, 174.555),      
         ("WELD", 34),  
-        (145.428, 150.805),
+        (145.428, 151.105),
         ("WELD", 35),  
-        (125.118, 162.525),      # Start position of column 3 - Face 2
+
+        # Face 2 - Column 3
+        (125.118, 162.825), 
         ("WELD", 36),
-        (125.118, 185.975),
+        (125.118, 186.275),
         ("WELD", 37),
-        (125.118, 209.425),
+        (125.118, 209.725),
         ("WELD", 38),
-        (125.118, 232.875),
+        (125.118, 233.175),
         ("WELD", 39),  
-        (125.118, 256.325),
+        (125.118, 256.625),
         ("WELD", 40),
-        (125.118, 279.775),
+        (125.118, 280.075),
         ("WELD", 41),
-        (125.118, 303.225),
+        (125.118, 303.525),
         ("WELD", 42),
+
+        # Final Return Home
         (WORKER_POSITION_X, WORKER_POSITION_Y),
-        ("USER", None),      # Go back home, let operator change to new pack and continue with new welding process  
-        # ... (add more positions as needed) ...
+        ("USER", None),    # Go back home, let operator change to new pack and continue with new welding process  
     ]
 
     # Combine control for controller and reading from welding machine
     xy_table.home()
 
     welding_position = 0
-    table_index = 0
+    table_index = -1
     state_of_machine = 0
     while True:
         _udi = read_input_from_scanner()
@@ -1471,7 +1558,6 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
 
         # call the state machine in a loop to process the positions and user input
         state_of_machine , table_index, welding_position = table_state_machine(xy_table, welder, adam, state_of_machine, POSITIONS_OF_PART, table_index, welding_position)
-
 
     # auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
 
@@ -1502,7 +1588,7 @@ if __name__ == "__main__":
 
     #test_gcode_parser()
 
-    RESOURCE_STR_MOTION_CONTROLLER = "COM9,9600,8N1"  # Port for motion controller
+    RESOURCE_STR_MOTION_CONTROLLER = "COM11,9600,8N1"  # Port for motion controller
     RESOURCE_STR_AWS = "tcp:172.25.103.100:502"
     RESOURCE_STR_ADAM = "172.25.103.202"
     # test_xydevice(RESOURCE_STR_MOTION_CONTROLLER)
