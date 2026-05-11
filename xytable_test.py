@@ -27,7 +27,6 @@ from rrc.custom_logging import getLogger, logger_init
 
 #--------------------------------------------------------------------------------------------------
 
-
 class BaseOfStage():
 
     def __init__(self,
@@ -1073,7 +1072,7 @@ class OurXYAWS3Modbus(AWS3Modbus):
     def is_machine_ready(self) -> tuple:
         self._sync_modbus_timing()
         # following includes a verification helper to simulate a weld process with
-        # a real machinge but without really doing the welding process (saves material and time)
+        # a real machine but without really doing the welding process (saves material and time)
         bits = self.read_coils(97-1, 8, unit_address=3) #if not self._verification_weld_resultbits else self._verification_weld_resultbits
         d = {
             "ready": 1 if bits[0] else 0,
@@ -1267,6 +1266,7 @@ def is_position_close_to(position: tuple, target_position: tuple, tolerance: flo
 def table_state_machine(xy_table, welder, adam, current_state: int, table_of_positions: list, table_index: int, welding_position: int) -> Tuple[int, int, int]:
     global weld_test_result
     WORKER_POSITION_X, WORKER_POSITION_Y = 165.738, 62.825
+    UNLOAD_POSITION_X, UNLOAD_POSITION_Y = 217.625, 0.0
 
     _next_state = current_state
     sleep(0.01)    # Limit communication on LAN
@@ -1287,11 +1287,10 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
                 # Get xy_table's current position
                 current_pos = xy_table.positions_in_mm
                 print(f"Current xy_table's position: {current_pos}")
-                if current_pos != (0,0):
-                    xy_table.home()
-                    sleep(0.01)
-
-                xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y, units_in_mm=True)  # Go to worker position
+                if current_pos != (0,0):    # Check in case motion controller is shut down while moving
+                    if is_move_button_pressed(adam):    # Operator must press move button to continue moving xytable after power is back
+                        xy_table.home()
+                        sleep(0.01)
 
                 table_index = -1  # reset table index
                 welding_position = 0  # reset welding position
@@ -1314,17 +1313,23 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
                 #     current_pos += (_new_position,)
                 # print(current_pos)
 
-                # Check if current position is not at worker position and at first welding point (in case light curtain activated early)
+                # Check if current position is not at worker position and at welding position 21 (to flip battery pack)
                 
-                if is_position_close_to(current_pos, (WORKER_POSITION_X, WORKER_POSITION_Y), 0.02) == False and welding_position == 0:
-                    print("XY_table is not at worker position!")
-                    xy_table.home()   # Reset from beginning
-                    _next_state = 0
+                if welding_position == 21 and is_position_close_to(current_pos, (WORKER_POSITION_X, WORKER_POSITION_Y), 0.02) == False:   # This case happens when power is lost
+                    if is_move_button_pressed(adam):    # Operator must press move button to continue moving xytable after power is back 
+                        xy_table.home()  # Go home to get root coordinate
+                        xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y, units_in_mm=True)  # Go to worker position
+                        _next_state = 1
                 else:
-
                     # check move button to move to next position
                     if is_move_button_pressed(adam):
-                        _next_state = 2  # move to next position
+                        if is_position_close_to(current_pos, (UNLOAD_POSITION_X, UNLOAD_POSITION_Y), 0.02):  # If current position is pack unloading position
+                            xy_table.home()
+                            _next_state = 0  # Reset process
+                            print("Move to state 0")
+                        else:
+                            _next_state = 2  # move to next position
+                            print("Move to state 2")
             else:
                 _next_state = 1
 
@@ -1370,6 +1375,17 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
             else:  
                 # position change
                 xy_table.goto_position(x, y, units_in_mm=True)
+                
+                current_pos = xy_table.positions_in_mm
+                print(f"Current xy_table's position: {current_pos}")
+                if current_pos == ():
+                    current_pos = (-1.0, -1.0)
+
+                if is_position_close_to(current_pos, (x, y), 0.02) == False:  # Case when power is lost
+                    if is_move_button_pressed(adam):
+                        xy_table.home()
+                        xy_table.goto_position(x, y, units_in_mm=True)    # Continue moving to that position
+                        
                 _next_state = 3
                 table_index += 1  # Move to next command
 
@@ -1384,6 +1400,7 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
         case 5:
             # Get welding results
             _, weld_result = welder.is_machine_ready()
+            # print(weld_result)
 
             # ''' SIMULATION MOVING XYTABLE IN CASE WELDING MACHINE DOES NOT WORK'''
             # weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
@@ -1402,14 +1419,12 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
                     print("Welding head moved up or not after welding: No")
 
                 print("Move to state 2")
-                # print("Move to state 6")
-                # _next_state = 6   # wait for user input to move to next position
 
             # elif weld_test_result == "failed":
             elif weld_result["reject"] == 1:    # Case when welding failed
 
                 weld_test_result = 'failed'
-                print("Welding failed")
+                print("Welding failed!")
                 print("Move to state 7")
                 _next_state = 7  # move to error handling state
 
@@ -1426,21 +1441,21 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
 
         case 6:
 
-            # position done, move to next position
-            print("Welding ok")
-            weld_test_result = 'ok'
-            print("Move to state 2")
-            _next_state = 2
+            # Check failed case - If toggle bit of welder has changed because SoftSPS keep welder in locked state
 
             _ready, _ = welder.is_machine_ready()
             if _ready:
                 if welder.is_toggle_bit_changed():
-                    _next_state = 5  # check welding result again
+                    weld_test_result = 'failed'
+                    print("Welding failed")
+                    print("Move to state 7")
+                    _next_state = 7  # move to error handling state
 
         case 7:
             # error handling state
             print("Error during welding process! Please check the machine and try again.")
-            _next_state = 0  # reset to initial state
+            xy_table.goto_position(UNLOAD_POSITION_X, UNLOAD_POSITION_Y)   # Go to unloading pack position
+            _next_state = 1  # reset to initial state
 
         case 99: # SAFETY LOCK STATE
             # Stay here as long as the curtain is blocked
@@ -1458,6 +1473,11 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
                         _next_state = 2
                     elif weld_test_result == 'failed':
                         _next_state = 7
+
+
+        # Cases where motion controller and welding machine is powered on after losing power. 
+        case 100:
+            pass
                 
         case _:
             # reset to initial state if something goes wrong
@@ -1495,6 +1515,7 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
     xy_table.clear()
 
     WORKER_POSITION_X, WORKER_POSITION_Y = 165.738, 62.825
+    UNLOAD_POSITION_X, UNLOAD_POSITION_Y = 217.625, 0.0
     POSITIONS_OF_PART = [  # RRC3570 42 positions (updated with +0.300mm offset)
         
         # Face 1 - Column 1
@@ -1598,8 +1619,8 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
         (125.118, 303.525),
         ("WELD", 42),
 
-        # Final Return Home
-        (WORKER_POSITION_X, WORKER_POSITION_Y),
+        # Final Return to Unloading Position
+        (UNLOAD_POSITION_X, UNLOAD_POSITION_Y),
         ("USER", None),    # Go back home, let operator change to new pack and continue with new welding process  
     ]
 
@@ -1663,9 +1684,9 @@ if __name__ == "__main__":
     RESOURCE_STR_AWS = "tcp:172.25.103.100:502"
     RESOURCE_STR_ADAM = "172.25.103.202"
     # test_xydevice(RESOURCE_STR_MOTION_CONTROLLER)
-    test_combined_controllers(RESOURCE_STR_AWS, RESOURCE_STR_MOTION_CONTROLLER, RESOURCE_STR_ADAM)
+    # test_combined_controllers(RESOURCE_STR_AWS, RESOURCE_STR_MOTION_CONTROLLER, RESOURCE_STR_ADAM)
 
-    # test_aws3_communication("tcp:172.25.103.100:502")
+    test_aws3_communication("tcp:172.25.103.100:502")
     # test_db_driven_stage()
 
     toc = perf_counter()
