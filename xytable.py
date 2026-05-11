@@ -3,6 +3,10 @@
 Contains the drivers for stepper motor controller MOC-01/MOC-02 from Optics Focus Instruments Co., Ltd.
 """
 
+import csv
+from datetime import datetime
+import os
+
 from time import sleep
 from math import e
 from typing import Tuple, List
@@ -23,9 +27,39 @@ DEBUG = 2
 from rrc.custom_logging import getLogger, logger_init
 
 # --------------------------------------------------------------------------- #
- 
+
 
 #--------------------------------------------------------------------------------------------------
+
+class EventLogger:
+    def __init__(self, filename="production_stats.csv"):
+        self.filename = filename
+        self.start_time = datetime.now()
+        self.current_state = "RUNNING"
+        self.source = "SYSTEM"
+
+        if not os.path.exists(self.filename):
+            with open(self.filename, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(["Start_Time", "End_Time", "Event_Type", "Source", "Duration_Sec"])
+
+    def switch_state(self, next_state: str, source: str):
+        end_time = datetime.now()
+        duration = (end_time - self.start_time).total_seconds()
+
+        with open(self.filename, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                self.start_time.strftime("%Y-%m-%d %H:%M:%S"),
+                end_time.strftime("%Y-%m-%d %H:%M:%S"),
+                self.current_state,
+                self.source,
+                round(duration, 2)
+            ])
+
+        self.start_time = datetime.now()
+        self.current_state = next_state
+        self.source = source
 
 
 class BaseOfStage():
@@ -114,7 +148,7 @@ class RotaryStage(BaseOfStage):
         super().__init__(name, step_angle)
         self.stage_type: str = "rotary_stage"
         self.unit: str = "degree"
-        self.position = None  # current position of the stage unkonwn at start
+        self.position = None  # current position of the stage unknown at start
         # calculation depending on the type of stage
         self.subdivision = subdivision
         self.transmission_ratio = transmission_ratio  # for rotation stages
@@ -274,6 +308,7 @@ class LinearStage(BaseOfStage):
             return None, "Not yet on defined position"  # need to HOME or MAX first
 
         displacement = int(round(new_position - self.position))
+
         if not displacement:
             return "", f"Already on position '{new_position}'"  # already on position
         cmd, msg = self.displacement_to_motion_command(displacement)
@@ -375,7 +410,7 @@ class ParsingStage():
 class XYLinearStage():
     """Driver for the XY table using linear stages for X and Y direction."""
 
-    def __init__(self, X: LinearStage, Y: LinearStage, resource_string: str, timeout: float = 5.0) -> None:
+    def __init__(self, X: LinearStage, Y: LinearStage, resource_string: str, logger=None, timeout: float = 5.0) -> None:
         """Creates a XY linear stage device using an MOC-01/MOC-02 from Optics Focus Instruments Co., Ltd.
 
         Depending on the resource string, it creates either a network socket or a COM port connection to the stage.
@@ -416,6 +451,9 @@ class XYLinearStage():
         # create a tuple of stages
         self.stages = (X, Y)
         self.pulse_period = 30 / (0 + 1)  # assuming the initial speed is 0  -> pulses/ms
+        # Create log handler
+        self.logger = logger  
+        self._is_offline = False
         # -> _duration = abs(displacement) / self.pulse_period   # in ms
 
 
@@ -427,34 +465,104 @@ class XYLinearStage():
 
     #----------------------------------------------------------------------------------------------
 
+    # def command(self, command, message: str = None) -> Tuple[int | bool, str | None]:
+    #     if message:
+    #         global DEBUG
+    #         _log = getLogger(__name__, DEBUG)
+    #         _log.debug(message)
+    #     try:
+    #         response = self.dev.request(command, timeout=5.0, pause_after_write=5)
+
+    #         if 'OK' in response:
+    #             return True, response
+    #         elif not 'ERR' in response:
+    #             # a number with sign
+    #             return True, int(''.join(x for x in response if x.isdigit()))
+    #         else:
+    #             # ERR found -> decode error message
+    #             _err = int(response.split('ERR')[-1])
+    #             _err_msg = {
+    #                 1: "communication error/sent invalid commands/communication is a timeout ",
+    #                 2: "communication not established",
+    #                 3: "invalid command",
+    #                 4: "stop command",
+    #                 5: "limit switch is valid",
+    #             }
+    #             if _err in _err_msg:
+    #                 return False, f"Stage error '{response}': {_err_msg[_err]}"
+                
+    #     except UnicodeDecodeError as te:
+    #         # return False
+    #         raise LightCurtainError("User Interception")
+
     def command(self, command, message: str = None) -> Tuple[int | bool, str | None]:
         if message:
             global DEBUG
             _log = getLogger(__name__, DEBUG)
             _log.debug(message)
 
-        response = self.dev.request(command, timeout=5.0, pause_after_write=5)
+        while True:  # Loop to allow retrying after a power-cut
+            try:
+                # 1. Attempt the request
+                response = self.dev.request(command, timeout=5.0, pause_after_write=5)
+                
+                # If successful, process response normally
+                if 'OK' in response:
+                    return True, response
+                elif not 'ERR' in response:
+                    return True, int(''.join(x for x in response if x.isdigit()))
+                else:
+                    _err = int(response.split('ERR')[-1])
+                    _err_msg = {
+                        1: "communication error/timeout",
+                        2: "communication not established",
+                        3: "invalid command",
+                        4: "stop command",
+                        5: "limit switch is valid",
+                    }
 
-        if 'OK' in response:
-            return True, response
-        elif not 'ERR' in response:
-            # a number with sign
-            return True, int(''.join(x for x in response if x.isdigit()))
-        else:
-            # ERR found -> decode error message
-            _err = int(response.split('ERR')[-1])
-            _err_msg = {
-                1: "communication error/sent invalid commands/communication is a timeout ",
-                2: "communication not established",
-                3: "invalid command",
-                4: "stop command",
-                5: "limit switch is valid",
-            }
-            if _err in _err_msg:
-                return False, f"Stage error '{response}': {_err_msg[_err]}"
+                    return False, f"Stage error '{response}': {_err_msg.get(_err, 'Unknown error')}"
 
-        raise Exception(f"Something went wrong: {response}")
+            except (UnicodeDecodeError) as e:
+                # --- LOGGING POINT 1: STOP DETECTED ---
+                # We close the 'RUNNING' session and start the 'DOWNTIME' clock
+                if hasattr(self, 'logger') and self.logger:
+                    self.logger.switch_state("DOWNTIME", "EMERGENCY")
 
+                # 2. LIGHT CURTAIN / POWER CUT DETECTED
+                print(f"\n⚠️ [INTERRUPTION] Light Curtain or Emergency Stop triggered!")
+                
+                # Log the downtime to your CSV
+                # if hasattr(self, 'logger') and self.logger:
+                #     self.logger.record_event("RUNNING", "SYSTEM")
+
+                print("🛑 Waiting for hardware to power back on...")
+                
+                # 3. Wait for hardware to become reachable again
+
+                while True:
+                    try:
+                        self.dev.close()
+                        sleep(2)
+                        self.dev.open()
+                        
+                        # Verification Ping: Ensure controller is actually processing strings
+                        if self.dev.request("?", timeout=1.0): 
+                            break
+
+                    except Exception:
+                        # Still no power or serial buffer is garbled
+                        sleep(1)
+
+                # --- PHASE 3: Recovery ---
+                print("✨ Hardware restored.")
+
+                # --- LOGGING POINT 2: RESUME ---
+                # We close the 'DOWNTIME' session and start the 'RUNNING' clock again
+                if hasattr(self, 'logger') and self.logger:
+                    self.logger.switch_state("RUNNING", "SYSTEM")
+                
+                print(f"🔄 Retrying command: {command}")
 
     #----------------------------------------------------------------------------------------------
 
@@ -471,10 +579,12 @@ class XYLinearStage():
         for stage in self.stages:
             cmd, msg = stage.read_position_command()
             ok, response = self.command(cmd, message=msg)
+
             if ok:
                 # update stage position from motion controller response
                 # stage.position = self._extract_position_from_response(response)
                 stage.position = int(response)
+
         return tuple([stage.position for stage in self.stages])
 
     @property
@@ -562,9 +672,11 @@ class XYLinearStage():
                 _new_position = new_position
             cmd, msg = stage.absolute_position_to_motion_command(_new_position)
             if cmd is not None and cmd != "":
+
                 ok, response = self.command(cmd, message=msg)
                 if not ok:
                     return False  # error during motion command
+
         x, y = self.position # update positions after motion
         return True
 
@@ -618,12 +730,16 @@ class XYLinearStage():
         """Get the command string to reset the stage position so that the absolute zero position (home)."""
 
         for stage in self.stages:
+
             cmd, msg = stage.home_command()
             ok, _ = self.command(cmd, message=msg)
             if ok:
                 stage.position = 0  # to only way to set position initially
             else:
+                print("Error during homing!")
+                print(_)
                 return False  # error during homing
+
         return True
 
 
@@ -738,6 +854,10 @@ def generate_stage_from_parameter(parameter: dict) -> None | XYLinearStage:
                         stage = XYLinearStage(stages[0], stages[1], _resource_string)
 
     return stage
+
+
+class LightCurtainError(Exception):
+    pass 
 
 
 #--------------------------------------------------------------------------------------------------
@@ -1032,7 +1152,7 @@ class OurXYAWS3Modbus(AWS3Modbus):
         self._sync_modbus_timing()
         # following includes a verification helper to simulate a weld process with
         # a real machinge but without really doing the welding process (saves material and time)
-        bits = self.read_coils(97-1, 8, unit_address=3) #if not self._verification_weld_resultbits else self._verification_weld_resultbits
+        bits = self.read_coils(97-1, 8, unit_address=3) if not self._verification_weld_resultbits else self._verification_weld_resultbits
         d = {
             "ready": 1 if bits[0] else 0,
             "operational_mode": 1 if bits[1] else 0,  # 0=auto, 1=step
@@ -1201,14 +1321,19 @@ def is_light_curtain_activated(adam) -> bool:
 def is_emergency_button_pressed(adam) -> bool:
     return adam.get_digital_input(index=2)
 
+def is_welding_head_down(adam) -> bool:
+    return adam.get_digital_input(index=7)
+
 def is_position_close_to(position: tuple, target_position: tuple, tolerance: float) -> bool:
     """
     Check if position is close to target_position within tolerance percent.
     """
-    if len(position) != 2 or len(target_position) != 2:
-        raise ValueError("Position and target_position must both be (x, y) tuples")
-
-    x, y = position
+    # if len(position) != 2 or len(target_position) != 2:
+    #     raise ValueError("Position and target_position must both be (x, y) tuples")
+    if position == ():
+        x, y = 1000.0, 1000.0 #Random big values
+    else:
+        x, y = position
     tx, ty = target_position
 
     def within_tolerance(value: float, target: float) -> bool:
@@ -1222,193 +1347,227 @@ def is_position_close_to(position: tuple, target_position: tuple, tolerance: flo
 def table_state_machine(xy_table, welder, adam, current_state: int, table_of_positions: list, table_index: int, welding_position: int) -> Tuple[int, int, int]:
     global weld_test_result
     WORKER_POSITION_X, WORKER_POSITION_Y = 165.738, 62.825
+    UNLOAD_POSITION_X, UNLOAD_POSITION_Y = 217.625, 0.0
 
     _next_state = current_state
     sleep(0.01)    # Limit communication on LAN
-    if current_state != 99 and (is_light_curtain_activated(adam) or is_emergency_button_pressed(adam)):
-        try:
-            xy_table.stop() # Must connect adam output with input of motion controller
-        except Exception:
-            pass
-        print("Light curtain activated -> Move to state 99")
-        return 99, table_index, welding_position
 
-    match current_state:
+    # if current_state != 99 and (is_light_curtain_activated(adam) or is_emergency_button_pressed(adam)):
+    #     try:
+    #         xy_table.stop()
+    #     except Exception:
+    #         pass
+    #     print("Light curtain activated -> Move to state 99")
+    #     return 99, table_index, welding_position
+    try:
+        match current_state:
 
-        case 0:  # initialize
+            case 0:  # initialize
 
-            # if not is_light_curtain_activated(adam) and not is_emergency_button_pressed(adam):
-            xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y, units_in_mm=True)  # Go to worker position
+                if xy_table.is_connected():
+                    # Get xy_table's current position
+                    current_pos = xy_table.positions_in_mm
+                    print(f"Current xy_table's position: {current_pos}")
+                    if current_pos != (0,0):    # Check in case motion controller is shut down while moving
+                        if is_move_button_pressed(adam):    # Operator must press move button to continue moving xytable after power is back
+                            xy_table.home()
+                            sleep(0.01)
 
-            table_index = -1  # reset table index
-            welding_position = 0  # reset welding position
-            weld_test_result = ""
-            print("Move to state 1")
-            _next_state = 1  # move to next state
-
-
-        case 1:
-            # Get xy_table's current position
-            current_pos = xy_table.positions_in_mm
-            print(current_pos)
-
-            # current_pos = ()
-            # for stage, new_position in zip((X_stage, Y_stage), xy_table.position):
-            #     _new_position = stage.convert_steps_to_mm(new_position)
-            #     _new_position = round(_new_position,3)
-            #     current_pos += (_new_position,)
-            # print(current_pos)
-
-            # Check if current position is not at worker position and at first welding point
-            # if current_pos != (165.738, 63.425) and welding_position == 0:
-            if is_position_close_to(current_pos, (WORKER_POSITION_X, WORKER_POSITION_Y), 0.02) == False and welding_position == 0:
-                print("XY_table is not at worker position!")
-                xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y, units_in_mm=True)  # Go to worker position
-                _next_state = 0
-            else:
-                # check move button to move to next position
-                if is_move_button_pressed(adam):
-                    _next_state = 2  # move to next position
-                # stay in current state until user input
-
-        case 2:
-            # move to next command in POSITIONS_OF_PART list
-            table_index += 1
-
-            # Check if table is finished
-            if table_index >= len(table_of_positions):
-                _next_state = 0
-            else:
-                print("Moved to state 3")
-                _next_state = 3 
-
-        case 3:
-            # evaluate table command
-            x, y = table_of_positions[table_index]
-            if isinstance(x, str):
-                if x == "PAUSE" and y is not None:
-                    print(f"Pause for {y} seconds!")
-                    sleep(y)  # wait a bit before moving to the next position
-                    _next_state = 2  # next table position
-                elif x == "USER":
-                    # Need to interact with user (read io port, etc.)
+                    table_index = -1  # reset table index
+                    welding_position = 0  # reset welding position
+                    weld_test_result = ""
                     print("Move to state 1")
-                    _next_state = 1  # wait for user input
-                elif x == "WELD":
-                    # trigger welding process here
-                    welding_position += 1
-                    print("Move to state 4")
-                    _next_state = 4  # next table position    
-
-                    if adam.get_digital_input(index=7) == False:
-                        print("Welding head up or not: Yes")                
+                    _next_state = 1  # move to next state
                 else:
-                    print(f"Unknown statement {x}!")
                     _next_state = 0
-            else:  
-                # position change
-                xy_table.goto_position(x, y, units_in_mm=True)
-                _next_state = 3
-                table_index += 1  # Move to next command
 
-        case 4:
-            # _next_state = 5     # This line is for testing in case welder is not working
-            # print(f"Welding position {welding_position}.")
-            # print("Wait until welding is done.")
-            _ready, _ = welder.is_machine_ready()
-            if _ready:
-                if welder.is_toggle_bit_changed():
-                    print("Move to state 5")
-                    _next_state = 5  # check welding result
+            case 1:
+                if xy_table.is_connected():    
+                    # Get xy_table's current position
+                    current_pos = xy_table.positions_in_mm
+                    print(f"Current xy_table's position: {current_pos}")
+
+                    # current_pos = ()
+                    # for stage, new_position in zip((X_stage, Y_stage), xy_table.position):
+                    #     _new_position = stage.convert_steps_to_mm(new_position)
+                    #     _new_position = round(_new_position,3)
+                    #     current_pos += (_new_position,)
+                    # print(current_pos)
+
+                    # Check if current position is not at worker position and at welding position 21 (to flip battery pack)
                     
-        case 5:
-            # Get welding results
-            _, weld_result = welder.is_machine_ready()
+                    if welding_position == 21 and is_position_close_to(current_pos, (WORKER_POSITION_X, WORKER_POSITION_Y), 0.02) == False:   # This case happens when power is lost
+                        if is_move_button_pressed(adam):    # Operator must press move button to continue moving xytable after power is back 
+                            xy_table.home()  # Go home to get root coordinate
+                            xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y, units_in_mm=True)  # Go to worker position
+                            _next_state = 1
+                    else:
+                        # check move button to move to next position
+                        if is_move_button_pressed(adam):
+                            if is_position_close_to(current_pos, (UNLOAD_POSITION_X, UNLOAD_POSITION_Y), 0.02):  # If current position is pack unloading position
+                                xy_table.home()
+                                _next_state = 0  # Reset process
+                                print("Move to state 0")
+                            else:
+                                _next_state = 2  # move to next position
+                                print("Move to state 2")
+                else:
+                    _next_state = 1
+            case 2:
+                # move to next command in POSITIONS_OF_PART list
+                print(f"Motion Controller Connected: {xy_table.is_connected()}")
+                if xy_table.is_connected():
+                    table_index += 1
 
-            # ''' SIMULATION MOVING XYTABLE IN CASE WELDING MACHINE DOES NOT WORK'''
-            # weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
+                    # Check if table is finished
+                    if table_index >= len(table_of_positions):
+                        _next_state = 0
+                    else:
+                        print("Moved to state 3")
+                        _next_state = 3 
 
-            # if weld_test_result == "ok":
+            case 3:
+                # evaluate table command
+                x, y = table_of_positions[table_index]
+                if isinstance(x, str):
+                    if x == "PAUSE" and y is not None:
+                        print(f"Pause for {y} seconds!")
+                        sleep(y)  # wait a bit before moving to the next position
+                        _next_state = 2  # next table position
+                    elif x == "USER":
+                        # Need to interact with user (read io port, etc.)
+                        print("Move to state 1")
+                        _next_state = 1  # wait for user input
+                    elif x == "WELD":
+                        # trigger welding process here
+                        welding_position += 1
+                        print("Move to state 4")
+                        _next_state = 4  # next table position  
 
-            if weld_result["ok"] == 1:          # Case when welding result is ok
+                        if is_welding_head_down(adam) == False:
+                            print("Welding head up or not: Yes")   
+                        
+                        print(f"Welding position {welding_position}.")
+                        print("Wait until welding is done.")                  
+                    else:
+                        print(f"Unknown statement {x}!")
+                        _next_state = 0
+                else:  
+                    # position change
+                    if xy_table.is_connected():
+                        xy_table.goto_position(x, y, units_in_mm=True)
+                        
+                        current_pos = xy_table.positions_in_mm
+                        print(f"Current xy_table's position: {current_pos}")
 
-                print("Welding ok")
-                weld_test_result = 'ok'
-                print("Move to state 2")
-                _next_state = 2
+                        if is_position_close_to(current_pos, (x, y), 0.02) == False and is_move_button_pressed(adam): # Case when power is lost
+                            print(f"Connected: {xy_table.is_connected()}")
+                            xy_table.clear()
 
-                if adam.get_digital_input(index=7) == False:
-                    print("Welding head moved up or not after welding: Yes")
-                else: 
-                    print("Welding head moved up or not after welding: No")
+                            xy_table.home()
+                            xy_table.goto_position(x, y, units_in_mm=True)    # Continue moving to that position
 
-                # print("Move to state 6")
-                # _next_state = 6   # wait for user input to move to next position
+                        _next_state = 3
+                        table_index += 1  # Move to next command
+                                
+                    else:
+                        _next_state = 3
 
-            # elif weld_test_result == "failed":
-            elif weld_result["reject"] == 1:    # Case when welding failed
+            case 4:
+                # _next_state = 5     # This line is for testing in case welder is not working
+                _ready, _ = welder.is_machine_ready()
+                if _ready:
+                    if welder.is_toggle_bit_changed():
+                        print("Move to state 5")
+                        _next_state = 5  # check welding result
 
-                weld_test_result = 'failed'
-                print("Welding failed")
-                print("Move to state 7")
-                _next_state = 7  # move to error handling state
+            case 5:
+                # Get welding results
+                _, weld_result = welder.is_machine_ready()
 
-            else:
-                # Case when no welding signal is received
-                # In this case, xytable stops. Operator moves battey pack out, and puts pack back in position
-                # Then, operator can press 'c' to continue moving the xytable to the next welding position
-                
-                print("No welding signal received!")
-                _next_state = 4
+                # ''' SIMULATION MOVING XYTABLE IN CASE WELDING MACHINE DOES NOT WORK'''
+                # weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
 
-            # sleep(3) Delay time to wait for welding head to move up + operator detect if sticky electrode happens
+                # if weld_test_result == "ok":
+                if weld_result["ok"] == 1:          # Case when welding result is ok
+
+                    print("Welding ok!")
+                    weld_test_result = 'ok'
+                    _next_state = 2
+                    print("Move to state 2")
+                    # print("Move to state 6")
+                    # _next_state = 6   # wait for user input to move to next position
 
 
-        case 6:
+                # elif weld_test_result == "failed":
+                elif weld_result["reject"] == 1:    # Case when welding failed
 
-            # position done, move to next position
-            print("Welding ok")
-            weld_test_result = 'ok'
-            print("Move to state 2")
-            _next_state = 2
+                    weld_test_result = 'failed'
+                    print("Welding failed!")
+                    print("Move to state 7")
+                    _next_state = 7  # move to error handling state
 
-            _ready, _ = welder.is_machine_ready()
-            if _ready:
-                if welder.is_toggle_bit_changed():
-                    _next_state = 5  # check welding result again
-
-        case 7:
-            # error handling state
-            print("Error during welding process! Please check the machine and try again.")
-            _next_state = 0  # reset to initial state
-
-        case 99: # SAFETY LOCK STATE
-            # Stay here as long as the curtain is blocked
-
-            if not is_light_curtain_activated(adam) and not is_emergency_button_pressed(adam):
-                print("Light curtain clear and Emergency button released.")
-
-                if welding_position in (0, 21):  # If position == 0 or 21, operator needs to press Move button
-                    print("Move to state 1")
-                    print("Press Move Button to continue.")
-                    _next_state = 1  # Move to state 1 to check for move button pressed
-                else:    # If not, automatically move to corresponding state based on welding results.
+                else:
+                    # Case when no welding signal is received
+                    # In this case, xytable stops. Operator moves battey pack out, and puts pack back in position
+                    # Then, operator can press 'c' to continue moving the xytable to the next welding position
                     
-                    if weld_test_result == 'ok':
-                        _next_state = 2
-                    elif weld_test_result == 'failed':
-                        _next_state = 7
-                
-        case _:
-            # reset to initial state if something goes wrong
-            _next_state = 0
+                    print("No welding signal received!")
+                    _next_state = 4
+
+                # sleep(3) Delay time to wait for welding head to move up + operator detect if sticky electrode happens
+
+            case 6:
+                # wait for user input to move to next position or another welding result
+                if is_move_button_pressed(adam):
+                    # position done, move to next position
+                    welding_position += 1
+                    print("Move to state 2")
+                    _next_state = 2
+                # if is_welding_done():
+                # _ready, _ = welder.is_machine_ready()
+                # if _ready:
+                #     if welder.is_toggle_bit_changed():
+                #         _next_state = 5  # check welding result again
+
+            case 7:
+                # error handling state
+                print("Error during welding process! Please check the machine and try again.")
+                xy_table.goto_position(UNLOAD_POSITION_X, UNLOAD_POSITION_Y)   # Go to unloading pack position
+                _next_state = 1  # reset to initial state
+
+            case 99: # SAFETY LOCK STATE
+                # Stay here as long as the curtain is blocked
+
+                if not is_light_curtain_activated(adam) and not is_emergency_button_pressed(adam):
+                    print("Light curtain clear and Emergency button released.")
+
+                    if welding_position in (0, 21):  # If position == 0 or 21, operator needs to press Move button
+                        print("Move to state 1")
+                        print("Press Move Button to continue.")
+                        _next_state = 1  # Move to state 1 to check for move button pressed
+                    else:    # If not, automatically move to corresponding state based on welding results.
+                        
+                        if weld_test_result == 'ok':
+                            _next_state = 2
+                        elif weld_test_result == 'failed':
+                            _next_state = 7
+
+                # reset to initial state if something goes wrong
+                _next_state = 0
+
+    except (UnicodeDecodeError) as e:
+        print("Exception error", e)
+        print("Current welding position:", welding_position)
+        print("Current state:", current_state)
+
 
     return _next_state, table_index, welding_position
 
 def read_input_from_scanner() -> str:
     return ""  # TODO: implement this function to read from a barcode scanner or other input device
 
-def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resource_str_adam: str):
+def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resource_str_adam: str, logger: EventLogger):
     adam = ADAM6052(ip=resource_str_adam, connect=True)
     welder = OurXYAWS3Modbus(resource_str_aws)
     welder.open()
@@ -1430,11 +1589,12 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
         travel_range_mm = 1000.0,
     )
 
-    xy_table = XYLinearStage(X_stage, Y_stage, resource_str_xy)
+    xy_table = XYLinearStage(X_stage, Y_stage, resource_str_xy, logger)
     print(f"Connected: {xy_table.is_connected()}")
     xy_table.clear()
 
     WORKER_POSITION_X, WORKER_POSITION_Y = 165.738, 62.825
+    UNLOAD_POSITION_X, UNLOAD_POSITION_Y = 217.625, 0.0
     POSITIONS_OF_PART = [  # RRC3570 42 positions (updated with +0.300mm offset)
         
         # Face 1 - Column 1
@@ -1538,8 +1698,8 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
         (125.118, 303.525),
         ("WELD", 42),
 
-        # Final Return Home
-        (WORKER_POSITION_X, WORKER_POSITION_Y),
+        # Final Return to Unloading Position
+        (UNLOAD_POSITION_X, UNLOAD_POSITION_Y),
         ("USER", None),    # Go back home, let operator change to new pack and continue with new welding process  
     ]
 
@@ -1583,7 +1743,7 @@ if __name__ == "__main__":
     ## Initialize the logging
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
-
+    production_logger = EventLogger("production_stats_line3.csv")
     tic = perf_counter()
 
     #test_gcode_parser()
@@ -1591,8 +1751,8 @@ if __name__ == "__main__":
     RESOURCE_STR_MOTION_CONTROLLER = "COM11,9600,8N1"  # Port for motion controller
     RESOURCE_STR_AWS = "tcp:172.25.103.100:502"
     RESOURCE_STR_ADAM = "172.25.103.202"
-    # test_xydevice(RESOURCE_STR_MOTION_CONTROLLER)
-    test_combined_controllers(RESOURCE_STR_AWS, RESOURCE_STR_MOTION_CONTROLLER, RESOURCE_STR_ADAM)
+    #test_xydevice(RESOURCE_STR_MOTION_CONTROLLER)
+    test_combined_controllers(RESOURCE_STR_AWS, RESOURCE_STR_MOTION_CONTROLLER, RESOURCE_STR_ADAM, production_logger)
 
     # test_aws3_communication("tcp:172.25.103.100:502")
     # test_db_driven_stage()
