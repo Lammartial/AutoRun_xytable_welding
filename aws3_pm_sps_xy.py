@@ -531,7 +531,7 @@ class SPSStateMachineBase(object):
         # e.g. the Rotating version does write files, the Production version writes to DB
         self.have_read_measurements = have_read_measurements
         self.welding_status = None
-        self.welding_parameters = None
+        self.welding_parameters = None  # For the old good sake of being an idol of this world
         self.welding_measurements = None
         self.welding_waveforms = None
         # MODBUS communication - either real or DUMMY
@@ -1557,6 +1557,7 @@ class ProcessSPS(mp.Process):
                             SM._debug_trigger_ = True
                             SM.set_state(SM.move_seqence_step(int(cmd["move_counter"])))
                             answer = "OK"
+
                     if "reset_counter" in cmd:
                         #SM.reset_seqence()
                         SM.close()
@@ -1654,13 +1655,12 @@ class ProcessScanner(mp.Process):
             #        sleep(1.0)
             #        self.sps_queue.put({"move_counter": 1})
 
-#--------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
     # need to initialize logger on load
 
-    print("=== POOR MAN's SPS ===")
-    print(modbus_version)
+    print("=== POOR MAN's SPS ===") 
 
     #_default_yaml_filepath_ = Path(__file__).parent / "aws_readings"
     _default_yaml_filepath_ = Path(__file__).parent / "../.." / "logs" / "aws_readings"
