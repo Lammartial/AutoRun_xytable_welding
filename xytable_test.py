@@ -3,6 +3,10 @@
 Contains the drivers for stepper motor controller MOC-01/MOC-02 from Optics Focus Instruments Co., Ltd.
 """
 
+import csv
+from datetime import datetime
+import os
+
 from time import sleep
 from math import e
 from typing import Tuple, List
@@ -23,9 +27,94 @@ DEBUG = 2
 from rrc.custom_logging import getLogger, logger_init
 
 # --------------------------------------------------------------------------- #
- 
+
 
 #--------------------------------------------------------------------------------------------------
+
+class EventLogger:
+    def __init__(self, filename="production_stats_line3.csv"):
+        self.filename = filename
+        self.current_state = "RUNNING"
+        self.source = "SYSTEM"
+
+        file_existed = os.path.exists(self.filename)
+        with open(self.filename, 'a', newline='') as f:
+            writer = csv.writer(f)
+            if not file_existed:
+                # First ever run — write the header
+                writer.writerow(["Start_Time", "End_Time", "Event_Type", "Source", "Duration_Sec"])
+            else:
+                # Subsequent run — write a blank separator row so sessions are
+                # visually distinct in the CSV without touching existing data
+                writer.writerow([])
+            # Write a session-start marker so the CSV always shows when the
+            # script was launched, even if no state switch ever happens
+            writer.writerow([
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "",
+                "SESSION_START",
+                "SYSTEM",
+                "",
+            ])
+
+        # Start the clock AFTER writing the session marker
+        self.start_time = datetime.now()
+
+        # Register close() to run automatically on any exit (normal, Ctrl+C,
+        # or unhandled exception). This ensures the last open period is always
+        # written to the CSV instead of being silently lost.
+        import atexit
+        atexit.register(self.close)    
+
+    def switch_state(self, next_state: str, source: str):
+        end_time = datetime.now()
+        duration = (end_time - self.start_time).total_seconds()
+
+        with open(self.filename, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                self.start_time.strftime("%Y-%m-%d %H:%M:%S"),
+                end_time.strftime("%Y-%m-%d %H:%M:%S"),
+                self.current_state,
+                self.source,
+                round(duration, 2)
+            ])
+
+        self.start_time = datetime.now()
+        self.current_state = next_state
+        self.source = source
+
+    def close(self):
+        """Write the final open period to the CSV.
+
+        Called automatically via atexit on any exit (normal shutdown, Ctrl+C,
+        or unhandled exception). Safe to call manually as well — subsequent
+        calls are ignored because start_time is set to None after the first.
+        """
+        if self.start_time is None:
+            return  # already closed — nothing to do
+        end_time = datetime.now()
+        duration = (end_time - self.start_time).total_seconds()
+        with open(self.filename, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                self.start_time.strftime("%Y-%m-%d %H:%M:%S"),
+                end_time.strftime("%Y-%m-%d %H:%M:%S"),
+                self.current_state,
+                self.source,
+                round(duration, 2),
+            ])
+
+            # Write the SESSION_STOP marker so every SESSION_START has a matching end
+            writer.writerow([
+                end_time.strftime("%Y-%m-%d %H:%M:%S"),
+                "",
+                "SESSION_STOP",
+                "SYSTEM",
+                "",
+            ])
+
+        self.start_time = None  # guard against double-close
 
 class BaseOfStage():
 
@@ -113,7 +202,7 @@ class RotaryStage(BaseOfStage):
         super().__init__(name, step_angle)
         self.stage_type: str = "rotary_stage"
         self.unit: str = "degree"
-        self.position = None  # current position of the stage unkonwn at start
+        self.position = None  # current position of the stage unknown at start
         # calculation depending on the type of stage
         self.subdivision = subdivision
         self.transmission_ratio = transmission_ratio  # for rotation stages
@@ -273,6 +362,7 @@ class LinearStage(BaseOfStage):
             return None, "Not yet on defined position"  # need to HOME or MAX first
 
         displacement = int(round(new_position - self.position))
+
         if not displacement:
             return "", f"Already on position '{new_position}'"  # already on position
         cmd, msg = self.displacement_to_motion_command(displacement)
@@ -374,7 +464,7 @@ class ParsingStage():
 class XYLinearStage():
     """Driver for the XY table using linear stages for X and Y direction."""
 
-    def __init__(self, X: LinearStage, Y: LinearStage, resource_string: str, timeout: float = 5.0) -> None:
+    def __init__(self, X: LinearStage, Y: LinearStage, resource_string: str, logger=None, timeout: float = 5.0) -> None:
         """Creates a XY linear stage device using an MOC-01/MOC-02 from Optics Focus Instruments Co., Ltd.
 
         Depending on the resource string, it creates either a network socket or a COM port connection to the stage.
@@ -415,6 +505,22 @@ class XYLinearStage():
         # create a tuple of stages
         self.stages = (X, Y)
         self.pulse_period = 30 / (0 + 1)  # assuming the initial speed is 0  -> pulses/ms
+        # Create log handler
+        self.logger = logger  
+        self._is_offline = False
+        # Flag set whenever a UnicodeDecodeError (power cut / light curtain) is detected
+        # and cleared only after a successful home + move recovery in the state machine.
+        # This prevents table_index from advancing before the target is actually reached.
+        self._power_was_cut = False
+        # Recovery context: set before EVERY movement so that state 30 always knows
+        # what position was being targeted and where to resume after successful recovery.
+        # Shape: {"target": (x, y), "return_state": int, "advance_table": bool}
+        #   target        – physical (mm) destination that was being moved to.
+        #                   Use (0.0, 0.0) when the move is a home() call.
+        #   return_state  – state to transition to after recovery succeeds.
+        #   advance_table – True when table_index must be incremented on success
+        #                   (only needed for movements driven by table_of_positions).
+        self._recovery_context = None
         # -> _duration = abs(displacement) / self.pulse_period   # in ms
 
 
@@ -431,28 +537,30 @@ class XYLinearStage():
     #         global DEBUG
     #         _log = getLogger(__name__, DEBUG)
     #         _log.debug(message)
+    #     try:
+    #         response = self.dev.request(command, timeout=5.0, pause_after_write=5)
 
-    #     response = self.dev.request(command, timeout=5.0, pause_after_write=5)
-
-    #     if 'OK' in response:
-    #         return True, response
-    #     elif not 'ERR' in response:
-    #         # a number with sign
-    #         return True, int(''.join(x for x in response if x.isdigit()))
-    #     else:
-    #         # ERR found -> decode error message
-    #         _err = int(response.split('ERR')[-1])
-    #         _err_msg = {
-    #             1: "communication error/sent invalid commands/communication is a timeout ",
-    #             2: "communication not established",
-    #             3: "invalid command",
-    #             4: "stop command",
-    #             5: "limit switch is valid",
-    #         }
-    #         if _err in _err_msg:
-    #             return False, f"Stage error '{response}': {_err_msg[_err]}"
-
-    #     raise Exception(f"Something went wrong: {response}")
+    #         if 'OK' in response:
+    #             return True, response
+    #         elif not 'ERR' in response:
+    #             # a number with sign
+    #             return True, int(''.join(x for x in response if x.isdigit()))
+    #         else:
+    #             # ERR found -> decode error message
+    #             _err = int(response.split('ERR')[-1])
+    #             _err_msg = {
+    #                 1: "communication error/sent invalid commands/communication is a timeout ",
+    #                 2: "communication not established",
+    #                 3: "invalid command",
+    #                 4: "stop command",
+    #                 5: "limit switch is valid",
+    #             }
+    #             if _err in _err_msg:
+    #                 return False, f"Stage error '{response}': {_err_msg[_err]}"
+                
+    #     except UnicodeDecodeError as te:
+    #         # return False
+    #         raise LightCurtainError("User Interception")
 
     def command(self, command, message: str = None) -> Tuple[int | bool, str | None]:
         if message:
@@ -460,43 +568,68 @@ class XYLinearStage():
             _log = getLogger(__name__, DEBUG)
             _log.debug(message)
 
-        # This calls your new resilient request() from base.py
-        response = self.dev.request(command, timeout=5.0, pause_after_write=5)
+        try:
+            response = self.dev.request(command, timeout=5.0, pause_after_write=5)
 
-        # 1. HANDLE EMPTY OR NULL RESPONSES
-        if not response or str(response).strip() == "":
-            return False, "Empty response: Controller not ready yet"
-
-        # 2. HANDLE SUCCESSFUL 'OK'
-        if 'OK' in response:
-            return True, response
-
-        # 3. HANDLE ERROR CODES
-        elif 'ERR' in response:
-            try:
+            if 'OK' in response:
+                return True, response
+            elif not 'ERR' in response:
+                return True, int(''.join(x for x in response if x.isdigit()))
+            else:
                 _err = int(response.split('ERR')[-1])
                 _err_msg = {
-                    1: "communication error/sent invalid commands/communication is a timeout",
+                    1: "communication error/timeout",
                     2: "communication not established",
                     3: "invalid command",
                     4: "stop command",
                     5: "limit switch is valid",
                 }
-                error_text = _err_msg.get(_err, "Unknown Error")
-                return False, f"Stage error '{response}': {error_text}"
-            except (ValueError, IndexError):
-                return False, f"Malformed Error response: {response}"
+                return False, f"Stage error '{response}': {_err_msg.get(_err, 'Unknown error')}"
 
-        # 4. HANDLE NUMERIC RESPONSES (e.g., Position or Status)
-        else:
-            # Extract only the digits (and maybe a sign '-' if needed)
-            digits = ''.join(x for x in response if x.isdigit() or x == '-')
-            
-            if digits and digits != '-': # Ensure we actually have numbers
-                return True, int(digits)
-            else:
-                # If we get here, the response wasn't OK, wasn't ERR, and wasn't a number.
-                return False, f"Unexpected response format: {response}"
+        except (UnicodeDecodeError) as e:
+            # --- LOGGING POINT 1: STOP DETECTED ---
+            # We close the 'RUNNING' session and start the 'DOWNTIME' clock
+            if hasattr(self, 'logger') and self.logger:
+                self.logger.switch_state("DOWNTIME", "EMERGENCY")
+
+            print(f"\n⚠️ [INTERRUPTION] Light Curtain or Emergency Stop triggered!")
+            print("🛑 Waiting for hardware to power back on...")
+
+            # Wait for hardware to become reachable again
+            while True:
+                try:
+                    self.dev.close()
+                    sleep(2)
+                    self.dev.open()
+                    # Verification ping: ensure controller is actually processing commands
+                    response = self.dev.request("?R", timeout=2.0)
+                    if response and "OK" in response:
+                        break   # firmware confirmed ready
+
+                except Exception:
+                    # Still no power or serial buffer is garbled
+                    sleep(1)
+
+            print("✨ Hardware restored.")
+
+            # --- LOGGING POINT 2: RESUME ---
+            # We close the 'DOWNTIME' session and start the 'RUNNING' clock again
+            if hasattr(self, 'logger') and self.logger:
+                self.logger.switch_state("RUNNING", "SYSTEM")
+
+            # CRITICAL: Do NOT retry the original command here.
+            # The motion controller has been power-cycled, so its internal step
+            # counter has reset to 0. Retrying a relative move command (e.g. X+1200)
+            # from position 0 would move to the completely wrong location.
+            # Instead, signal the state machine so it can: wait for operator button,
+            # call home() to re-reference zero, then re-issue the move.
+            self._power_was_cut = True
+            for stage in self.stages:
+                stage.position = None  # invalidate cached positions — they are now meaningless
+
+            print("⚠️  Position lost. State machine will home and retry after button press.")
+            return False, "POWER_CUT_RECOVERED"
+
     #----------------------------------------------------------------------------------------------
 
 
@@ -512,10 +645,12 @@ class XYLinearStage():
         for stage in self.stages:
             cmd, msg = stage.read_position_command()
             ok, response = self.command(cmd, message=msg)
+
             if ok:
                 # update stage position from motion controller response
                 # stage.position = self._extract_position_from_response(response)
                 stage.position = int(response)
+
         return tuple([stage.position for stage in self.stages])
 
     @property
@@ -603,9 +738,11 @@ class XYLinearStage():
                 _new_position = new_position
             cmd, msg = stage.absolute_position_to_motion_command(_new_position)
             if cmd is not None and cmd != "":
+
                 ok, response = self.command(cmd, message=msg)
                 if not ok:
                     return False  # error during motion command
+
         x, y = self.position # update positions after motion
         return True
 
@@ -659,12 +796,16 @@ class XYLinearStage():
         """Get the command string to reset the stage position so that the absolute zero position (home)."""
 
         for stage in self.stages:
+
             cmd, msg = stage.home_command()
             ok, _ = self.command(cmd, message=msg)
             if ok:
                 stage.position = 0  # to only way to set position initially
             else:
+                print("Error during homing!")
+                print(_)
                 return False  # error during homing
+
         return True
 
 
@@ -779,6 +920,10 @@ def generate_stage_from_parameter(parameter: dict) -> None | XYLinearStage:
                         stage = XYLinearStage(stages[0], stages[1], _resource_string)
 
     return stage
+
+
+class LightCurtainError(Exception):
+    pass 
 
 
 #--------------------------------------------------------------------------------------------------
@@ -1072,8 +1217,8 @@ class OurXYAWS3Modbus(AWS3Modbus):
     def is_machine_ready(self) -> tuple:
         self._sync_modbus_timing()
         # following includes a verification helper to simulate a weld process with
-        # a real machine but without really doing the welding process (saves material and time)
-        bits = self.read_coils(97-1, 8, unit_address=3) #if not self._verification_weld_resultbits else self._verification_weld_resultbits
+        # a real machinge but without really doing the welding process (saves material and time)
+        bits = self.read_coils(97-1, 8, unit_address=3) if not self._verification_weld_resultbits else self._verification_weld_resultbits
         d = {
             "ready": 1 if bits[0] else 0,
             "operational_mode": 1 if bits[1] else 0,  # 0=auto, 1=step
@@ -1251,7 +1396,9 @@ def is_position_close_to(position: tuple, target_position: tuple, tolerance: flo
     """
     if len(position) != 2 or len(target_position) != 2:
         raise ValueError("Position and target_position must both be (x, y) tuples")
-
+    # if position == ():
+    #     x, y = 1000.0, 1000.0 #Random big values
+    # else:
     x, y = position
     tx, ty = target_position
 
@@ -1271,68 +1418,98 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
     _next_state = current_state
     sleep(0.01)    # Limit communication on LAN
 
-    # if current_state != 99 and (is_light_curtain_activated(adam) or is_emergency_button_pressed(adam)):
-    #     try:
-    #         xy_table.stop() # Must connect adam output with input of motion controller
-    #     except Exception:
-    #         pass
-    #     print("Light curtain activated -> Move to state 99")
-    #     return 99, table_index, welding_position
 
     match current_state:
 
         case 0:  # initialize
 
             if xy_table.is_connected():
-                # Get xy_table's current position
                 current_pos = xy_table.positions_in_mm
                 print(f"Current xy_table's position: {current_pos}")
-                if current_pos != (0,0):    # Check in case motion controller is shut down while moving
-                    if is_move_button_pressed(adam):    # Operator must press move button to continue moving xytable after power is back
+
+                # Reset counters here so that if a power cut occurs during the
+                # home() call below and we jump to state 30 → return_state 1,
+                # the counters are already in their correct initial state.
+                table_index = -1
+                welding_position = 0
+                weld_test_result = ""
+
+                if current_pos != (0, 0):
+                    # Case 1: table not at home — operator must confirm before homing
+                    if is_move_button_pressed(adam):
+                        # Set recovery context before every movement (covers all power-cut cases)
+                        xy_table._recovery_context = {
+                            "target": (0.0, 0.0),   # home position
+                            "return_state": 1,       # go to state 1 after recovery
+                            "advance_table": False,
+                        }
+                        xy_table._power_was_cut = False
                         xy_table.home()
                         sleep(0.01)
-
-                table_index = -1  # reset table index
-                welding_position = 0  # reset welding position
-                weld_test_result = ""
-                print("Move to state 1")
-                _next_state = 1  # move to next state
+                        if xy_table._power_was_cut:
+                            print("⚠️  Power cut during startup home. Entering recovery.")
+                            _next_state = 30
+                        else:
+                            print("Move to state 1")
+                            _next_state = 1
+                else:
+                    print("Move to state 1")
+                    _next_state = 1
             else:
                 _next_state = 0
 
         case 1:
             if xy_table.is_connected():    
-                # Get xy_table's current position
                 current_pos = xy_table.positions_in_mm
                 print(f"Current xy_table's position: {current_pos}")
 
-                # current_pos = ()
-                # for stage, new_position in zip((X_stage, Y_stage), xy_table.position):
-                #     _new_position = stage.convert_steps_to_mm(new_position)
-                #     _new_position = round(_new_position,3)
-                #     current_pos += (_new_position,)
-                # print(current_pos)
-
                 # Check if current position is not at worker position and at welding position 21 (to flip battery pack)
-                
-                if welding_position == 21 and is_position_close_to(current_pos, (WORKER_POSITION_X, WORKER_POSITION_Y), 0.02) == False:   # This case happens when power is lost
-                    if is_move_button_pressed(adam):    # Operator must press move button to continue moving xytable after power is back 
-                        xy_table.home()  # Go home to get root coordinate
-                        xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y, units_in_mm=True)  # Go to worker position
-                        _next_state = 1
-                else:
-                    # check move button to move to next position
+                if welding_position == 21 and not is_position_close_to(current_pos, (WORKER_POSITION_X, WORKER_POSITION_Y), 0.02):
+                    # Case 3 (backup path): power was lost while moving to worker position.
+                    # State 3 → state 30 handles this in normal flow, but this branch
+                    # acts as a safety net if the machine restarts mid-sequence.
                     if is_move_button_pressed(adam):
-                        if is_position_close_to(current_pos, (UNLOAD_POSITION_X, UNLOAD_POSITION_Y), 0.02):  # If current position is pack unloading position
-                            xy_table.home()
-                            _next_state = 0  # Reset process
-                            print("Move to state 0")
+                        # Recovery target is worker position; state 30 will home first then move there.
+                        xy_table._recovery_context = {
+                            "target": (WORKER_POSITION_X, WORKER_POSITION_Y),
+                            "return_state": 1,       # come back to state 1 after recovery
+                            "advance_table": False,
+                        }
+                        xy_table._power_was_cut = False
+                        xy_table.home()  # re-reference zero after power cycle
+                        if xy_table._power_was_cut:
+                            print("⚠️  Power cut during home (worker recovery). Entering recovery.")
+                            _next_state = 30
                         else:
-                            _next_state = 2  # move to next position
+                            xy_table._power_was_cut = False
+                            xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y, units_in_mm=True)
+                            if xy_table._power_was_cut:
+                                print("⚠️  Power cut moving to worker position. Entering recovery.")
+                                _next_state = 30
+                            else:
+                                _next_state = 1
+                else:
+                    if is_move_button_pressed(adam):
+                        if is_position_close_to(current_pos, (UNLOAD_POSITION_X, UNLOAD_POSITION_Y), 0.02):
+                            # Case 6: at unload position — home to reset, then restart
+                            xy_table._recovery_context = {
+                                "target": (0.0, 0.0),   # home
+                                "return_state": 0,       # after recovery go to state 0 to restart
+                                "advance_table": False,
+                            }
+                            xy_table._power_was_cut = False
+                            xy_table.home()
+                            if xy_table._power_was_cut:
+                                print("⚠️  Power cut during home (unload→start). Entering recovery.")
+                                _next_state = 30
+                            else:
+                                _next_state = 0
+                                print("Move to state 0")
+                        else:
+                            _next_state = 2
                             print("Move to state 2")
             else:
                 _next_state = 1
-
         case 2:
             # move to next command in POSITIONS_OF_PART list
             print(f"Motion Controller Connected: {xy_table.is_connected()}")
@@ -1362,66 +1539,76 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
                     # trigger welding process here
                     welding_position += 1
                     print("Move to state 4")
-                    _next_state = 4  # next table position    
+                    _next_state = 4  # next table position  
 
                     if is_welding_head_down(adam) == False:
                         print("Welding head up or not: Yes")   
                     
                     print(f"Welding position {welding_position}.")
-                    print("Wait until welding is done.")             
+                    print("Wait until welding is done.")                  
                 else:
                     print(f"Unknown statement {x}!")
                     _next_state = 0
             else:  
-                # position change
-                xy_table.goto_position(x, y, units_in_mm=True)
-                
-                current_pos = xy_table.positions_in_mm
-                print(f"Current xy_table's position: {current_pos}")
-                if current_pos == ():
-                    current_pos = (-1.0, -1.0)
+                # position change driven by table_of_positions
+                if xy_table.is_connected():
+                    # Set recovery context BEFORE the move so that state 30
+                    # knows the exact target and where to resume if power cuts mid-move.
+                    xy_table._recovery_context = {
+                        "target": (x, y),
+                        "return_state": 3,      # resume at state 3 after recovery
+                        "advance_table": True,  # advance table_index only after confirmed arrival
+                    }
+                    xy_table._power_was_cut = False
+                    xy_table.goto_position(x, y, units_in_mm=True)
 
-                if is_position_close_to(current_pos, (x, y), 0.02) == False:  # Case when power is lost
-                    if is_move_button_pressed(adam):
-                        xy_table.home()
-                        xy_table.goto_position(x, y, units_in_mm=True)    # Continue moving to that position
-                        
-                _next_state = 3
-                table_index += 1  # Move to next command
+                    if xy_table._power_was_cut:
+                        print(f"⚠️  Power cut while moving to X={x} Y={y}. Entering recovery.")
+                        _next_state = 30  # table_index intentionally NOT advanced yet
+                    else:
+                        current_pos = xy_table.positions_in_mm
+                        print(f"Current xy_table's position: {current_pos}")
+
+                        if not is_position_close_to(current_pos, (x, y), 0.02):
+                            # Off-target without a power cut (e.g. limit switch).
+                            # Keep same table_index and retry.
+                            print(f"⚠️  Position mismatch — expected ({x},{y}), got {current_pos}. Retrying.")
+                            _next_state = 3
+                        else:
+                            # Confirmed arrival — advance index and continue
+                            table_index += 1
+                            _next_state = 3
+                else:
+                    _next_state = 3
 
         case 4:
-            # # _next_state = 5     # This line is for testing in case welder is not working
-            _ready, _ = welder.is_machine_ready()
-            if _ready:
-                if welder.is_toggle_bit_changed():
-                    print("Move to state 5")
-                    _next_state = 5  # check welding result
-                    
+            _next_state = 5     # This line is for testing in case welder is not working
+            # _ready, _ = welder.is_machine_ready()
+            # if _ready:
+            #     if welder.is_toggle_bit_changed():
+            #         print("Move to state 5")
+            #         _next_state = 5  # check welding result
+
         case 5:
             # Get welding results
             _, weld_result = welder.is_machine_ready()
-            # print(weld_result)
 
-            # ''' SIMULATION MOVING XYTABLE IN CASE WELDING MACHINE DOES NOT WORK'''
-            # weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
+            ''' SIMULATION MOVING XYTABLE IN CASE WELDING MACHINE DOES NOT WORK'''
+            weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
 
-            # if weld_test_result == "ok":
-
-            if weld_result["ok"] == 1:          # Case when welding result is ok
+            if weld_test_result == "ok":
+            # if weld_result["ok"] == 1:          # Case when welding result is ok
 
                 print("Welding ok!")
                 weld_test_result = 'ok'
                 _next_state = 2
-
-                if is_welding_head_down(adam) == False:
-                    print("Welding head moved up or not after welding: Yes")
-                else: 
-                    print("Welding head moved up or not after welding: No")
-
                 print("Move to state 2")
+                # print("Move to state 6")
+                # _next_state = 6   # wait for user input to move to next position
 
-            # elif weld_test_result == "failed":
-            elif weld_result["reject"] == 1:    # Case when welding failed
+
+            elif weld_test_result == "failed":
+            # elif weld_result["reject"] == 1:    # Case when welding failed
 
                 weld_test_result = 'failed'
                 print("Welding failed!")
@@ -1438,57 +1625,134 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
 
             # sleep(3) Delay time to wait for welding head to move up + operator detect if sticky electrode happens
 
-
         case 6:
-
-            # Check failed case - If toggle bit of welder has changed because SoftSPS keep welder in locked state
-
-            _ready, _ = welder.is_machine_ready()
-            if _ready:
-                if welder.is_toggle_bit_changed():
-                    weld_test_result = 'failed'
-                    print("Welding failed")
-                    print("Move to state 7")
-                    _next_state = 7  # move to error handling state
+            # wait for user input to move to next position or another welding result
+            if is_move_button_pressed(adam):
+                # position done, move to next position
+                welding_position += 1
+                print("Move to state 2")
+                _next_state = 2
 
         case 7:
-            # error handling state
+            # Error handling: move to unload position so operator can remove failed pack.
             print("Error during welding process! Please check the machine and try again.")
-            xy_table.goto_position(UNLOAD_POSITION_X, UNLOAD_POSITION_Y)   # Go to unloading pack position
-            _next_state = 1  # reset to initial state
+            # Case 4: moving from failed-weld position to unload position.
+            xy_table._recovery_context = {
+                "target": (UNLOAD_POSITION_X, UNLOAD_POSITION_Y),
+                "return_state": 1,      # after recovery, go back to state 1 (wait for operator)
+                "advance_table": False,
+            }
+            xy_table._power_was_cut = False
+            xy_table.goto_position(UNLOAD_POSITION_X, UNLOAD_POSITION_Y)
+            if xy_table._power_was_cut:
+                print("⚠️  Power cut while moving to unload position. Entering recovery.")
+                _next_state = 30
+            else:
+                _next_state = 1
 
-        case 99: # SAFETY LOCK STATE
-            # Stay here as long as the curtain is blocked
+        case 30:
+            # ---------------------------------------------------------------
+            # POWER CUT RECOVERY STATE
+            # ---------------------------------------------------------------
+            # Entered from ANY state whenever command() detects a power cut
+            # (UnicodeDecodeError from the motion controller).
+            #
+            # Before every movement call in states 0, 1, 3, and 7, the calling
+            # state stores xy_table._recovery_context with:
+            #   "target"        – (x_mm, y_mm) the move was heading for.
+            #                     (0.0, 0.0) means the move was a home() call.
+            #   "return_state"  – state to transition to after successful recovery.
+            #   "advance_table" – whether to increment table_index on success.
+            #
+            # Recovery sequence (loops back to state 30 on any power cut):
+            #   1. Read and validate _recovery_context.
+            #   2. Wait for operator to confirm it is safe (Move button).
+            #   3. home() to re-reference the absolute zero of the controller.
+            #   4a. If target is (0,0) → we are done (home WAS the goal).
+            #   4b. Otherwise goto_position(target).
+            #   5. Verify final position; if close enough → advance index (if
+            #      needed) and return to return_state. Otherwise loop back.
+            # ---------------------------------------------------------------
 
-            if not is_light_curtain_activated(adam) and not is_emergency_button_pressed(adam):
-                print("Light curtain clear and Emergency button released.")
+            print("Moved to emergency handling state.")
+            print(f"Current welding position: {welding_position}")
 
-                if welding_position in (0, 21):  # If position == 0 or 21, operator needs to press Move button
-                    print("Move to state 1")
-                    print("Press Move Button to continue.")
-                    _next_state = 1  # Move to state 1 to check for move button pressed
-                else:    # If not, automatically move to corresponding state based on welding results.
-                    
-                    if weld_test_result == 'ok':
-                        _next_state = 2
-                    elif weld_test_result == 'failed':
-                        _next_state = 7
+            ctx = xy_table._recovery_context
+            if ctx is None:
+                # Safety fallback: no context was set (should not happen in
+                # normal operation). Reset to the beginning to avoid stale state.
+                print("⚠️  Recovery entered with no context — resetting to state 0.")
+                _next_state = 0
+            else:
+                target_x, target_y = ctx["target"]
+                return_state       = ctx["return_state"]
+                advance_table      = ctx["advance_table"]
 
+                xy_table._power_was_cut = False
 
-        # Cases where motion controller and welding machine is powered on after losing power. 
-        case 100:
-            pass
-                
-        case _:
-            # reset to initial state if something goes wrong
-            _next_state = 0
+                print(f"🔄 Recovery: target X={target_x} Y={target_y}, "
+                        f"will return to state {return_state} after success.")
+                print("Press Move button when it is safe to re-home and continue.")
+
+                is_move_button_pressed(adam)  # blocking — waits for operator
+
+                # --- Step 3: Home to re-reference absolute zero ---
+                print("🏠 Homing to re-reference zero after power cycle...")
+                home_ok = xy_table.home()
+
+                if xy_table._power_was_cut:
+                    # Another power cut happened during homing itself.
+                    # _recovery_context is unchanged → loop back and wait again.
+                    print("⚠️  Power cut during homing. Will retry recovery on next loop.")
+                    _next_state = 30
+
+                elif not home_ok:
+                    # Homing failed for a non-power-cut reason (limit switch, etc.).
+                    print("⚠️  Homing failed (non-power-cut). Retrying recovery on next loop.")
+                    _next_state = 30
+
+                else:
+                    # Homing succeeded.
+                    if target_x == 0.0 and target_y == 0.0:
+                        # --- Step 4a: Target WAS home — we are already there ---
+                        print("✅ Recovery successful — home position reached.")
+                        if advance_table:
+                            table_index += 1
+                        xy_table._recovery_context = None
+                        _next_state = return_state
+
+                    else:
+                        # --- Step 4b: Move to the original target ---
+                        print(f"✅ Homed. Re-attempting move to X={target_x} Y={target_y}...")
+                        xy_table._power_was_cut = False
+                        xy_table.goto_position(target_x, target_y, units_in_mm=True)
+
+                        if xy_table._power_was_cut:
+                            # Yet another power cut during recovery move.
+                            # _recovery_context unchanged → loop back.
+                            print("⚠️  Power cut during recovery move. Will retry recovery on next loop.")
+                            _next_state = 30
+
+                        else:
+                            # --- Step 5: Verify final position ---
+                            current_pos = xy_table.positions_in_mm
+                            if is_position_close_to(current_pos, (target_x, target_y), 0.02):
+                                print(f"✅ Recovery successful — reached X={target_x} Y={target_y}.")
+                                if advance_table:
+                                    table_index += 1
+                                xy_table._recovery_context = None
+                                _next_state = return_state
+                            else:
+                                print(f"⚠️  Still off-target after recovery "
+                                        f"(got {current_pos}, expected ({target_x},{target_y})). Retrying.")
+                                _next_state = 30  # table_index unchanged, context unchanged
 
     return _next_state, table_index, welding_position
 
 def read_input_from_scanner() -> str:
     return ""  # TODO: implement this function to read from a barcode scanner or other input device
 
-def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resource_str_adam: str):
+def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resource_str_adam: str, logger: EventLogger):
     adam = ADAM6052(ip=resource_str_adam, connect=True)
     welder = OurXYAWS3Modbus(resource_str_aws)
     welder.open()
@@ -1510,8 +1774,8 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
         travel_range_mm = 1000.0,
     )
 
-    xy_table = XYLinearStage(X_stage, Y_stage, resource_str_xy)
-    print("\n")   # New line
+    xy_table = XYLinearStage(X_stage, Y_stage, resource_str_xy, logger)
+    print(f"Connected: {xy_table.is_connected()}")
     xy_table.clear()
 
     WORKER_POSITION_X, WORKER_POSITION_Y = 165.738, 62.825
@@ -1625,17 +1889,6 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
     ]
 
     # Combine control for controller and reading from welding machine
-    while True:
-        print(f"Motion Controller Connected: {xy_table.is_connected()}")
-        if xy_table.is_connected():
-            # Give the electronics extra milisecond to stabilize before moving
-            sleep(0.05) 
-            break 
-
-    print(f"\n--------------------------------------------------")
-    print("🚀 System Ready. Starting State Machine...")
-    print("--------------------------------------------------")
-
     xy_table.home()
 
     welding_position = 0
@@ -1675,7 +1928,7 @@ if __name__ == "__main__":
     ## Initialize the logging
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
-
+    production_logger = EventLogger("production_stats_line3.csv")
     tic = perf_counter()
 
     #test_gcode_parser()
@@ -1683,10 +1936,10 @@ if __name__ == "__main__":
     RESOURCE_STR_MOTION_CONTROLLER = "COM11,9600,8N1"  # Port for motion controller
     RESOURCE_STR_AWS = "tcp:172.25.103.100:502"
     RESOURCE_STR_ADAM = "172.25.103.202"
-    # test_xydevice(RESOURCE_STR_MOTION_CONTROLLER)
-    # test_combined_controllers(RESOURCE_STR_AWS, RESOURCE_STR_MOTION_CONTROLLER, RESOURCE_STR_ADAM)
+    #test_xydevice(RESOURCE_STR_MOTION_CONTROLLER)
+    test_combined_controllers(RESOURCE_STR_AWS, RESOURCE_STR_MOTION_CONTROLLER, RESOURCE_STR_ADAM, production_logger)
 
-    test_aws3_communication("tcp:172.25.103.100:502")
+    # test_aws3_communication("tcp:172.25.103.100:502")
     # test_db_driven_stage()
 
     toc = perf_counter()

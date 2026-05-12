@@ -532,9 +532,7 @@ class XYLinearStage():
                 # 2. LIGHT CURTAIN / POWER CUT DETECTED
                 print(f"\n⚠️ [INTERRUPTION] Light Curtain or Emergency Stop triggered!")
                 
-                # Log the downtime to your CSV
-                # if hasattr(self, 'logger') and self.logger:
-                #     self.logger.record_event("RUNNING", "SYSTEM")
+
 
                 print("🛑 Waiting for hardware to power back on...")
                 
@@ -1386,13 +1384,6 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
                     # Get xy_table's current position
                     current_pos = xy_table.positions_in_mm
                     print(f"Current xy_table's position: {current_pos}")
-
-                    # current_pos = ()
-                    # for stage, new_position in zip((X_stage, Y_stage), xy_table.position):
-                    #     _new_position = stage.convert_steps_to_mm(new_position)
-                    #     _new_position = round(_new_position,3)
-                    #     current_pos += (_new_position,)
-                    # print(current_pos)
 
                     # Check if current position is not at worker position and at welding position 21 (to flip battery pack)
                     
