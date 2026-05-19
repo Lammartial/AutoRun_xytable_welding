@@ -561,6 +561,7 @@ class XYLinearStage():
     #     except UnicodeDecodeError as te:
     #         # return False
     #         raise LightCurtainError("User Interception")
+    
 
     def command(self, command, message: str = None) -> Tuple[int | bool, str | None]:
         if message:
@@ -629,6 +630,7 @@ class XYLinearStage():
 
             print("⚠️  Position lost. State machine will home and retry after button press.")
             return False, "POWER_CUT_RECOVERED"
+    
 
     #----------------------------------------------------------------------------------------------
 
@@ -678,7 +680,7 @@ class XYLinearStage():
 
         ok, response = self.command("?V", message="Getting stage speed")
         if ok:
-            _v_speed = int(response.split('\r')[-1][1:])  # returns "?V\rV 0000\n"
+            _v_speed = int(response)  
             self.pulse_period = 30 / (_v_speed + 1)  # update pulse period -> pulses/ms
             return _v_speed
         return None
@@ -716,7 +718,6 @@ class XYLinearStage():
 
     #----------------------------------------------------------------------------------------------
 
-
     def goto_position(self, new_position_x: float | int | str, new_position_y: float | int | str, units_in_mm: bool = True) -> bool:
         """Calculates the absolute new position on the linear stages and moves them to this position.
 
@@ -736,6 +737,7 @@ class XYLinearStage():
                 _new_position = stage.convert_mm_to_steps(new_position)
             else:
                 _new_position = new_position
+
             cmd, msg = stage.absolute_position_to_motion_command(_new_position)
             if cmd is not None and cmd != "":
 
@@ -746,9 +748,7 @@ class XYLinearStage():
         x, y = self.position # update positions after motion
         return True
 
-
     #----------------------------------------------------------------------------------------------
-
 
     def center_position(self) -> int | bool:
         """Moves stage to the absolute center"""
@@ -1199,11 +1199,18 @@ def test_xydevice(resource_string: str) -> None:
     #     sleep(0.3)
 
     # Test movement
+    # dev.set_current_stage_speed(255)
     dev.home()
-    dev.goto_position(165.738, 62.825)
+    # dev.goto_position(165.738, 63.425)  # Worker
+    print("XY_table's current speed:", dev.get_current_stage_speed())
+
     dev.goto_position(165.738, 162.825)
-    # dev.goto_position(100.0, 110.0)
-    # dev.goto_position(150.0, 110.0)
+    sleep(0.1)
+    dev.goto_position(23.738, 304.125)
+
+    # dev.goto_position(145.428, 244.905), # WELD 9
+    # dev.goto_position(145.428, 221.455),  # WELD 10
+
 
 
 #--------------------------------------------------------------------------------------------------
@@ -1227,6 +1234,18 @@ class OurXYAWS3Modbus(AWS3Modbus):
             "ok": 1 if (bits[6] and bits[7]) else 0  # combine both axes: both need to be good
         }
         return bits[0], d
+    
+    def trigger_welding_start(self, adam, index, state=True) -> bool:
+        """Simulates a foot pedal press by pulsing a Digital Output."""
+        try:
+            # Set ouput value
+            adam.set_digital_output(index, state)
+            print("ADAM DO output turned on:", state)
+            sleep(0.85) # Pulse duration to mimic foot press
+            return True
+        except Exception as e:
+            print(f"❌ Failed to trigger ADAM-6052: {e}")
+            return False
 
 
 def test_aws3_communication(resource_str: str) -> None:
@@ -1275,7 +1294,6 @@ def auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSI
                 #     auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
                 # else:
                 #     return
-                
                 
             elif _x == "WELD":
                 welding_position += 1
@@ -1370,7 +1388,7 @@ def is_move_button_pressed(adam) -> bool:
     
     while True:
         # 1. Read the button state
-        is_pressed = adam.get_digital_input(index=0)
+        is_pressed = adam.get_digital_input(index=1)
         
         # 2. If pressed, exit the loop and return
         if is_pressed:
@@ -1382,7 +1400,7 @@ def is_move_button_pressed(adam) -> bool:
         sleep(0.1)
 
 def is_light_curtain_activated(adam) -> bool:
-    return adam.get_digital_input(index=1)
+    return adam.get_digital_input(index=0)
 
 def is_emergency_button_pressed(adam) -> bool:
     return adam.get_digital_input(index=2)
@@ -1463,7 +1481,7 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
                 current_pos = xy_table.positions_in_mm
                 print(f"Current xy_table's position: {current_pos}")
 
-                # Check if current position is not at worker position and at welding position 21 (to flip battery pack)
+                # Emergency case: Check if current position is not at worker position and at welding position 21 (to flip battery pack)
                 if welding_position == 21 and not is_position_close_to(current_pos, (WORKER_POSITION_X, WORKER_POSITION_Y), 0.02):
                     # Case 3 (backup path): power was lost while moving to worker position.
                     # State 3 → state 30 handles this in normal flow, but this branch
@@ -1582,33 +1600,33 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
                     _next_state = 3
 
         case 4:
-            _next_state = 5     # This line is for testing in case welder is not working
             # _ready, _ = welder.is_machine_ready()
             # if _ready:
             #     if welder.is_toggle_bit_changed():
+            #         print("Machine is ready:", _ready)
+            #         print("Welding result:", _)
             #         print("Move to state 5")
             #         _next_state = 5  # check welding result
+            # # _next_state = 5     # This line is for testing in case welder is not working 
+            _next_state = 6     # This line is for testing auto-weld without foot pedal
 
         case 5:
             # Get welding results
             _, weld_result = welder.is_machine_ready()
 
             ''' SIMULATION MOVING XYTABLE IN CASE WELDING MACHINE DOES NOT WORK'''
-            weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
+            # weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
 
-            if weld_test_result == "ok":
-            # if weld_result["ok"] == 1:          # Case when welding result is ok
+            # if weld_test_result == "ok":
+            if weld_result["ok"] == 1:          # Case when welding result is ok
 
                 print("Welding ok!")
                 weld_test_result = 'ok'
                 _next_state = 2
                 print("Move to state 2")
-                # print("Move to state 6")
-                # _next_state = 6   # wait for user input to move to next position
 
-
-            elif weld_test_result == "failed":
-            # elif weld_result["reject"] == 1:    # Case when welding failed
+            # elif weld_test_result == "failed":
+            elif weld_result["reject"] == 1:    # Case when welding failed
 
                 weld_test_result = 'failed'
                 print("Welding failed!")
@@ -1626,12 +1644,38 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
             # sleep(3) Delay time to wait for welding head to move up + operator detect if sticky electrode happens
 
         case 6:
-            # wait for user input to move to next position or another welding result
-            if is_move_button_pressed(adam):
-                # position done, move to next position
-                welding_position += 1
-                print("Move to state 2")
-                _next_state = 2
+            # Auto-weld with ADAM6052 DO outputs without foot pedal - Use DO6
+
+            # Turn Output on
+            welder.trigger_welding_start(adam, 6, True)
+            # Sleep for x seconds between on and off to allow hardware enough time to respond
+            welder.trigger_welding_start(adam, 6, False)
+
+            # Get welding results
+            _ready, weld_result = welder.is_machine_ready()
+            if _ready and welder.is_toggle_bit_changed():
+                print("Machine is ready:", _ready)
+                print("Welding result:", weld_result)
+            
+                if weld_result["ok"] == 1:          # Case when welding result is ok
+
+                    print("Welding ok!")
+                    weld_test_result = 'ok'
+                    _next_state = 2
+                    print("Move to state 2")
+
+                elif weld_result["reject"] == 1:    # Case when welding failed
+
+                    weld_test_result = 'failed'
+                    print("Welding failed!")
+                    print("Move to state 7")
+                    _next_state = 7  # move to error handling state
+
+                else:
+                    # Case when no welding signal is received
+                    
+                    print("No welding signal received!")
+                    _next_state = 6
 
         case 7:
             # Error handling: move to unload position so operator can remove failed pack.
@@ -1775,60 +1819,63 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
     )
 
     xy_table = XYLinearStage(X_stage, Y_stage, resource_str_xy, logger)
+    xy_table.set_current_stage_speed(255)     # Set maximum speed for each axis stage
     print(f"Connected: {xy_table.is_connected()}")
+    print(f"XY_table's current speed: {xy_table.get_current_stage_speed()}")
     xy_table.clear()
 
-    WORKER_POSITION_X, WORKER_POSITION_Y = 165.738, 62.825
-    UNLOAD_POSITION_X, UNLOAD_POSITION_Y = 217.625, 0.0
-    POSITIONS_OF_PART = [  # RRC3570 42 positions (updated with +0.300mm offset)
+    WORKER_POSITION_X, WORKER_POSITION_Y = 165.738, 63.425
+    UNLOAD_POSITION_X, UNLOAD_POSITION_Y = 165.738, 63.425
+
+    POSITIONS_OF_PART = [  # RRC3570 42 positions
         
         # Face 1 - Column 1
         # (WORKER_POSITION_X, WORKER_POSITION_Y),       # Worker position
-        (165.738, 162.825), 
+        (165.738, 163.425), 
         ("WELD", 1),       # Trigger welding with program number
-        (165.738, 186.275),
+        (165.738, 186.875),
         ("WELD", 2),
-        (165.738, 209.725),
+        (165.738, 210.325),
         ("WELD", 3),
-        (165.738, 233.175),
+        (165.738, 233.775),
         ("WELD", 4),
-        (165.738, 256.625),
+        (165.738, 257.225),
         ("WELD", 5),
-        (165.738, 280.075),
+        (165.738, 280.675),
         ("WELD", 6),
-        (165.738, 303.525),    
+        (165.738, 304.125),    
         ("WELD", 7),
 
         # Face 1 - Column 2
-        (145.428, 291.805), 
+        (145.428, 292.405), 
         ("WELD", 8),
-        (145.428, 268.355),
+        (145.428, 268.955),
         ("WELD", 9),
-        (145.428, 244.905),
+        (145.428, 245.505),
         ("WELD", 10),
-        (145.428, 221.455),
+        (145.428, 222.055),
         ("WELD", 11),
-        (145.428, 198.005),
+        (145.428, 198.605),
         ("WELD", 12),
-        (145.428, 174.555),
+        (145.428, 175.155),
         ("WELD", 13),
-        (145.428, 151.105),      
+        (145.428, 151.705),      
         ("WELD", 14),
 
         # Face 1 - Column 3
-        (125.118, 162.825), 
+        (125.118, 163.425), 
         ("WELD", 15),
-        (125.118, 186.275),
+        (125.118, 186.875),
         ("WELD", 16),
-        (125.118, 209.725),
+        (125.118, 210.325),
         ("WELD", 17),
-        (125.118, 233.175),
+        (125.118, 233.775),
         ("WELD", 18),
-        (125.118, 256.625),
+        (125.118, 257.225),
         ("WELD", 19),
-        (125.118, 280.075),
+        (125.118, 280.675),
         ("WELD", 20),
-        (125.118, 303.525),      
+        (125.118, 304.125),      
         ("WELD", 21),
 
         # Flip Action
@@ -1836,51 +1883,51 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
         ("USER", None),    # Operator stops to flip pack, then press 'MOVE' button to continue.
 
         # Face 2 - Column 1
-        (165.738, 162.825), 
+        (165.738, 163.425), 
         ("WELD", 22),
-        (165.738, 186.275),
+        (165.738, 186.875),
         ("WELD", 23),
-        (165.738, 209.725),
+        (165.738, 210.325),
         ("WELD", 24),
-        (165.738, 233.175),
+        (165.738, 233.775),
         ("WELD", 25),
-        (165.738, 256.625),
+        (165.738, 257.225),
         ("WELD", 26),
-        (165.738, 280.075),    
+        (165.738, 280.675),    
         ("WELD", 27),
-        (165.738, 303.525),
+        (165.738, 304.125),
         ("WELD", 28),
 
         # Face 2 - Column 2
-        (145.428, 291.805), 
+        (145.428, 292.405), 
         ("WELD", 29),
-        (145.428, 268.355),
+        (145.428, 268.955),
         ("WELD", 30),
-        (145.428, 244.905),
+        (145.428, 245.505),
         ("WELD", 31),
-        (145.428, 221.455),
+        (145.428, 222.055),
         ("WELD", 32),
-        (145.428, 198.005),
+        (145.428, 198.605),
         ("WELD", 33),
-        (145.428, 174.555),      
+        (145.428, 175.155),      
         ("WELD", 34),  
-        (145.428, 151.105),
+        (145.428, 151.705),
         ("WELD", 35),  
 
         # Face 2 - Column 3
-        (125.118, 162.825), 
+        (125.118, 163.425), 
         ("WELD", 36),
-        (125.118, 186.275),
+        (125.118, 186.875),
         ("WELD", 37),
-        (125.118, 209.725),
+        (125.118, 210.325),
         ("WELD", 38),
-        (125.118, 233.175),
+        (125.118, 233.775),
         ("WELD", 39),  
-        (125.118, 256.625),
+        (125.118, 257.225),
         ("WELD", 40),
-        (125.118, 280.075),
+        (125.118, 280.675),
         ("WELD", 41),
-        (125.118, 303.525),
+        (125.118, 304.125),
         ("WELD", 42),
 
         # Final Return to Unloading Position
@@ -1905,7 +1952,6 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
         state_of_machine , table_index, welding_position = table_state_machine(xy_table, welder, adam, state_of_machine, POSITIONS_OF_PART, table_index, welding_position)
 
     # auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
-
 
 #--------------------------------------------------------------------------------------------------
 
@@ -1935,8 +1981,8 @@ if __name__ == "__main__":
 
     RESOURCE_STR_MOTION_CONTROLLER = "COM11,9600,8N1"  # Port for motion controller
     RESOURCE_STR_AWS = "tcp:172.25.103.100:502"
-    RESOURCE_STR_ADAM = "172.25.103.202"
-    #test_xydevice(RESOURCE_STR_MOTION_CONTROLLER)
+    RESOURCE_STR_ADAM = "172.25.103.202" 
+    # test_xydevice(RESOURCE_STR_MOTION_CONTROLLER)
     test_combined_controllers(RESOURCE_STR_AWS, RESOURCE_STR_MOTION_CONTROLLER, RESOURCE_STR_ADAM, production_logger)
 
     # test_aws3_communication("tcp:172.25.103.100:502")
