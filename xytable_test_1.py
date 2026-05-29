@@ -1376,7 +1376,17 @@ def auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSI
             print(f"Moved to position X={_x} Y={_y}, current position: {xy_table.position}")
             # Start welding here
         sleep(0.3)
+
+
+def is_grind_button_pressed(adam) -> bool:
     
+    print("Waiting for Operator to press 'GRIND'...")
+    while True:
+        if adam.get_digital_input(index=0):  # ← change index to match wiring
+            print("Grind button pressed! Moving to grinding position...")
+            return True
+        sleep(0.1)
+
 
 def is_move_button_pressed(adam) -> bool:
 
@@ -1395,16 +1405,6 @@ def is_move_button_pressed(adam) -> bool:
         sleep(0.1)
 
 
-def is_grind_button_pressed(adam) -> bool:
-    
-    print("Waiting for Operator to press 'GRIND'...")
-    while True:
-        if adam.get_digital_input(index=3):  # ← change index to match wiring
-            print("Grind button pressed! Moving to grinding position...")
-            return True
-        sleep(0.1)
-
-
 def wait_for_move_or_grind(adam) -> str:
     """Block until either Move or Grind button is pressed in emergency cases.
     Returns 'move' or 'grind' so the caller can route accordingly."""
@@ -1413,14 +1413,14 @@ def wait_for_move_or_grind(adam) -> str:
         if adam.get_digital_input(index=1):   # Move button
             print("Move button pressed — normal recovery.")
             return 'move'
-        if adam.get_digital_input(index=3):   # Grind button
+        if adam.get_digital_input(index=0):   # Grind button
             print("Grind button pressed — grinding recovery.")
             return 'grind'
         sleep(0.1)
 
 
-def is_light_curtain_activated(adam) -> bool:
-    return adam.get_digital_input(index=0)
+# def is_light_curtain_activated(adam) -> bool:
+#     return adam.get_digital_input(index=0)
 
 def is_emergency_button_pressed(adam) -> bool:
     return adam.get_digital_input(index=2)
@@ -1498,30 +1498,9 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
             welding_position = 0
             weld_test_result = ""
 
+            print("Variables resetted!")
             print("Move to state 1")
             _next_state = 1
-
-            # if current_pos != (0, 0):
-            #     # Case 1: table not at home — operator must confirm before homing
-            #     if is_move_button_pressed(adam):
-            #         # Set recovery context before every movement (covers all power-cut cases)
-            #         xy_table._recovery_context = {
-            #             "target": (0.0, 0.0),   # home position
-            #             "return_state": 1,       # go to state 1 after recovery
-            #             "advance_table": False,
-            #         }
-            #         xy_table._power_was_cut = False
-            #         xy_table.home()
-            #         sleep(0.01)
-            #         if xy_table._power_was_cut:
-            #             print("⚠️  Power cut during startup home. Entering recovery.")
-            #             _next_state = 30
-            #         else:
-            #             print("Move to state 1")
-            #             _next_state = 1
-            # else:
-            #     print("Move to state 1")
-            #     _next_state = 1
 
         case 1:
             if xy_table.is_connected():    
@@ -1561,14 +1540,14 @@ def table_state_machine(xy_table, welder, adam, current_state: int, table_of_pos
                         # if is_position_close_to(current_pos, (UNLOAD_POSITION_X, UNLOAD_POSITION_Y), 0.02):
                         if weld_test_result == "failed":
 
-                            # Case 6: at unload position — home to reset, then restart
+                            # Case 6: at unload position — stay at unload, or worker position
                             xy_table._recovery_context = {
-                                "target": (0.0, 0.0),   # home
+                                "target": (WORKER_POSITION_X, WORKER_POSITION_Y),   # Worker pos
                                 "return_state": 0,       # after recovery go to state 0 to restart
                                 "advance_table": False,
                             }
                             xy_table._power_was_cut = False
-                            xy_table.home()
+                            # xy_table.home()
                             if xy_table._power_was_cut:
                                 print("⚠️  Power cut during home (unload→start). Entering recovery.")
                                 _next_state = 30
@@ -2100,23 +2079,18 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
     # Initialize variables
     welding_position = 0
     table_index = -1
-    state_of_machine = 0
-    # state_of_machine = -1  # If wants to implement case -1 in table_state_machine
+    state_of_machine = -1 
     
     # Combine control for controller and reading from welding machine
-    xy_table.home()
-
     while True:
         _udi = read_input_from_scanner()
         if _udi != "":
             print(f"Received input: {_udi}")
             # reset state machine which then resets table index and welding position
-            # state_of_machine = 0
+            # state_of_machine = -1
 
         # call the state machine in a loop to process the positions and user input
         state_of_machine, table_index, welding_position = table_state_machine(xy_table, welder, adam, state_of_machine, POSITIONS_OF_PART, table_index, welding_position)
-
-    # auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
 
 #--------------------------------------------------------------------------------------------------
 

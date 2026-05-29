@@ -1134,8 +1134,8 @@ def test_xydevice(resource_string: str) -> None:
 
     # Test movement
     dev.home()
-    dev.goto_position(165.738, 62.825)
-    dev.goto_position(165.738, 162.825)
+    dev.goto_position(145.428, 222.055)
+
     # dev.goto_position(100.0, 110.0)
     # dev.goto_position(150.0, 110.0)
 
@@ -1751,8 +1751,8 @@ if __name__ == "__main__":
     RESOURCE_STR_MOTION_CONTROLLER = "COM11,9600,8N1"  # Port for motion controller
     RESOURCE_STR_AWS = "tcp:172.25.103.100:502"
     RESOURCE_STR_ADAM = "172.25.103.202"
-    #test_xydevice(RESOURCE_STR_MOTION_CONTROLLER)
-    test_combined_controllers(RESOURCE_STR_AWS, RESOURCE_STR_MOTION_CONTROLLER, RESOURCE_STR_ADAM, production_logger)
+    test_xydevice(RESOURCE_STR_MOTION_CONTROLLER)
+    # test_combined_controllers(RESOURCE_STR_AWS, RESOURCE_STR_MOTION_CONTROLLER, RESOURCE_STR_ADAM, production_logger)
 
     # test_aws3_communication("tcp:172.25.103.100:502")
     # test_db_driven_stage()
