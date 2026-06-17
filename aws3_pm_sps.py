@@ -14,7 +14,7 @@ from base64 import b64decode, b64encode
 from time import sleep, perf_counter
 from pathlib import Path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-from datetime import timezone, datetime
+from datetime import datetime, timezone
 from winsound import PlaySound, SND_FILENAME
 
 from rrc.station_config_loader import StationConfiguration, CONF_FILENAME_DEV
@@ -28,6 +28,9 @@ from rrc.barcode_scanner import create_barcode_scanner, decode_rrc_udi_label
 from pymodbus.exceptions import ModbusException
 from pymodbus import version as modbus_version
 from rrc.modbus.aws3 import AWS3Modbus, AWS3Modbus_DUMMY
+import socket
+
+UDI_BROADCAST_PORT = 50007  # pick any free UDP port, same in both files
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -62,6 +65,16 @@ VERIFICATION_SUPPORT: int = False  # is being overwritten by argument
 
 import random
 import string
+
+def broadcast_udi(udi: str) -> None:
+    """Broadcast a confirmed UDI string via UDP to any local listener (e.g. xytable script)."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            sock.sendto(udi.encode("utf-8"), ("<broadcast>", UDI_BROADCAST_PORT))
+            print(f"SPS: Broadcast UDI '{udi}'")
+    except Exception as ex:
+        print(f"SPS: broadcast_udi failed: {ex}")
 
 def get_random_letter_string(length):
     # choose from all lowercase letter
@@ -1486,6 +1499,7 @@ class ProcessSPS(mp.Process):
                                 ok, _response = _dsp.send_udi_upfront(_udi)
                                 if ok:
                                     # need to reset the sequence
+                                    broadcast_udi(_udi) #notify xytable of confirmed UDI
                                     answer = "OK"
                                 else:
                                     # udi is not accepted and we are at a situation to allow a restart -> clear _udi
