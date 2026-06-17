@@ -12,8 +12,9 @@ from pymodbus.bit_read_message import ReadCoilsResponse, ReadDiscreteInputsRespo
 from pymodbus.bit_write_message import WriteMultipleCoilsResponse, WriteSingleCoilResponse
 from pymodbus.register_read_message import ReadHoldingRegistersResponse, ReadInputRegistersResponse
 from pymodbus.register_write_message import WriteMultipleRegistersResponse
-from pymodbus.exceptions import ModbusException
+from pymodbus.exceptions import ModbusException, ConnectionException
 from pymodbus.pdu import ExceptionResponse
+from time import sleep
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -48,7 +49,6 @@ VERSION = "0.0.1"
 #--------------------------------------------------------------------------------------------------
 
 __version__ = VERSION
-
 
 # -------------------------------------------------
 # Generic error handling, to avoid duplicating code
@@ -213,9 +213,46 @@ class ModbusClient:
 
     #--------------------------------------------------------------------------------------------------
     # easier to use interface
-    def read_coils(self, address: int, count: int, unit_address: int | None = None) -> ReadCoilsResponse | Any:
-        readResponse = _check_call(self.client.read_coils(address, count, slave=unit_address if unit_address is not None else self.unit_address))
-        return readResponse.bits[:count]
+    # def read_coils(self, address: int, count: int, unit_address: int | None = None) -> ReadCoilsResponse | Any:
+    #     readResponse = _check_call(self.client.read_coils(address, count, slave=unit_address if unit_address is not None else self.unit_address))
+    #     return readResponse.bits[:count]
+
+    def read_coils(self, address: int, count: int, unit_address: int | None = None):
+        slave_id = unit_address if unit_address is not None else self.unit_address
+        
+        # Initialize the offline state tracker if it doesn't exist
+        if not hasattr(self, '_modbus_offline'):
+            self._modbus_offline = False
+
+        while True:
+            try:
+                # 1. Ensure the socket is active
+                # Pymodbus connect() is fast if already connected
+                if not self.client.connect():
+                    raise ConnectionException(f"Cannot reach {self.client}")
+
+                # 2. Attempt the Modbus Read
+                readResponse = _check_call(self.client.read_coils(address, count, slave=slave_id))
+                
+                # 3. If we were previously offline, notify recovery
+                if self._modbus_offline:
+                    print(f"\n✨ [MODBUS] AMADA Welder (Unit {slave_id}) Connection Restored.")
+                    # Restore DEBUG logging so you can see your welding results again
+                    self._modbus_offline = False
+                
+                return readResponse.bits[:count]
+
+            except (ConnectionException, Exception):
+                # 4. Handle the outage
+                if not self._modbus_offline:
+                    print(f"\n🛑 [MODBUS] Connection Lost to AMADA Welder (Unit {slave_id}).")
+                    print("   Script is holding until machine is powered back on...")
+                    # Mute the 'Failed to connect' spam from pymodbus internals
+                    self._modbus_offline = True
+                
+                # Clean up and wait for the hardware power-up cycle
+                self.client.close()
+                sleep(1)
 
     def read_discrete_inputs(self, address: int, count: int, unit_address: int | None = None) -> ReadDiscreteInputsResponse | Any:
         readResponse = _check_call(self.client.read_discrete_inputs(address, count, slave=unit_address if unit_address is not None else self.unit_address))
