@@ -1594,6 +1594,12 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
 
             if xy_table.is_connected():
                 table_index += 1
+                # Avoid going to emergency case when operator puts hand in to flip battery pack (since light curtain will always be triggered here)
+                if welding_position == 21:    
+                    xy_table._power_was_cut = False
+                elif welding_position == 0:  # Auto-homing and avoid going to emergency case when operator puts battery pack in/out (since light curtain will always be triggered here)
+                    xy_table.home()
+                    xy_table._power_was_cut = False
 
                 # Check if table is finished
                 if table_index >= len(table_of_positions):
@@ -1622,7 +1628,7 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                     ''' Waiting time for motion controller to respond -> to detect emergency case triggered 
                         -> Avoid welding when the target position has not been physically reached
                     '''
-                    sleep(0.1)   
+                    sleep(0.2)   
                     
                     is_connected = xy_table.is_connected()
 
@@ -1675,7 +1681,7 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                     # xy_table._power_was_cut = False
                     # xy_table.goto_position(x, y, units_in_mm=True)
 
-                    if xy_table._power_was_cut:
+                    if xy_table._power_was_cut: 
                         print(f"⚠️  Power cut while moving to X={x} Y={y}. Entering recovery.")
                         _next_state = 30
 
@@ -1690,6 +1696,7 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                         _next_state = 31
 
                     else:
+                        xy_table._power_was_cut = False
                         is_move_successfully = xy_table.goto_position(x, y, units_in_mm=True)
                         print(f"XYTABLE moves successfully: {is_move_successfully}")
 
@@ -2019,18 +2026,18 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                     xy_table._power_was_cut = False
                     xy_table.goto_position(target_x, target_y, units_in_mm=True)
 
-                    if xy_table._power_was_cut:
-                        print("⚠️  Power cut moving back from grind position. Back to state 30.")
-                        _next_state = 30
+                    # if xy_table._power_was_cut:
+                    #     print("⚠️  Power cut moving back from grind position. Back to state 30.")
+                    #     _next_state = 30
+                    # else:
+                    current_pos = xy_table.positions_in_mm
+                    if is_position_close_to(current_pos, (target_x, target_y), 0.02):
+                        print(f"✅ Grind recovery complete — at X={target_x} Y={target_y}.")
+                        xy_table._recovery_context = None
+                        _next_state = return_state
                     else:
-                        current_pos = xy_table.positions_in_mm
-                        if is_position_close_to(current_pos, (target_x, target_y), 0.02):
-                            print(f"✅ Grind recovery complete — at X={target_x} Y={target_y}.")
-                            xy_table._recovery_context = None
-                            _next_state = return_state
-                        else:
-                            print(f"⚠️  Off-target after grind recovery (got {current_pos}). Retrying.")
-                            _next_state = 31
+                        print(f"⚠️  Off-target after grind recovery (got {current_pos}). Retrying.")
+                        _next_state = 31
 
 
     return _next_state, table_index, welding_position
