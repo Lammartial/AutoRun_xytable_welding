@@ -1555,37 +1555,16 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                 current_pos = xy_table.positions_in_mm
                 print(f"Current xy_table's position: {current_pos}")
 
-                # Emergency case: Check if current position is not at worker position and at welding position 21 (to flip battery pack)
-                if welding_position == 21 and not is_position_close_to(current_pos, (WORKER_POSITION_X, WORKER_POSITION_Y), 0.02):
-                    # Case 3 (backup path): power was lost while moving to worker position.
-                    # State 3 → state 30 handles this in normal flow, but this branch
-                    # acts as a safety net if the machine restarts mid-sequence.
-                    if is_move_button_pressed(adam):
-                        # Recovery target is worker position; state 30 will home first then move there.
-                        xy_table._recovery_context = {
-                            "target": (WORKER_POSITION_X, WORKER_POSITION_Y),
-                            "return_state": 1,       # come back to state 1 after recovery
-                            "advance_table": False,
-                        }
+                if is_move_button_pressed(adam):
+
+                    if xy_table._power_was_cut:
+                        print("⚠️  Power cut during moving. Entering recovery.")
+                        _next_state = 30
+                    else:
                         xy_table._power_was_cut = False
-                        xy_table.home()  # re-reference zero after power cycle
-                        if xy_table._power_was_cut:
-                            print("⚠️  Power cut during home (worker recovery). Entering recovery.")
-                            _next_state = 30
-                        else:
-                            xy_table._power_was_cut = False
-                            xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y, units_in_mm=True)
-                            if xy_table._power_was_cut:
-                                print("⚠️  Power cut moving to worker position. Entering recovery.")
-                                _next_state = 30
-                            else:
-                                _next_state = 1
-                else:
-                    if is_move_button_pressed(adam):
-                        print("Current welding position:", welding_position)
                         _next_state = 2
                         print("Move to state 2")
-                    
+                
             else:
                 _next_state = 1
         case 2:
