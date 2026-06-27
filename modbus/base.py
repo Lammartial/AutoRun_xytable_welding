@@ -237,6 +237,7 @@ class ModbusClient:
                 # 3. If we were previously offline, notify recovery
                 if self._modbus_offline:
                     print(f"\n✨ [MODBUS] AMADA Welder (Unit {slave_id}) Connection Restored.")
+                    self.just_restored = True
                     # Restore DEBUG logging so you can see your welding results again
                     self._modbus_offline = False
                 
@@ -254,33 +255,222 @@ class ModbusClient:
                 self.client.close()
                 sleep(1)
 
+    # def read_discrete_inputs(self, address: int, count: int, unit_address: int | None = None) -> ReadDiscreteInputsResponse | Any:
+    #     readResponse = _check_call(self.client.read_discrete_inputs(address, count, slave=unit_address if unit_address is not None else self.unit_address))
+    #     return readResponse.bits
+
+    # def read_input_registers(self, address: int, count: int, unit_address: int | None = None) -> ReadInputRegistersResponse | Any:
+    #     readResponse = _check_call(self.client.read_input_registers(address, count, slave=unit_address if unit_address is not None else self.unit_address))
+    #     return readResponse.registers
+
+    # def read_holding_registers(self, address: int, count: int, unit_address: int | None = None) -> ReadHoldingRegistersResponse | Any:
+    #     readResponse = _check_call(self.client.read_holding_registers(address, count, slave=unit_address if unit_address is not None else self.unit_address))
+    #     return readResponse.registers
+
+    # def write_register(self, address: int, value: int | float | str, unit_address: int | None = None) -> WriteMultipleRegistersResponse | Any:
+    #     writeResponse = _check_call(self.client.write_register(address, value, slave=unit_address if unit_address is not None else self.unit_address))
+    #     return writeResponse
+
+    # def write_registers(self, address: int, values: List[int | float | str], unit_address: int | None = None) -> WriteMultipleRegistersResponse | Any:
+    #     writeResponse = _check_call(self.client.write_registers(address, values, slave=unit_address if unit_address is not None else self.unit_address))
+    #     return writeResponse
+
+    # def write_coil(self, address: int, value: bool, unit_address: int | None = None) -> WriteSingleCoilResponse | Any:
+    #     writeResponse = _check_call(self.client.write_coil(address, value, slave=unit_address if unit_address is not None else self.unit_address))
+    #     return writeResponse
+
+    # def write_coils(self, address: int, values: List[bool], unit_address: int | None = None) -> WriteMultipleCoilsResponse | Any:
+    #     writeResponse = _check_call(self.client.write_coils(address, values, slave=unit_address if unit_address is not None else self.unit_address))
+    #     return writeResponse
+
     def read_discrete_inputs(self, address: int, count: int, unit_address: int | None = None) -> ReadDiscreteInputsResponse | Any:
-        readResponse = _check_call(self.client.read_discrete_inputs(address, count, slave=unit_address if unit_address is not None else self.unit_address))
-        return readResponse.bits
+        slave_id = unit_address if unit_address is not None else self.unit_address
+        if not hasattr(self, '_modbus_offline'):
+            self._modbus_offline = False
+
+        while True:
+            try:
+                if not self.client.connect():
+                    raise ConnectionException(f"Cannot reach {self.client}")
+
+                readResponse = _check_call(self.client.read_discrete_inputs(address, count, slave=slave_id))
+                
+                if self._modbus_offline:
+                    self.just_restored = True
+                    print(f"\n✨ [MODBUS] AMADA Welder (Unit {slave_id}) Connection Restored.")
+                    self._modbus_offline = False
+                
+                return readResponse.bits
+
+            except (ConnectionException, Exception):
+                if not self._modbus_offline:
+                    print(f"\n🛑 [MODBUS] Connection Lost to AMADA Welder (Unit {slave_id}).")
+                    print("   Script is holding until machine is powered back on...")
+                    self._modbus_offline = True
+                self.client.close()
+                sleep(1)
 
     def read_input_registers(self, address: int, count: int, unit_address: int | None = None) -> ReadInputRegistersResponse | Any:
-        readResponse = _check_call(self.client.read_input_registers(address, count, slave=unit_address if unit_address is not None else self.unit_address))
-        return readResponse.registers
+        slave_id = unit_address if unit_address is not None else self.unit_address
+        if not hasattr(self, '_modbus_offline'):
+            self._modbus_offline = False
+
+        while True:
+            try:
+                if not self.client.connect():
+                    raise ConnectionException(f"Cannot reach {self.client}")
+
+                readResponse = _check_call(self.client.read_input_registers(address, count, slave=slave_id))
+                
+                if self._modbus_offline:
+                    self.just_restored = True
+                    print(f"\n✨ [MODBUS] AMADA Welder (Unit {slave_id}) Connection Restored.")
+                    self._modbus_offline = False
+                
+                return readResponse.registers
+
+            except (ConnectionException, Exception):
+                if not self._modbus_offline:
+                    print(f"\n🛑 [MODBUS] Connection Lost to AMADA Welder (Unit {slave_id}).")
+                    print("   Script is holding until machine is powered back on...")
+                    self._modbus_offline = True
+                self.client.close()
+                sleep(1)
 
     def read_holding_registers(self, address: int, count: int, unit_address: int | None = None) -> ReadHoldingRegistersResponse | Any:
-        readResponse = _check_call(self.client.read_holding_registers(address, count, slave=unit_address if unit_address is not None else self.unit_address))
-        return readResponse.registers
+        slave_id = unit_address if unit_address is not None else self.unit_address
+        if not hasattr(self, '_modbus_offline'):
+            self._modbus_offline = False
+
+        while True:
+            try:
+                if not self.client.connect():
+                    raise ConnectionException(f"Cannot reach {self.client}")
+
+                readResponse = _check_call(self.client.read_holding_registers(address, count, slave=slave_id))
+                
+                if self._modbus_offline:
+                    self.just_restored = True
+                    print(f"\n✨ [MODBUS] AMADA Welder (Unit {slave_id}) Connection Restored.")
+                    self._modbus_offline = False
+                
+                return readResponse.registers
+
+            except (ConnectionException, Exception):
+                if not self._modbus_offline:
+                    print(f"\n🛑 [MODBUS] Connection Lost to AMADA Welder (Unit {slave_id}).")
+                    print("   Script is holding until machine is powered back on...")
+                    self._modbus_offline = True
+                self.client.close()
+                sleep(1)
 
     def write_register(self, address: int, value: int | float | str, unit_address: int | None = None) -> WriteMultipleRegistersResponse | Any:
-        writeResponse = _check_call(self.client.write_register(address, value, slave=unit_address if unit_address is not None else self.unit_address))
-        return writeResponse
+        slave_id = unit_address if unit_address is not None else self.unit_address
+        if not hasattr(self, '_modbus_offline'):
+            self._modbus_offline = False
+
+        while True:
+            try:
+                if not self.client.connect():
+                    raise ConnectionException(f"Cannot reach {self.client}")
+
+                writeResponse = _check_call(self.client.write_register(address, value, slave=slave_id))
+                
+                if self._modbus_offline:
+                    self.just_restored = True
+                    print(f"\n✨ [MODBUS] AMADA Welder (Unit {slave_id}) Connection Restored.")
+                    self._modbus_offline = False
+                
+                return writeResponse
+
+            except (ConnectionException, Exception):
+                if not self._modbus_offline:
+                    print(f"\n🛑 [MODBUS] Connection Lost to AMADA Welder (Unit {slave_id}).")
+                    print("   Script is holding until machine is powered back on...")
+                    self._modbus_offline = True
+                self.client.close()
+                sleep(1)
 
     def write_registers(self, address: int, values: List[int | float | str], unit_address: int | None = None) -> WriteMultipleRegistersResponse | Any:
-        writeResponse = _check_call(self.client.write_registers(address, values, slave=unit_address if unit_address is not None else self.unit_address))
-        return writeResponse
+        slave_id = unit_address if unit_address is not None else self.unit_address
+        if not hasattr(self, '_modbus_offline'):
+            self._modbus_offline = False
+
+        while True:
+            try:
+                if not self.client.connect():
+                    raise ConnectionException(f"Cannot reach {self.client}")
+
+                writeResponse = _check_call(self.client.write_registers(address, values, slave=slave_id))
+                
+                if self._modbus_offline:
+                    self.just_restored = True
+                    print(f"\n✨ [MODBUS] AMADA Welder (Unit {slave_id}) Connection Restored.")
+                    self._modbus_offline = False
+                
+                return writeResponse
+
+            except (ConnectionException, Exception):
+                if not self._modbus_offline:
+                    print(f"\n🛑 [MODBUS] Connection Lost to AMADA Welder (Unit {slave_id}).")
+                    print("   Script is holding until machine is powered back on...")
+                    self._modbus_offline = True
+                self.client.close()
+                sleep(1)
 
     def write_coil(self, address: int, value: bool, unit_address: int | None = None) -> WriteSingleCoilResponse | Any:
-        writeResponse = _check_call(self.client.write_coil(address, value, slave=unit_address if unit_address is not None else self.unit_address))
-        return writeResponse
+        slave_id = unit_address if unit_address is not None else self.unit_address
+        if not hasattr(self, '_modbus_offline'):
+            self._modbus_offline = False
+
+        while True:
+            try:
+                if not self.client.connect():
+                    raise ConnectionException(f"Cannot reach {self.client}")
+
+                writeResponse = _check_call(self.client.write_coil(address, value, slave=slave_id))
+                
+                if self._modbus_offline:
+                    self.just_restored = True
+                    print(f"\n✨ [MODBUS] AMADA Welder (Unit {slave_id}) Connection Restored.")
+                    self._modbus_offline = False
+                
+                return writeResponse
+
+            except (ConnectionException, Exception):
+                if not self._modbus_offline:
+                    print(f"\n🛑 [MODBUS] Connection Lost to AMADA Welder (Unit {slave_id}).")
+                    print("   Script is holding until machine is powered back on...")
+                    self._modbus_offline = True
+                self.client.close()
+                sleep(1)
 
     def write_coils(self, address: int, values: List[bool], unit_address: int | None = None) -> WriteMultipleCoilsResponse | Any:
-        writeResponse = _check_call(self.client.write_coils(address, values, slave=unit_address if unit_address is not None else self.unit_address))
-        return writeResponse
+        slave_id = unit_address if unit_address is not None else self.unit_address
+        if not hasattr(self, '_modbus_offline'):
+            self._modbus_offline = False
+
+        while True:
+            try:
+                if not self.client.connect():
+                    raise ConnectionException(f"Cannot reach {self.client}")
+
+                writeResponse = _check_call(self.client.write_coils(address, values, slave=slave_id))
+                
+                if self._modbus_offline:
+                    self.just_restored = True
+                    print(f"\n✨ [MODBUS] AMADA Welder (Unit {slave_id}) Connection Restored.")
+                    self._modbus_offline = False
+                
+                return writeResponse
+
+            except (ConnectionException, Exception):
+                if not self._modbus_offline:
+                    print(f"\n🛑 [MODBUS] Connection Lost to AMADA Welder (Unit {slave_id}).")
+                    print("   Script is holding until machine is powered back on...")
+                    self._modbus_offline = True
+                self.client.close()
+                sleep(1)
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
