@@ -1104,6 +1104,7 @@ def test_xydevice(resource_string: str) -> None:
     dev.clear()
 
     POSITIONS_OF_PART = [  # RRC3570 42 positions (define them in mm)
+        
         (165.738, 62.525),       # Worker position
         ("PAUSE", 1.0),
         (165.738, 162.525),       # First welding position - Face 1
@@ -1463,6 +1464,10 @@ def is_light_curtain_activated(adam) -> bool:
 def is_sticky_electrode(adam) -> bool:
     return not adam.get_digital_input(index=4)
 
+def is_weld_result_failed(adam) -> bool:
+    # Out of limit value from welding machine (Out-of-limit = True means NG, False means OK)
+    return adam.get_digital_input(index=6)
+
 def is_welding_head_down(adam) -> bool:
     return adam.get_digital_input(index=7)
 
@@ -1489,9 +1494,9 @@ def is_position_close_to(position: tuple, target_position: tuple, tolerance: flo
 
 def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, table_of_positions: list, table_index: int, welding_position: int) -> Tuple[int, int, int]:
     global weld_test_result
-    WORKER_POSITION_X, WORKER_POSITION_Y = 165.738, 63.425
-    UNLOAD_POSITION_X, UNLOAD_POSITION_Y = 165.738, 63.425
-    GRIND_POSITION_X,  GRIND_POSITION_Y  = 145.428, 222.055
+    WORKER_POSITION_X, WORKER_POSITION_Y = 166.4, 60.075
+    UNLOAD_POSITION_X, UNLOAD_POSITION_Y = 166.4, 60.075    # Operator move to this position to unload the battery pack
+    GRIND_POSITION_X,  GRIND_POSITION_Y  = 146.09, 218.705   # Operator move to this position to grind the electrode
 
     _next_state = current_state
     sleep(0.01)    # Limit communication on LAN
@@ -1611,8 +1616,10 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                     
                     is_connected = xy_table.is_connected()
 
-                    if not is_connected:    
+                    if is_light_curtain_activated(adam) or is_emergency_button_pressed(adam) or not is_connected:       
                         print(f"Motion Controller Connected1: {is_connected}")
+                        welder.toggle_welding_mode(adam, 7, False) # Ensure disabled
+
 
                         a, b = table_of_positions[table_index-1]   # Get current position before welding
                         # Set recovery context BEFORE the move so that state 30
@@ -1635,6 +1642,8 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                             grind_request_event.clear()
                             _next_state = 31
                         else:
+                            print("✅ Position safe. Enabling foot pedal.")
+                            welder.toggle_welding_mode(adam, 7, True)  # <-- TURN PEDAL ON
                             welding_position += 1
                             _next_state = 6
                             print(f"Welding position {welding_position}.")
@@ -1700,15 +1709,20 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
 
         case 4:
             _ready, _ = welder.is_machine_ready()
-            if _ready:
-                if welder.is_toggle_bit_changed():
-                    print("Machine is ready:", _ready)
-                    print("Welding result:", _)
-                    print("Move to state 5")
-                    _next_state = 5  # check welding result
+            # if _ready:
+            if welder.is_toggle_bit_changed():
+                print("Machine is ready:", _ready)
+                print("Welding result:", _)
+                print("Move to state 5")
+                _next_state = 5  # check welding result
 
         case 5:
             # Get welding results
+
+            # --- DEFAULT SAFE STATE: DISABLE ---
+            welder.toggle_welding_mode(adam, 7, False) # <-- TURN PEDAL OFF
+            print("🔒 Welding disabled for transit.")
+
             _, weld_result = welder.is_machine_ready()
 
             ''' SIMULATION MOVING XYTABLE IN CASE WELDING MACHINE DOES NOT WORK'''
@@ -1757,6 +1771,8 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
             if weld_result["ok"] == 1:          # Case when welding result is ok
 
                 print("Welding ok!")
+                if is_weld_result_failed(adam) == False:
+                    print("ADAM DI 6 weld result ok!")
                 weld_test_result = 'ok'
                 _next_state = 2
                 print("Move to state 2")
@@ -1765,6 +1781,8 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
 
                 weld_test_result = 'failed'
                 print("Welding failed!")
+                if is_weld_result_failed(adam) == True:
+                    print("ADAM DI 6 weld result failed!")
                 print("Move to state 7")
                 _next_state = 7  # move to error handling state
 
@@ -1884,7 +1902,6 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                     else:
                         # --- Step 4b: Move to the original target ---
                         is_move_button_pressed(adam)
-                        welder.toggle_welding_mode(adam, 7, True)   # Enable welding
                         print(f"✅ Re-attempting move to X={target_x} Y={target_y}...")
                         xy_table._power_was_cut = False
                         xy_table.goto_position(target_x, target_y, units_in_mm=True)
@@ -2075,59 +2092,58 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
     print(f"XY_table's current speed: {xy_table.get_current_stage_speed()}")
     xy_table.clear()
 
-    WORKER_POSITION_X, WORKER_POSITION_Y = 165.738, 63.425
-    UNLOAD_POSITION_X, UNLOAD_POSITION_Y = 165.738, 63.425    # Operator move to this position to unload the battery pack
-    GRIND_POSITION_X,  GRIND_POSITION_Y  = 145.428, 222.055   # Operator move to this position to grind the electrodes
+    WORKER_POSITION_X, WORKER_POSITION_Y = 166.4, 60.075
+    UNLOAD_POSITION_X, UNLOAD_POSITION_Y = 166.4, 60.075    # Operator move to this position to unload the battery pack
+    GRIND_POSITION_X,  GRIND_POSITION_Y  = 146.09, 218.705   # Operator move to this position to grind the electrodes
 
-    POSITIONS_OF_PART = [  # RRC3570 42 positions
+    POSITIONS_OF_PART = [  # RRC3570-4 42 positions
         
         # Face 1 - Column 1
-        # (WORKER_POSITION_X, WORKER_POSITION_Y),       # Worker position
-        (165.738, 163.425), 
+        (166.4, 160.075), 
         ("WELD", 1),       # Trigger welding with program number
-        (165.738, 186.875),
+        (166.4, 183.525),
         ("WELD", 2),
-        (165.738, 210.325),
+        (166.4, 206.975),
         ("WELD", 3),
-        (165.738, 233.775),
+        (166.4, 230.425),
         ("WELD", 4),
-        (165.738, 257.225),
+        (166.4, 253.875),
         ("WELD", 5),
-        (165.738, 280.675),
+        (166.4, 277.325),
         ("WELD", 6),
-        (165.738, 304.125),    
+        (166.4, 300.775),    
         ("WELD", 7),
 
         # Face 1 - Column 2
-        (145.428, 292.405), 
+        (146.09, 289.055), 
         ("WELD", 8),
-        (145.428, 268.955),
+        (146.09, 265.605),
         ("WELD", 9),
-        (145.428, 245.505),
+        (146.09, 242.155),
         ("WELD", 10),
-        (145.428, 222.055),
+        (146.09, 218.705),
         ("WELD", 11),
-        (145.428, 198.605),
+        (146.09, 195.255),
         ("WELD", 12),
-        (145.428, 175.155),
+        (146.09, 171.805),
         ("WELD", 13),
-        (145.428, 151.705),      
+        (146.09, 148.355),      
         ("WELD", 14),
 
         # Face 1 - Column 3
-        (125.118, 163.425), 
+        (125.78, 160.075), 
         ("WELD", 15),
-        (125.118, 186.875),
+        (125.78, 183.525),
         ("WELD", 16),
-        (125.118, 210.325),
+        (125.78, 206.975),
         ("WELD", 17),
-        (125.118, 233.775),
+        (125.78, 230.425),
         ("WELD", 18),
-        (125.118, 257.225),
+        (125.78, 253.875),
         ("WELD", 19),
-        (125.118, 280.675),
+        (125.78, 277.325),
         ("WELD", 20),
-        (125.118, 304.125),      
+        (125.78, 300.775),      
         ("WELD", 21),
 
         # Flip Action
@@ -2135,56 +2151,56 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
         ("USER", None),    # Operator stops to flip pack, then press 'MOVE' button to continue.
 
         # Face 2 - Column 1
-        (165.738, 163.425), 
+        (166.4, 160.075), 
         ("WELD", 22),
-        (165.738, 186.875),
+        (166.4, 183.525),
         ("WELD", 23),
-        (165.738, 210.325),
+        (166.4, 206.975),
         ("WELD", 24),
-        (165.738, 233.775),
+        (166.4, 230.425),
         ("WELD", 25),
-        (165.738, 257.225),
+        (166.4, 253.875),
         ("WELD", 26),
-        (165.738, 280.675),    
+        (166.4, 277.325),    
         ("WELD", 27),
-        (165.738, 304.125),
+        (166.4, 300.775),
         ("WELD", 28),
 
         # Face 2 - Column 2
-        (145.428, 292.405), 
+        (146.09, 289.055), 
         ("WELD", 29),
-        (145.428, 268.955),
+        (146.09, 265.605),
         ("WELD", 30),
-        (145.428, 245.505),
+        (146.09, 242.155),
         ("WELD", 31),
-        (145.428, 222.055),
+        (146.09, 218.705),
         ("WELD", 32),
-        (145.428, 198.605),
+        (146.09, 195.255),
         ("WELD", 33),
-        (145.428, 175.155),      
+        (146.09, 171.805),      
         ("WELD", 34),  
-        (145.428, 151.705),
+        (146.09, 148.355),
         ("WELD", 35),  
 
         # Face 2 - Column 3
-        (125.118, 163.425), 
+        (125.78, 160.075), 
         ("WELD", 36),
-        (125.118, 186.875),
+        (125.78, 183.525),
         ("WELD", 37),
-        (125.118, 210.325),
+        (125.78, 206.975),
         ("WELD", 38),
-        (125.118, 233.775),
+        (125.78, 230.425),
         ("WELD", 39),  
-        (125.118, 257.225),
+        (125.78, 253.875),
         ("WELD", 40),
-        (125.118, 280.675),
+        (125.78, 277.325),
         ("WELD", 41),
-        (125.118, 304.125),
+        (125.78, 300.775),
         ("WELD", 42),
 
         # Final Return to Unloading Position
+        ("USER", None),
         (UNLOAD_POSITION_X, UNLOAD_POSITION_Y),
-        # ("USER", None),    # Go back home, let operator change to new pack and continue with new welding process  
     ]
 
     udi_sock = create_udi_listener()
@@ -2194,7 +2210,7 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
     table_index = -1
     state_of_machine = -1 
     
-    welder.toggle_welding_mode(adam, 7, True)    # Enable welding 
+    welder.toggle_welding_mode(adam, 7, False)    # Start with welding disabled
     welder.trigger_welding_start(adam, 6, False)  # Turn off auto-weld
 
     Thread(target=grind_watchdog, args=(adam,), daemon=True).start()
