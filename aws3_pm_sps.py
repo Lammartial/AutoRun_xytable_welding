@@ -719,15 +719,23 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                     if self._machine_locked:
                         self.unlock_machine()  # make sure we are not locked here
                     if self.dev.is_toggle_bit_changed():
-                        #self.set_state(SPSStates.WAIT_MACHINE_READY)
-                        _machine_ready, _status = self.dev.is_machine_ready()
-                        self.lock_machine() # lock machine to have control for read measurements
-                        self.welding_status = _status  # store result
-                        self.counter_ax1 = self.dev.read_axis_counter(1)
-                        self.last_counter_ax1 = self.counter_ax1
-                        print(f"Counters: Ax1={self.counter_ax1}")
-                        self.set_state(SPSStates.CHECK_WELDING_RESULT)
-                        _do_pause = False
+                        # --- THE FIX: IGNORE REBOOT FALSE-TRIGGERS ---
+                        if getattr(self.dev, 'just_restored', False):
+                            print("🔄 Connection restore detected. Ignoring reboot toggle-bit flip and syncing baseline...")
+                            self.dev.just_restored = False
+                            # We deliberately do nothing here. The baseline was already 
+                            # synced by is_toggle_bit_changed(), so we just wait for the next real press.
+
+                        else:
+                            #self.set_state(SPSStates.WAIT_MACHINE_READY)
+                            _machine_ready, _status = self.dev.is_machine_ready()
+                            self.lock_machine() # lock machine to have control for read measurements
+                            self.welding_status = _status  # store result
+                            self.counter_ax1 = self.dev.read_axis_counter(1)
+                            self.last_counter_ax1 = self.counter_ax1
+                            print(f"Counters: Ax1={self.counter_ax1}")
+                            self.set_state(SPSStates.CHECK_WELDING_RESULT)
+                            _do_pause = False
                     if _do_pause:
                         sleep(self._throttle_pause)  # throttle polling
 
@@ -943,15 +951,23 @@ class SPSStateMachine(SPSStateMachineBase):
                     if self._machine_locked:
                         self.unlock_machine()  # make sure we are not locked here
                     if self.dev.is_toggle_bit_changed():
-                        #self.set_state(SPSStates.WAIT_MACHINE_READY)
-                        _machine_ready, _status = self.dev.is_machine_ready()
-                        self.lock_machine() # lock machine to have control for read measurements
-                        self.welding_status = _status  # store result
-                        self.counter_ax1 = self.dev.read_axis_counter(1)
-                        self.last_counter_ax1 = self.counter_ax1
-                        print(f"Counters: Ax1={self.counter_ax1}")
-                        self.set_state(SPSStates.CHECK_WELDING_RESULT)
-                        _do_pause = False
+                        # --- THE FIX: IGNORE REBOOT FALSE-TRIGGERS ---
+                        if getattr(self.dev, 'just_restored', False):
+                            print("🔄 Connection restore detected. Ignoring reboot toggle-bit flip and syncing baseline...")
+                            self.dev.just_restored = False
+                            # We deliberately do nothing here. The baseline was already 
+                            # synced by is_toggle_bit_changed(), so we just wait for the next real press.
+
+                        else:
+                            #self.set_state(SPSStates.WAIT_MACHINE_READY)
+                            _machine_ready, _status = self.dev.is_machine_ready()
+                            self.lock_machine() # lock machine to have control for read measurements
+                            self.welding_status = _status  # store result
+                            self.counter_ax1 = self.dev.read_axis_counter(1)
+                            self.last_counter_ax1 = self.counter_ax1
+                            print(f"Counters: Ax1={self.counter_ax1}")
+                            self.set_state(SPSStates.CHECK_WELDING_RESULT)
+                            _do_pause = False
                     if _do_pause:
                         sleep(self._throttle_pause)  # throttle polling
 
@@ -1239,7 +1255,8 @@ class ProcessSPS(mp.Process):
 
             print("STORE DB")
             _result = "P" if SM.welding_status["ok"]>0 else ("F" if SM.welding_status["reject"]>0 else "A")  # Pass, Fail, Abort
-            _counter = SM.counter_ax1
+            # _counter = SM.counter_ax1
+            _counter = SM.sequence_pos  # Avoid its internal counter_ax1 resetting to 0 when power is cut by using sequence_pos which forces the database to use the script's indestructible RAM counter instead, preventing primary-key collision crashes.
             _udi = udi if udi else "undefined"  # database uses UDI as prim key -> not null
             __retries_db__ = 3
             while __retries_db__ > 0:
