@@ -1,0 +1,3 @@
+Timestamp,Cycle_ID,Work_Order,UDI,Event_Type,Machine_State,Welding_Position,Target_X,Target_Y,Actual_X,Actual_Y,Position_Result,Required_Program,Actual_Program,Weld_Result,Reason,User_Action,Duration_Sec,Details
+2026-08-11 16:10:55.862,20260811_161055_a79b3d,,,SESSION_START,,,,,,,,,,,,,,XY-table automation script started
+2026-08-11 17:10:21.926,20260811_171021_2b32b0,,,SESSION_START,,,,,,,,,,,,,,XY-table automation script started
