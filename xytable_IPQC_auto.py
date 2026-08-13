@@ -1446,9 +1446,13 @@ def is_move_button_pressed(adam) -> bool:
         
         # 2. If pressed, exit the loop and return
         if is_pressed:
-            print("Move button pressed! Moving to next position...")
-            return is_pressed
-        
+            if is_light_curtain_activated(adam):
+                print("Move button pressed! Moving to next position...")
+                return is_pressed
+            else:
+                print("Light curtain deactivated! Please activate LC first, then press the Move button again.")
+
+
         # 3. VERY IMPORTANT: Sleep for a short time
         # This prevents your laptop CPU from hitting 100% 
         sleep(0.1)
@@ -1458,7 +1462,7 @@ def is_emergency_button_pressed(adam) -> bool:
     return adam.get_digital_input(index=2)
 
 def is_light_curtain_activated(adam) -> bool:
-    return adam.get_digital_input(index=3)
+    return not adam.get_digital_input(index=3)
 
 def is_sticky_electrode(adam) -> bool:
     return not adam.get_digital_input(index=4)
@@ -1466,9 +1470,6 @@ def is_sticky_electrode(adam) -> bool:
 def is_weld_result_failed(adam) -> bool:
     # Out of limit value from welding machine (Out-of-limit = True means NG, False means OK)
     return adam.get_digital_input(index=6)
-
-def is_welding_head_down(adam) -> bool:
-    return adam.get_digital_input(index=7)
 
 def is_position_close_to(position: tuple, target_position: tuple, tolerance: float) -> bool:
     """
@@ -1577,12 +1578,6 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
 
             if xy_table.is_connected():
                 table_index += 1
-                # Avoid going to emergency case when operator puts hand in to flip battery pack (since light curtain will always be triggered here)
-                if welding_position in (5, 9, 14, 18):    
-                    xy_table._power_was_cut = False
-                elif welding_position == 0:  # Auto-homing and avoid going to emergency case when operator puts battery pack in/out (since light curtain will always be triggered here)
-                    xy_table.home()
-                    xy_table._power_was_cut = False
 
                 # Check if table is finished
                 if table_index >= len(table_of_positions):
@@ -1608,14 +1603,9 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                 elif x == "WELD":
                     print("Move to WELD command!!!")
 
-                    ''' Waiting time for motion controller to respond -> to detect emergency case triggered 
-                        -> Avoid welding when the target position has not been physically reached
-                    '''
-                    sleep(0.2)   
-                    
                     is_connected = xy_table.is_connected()
 
-                    if is_light_curtain_activated(adam) or is_emergency_button_pressed(adam) or not is_connected:       
+                    if not is_connected:       
                         print(f"Motion Controller Connected1: {is_connected}")
                         welder.toggle_welding_mode(adam, 7, False) # Ensure disabled
 
@@ -1642,6 +1632,7 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                         else:
                             print("✅ Position safe. Enabling foot pedal.")
                             welder.toggle_welding_mode(adam, 7, True)  # <-- TURN PEDAL ON
+                            sleep(0.1) # Allows time for welding machine input to be turned on (otherwise it skips first point)
                             welding_position += 1
                             _next_state = 6
                             print(f"Welding position {welding_position}.")
@@ -1677,9 +1668,9 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                         grind_request_event.clear()
                         _next_state = 31
 
-                    elif is_sticky_electrode(adam):
-                        print("⚠️ Sticky electrode event occurs -> stop at current position and enter grind flow")
-                        _next_state = 31
+                    # elif is_sticky_electrode(adam):
+                    #     print("⚠️ Sticky electrode event occurs -> stop at current position and enter grind flow")
+                    #     _next_state = 31
 
                     else:
                         xy_table._power_was_cut = False
@@ -1752,41 +1743,117 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
 
         case 6:
             # Auto-weld with ADAM6052 DO outputs without foot pedal - Use DO6
+            # 1. FLAG CLEANUP (From previous fix)
+            if getattr(welder, 'just_restored', False):
+                # Clear the restored flag so we don't infinitely loop
+                welder.just_restored = False
+                welder.waiting_for_result = False
 
-            # Turn Output on
-            welder.trigger_welding_start(adam, 6, True)
-            sleep(0.85) # Sleep for min 0.85 seconds between on and off to perform welding successfully (waiting time for welding head to move down and contact with cell tabs)
-            welder.trigger_welding_start(adam, 6, False)
+                print("⚠️ Interruption detected right before/during auto-weld!")
 
-            # Get welding results
-            _ready, weld_result = welder.is_machine_ready()
-            if _ready and welder.is_toggle_bit_changed():
-                print("Machine is ready:", _ready)
-                print("Welding result:", weld_result)
-            
-            if weld_result["ok"] == 1:          # Case when welding result is ok
+                welder.trigger_welding_start(adam, 6, False)  # Ensure trigger is safely OFF
+                
+                # Set recovery context to resume perfectly after power cycle
+                a, b = table_of_positions[table_index - 1]
+                xy_table._recovery_context = {
+                    "target": (a, b),
+                    "return_state": 3,
+                    "grind_phase": 0,
+                    "advance_table": False,
+                }
+                print(f"⚠️ Recovery context set to X={a} Y={b}. Entering state 30.")
+                _next_state = 30
 
-                print("Welding ok!")
-                if is_weld_result_failed(adam) == False:
-                    print("ADAM DI 6 weld result ok!")
-                weld_test_result = 'ok'
-                _next_state = 2
-                print("Move to state 2")
-
-            elif weld_result["reject"] == 1:    # Case when welding failed
-
-                weld_test_result = 'failed'
-                print("Welding failed!")
-                if is_weld_result_failed(adam) == True:
-                    print("ADAM DI 6 weld result failed!")
-                print("Move to state 7")
-                _next_state = 7  # move to error handling state
-
-            else:
-                # Case when no welding signal is received
+            else:    
+                # 2. PHASE CHECK: Have we already fired the trigger for this point?
+                if not getattr(welder, 'waiting_for_result', False):
                     
-                print("No welding signal received!")
-                _next_state = 6
+                    # --- PHASE 1: FIRE TRIGGER ---
+                    _ready_pre_check, _ = welder.is_machine_ready()
+                    if not _ready_pre_check:
+                        print("⏳ Waiting for AMADA Welder hardware to become READY...")
+                        _next_state = 6
+                        sleep(0.5)
+                    else:
+                        print("🔥 Firing weld trigger once...")
+
+                        welder.trigger_welding_start(adam, 6, True)
+                        sleep(0.85) # waiting time for welding head to move down
+
+                        fk_recognized = False
+                        timeout_counter = 0
+                        timeout_limit = 30  # 3 seconds (30 * 0.1s)
+
+                        # Loop to hold the script until DI 7 goes HIGH
+                        while not fk_recognized and timeout_counter < timeout_limit:
+                            # Read the status of ADAM DI 7 (FK stepping contact)
+                            fk_status = adam.get_digital_input(7) 
+                            
+                            if fk_status == True:  # FK goes HIGH (True) when recognized
+                                fk_recognized = True
+                            else:
+                                sleep(0.1)
+                                timeout_counter += 1
+
+                        # Supplier Recommendation: If FK is recognized, START can be disabled.
+                        # (We also disable it on timeout as a fail-safe)
+                        welder.trigger_welding_start(adam, 6, False)
+                        
+                        # Set the sub-state flag so we don't fire again on the next loop!
+                        welder.waiting_for_result = True 
+                        welder.just_restored = False
+
+                        if fk_recognized:
+                            print("✅ Stepping contact (FK) recognized. Weld START disabled.")
+                            print("⬆️ WELDING HEAD IS IN UPPER POSITION. Safe to move.")
+                            
+                            _next_state = 6                            
+                        else:
+                            # CRITICAL: Do not let the table move if the signal timed out!
+                            print("❌ ERROR: FK signal timeout! Did not detect welding head returning.")
+                            # Add logic here to pause the system, trigger an alarm, or raise an exception
+                            raise SystemError("Weld cycle failed to complete or FK signal lost.")
+                
+                else:
+                    # --- PHASE 2: WAIT FOR RESULT ---
+                    _ready, weld_result = welder.is_machine_ready()
+
+                    toggle_changed = welder.is_toggle_bit_changed()
+                    
+                    # Consider the weld done if the machine says it's ready + toggle flipped,
+                    # OR if we explicitly see a definitive OK or REJECT result in the Modbus data!
+                    weld_finished = (_ready and toggle_changed) or (weld_result["ok"] == 1 or weld_result["reject"] == 1)
+                    
+                    if weld_finished:
+                    # if welder.is_toggle_bit_changed():
+                        print("✅ Weld complete and acknowledged.")
+                        
+                        # CRITICAL: Reset the flag so the NEXT point can fire
+                        welder.waiting_for_result = False 
+                        
+                        print("Machine is ready:", _ready)
+                        print("Welding result:", weld_result)
+                    
+                        if weld_result["ok"] == 1: #and is_weld_result_failed(adam) == False:
+                            print("Welding ok!")
+                            if is_weld_result_failed(adam) == False:
+                                print("ADAM DI 6 weld result ok!")
+                            weld_test_result = 'ok'
+                            _next_state = 2
+                            print("Move to state 2")
+
+                        elif weld_result["reject"] == 1: #and is_weld_result_failed(adam) == True:
+                            weld_test_result = 'failed'
+                            print("Welding failed!")
+                            if is_weld_result_failed(adam) == True:
+                                print("ADAM DI 6 weld result failed!")
+                            print("Move to state 7")
+                            _next_state = 7  # move to error handling state
+
+                    else:
+                        # Case when no welding signal is received yet
+                        # print("⏳ No welding signal received. Still waiting for toggle bit to flip...")
+                        _next_state = 6
 
         case 7:
             # Error handling: move to unload position so operator can remove failed pack.
@@ -2093,7 +2160,7 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
     GRIND_POSITION_X,  GRIND_POSITION_Y  = 146.09, 218.705   # Operator move to this position to grind the electrodes
 
     ''' IPQC Welding Program: Perform welding for these welding points/programs: 
-        1, 2, 3, 10, 13, 14, 15, 16, 17, 26, 27, 28, 29, 31, 32, 40, 41, 42 
+        1, 2, 3, 10, 13, 14, 15, 16, 17, 26, 27, 28, 29, 31, 40, 41, 42 
         ----------------------------------------------------------------------
         WELD P1, 3, 13, 15, 17
         Go to unloading position
@@ -2101,7 +2168,7 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
         Go to unloading position
         WELD P27, 28, 31, 41, 42
         Go to unloading position
-        WELD P26, 29, 32, 40
+        WELD P26, 29, 40
         Go to unloading position (done)    
         
     '''
@@ -2311,22 +2378,26 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
     table_index = -1
     state_of_machine = -1 
     
-    welder.toggle_welding_mode(adam, 7, False)    # Enable welding 
+    welder.toggle_welding_mode(adam, 7, False)    # Start with welding disabled
     welder.trigger_welding_start(adam, 6, False)  # Turn off auto-weld
 
     Thread(target=grind_watchdog, args=(adam,), daemon=True).start()
+    while not is_light_curtain_activated(adam):
+        pass
+
     xy_table.home()
     
     # Combine control for controller and reading from welding machine
     while True:
 
-        state_of_machine, table_index, welding_position = table_state_machine(
-            xy_table, welder, adam,
-            udi_sock,
-            state_of_machine,
-            POSITIONS_OF_PART,
-            table_index, welding_position,
-        )
+        if is_light_curtain_activated(adam):
+            state_of_machine, table_index, welding_position = table_state_machine(
+                xy_table, welder, adam,
+                udi_sock,
+                state_of_machine,
+                POSITIONS_OF_PART,
+                table_index, welding_position,
+            )
 
 #--------------------------------------------------------------------------------------------------
 

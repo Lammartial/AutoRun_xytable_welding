@@ -48,91 +48,6 @@ def grind_watchdog(adam):
         prev = pressed
         sleep(0.05)
 
-class EventLogger:
-    def __init__(self, filename="production_stats_line3.csv"):
-        self.filename = filename
-        self.current_state = "RUNNING"
-        self.source = "SYSTEM"
-
-        file_existed = os.path.exists(self.filename)
-        with open(self.filename, 'a', newline='') as f:
-            writer = csv.writer(f)
-            if not file_existed:
-                # First ever run — write the header
-                writer.writerow(["Start_Time", "End_Time", "Event_Type", "Source", "Duration_Sec"])
-            else:
-                # Subsequent run — write a blank separator row so sessions are
-                # visually distinct in the CSV without touching existing data
-                writer.writerow([])
-            # Write a session-start marker so the CSV always shows when the
-            # script was launched, even if no state switch ever happens
-            writer.writerow([
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "",
-                "SESSION_START",
-                "SYSTEM",
-                "",
-            ])
-
-        # Start the clock AFTER writing the session marker
-        self.start_time = datetime.now()
-
-        # Register close() to run automatically on any exit (normal, Ctrl+C,
-        # or unhandled exception). This ensures the last open period is always
-        # written to the CSV instead of being silently lost.
-        import atexit
-        atexit.register(self.close)    
-
-    def switch_state(self, next_state: str, source: str):
-        end_time = datetime.now()
-        duration = (end_time - self.start_time).total_seconds()
-
-        with open(self.filename, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                self.start_time.strftime("%Y-%m-%d %H:%M:%S"),
-                end_time.strftime("%Y-%m-%d %H:%M:%S"),
-                self.current_state,
-                self.source,
-                round(duration, 2)
-            ])
-
-        self.start_time = datetime.now()
-        self.current_state = next_state
-        self.source = source
-
-    def close(self):
-        """Write the final open period to the CSV.
-
-        Called automatically via atexit on any exit (normal shutdown, Ctrl+C,
-        or unhandled exception). Safe to call manually as well — subsequent
-        calls are ignored because start_time is set to None after the first.
-        """
-        if self.start_time is None:
-            return  # already closed — nothing to do
-        end_time = datetime.now()
-        duration = (end_time - self.start_time).total_seconds()
-        with open(self.filename, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                self.start_time.strftime("%Y-%m-%d %H:%M:%S"),
-                end_time.strftime("%Y-%m-%d %H:%M:%S"),
-                self.current_state,
-                self.source,
-                round(duration, 2),
-            ])
-
-            # Write the SESSION_STOP marker so every SESSION_START has a matching end
-            writer.writerow([
-                end_time.strftime("%Y-%m-%d %H:%M:%S"),
-                "",
-                "SESSION_STOP",
-                "SYSTEM",
-                "",
-            ])
-
-        self.start_time = None  # guard against double-close
-
 class BaseOfStage():
 
     def __init__(self,
@@ -605,13 +520,9 @@ class XYLinearStage():
                 return False, f"Stage error '{response}': {_err_msg.get(_err, 'Unknown error')}"
 
         except (UnicodeDecodeError) as e:
-            # --- LOGGING POINT 1: STOP DETECTED ---
-            # We close the 'RUNNING' session and start the 'DOWNTIME' clock
-            if hasattr(self, 'logger') and self.logger:
-                self.logger.switch_state("DOWNTIME", "EMERGENCY")
 
-            print(f"\n⚠️ [INTERRUPTION] Light Curtain or Emergency Stop triggered!")
-            print("🛑 Waiting for hardware to power back on...")
+            print(f"\n[INTERRUPTION] Light Curtain or Emergency Stop triggered!")
+            print("Waiting for hardware to power back on...")
 
             # Wait for hardware to become reachable again
             while True:
@@ -628,14 +539,9 @@ class XYLinearStage():
                     # Still no power or serial buffer is garbled
                     sleep(1)
 
-            print("✨ Hardware restored.")
+            print("Hardware restored.")
 
-            # --- LOGGING POINT 2: RESUME ---
-            # We close the 'DOWNTIME' session and start the 'RUNNING' clock again
-            if hasattr(self, 'logger') and self.logger:
-                self.logger.switch_state("RUNNING", "SYSTEM")
 
-            # CRITICAL: Do NOT retry the original command here.
             # The motion controller has been power-cycled, so its internal step
             # counter has reset to 0. Retrying a relative move command (e.g. X+1200)
             # from position 0 would move to the completely wrong location.
@@ -645,7 +551,7 @@ class XYLinearStage():
             for stage in self.stages:
                 stage.position = None  # invalidate cached positions — they are now meaningless
 
-            print("⚠️  Position lost. State machine will home and retry after button press.")
+            print("Position lost. State machine will home and retry after button press.")
             return False, "POWER_CUT_RECOVERED"
     
 
@@ -1262,7 +1168,7 @@ class OurXYAWS3Modbus(AWS3Modbus):
             # sleep(0.85) # Sleep time to wait for welding head to move down -> contact with cell tab -> welding head move up
             return True
         except Exception as e:
-            print(f"❌ Failed to trigger ADAM-6052: {e}")
+            print(f"Failed to trigger ADAM-6052: {e}")
             return False
         
     def toggle_welding_mode(self, adam, index, state) -> bool:
@@ -1270,10 +1176,10 @@ class OurXYAWS3Modbus(AWS3Modbus):
         try:
             # Set ouput value
             adam.set_digital_output(index, state)
-            print(f"ADAM-6052 DO index {index} turned on:", state)
+            # print(f"ADAM-6052 DO index {index} turned on:", state)
             return True
         except Exception as e:
-            print(f"❌ Failed to trigger ADAM-6052: {e}")
+            print(f"Failed to trigger ADAM-6052: {e}")
             return False
 
 
@@ -1372,13 +1278,6 @@ def auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSI
                     # xy table moves back to worker position to restart new welding process
                     xy_table.goto_position(WORKER_POSITION_X,WORKER_POSITION_Y)
 
-                    # c = input("Please press 'c' to continue or 's' to stop: ").strip()
-                    # if c.lower() == 'c':
-                    #     break
-                    # else:
-                    #     return
-
-
                 else:
                     # Case when no welding signal is received
                     # In this case, xytable stops. Operator moves battey pack out, and puts pack back in position
@@ -1446,19 +1345,20 @@ def is_move_button_pressed(adam) -> bool:
         
         # 2. If pressed, exit the loop and return
         if is_pressed:
-            print("Move button pressed! Moving to next position...")
-            return is_pressed
-        
+            if is_light_curtain_activated(adam):
+                print("Move button pressed! Moving to next position...")
+                return is_pressed
+            else:
+                print("Light curtain deactivated! Please activate LC first, then press the Move button again.")
         # 3. VERY IMPORTANT: Sleep for a short time
         # This prevents your laptop CPU from hitting 100% 
         sleep(0.1)
-
 
 def is_emergency_button_pressed(adam) -> bool:
     return adam.get_digital_input(index=2)
 
 def is_light_curtain_activated(adam) -> bool:
-    return adam.get_digital_input(index=3)
+    return not adam.get_digital_input(index=3)
 
 def is_sticky_electrode(adam) -> bool:
     return not adam.get_digital_input(index=4)
@@ -1466,9 +1366,6 @@ def is_sticky_electrode(adam) -> bool:
 def is_weld_result_failed(adam) -> bool:
     # Out of limit value from welding machine (Out-of-limit = True means NG, False means OK)
     return adam.get_digital_input(index=6)
-
-def is_welding_head_down(adam) -> bool:
-    return adam.get_digital_input(index=7)
 
 def is_position_close_to(position: tuple, target_position: tuple, tolerance: float) -> bool:
     """
@@ -1519,7 +1416,7 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                         xy_table.home()
                         sleep(0.01)
                         if xy_table._power_was_cut:
-                            print("⚠️  Power cut during startup home. Entering recovery.")
+                            print("Power cut during startup home. Entering recovery.")
                             _next_state = 30
                         else:
                             print("Move to state 0")
@@ -1562,7 +1459,7 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                 if is_move_button_pressed(adam):
                 
                     if xy_table._power_was_cut:
-                        print("⚠️  Power cut during home (worker recovery). Entering recovery.")
+                        print("⚠️  Power cut during moving. Entering recovery.")
                         _next_state = 30
                     else:
                         xy_table._power_was_cut = False
@@ -1577,19 +1474,13 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
 
             if xy_table.is_connected():
                 table_index += 1
-                # Avoid going to emergency case when operator puts hand in to flip battery pack (since light curtain will always be triggered here)
-                if welding_position in (5, 9, 14, 18):    
-                    xy_table._power_was_cut = False
-                elif welding_position == 0:  # Auto-homing and avoid going to emergency case when operator puts battery pack in/out (since light curtain will always be triggered here)
-                    xy_table.home()
-                    xy_table._power_was_cut = False
 
                 # Check if table is finished
                 if table_index >= len(table_of_positions):
                     _next_state = 0
-                    print("Move to state 0")
+                    print("Moved to state 0")
                 else:
-                    print("Move to state 3")
+                    print("Moved to state 3")
                     _next_state = 3 
 
         case 3:
@@ -1610,7 +1501,7 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                     
                     is_connected = xy_table.is_connected()
 
-                    if is_light_curtain_activated(adam) or is_emergency_button_pressed(adam) or not is_connected:    
+                    if not is_connected:    
                         print(f"Motion Controller Connected1: {is_connected}")
                         welder.toggle_welding_mode(adam, 7, False) # Ensure disabled
 
@@ -1625,7 +1516,7 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
 
                         }
                         # table_index -= 1
-                        print(f"⚠️  Power cut while moving to X={a} Y={b}. Entering recovery.")
+                        print(f"Power cut while moving to X={a} Y={b}. Entering recovery.")
                         _next_state = 30
 
                     else:
@@ -1633,6 +1524,14 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                         print("✅ Position safe. Enabling foot pedal.")
                         welder.toggle_welding_mode(adam, 7, True)  # <-- TURN PEDAL ON
                         welding_position += 1
+
+                        # Make sure program is set
+                        welder.write_program_no(int(y))
+                        sleep(0.01)
+                        while welder.read_program_no() != int(y):
+                            sleep(0.01)
+                        pass
+
                         print(f"Welding position {welding_position}.")
                         print("Wait until welding is done.")
                         _next_state = 4     
@@ -1656,18 +1555,20 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                     # xy_table._power_was_cut = False
                     # xy_table.goto_position(x, y, units_in_mm=True)
                     if grind_request_event.is_set():
-                        print("⚠️ Grind requested after move -> stop at current position and enter grind flow")
+                        print("Grind requested after move -> stop at current position and enter grind flow")
                         print(f"Current welding position: {welding_position}")
                         grind_request_event.clear()
                         _next_state = 31
 
                     elif xy_table._power_was_cut: 
-                        print(f"⚠️  Power cut while moving to X={x} Y={y}. Entering recovery.")
+                        print(f"Power cut while moving to X={x} Y={y}. Entering recovery.")
                         _next_state = 30
 
-                    # elif is_sticky_electrode(adam):
-                    #     print("⚠️ Sticky electrode event occurs -> stop at current position and enter grind flow")
-                    #     _next_state = 31
+                    elif is_sticky_electrode(adam):
+                        print("Sticky electrode event occurs -> stop at current position and enter grind flow")
+                        welder.toggle_welding_mode(adam, 7, False)  # <-- TURN PEDAL OFF
+
+                        _next_state = 31
 
                     else:
                         xy_table._power_was_cut = False
@@ -1675,7 +1576,7 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                         print(f"XYTABLE moves successfully: {is_move_successfully}")
 
                         if not is_move_successfully:
-                            print(f"⚠️  Power cut while moving to X={x} Y={y}. Entering recovery.")
+                            print(f"Power cut while moving to X={x} Y={y}. Entering recovery.")
                             _next_state = 30
                         else:
                             current_pos = xy_table.positions_in_mm
@@ -1684,7 +1585,7 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                             if not is_position_close_to(current_pos, (x, y), 0.02):
                                 # Off-target without a power cut (e.g. limit switch).
                                 # Keep same table_index and retry.
-                                print(f"⚠️  Position mismatch — expected ({x},{y}), got {current_pos}. Retrying.")
+                                print(f"Position mismatch — expected ({x},{y}), got {current_pos}. Retrying.")
                                 _next_state = 3
                             else:
                                 # Confirmed arrival — advance index and continue
@@ -1695,7 +1596,8 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
 
         case 4:
             # Light curtain / emergency check 
-            if is_light_curtain_activated(adam) or is_emergency_button_pressed(adam):
+            if not xy_table.is_connected():
+            # if is_light_curtain_activated(adam) or is_emergency_button_pressed(adam):
                 print("⚠️  Light curtain / emergency triggered while waiting for weld!")
                 print("   Disabling welding machine immediately to block foot pedal.")
                 welder.toggle_welding_mode(adam, 7, False)  # <-- TURN PEDAL OFF
@@ -1708,17 +1610,18 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                     "grind_phase": 0,
                     "advance_table": False,
                 }
-                print(f"⚠️  Recovery context set to X={a} Y={b}. Entering state 30.")
+                print(f"Recovery context set to X={a} Y={b}. Entering state 30.")
                 _next_state = 30
 
             elif grind_request_event.is_set():
-                print("⚠️ Grind requested before WELD -> enter grind flow")
+                print("Grind requested before WELD -> enter grind flow")
                 welding_position -= 1  # Minus 1 because script will move to case 3: welding_pos + 1 after grinding
                 welder.toggle_welding_mode(adam, 7, False)  # <-- TURN PEDAL OFF FOR GRINDING
                 grind_request_event.clear()
                 _next_state = 31
 
             else:
+                welder.toggle_welding_mode(adam, 7, True)    # Reenable foot pedal welding in case LC is deactivated and activated again while waiting for welding
                 _ready, _ = welder.is_machine_ready()
 
                 if welder.is_toggle_bit_changed():
@@ -1729,96 +1632,41 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
 
         case 5:
             # Get welding results
-            # welding_position += 1
-            # print(f"Welding position {welding_position}.")
 
-            # --- DEFAULT SAFE STATE: DISABLE ---
             welder.toggle_welding_mode(adam, 7, False) # <-- TURN PEDAL OFF
-            print("🔒 Welding disabled for transit.")
+            print("Welding disabled for transit.")
 
             _, weld_result = welder.is_machine_ready()
 
-            ''' SIMULATION MOVING XYTABLE IN CASE WELDING MACHINE DOES NOT WORK'''
-            # weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
-
-            # if weld_test_result == "ok":
             if weld_result["ok"] == 1:          # Case when welding result is ok
 
                 print("Welding ok!")
-                if is_weld_result_failed(adam) == False:
-                    print("ADAM DI 6 weld result ok!")
+                # if is_weld_result_failed(adam) == False:
+                #     print("ADAM DI 6 weld result ok!")
                 weld_test_result = 'ok'
                 _next_state = 2
                 print("Move to state 2")
 
-            # elif weld_test_result == "failed":
             elif weld_result["reject"] == 1:    # Case when welding failed
 
                 weld_test_result = 'failed'
                 print("Welding failed!")
-                if is_weld_result_failed(adam) == True:
-                    print("ADAM DI 6 weld result failed!")
+                # if is_weld_result_failed(adam) == True:
+                #     print("ADAM DI 6 weld result failed!")
                 print("Move to state 7")
                 _next_state = 7  # move to error handling state
 
             else:
                 # Case when no welding signal is received
-                # In this case, xytable stops. Operator moves battey pack out, and puts pack back in position
-                # Then, operator can press 'c' to continue moving the xytable to the next welding position
                 
                 print("No welding signal received!")
                 print("Wait until welding is done again.")
                 welder.toggle_welding_mode(adam, 7, True) # <-- TURN PEDAL ON
                 _next_state = 4
 
-            # sleep(3) Delay time to wait for welding head to move up + operator detect if sticky electrode happens
-
-        case 6:
-            # Auto-weld with ADAM6052 DO outputs without foot pedal - Use DO6
-
-            # Turn Output on
-            welder.trigger_welding_start(adam, 6, True)
-            sleep(0.85) # Sleep for min 0.85 seconds between on and off to perform welding successfully (waiting time for welding head to move down and contact with cell tabs)
-            welder.trigger_welding_start(adam, 6, False)
-
-            # Get welding results
-            _ready, weld_result = welder.is_machine_ready()
-            if _ready and welder.is_toggle_bit_changed():
-                print("Machine is ready:", _ready)
-                print("Welding result:", weld_result)
-            
-            if weld_result["ok"] == 1:          # Case when welding result is ok
-
-                print("Welding ok!")
-                weld_test_result = 'ok'
-                _next_state = 2
-                print("Move to state 2")
-
-            elif weld_result["reject"] == 1:    # Case when welding failed
-
-                weld_test_result = 'failed'
-                print("Welding failed!")
-                print("Move to state 7")
-                _next_state = 7  # move to error handling state
-
-            else:
-                # Case when no welding signal is received
-                    
-                print("No welding signal received!")
-                _next_state = 6
-
         case 7:
             # Error handling: move to unload position so operator can remove failed pack.
             print("Error during welding process! Please check the machine and try again.")
-            
-            # Ask supervisor to input a PASSCODE to continue with the welding process
-            # while True:
-            #     pwd = input("Please enter a password to continue: ").strip()
-            #     if pwd == "RRCVN@2026":
-            #         print("Correct password! Continue with the auto_run program ...")
-            #         break
-            #     else:
-            #         print("Incorrect password! Please try again.")
 
             if is_move_button_pressed(adam):  # Press button to move to unload position
                 # Moving from failed-weld position to unload position.
@@ -1830,7 +1678,7 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                 xy_table._power_was_cut = False
                 xy_table.goto_position(UNLOAD_POSITION_X, UNLOAD_POSITION_Y)
                 if xy_table._power_was_cut:
-                    print("⚠️  Power cut while moving to unload position. Entering recovery.")
+                    print("Power cut while moving to unload position. Entering recovery.")
                     _next_state = 30
                 else:
                     _next_state = 0
@@ -1868,7 +1716,7 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
             if ctx is None:
                 # Safety fallback: no context was set (should not happen in
                 # normal operation). Reset to the beginning to avoid stale state.
-                print("⚠️  Recovery entered with no context — resetting to state 0.")
+                print("Recovery entered with no context — resetting to state 0.")
                 _next_state = 0
             else:
                 target_x, target_y = ctx["target"]
@@ -1881,64 +1729,63 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
 
                 xy_table._power_was_cut = False
 
-                print(f"🔄 Recovery: target X={target_x} Y={target_y}, "
+                print(f"Recovery: target X={target_x} Y={target_y}, "
                         f"will return to state {return_state} after success.")
                 print("Press Move button when it is safe to re-home and continue.")
 
                 # button = wait_for_move_or_grind(adam)  
                 is_move_button_pressed(adam)      # blocking — waits for operator
 
-
                 # --- Step 3: Home to re-reference absolute zero ---
-                print("🏠 Homing to re-reference zero after power cycle...")
+                print("Homing to re-reference zero after power cycle...")
                 home_ok = xy_table.home()
 
                 if xy_table._power_was_cut:
                     # Another power cut happened during homing itself.
                     # _recovery_context is unchanged → loop back and wait again.
-                    print("⚠️  Power cut during homing. Will retry recovery on next loop.")
+                    print("Power cut during homing. Will retry recovery on next loop.")
                     _next_state = 30
 
                 elif not home_ok:
                     # Homing failed for a non-power-cut reason (limit switch, etc.).
-                    print("⚠️  Homing failed (non-power-cut). Retrying recovery on next loop.")
+                    print("Homing failed (non-power-cut). Retrying recovery on next loop.")
                     _next_state = 30
 
                 else:
                     # Homing succeeded.
                     if target_x == 0.0 and target_y == 0.0:
-                        # --- Step 4a: Target WAS home — we are already there ---
-                        print("✅ Recovery successful — home position reached.")
+                        # Target WAS home — we are already there
+                        print("Recovery successful — home position reached.")
                         if advance_table and phase == 0:
                             table_index += 1
                         xy_table._recovery_context = None
                         _next_state = return_state
 
                     else:
-                        # --- Step 4b: Move to the original target ---
+                        # Move to the original target
                         is_move_button_pressed(adam)
-                        print(f"✅ Re-attempting move to X={target_x} Y={target_y}...")
+                        print(f"Re-attempting move to X={target_x} Y={target_y}...")
                         xy_table._power_was_cut = False
                         xy_table.goto_position(target_x, target_y, units_in_mm=True)
 
                         if xy_table._power_was_cut:
                             # Yet another power cut during recovery move.
                             # _recovery_context unchanged → loop back.
-                            print("⚠️  Power cut during recovery move. Will retry recovery on next loop.")
+                            print("Power cut during recovery move. Will retry recovery on next loop.")
                             _next_state = 30
 
                         else:
-                            # --- Step 5: Verify final position ---
+                            # Verify final position
                             current_pos = xy_table.positions_in_mm
                             if is_position_close_to(current_pos, (target_x, target_y), 0.02):
-                                print(f"✅ Recovery successful — reached X={target_x} Y={target_y}.")
+                                print(f"Recovery successful — reached X={target_x} Y={target_y}.")
                                 # Only advance if we were NOT in a grind flow
                                 if advance_table and phase == 0:
                                     table_index += 1
                                 xy_table._recovery_context = None
                                 _next_state = return_state
                             else:
-                                print(f"⚠️  Still off-target after recovery "
+                                print(f"Still off-target after recovery "
                                         f"(got {current_pos}, expected ({target_x},{target_y})). Retrying.")
                                 _next_state = 30  # table_index unchanged, context unchanged
                                     
@@ -1969,12 +1816,12 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
             ctx = xy_table._recovery_context
 
             if ctx is None:
-                # print("⚠️  Grind recovery entered with no context — resetting to state 0.")
+                # print("Grind recovery entered with no context — resetting to state 0.")
                 # xy_table.home()
                 # _next_state = 0
 
                 # 1. Log that we are safely ignoring the stray button press
-                print("⚠️  Grind button press detected (no active context). Ignoring event.")
+                print("Grind button press detected (no active context). Ignoring event.")
                 
                 # 2. Clear the thread event so it doesn't keep triggering
                 grind_request_event.clear()
@@ -1992,7 +1839,7 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                 if phase == 0:
                     # 1. Check the flag before printing
                     if not ctx.get("msg_printed", False):
-                        print("✅ Stopped at current position.")
+                        print("Stopped at current position.")
                         print("Press GRIND again to move to the grinding position.")
                         ctx["msg_printed"] = True  # 2. Set the flag so it doesn't print again
 
@@ -2004,12 +1851,12 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
 
                 # Phase 1: move to grinding position.
                 elif phase == 1:
-                    print(f"✅ Moving to grind position X={GRIND_POSITION_X} Y={GRIND_POSITION_Y}...")
+                    print(f"Moving to grind position X={GRIND_POSITION_X} Y={GRIND_POSITION_Y}...")
                     xy_table._power_was_cut = False
                     xy_table.goto_position(GRIND_POSITION_X, GRIND_POSITION_Y, units_in_mm=True)
 
                     if xy_table._power_was_cut:
-                        print("⚠️  Power cut moving to grind position. Back to state 30.")
+                        print("Power cut moving to grind position. Back to state 30.")
                         _next_state = 30
                     else:
                         #Grind position reached.
@@ -2022,7 +1869,7 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
                 elif phase == 2:
                     # Check the flag before printing
                     if not ctx.get("msg_printed", False):
-                        print("🔧 Grind position reached. Press GRIND again to return after finishing grinding the electrode.")
+                        print("Grind position reached. Press GRIND again to return after finishing grinding the electrode.")
                         ctx["msg_printed"] = True  # Set the flag
 
                     if grind_request_event.is_set():
@@ -2033,21 +1880,21 @@ def table_state_machine(xy_table, welder, adam, udi_sock, current_state: int, ta
 
                 # Phase 3: return to the original target.
                 elif phase == 3:
-                    print(f"✅ Returning to X={target_x} Y={target_y}...")
+                    print(f"Returning to X={target_x} Y={target_y}...")
                     xy_table._power_was_cut = False
                     xy_table.goto_position(target_x, target_y, units_in_mm=True)
 
                     # if xy_table._power_was_cut:
-                    #     print("⚠️  Power cut moving back from grind position. Back to state 30.")
+                    #     print("Power cut moving back from grind position. Back to state 30.")
                     #     _next_state = 30
                     # else:
                     current_pos = xy_table.positions_in_mm
                     if is_position_close_to(current_pos, (target_x, target_y), 0.02):
-                        print(f"✅ Grind recovery complete — at X={target_x} Y={target_y}.")
+                        print(f"Grind recovery complete — at X={target_x} Y={target_y}.")
                         xy_table._recovery_context = None
                         _next_state = return_state
                     else:
-                        print(f"⚠️  Off-target after grind recovery (got {current_pos}). Retrying.")
+                        print(f"Off-target after grind recovery (got {current_pos}). Retrying.")
                         _next_state = 31
 
 
@@ -2063,7 +1910,6 @@ def create_udi_listener() -> socket.socket:
     # print(f"XYTable: Listening for UDI broadcasts on UDP port {UDI_BROADCAST_PORT}")
     return sock
 
-
 def read_input_from_scanner(sock: socket.socket) -> str:
     """Non-blocking check for a UDI broadcast from aws3_pm_sps.py.
     Returns the UDI string if received, empty string otherwise."""
@@ -2077,7 +1923,6 @@ def read_input_from_scanner(sock: socket.socket) -> str:
     except Exception as ex:
         print(f"XYTable: UDI listener error: {ex}")
         return ""
-
 
 def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resource_str_adam: str, logger: EventLogger):
     adam = ADAM6052(ip=resource_str_adam, connect=True)
@@ -2112,7 +1957,7 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
     GRIND_POSITION_X,  GRIND_POSITION_Y  = 146.09, 218.705   # Operator move to this position to grind the electrodes
 
     ''' IPQC Welding Program: Perform welding for these welding points/programs: 
-        1, 2, 3, 10, 13, 14, 15, 16, 17, 26, 27, 28, 29, 31, 32, 40, 41, 42 
+        1, 2, 3, 10, 13, 14, 15, 16, 17, 26, 27, 28, 29, 31, 40, 41, 42 
         ----------------------------------------------------------------------
         WELD P1, 3, 13, 15, 17
         Go to unloading position
@@ -2125,7 +1970,7 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
         
     '''
     
-    POSITIONS_OF_PART = [  # RRC3570-4 42 positions
+    POSITIONS_OF_PART = [  # RRC3570-4 IPQC positions
         
         # Face 1 - Column 1
         (166.4, 160.075), 
@@ -2189,7 +2034,7 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
         ("WELD", 40),
         ("USER", None),
         (UNLOAD_POSITION_X, UNLOAD_POSITION_Y), 
-        ("USER", None),    # Go to unloading position - Finish
+        
     ]
 
     # # REFERENCE POSITION
@@ -2352,18 +2197,25 @@ def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resou
     welder.trigger_welding_start(adam, 6, False)  # Turn off auto-weld
 
     Thread(target=grind_watchdog, args=(adam,), daemon=True).start()
+    while not is_light_curtain_activated(adam):
+        pass
+
     xy_table.home()
     
     # Combine control for controller and reading from welding machine
     while True:
 
-        state_of_machine, table_index, welding_position = table_state_machine(
-            xy_table, welder, adam,
-            udi_sock,
-            state_of_machine,
-            POSITIONS_OF_PART,
-            table_index, welding_position,
-        )
+        if is_light_curtain_activated(adam):
+            state_of_machine, table_index, welding_position = table_state_machine(
+                xy_table, welder, adam,
+                udi_sock,
+                state_of_machine,
+                POSITIONS_OF_PART,
+                table_index, welding_position,
+            )
+        else:
+            welder.toggle_welding_mode(adam, 7, False)    # Disable foot pedal welding when LC is deactivated
+            
 
 #--------------------------------------------------------------------------------------------------
 
@@ -2386,7 +2238,6 @@ if __name__ == "__main__":
     ## Initialize the logging
     logger_init(filename_base=None)  ## init root logger with different filename
     _log = getLogger(__name__, DEBUG)
-    production_logger = EventLogger("production_stats_line3.csv")
     tic = perf_counter()
 
     #test_gcode_parser()
@@ -2395,7 +2246,7 @@ if __name__ == "__main__":
     RESOURCE_STR_AWS = "tcp:172.25.103.100:502"
     RESOURCE_STR_ADAM = "172.25.103.202" 
     # test_xydevice(RESOURCE_STR_MOTION_CONTROLLER)
-    test_combined_controllers(RESOURCE_STR_AWS, RESOURCE_STR_MOTION_CONTROLLER, RESOURCE_STR_ADAM, production_logger)
+    test_combined_controllers(RESOURCE_STR_AWS, RESOURCE_STR_MOTION_CONTROLLER, RESOURCE_STR_ADAM)
 
     # test_aws3_communication("tcp:172.25.103.100:502")
     # test_db_driven_stage()
