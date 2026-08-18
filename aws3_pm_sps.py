@@ -718,27 +718,45 @@ class SPSStateMachineRotating(SPSStateMachineBase):
                     _do_pause = True
                     if self._machine_locked:
                         self.unlock_machine()  # make sure we are not locked here
-                    if self.dev.is_toggle_bit_changed():
-                        # --- THE FIX: IGNORE REBOOT FALSE-TRIGGERS ---
-                        if getattr(self.dev, 'just_restored', False):
-                            print("🔄 Connection restore detected. Ignoring reboot toggle-bit flip and syncing baseline...")
-                            self.dev.just_restored = False
-                            # We deliberately do nothing here. The baseline was already 
-                            # synced by is_toggle_bit_changed(), so we just wait for the next real press.
+                    
+                    # 1. PING THE HARDWARE FIRST
+                    # We MUST run this function first so the Modbus wrapper can detect 
+                    # the reconnection and set the 'just_restored' flag!
+                    toggle_flipped = self.dev.is_toggle_bit_changed()
 
-                        else:
-                            #self.set_state(SPSStates.WAIT_MACHINE_READY)
-                            _machine_ready, _status = self.dev.is_machine_ready()
-                            self.lock_machine() # lock machine to have control for read measurements
-                            self.welding_status = _status  # store result
-                            self.counter_ax1 = self.dev.read_axis_counter(1)
-                            self.last_counter_ax1 = self.counter_ax1
-                            print(f"Counters: Ax1={self.counter_ax1}")
-                            self.set_state(SPSStates.CHECK_WELDING_RESULT)
-                            _do_pause = False
+                    # 2. CHECK RESTORE FLAG
+                    # Now we check the flag. This runs immediately on the exact loop cycle 
+                    # the connection restores, preventing fake weld triggers.
+                    if getattr(self.dev, 'just_restored', False):
+                        print("Connection restore detected. Syncing baseline & program BEFORE next weld...")
+                        self.dev.just_restored = False
+                        
+                        # Sync the counter baseline immediately
+                        boot_counter = self.dev.read_axis_counter(1)
+                        self.counter_ax1 = boot_counter
+                        self.last_counter_ax1 = boot_counter
+                        print(f"Counter baseline synced post-reboot to: Ax1={boot_counter}")
+
+                        # Push the correct program immediately
+                        if self.next_program_no != -1:
+                            print(f"Power cut recovery: Forcing AMADA welder back to Program {self.next_program_no}...")
+                            self.dev.write_program_no(self.next_program_no)
+                            self.program_no = self.next_program_no
+
+                    # 3. NORMAL WELD DETECTION
+                    # If it didn't just restore, AND the toggle flipped normally, process the weld!
+                    elif toggle_flipped:
+                        _machine_ready, _status = self.dev.is_machine_ready()
+                        self.lock_machine() # lock machine to have control for read measurements
+                        self.welding_status = _status  # store result
+                        self.counter_ax1 = self.dev.read_axis_counter(1)
+                        self.last_counter_ax1 = self.counter_ax1
+                        print(f"Counters: Ax1={self.counter_ax1}")
+                        self.set_state(SPSStates.CHECK_WELDING_RESULT)
+                        _do_pause = False
+                        
                     if _do_pause:
                         sleep(self._throttle_pause)  # throttle polling
-
 
                 case SPSStates.CHECK_WELDING_RESULT:
                     # We do this task here to have quick feedback on UI before the
@@ -950,24 +968,43 @@ class SPSStateMachine(SPSStateMachineBase):
                     _do_pause = True
                     if self._machine_locked:
                         self.unlock_machine()  # make sure we are not locked here
-                    if self.dev.is_toggle_bit_changed():
-                        # --- THE FIX: IGNORE REBOOT FALSE-TRIGGERS ---
-                        if getattr(self.dev, 'just_restored', False):
-                            print("🔄 Connection restore detected. Ignoring reboot toggle-bit flip and syncing baseline...")
-                            self.dev.just_restored = False
-                            # We deliberately do nothing here. The baseline was already 
-                            # synced by is_toggle_bit_changed(), so we just wait for the next real press.
+                    
+                    # 1. PING THE HARDWARE FIRST
+                    # We MUST run this function first so the Modbus wrapper can detect 
+                    # the reconnection and set the 'just_restored' flag!
+                    toggle_flipped = self.dev.is_toggle_bit_changed()
 
-                        else:
-                            #self.set_state(SPSStates.WAIT_MACHINE_READY)
-                            _machine_ready, _status = self.dev.is_machine_ready()
-                            self.lock_machine() # lock machine to have control for read measurements
-                            self.welding_status = _status  # store result
-                            self.counter_ax1 = self.dev.read_axis_counter(1)
-                            self.last_counter_ax1 = self.counter_ax1
-                            print(f"Counters: Ax1={self.counter_ax1}")
-                            self.set_state(SPSStates.CHECK_WELDING_RESULT)
-                            _do_pause = False
+                    # 2. CHECK RESTORE FLAG
+                    # Now we check the flag. This runs immediately on the exact loop cycle 
+                    # the connection restores, preventing fake weld triggers.
+                    if getattr(self.dev, 'just_restored', False):
+                        print("Connection restore detected. Syncing baseline & program BEFORE next weld...")
+                        self.dev.just_restored = False
+                        
+                        # Sync the counter baseline immediately
+                        boot_counter = self.dev.read_axis_counter(1)
+                        self.counter_ax1 = boot_counter
+                        self.last_counter_ax1 = boot_counter
+                        print(f"Counter baseline synced post-reboot to: Ax1={boot_counter}")
+
+                        # Push the correct program immediately
+                        if self.next_program_no != -1:
+                            print(f"Power cut recovery: Forcing AMADA welder back to Program {self.next_program_no}...")
+                            self.dev.write_program_no(self.next_program_no)
+                            self.program_no = self.next_program_no
+
+                    # 3. NORMAL WELD DETECTION
+                    # If it didn't just restore, AND the toggle flipped normally, process the weld!
+                    elif toggle_flipped:
+                        _machine_ready, _status = self.dev.is_machine_ready()
+                        self.lock_machine() # lock machine to have control for read measurements
+                        self.welding_status = _status  # store result
+                        self.counter_ax1 = self.dev.read_axis_counter(1)
+                        self.last_counter_ax1 = self.counter_ax1
+                        print(f"Counters: Ax1={self.counter_ax1}")
+                        self.set_state(SPSStates.CHECK_WELDING_RESULT)
+                        _do_pause = False
+                        
                     if _do_pause:
                         sleep(self._throttle_pause)  # throttle polling
 
@@ -1642,7 +1679,7 @@ class ProcessScanner(mp.Process):
             _udi = "1CELL" + get_random_digits_string(12)
             self.sps_queue.put({"udi_scanned": _udi})
             sleep(3.0)
-                # add some steps
+            #   add some steps
             #    for n in range(6):
             #        sleep(1.0)
             #        self.sps_queue.put({"move_counter": 1})
@@ -1667,7 +1704,6 @@ if __name__ == '__main__':
     parser.add_argument("--simulate_scan", action="store_true", help="Set a product for simulated UDI scan interface.")
     parser.add_argument("--block_scan_udi", action="store_false", help="To block scan UDI in the middle of a sequence. If false scanning UDI at any time resets sequence to start.")
     parser.add_argument("--verification", action="store_true", help="To support verification of SPS by providing buttons to force a PASS or FAIL weld.")
-
 
     args = parser.parse_args()
 
