@@ -222,6 +222,172 @@ def ask_supervisor_password(expected_password="RRCVN@2026"):
     root.mainloop()
     return password_accepted.get()
 
+def confirm_restart_position(position_num, target_x=None, target_y=None, program_id=None):
+    """
+    Displays a confirmation modal to verify restart details.
+    NOTE: Cancel button is temporarily disabled — user must confirm to continue.
+    Returns True upon confirmation.
+    """
+    root = tk.Tk()
+    root.title("Position Resume Confirmation")
+    
+    # Dimensions (620x380) centered on screen
+    width, height = 620, 380
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    start_x = (screen_width - width) // 2
+    start_y = (screen_height - height) // 2
+    root.geometry(f"{width}x{height}+{start_x}+{start_y}")
+    
+    # Industrial Palette
+    bg_dark = "#0F111A"
+    card_bg = "#1A1D2B"
+    header_blue = "#1D4ED8"
+    text_muted = "#A0A5B5"
+    text_highlight = "#10B981"  # Emerald green for position index
+    text_coord = "#38BDF8"      # Cyan for X/Y coordinates
+    btn_green = "#059669"
+    btn_green_active = "#047857"
+
+    root.configure(bg=bg_dark)
+    root.attributes("-topmost", True)
+    root.resizable(False, False)
+
+    confirmed = tk.BooleanVar(value=False)
+
+    # --- Header Banner ---
+    header_frame = tk.Frame(root, bg=header_blue, height=65)
+    header_frame.pack(fill="x", side="top")
+    header_frame.pack_propagate(False)
+
+    header_label = tk.Label(
+        header_frame, 
+        text="📍 RESTART POSITION CONFIRMATION", 
+        font=("Segoe UI", 14, "bold"), 
+        fg="#FFFFFF", 
+        bg=header_blue
+    )
+    header_label.pack(expand=True)
+
+    # --- Central Card Container ---
+    card = tk.Frame(root, bg=card_bg, highlightbackground="#2D3748", highlightthickness=1)
+    card.pack(fill="both", expand=True, padx=25, pady=(15, 20))
+
+    content_frame = tk.Frame(card, bg=card_bg)
+    content_frame.pack(fill="both", expand=True, padx=20, pady=15)
+
+    sub_label = tk.Label(
+        content_frame,
+        text="Please confirm target coordinates before homing:",
+        font=("Segoe UI", 11),
+        fg=text_muted,
+        bg=card_bg
+    )
+    sub_label.pack(pady=(0, 10))
+
+    # --- Target Position & Coordinates Highlight Box ---
+    info_box = tk.Frame(content_frame, bg=bg_dark, bd=1, relief="solid")
+    info_box.pack(fill="x", pady=(0, 12), ipady=8)
+
+    # 1. Position Index Line
+    pos_text = f"RESUME POSITION: #{position_num}"
+    if total_positions:
+        pos_text += f" / {total_positions}"
+
+    pos_label = tk.Label(
+        info_box,
+        text=pos_text,
+        font=("Consolas", 16, "bold"),
+        fg=text_highlight,
+        bg=bg_dark
+    )
+    pos_label.pack(pady=(2, 2))
+
+    # 2. Target X / Y Coordinates Line
+    if target_x is not None and target_y is not None:
+        coord_text = f"COORDINATES: X = {target_x} mm  |  Y = {target_y} mm"
+        coord_label = tk.Label(
+            info_box,
+            text=coord_text,
+            font=("Consolas", 13, "bold"),
+            fg=text_coord,
+            bg=bg_dark
+        )
+        coord_label.pack(pady=(2, 2))
+
+    # 3. Weld Program ID Line
+    if program_id is not None:
+        prog_label = tk.Label(
+            info_box,
+            text=f"WELD PROGRAM: {program_id}",
+            font=("Segoe UI", 10, "bold"),
+            fg="#FFFFFF",
+            bg=bg_dark
+        )
+        prog_label.pack(pady=(2, 2))
+
+    # Sequence Warning Line
+    flow_label = tk.Label(
+        content_frame,
+        text="Sequence:  1. Home Axes (0,0)  ➔  2. Move to Target  ➔  3. Resume",
+        font=("Segoe UI", 9, "bold"),
+        fg="#E5E7EB",
+        bg=card_bg
+    )
+    flow_label.pack(pady=(0, 14))
+
+    # --- Action Buttons ---
+    btn_frame = tk.Frame(content_frame, bg=card_bg)
+    btn_frame.pack()
+
+    def on_confirm():
+        confirmed.set(True)
+        root.destroy()
+
+    def on_cancel():
+        # Disabled for now
+        pass
+
+    btn_confirm = tk.Button(
+        btn_frame, 
+        text="CONFIRM & HOME TABLE", 
+        font=("Segoe UI", 11, "bold"), 
+        bg=btn_green, 
+        activebackground=btn_green_active,
+        fg="#FFFFFF", 
+        activeforeground="#FFFFFF",
+        relief="flat", 
+        cursor="hand2",
+        padx=20, 
+        pady=10,
+        command=on_confirm
+    )
+    btn_confirm.pack(side="left", padx=10)
+
+    # CANCEL BUTTON (DISABLED TEMPORARILY)
+    btn_abort = tk.Button(
+        btn_frame, 
+        text="CANCEL", 
+        font=("Segoe UI", 11, "bold"), 
+        bg="#2A2D3D",             # Greyed-out background
+        fg="#6B7280",             # Dim text color
+        disabledforeground="#6B7280",
+        relief="flat", 
+        cursor="no",              # 'No / Disabled' cursor icon
+        state="disabled",         # <-- Disables button interaction
+        padx=20, 
+        pady=10,
+        command=on_cancel
+    )
+    btn_abort.pack(side="left", padx=10)
+
+    # Disable window close 'X' button to force explicit confirmation
+    root.protocol("WM_DELETE_WINDOW", lambda: None)
+    
+    root.mainloop()
+
+    return confirmed.get()
+
 class EventLogger:
     """
     Production event logger for XY-table welding automation.
@@ -2097,7 +2263,9 @@ def table_state_machine(xy_table, welder, adam, udi_sock, logger, current_state:
                                     details="XYtable reached the target welding position"
                                 )
 
-                                if is_position_close_to((x, y), (GRIND_POSITION_X, GRIND_POSITION_Y), 0.01):
+                                previous_x, previous_y = table_of_positions[table_index-2]  
+                                # If previous_x == WELD, skip, otherwise start grinding
+                                if not isinstance(previous_x, str) and is_position_close_to((x, y), (GRIND_POSITION_X, GRIND_POSITION_Y), 0.01):
                                     logger.log_event(
                                         "GRIND_STARTED",
                                         machine_state=current_state,
@@ -2399,6 +2567,18 @@ def table_state_machine(xy_table, welder, adam, udi_sock, logger, current_state:
                     )
 
                     print("Correct password! Continue with the welding process ...")
+
+                    if confirm_restart_position(position_num=welding_position+1, target_x=target_x, target_y=target_y):
+                        logger.log_event(
+                            "RESTART_POSITION_CONFIRMED",
+                            machine_state=current_state,
+                            welding_position=welding_position+1,
+                            target=(target_x, target_y),
+                            user_action="Supervisor confirmed the target restart position",
+                            details="After successful confirmation, the machine will home and move to restart position",
+                        )
+
+                        print("Position confirmed! Initiating homing sequence...")
 
                     print("Press Move button when it is safe to re-home and continue.")
 
