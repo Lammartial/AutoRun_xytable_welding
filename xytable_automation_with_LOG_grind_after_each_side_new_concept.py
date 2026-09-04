@@ -1,0 +1,2832 @@
+
+"""
+Contains the drivers for stepper motor controller MOC-01/MOC-02 from Optics Focus Instruments Co., Ltd.
+"""
+
+import csv
+from datetime import datetime
+import os
+
+from time import sleep
+from math import e
+from typing import Tuple, List
+from enum import Enum
+
+from rrc.eth2serial import Eth2SerialDevice
+# from rrc.gcode.machine import Machine 
+from rrc.modbus.aws3 import AWS3Modbus
+from rrc.serialport import SerialComportDevice, SerialComportDevicePermanentlyOpen
+from rrc.adam6xxx import ADAM6052
+from threading import Event, Thread, Lock
+import socket
+from uuid import uuid4
+
+import tkinter as tk
+
+# --- Same port constant, must match aws3_pm_sps.py ---
+UDI_BROADCAST_PORT = 50007
+
+# --------------------------------------------------------------------------- #
+# Logging
+# --------------------------------------------------------------------------- #
+
+DEBUG = 2
+
+from rrc.custom_logging import getLogger, logger_init
+
+# --------------------------------------------------------------------------- #
+
+
+#--------------------------------------------------------------------------------------------------
+
+grind_request_event = Event()
+stop_watchdog_event = Event()
+
+def grind_watchdog(adam):
+    prev = False
+    while not stop_watchdog_event.is_set():
+        pressed = adam.get_digital_input(index=0)  # Grind button
+        if pressed and not prev:
+            grind_request_event.set()
+        prev = pressed
+        sleep(0.05)
+
+def monitor_light_curtain(adam, logger, get_state, xy_table):
+    previous_state = adam.get_digital_input(index=3)
+
+    while True:
+        current_state = adam.get_digital_input(index=3)
+
+        if current_state != previous_state:
+            if current_state:
+                # Latch the trip event on the motion controller object
+                xy_table.emergency_event_triggered = True
+
+                logger.log_event(
+                    "LIGHT_CURTAIN_ACTIVATED",
+                    machine_state=get_state(),
+                    user_action="Light curtain activated",
+                    details="Light curtain switched ON during execution",
+                )
+            else:
+                logger.log_event(
+                    "LIGHT_CURTAIN_DEACTIVATED",
+                    machine_state=get_state(),
+                    user_action="Light curtain deactivated",
+                    details="Light curtain switched OFF",
+                )
+
+            previous_state = current_state
+
+        sleep(0.05)
+
+def monitor_emergency_button(adam, logger, get_state, xy_table):
+    previous_state = adam.get_digital_input(index=2)
+
+    while True:
+        current_state = adam.get_digital_input(index=2)
+
+        if current_state != previous_state:
+            if current_state:
+                # Latch the trip event on the motion controller object
+                xy_table.emergency_event_triggered = True
+
+                logger.log_event(
+                    "EMERGENCY_BUTTON_PRESSED",
+                    machine_state=get_state(),
+                    user_action="Emergency button pressed",
+                    details="Emergency button pressed during execution",
+                )
+            else:
+                logger.log_event(
+                    "EMERGENCY_BUTTON_RELEASED",
+                    machine_state=get_state(),
+                    user_action="Emergency button released",
+                    details="Emergency button released",
+                )
+
+            previous_state = current_state
+
+        sleep(0.05)
+
+def ask_supervisor_password(expected_password="RRCVN@2026"):
+    """
+    Enlarged modern industrial modal popup with high-contrast instructions
+    and balanced component positioning.
+    """
+    root = tk.Tk()
+    root.title("Supervisor Authorization")
+    
+    # Enlarge popup dimensions to 620x420 and center on screen
+    width, height = 620, 420
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    start_x = (screen_width - width) // 2
+    start_y = (screen_height - height) // 2
+    root.geometry(f"{width}x{height}+{start_x}+{start_y}")
+    
+    # Industrial Color Palette
+    bg_dark = "#0F111A"      # Main window background
+    card_bg = "#1A1D2B"      # Inner card container
+    accent_red = "#C53030"   # Red alert header
+    text_alert = "#FCA5A5"   # Soft light-red status text
+    text_main = "#FFFFFF"    # High-contrast bold instruction text
+    btn_blue = "#2563EB"     # Primary action button
+    btn_blue_active = "#1D4ED8"
+
+    root.configure(bg=bg_dark)
+    root.attributes("-topmost", True)
+    root.resizable(False, False)
+
+    password_accepted = tk.BooleanVar(value=False)
+
+    # --- Top Alert Header Banner ---
+    header_frame = tk.Frame(root, bg=accent_red, height=65)
+    header_frame.pack(fill="x", side="top")
+    header_frame.pack_propagate(False)
+
+    header_label = tk.Label(
+        header_frame, 
+        text="⚠️   SUPERVISOR ACTION REQUIRED", 
+        font=("Segoe UI", 14, "bold"), 
+        fg="#FFFFFF", 
+        bg=accent_red
+    )
+    header_label.pack(expand=True)
+
+    # --- Central Container Card ---
+    card = tk.Frame(root, bg=card_bg, highlightbackground="#2D3748", highlightthickness=1)
+    card.pack(fill="both", expand=True, padx=25, pady=(20, 25))
+
+    # Inner layout container for vertical symmetry
+    content_frame = tk.Frame(card, bg=card_bg)
+    content_frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+    # 1. Halted Reason Line (Outstanding Status)
+    reason_label = tk.Label(
+        content_frame,
+        text="SYSTEM HALTED: PROCESS ERROR / E-STOP DETECTED",
+        font=("Segoe UI", 10, "bold"),
+        fg=text_alert,
+        bg=card_bg
+    )
+    reason_label.pack(pady=(0, 6))
+
+    # 2. Main Instruction (Prominent & High Contrast)
+    instruction_label = tk.Label(
+        content_frame,
+        text="Enter Supervisor Passcode to Clear Lock & Resume Process:",
+        font=("Segoe UI", 12, "bold"),
+        fg=text_main,
+        bg=card_bg,
+        justify="center"
+    )
+    instruction_label.pack(pady=(0, 16))
+
+    # 3. Password Input Field (Centered with border frame)
+    pwd_frame = tk.Frame(content_frame, bg="#374151", bd=1)
+    pwd_frame.pack(pady=4)
+
+    pwd_entry = tk.Entry(
+        pwd_frame, 
+        show="•", 
+        font=("Consolas", 24, "bold"), 
+        width=14, 
+        justify="center",
+        bg="#0F111A", 
+        fg="#FFFFFF", 
+        insertbackground="#FFFFFF",
+        relief="flat",
+        bd=8
+    )
+    pwd_entry.pack(padx=1, pady=1)
+    pwd_entry.focus()
+
+    # 4. Error Message Feedback Slot
+    error_label = tk.Label(
+        content_frame, 
+        text="", 
+        font=("Segoe UI", 10, "bold"), 
+        fg="#EF4444", 
+        bg=card_bg
+    )
+    error_label.pack(pady=6)
+
+    # 5. Verification & Shake Logic
+    def verify_password(event=None):
+        if pwd_entry.get() == expected_password:
+            password_accepted.set(True)
+            root.destroy()
+        else:
+            error_label.config(text="❌ Invalid Passcode! Access Denied.")
+            pwd_entry.delete(0, tk.END)
+            
+            # Window shake effect on incorrect password
+            cur_x = root.winfo_x()
+            cur_y = root.winfo_y()
+            for dx in [14, -14, 10, -10, 5, -5, 0]:
+                root.geometry(f"{width}x{height}+{cur_x + dx}+{cur_y}")
+                root.update()
+                root.after(25)
+
+    # 6. Unlock Button
+    btn = tk.Button(
+        content_frame, 
+        text="UNLOCK MACHINE", 
+        font=("Segoe UI", 11, "bold"), 
+        bg=btn_blue, 
+        activebackground=btn_blue_active,
+        fg="#FFFFFF", 
+        activeforeground="#FFFFFF",
+        relief="flat", 
+        cursor="hand2",
+        padx=35, 
+        pady=10,
+        command=verify_password
+    )
+    btn.pack(pady=(4, 0))
+
+    # Event Bindings
+    root.bind("<Return>", verify_password)
+    root.protocol("WM_DELETE_WINDOW", lambda: None)
+
+    root.mainloop()
+    return password_accepted.get()
+
+def confirm_restart_position(position_num, target_x=None, target_y=None, program_id=None):
+    """
+    Displays a confirmation modal to verify restart details.
+    NOTE: Cancel button is temporarily disabled — user must confirm to continue.
+    Returns True upon confirmation.
+    """
+    root = tk.Tk()
+    root.title("Position Resume Confirmation")
+    
+    # Dimensions (620x380) centered on screen
+    width, height = 620, 380
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    start_x = (screen_width - width) // 2
+    start_y = (screen_height - height) // 2
+    root.geometry(f"{width}x{height}+{start_x}+{start_y}")
+    
+    # Industrial Palette
+    bg_dark = "#0F111A"
+    card_bg = "#1A1D2B"
+    header_blue = "#1D4ED8"
+    text_muted = "#A0A5B5"
+    text_highlight = "#10B981"  # Emerald green for position index
+    text_coord = "#38BDF8"      # Cyan for X/Y coordinates
+    btn_green = "#059669"
+    btn_green_active = "#047857"
+
+    root.configure(bg=bg_dark)
+    root.attributes("-topmost", True)
+    root.resizable(False, False)
+
+    confirmed = tk.BooleanVar(value=False)
+
+    # --- Header Banner ---
+    header_frame = tk.Frame(root, bg=header_blue, height=65)
+    header_frame.pack(fill="x", side="top")
+    header_frame.pack_propagate(False)
+
+    header_label = tk.Label(
+        header_frame, 
+        text="📍 RESTART POSITION CONFIRMATION", 
+        font=("Segoe UI", 14, "bold"), 
+        fg="#FFFFFF", 
+        bg=header_blue
+    )
+    header_label.pack(expand=True)
+
+    # --- Central Card Container ---
+    card = tk.Frame(root, bg=card_bg, highlightbackground="#2D3748", highlightthickness=1)
+    card.pack(fill="both", expand=True, padx=25, pady=(15, 20))
+
+    content_frame = tk.Frame(card, bg=card_bg)
+    content_frame.pack(fill="both", expand=True, padx=20, pady=15)
+
+    sub_label = tk.Label(
+        content_frame,
+        text="Please confirm target coordinates before homing:",
+        font=("Segoe UI", 11),
+        fg=text_muted,
+        bg=card_bg
+    )
+    sub_label.pack(pady=(0, 10))
+
+    # --- Target Position & Coordinates Highlight Box ---
+    info_box = tk.Frame(content_frame, bg=bg_dark, bd=1, relief="solid")
+    info_box.pack(fill="x", pady=(0, 12), ipady=8)
+
+    # 1. Position Index Line
+    pos_text = f"RESUME POSITION: #{position_num}"
+
+    pos_label = tk.Label(
+        info_box,
+        text=pos_text,
+        font=("Consolas", 16, "bold"),
+        fg=text_highlight,
+        bg=bg_dark
+    )
+    pos_label.pack(pady=(2, 2))
+
+    # 2. Target X / Y Coordinates Line
+    if target_x is not None and target_y is not None:
+        coord_text = f"COORDINATES: X = {target_x} mm  |  Y = {target_y} mm"
+        coord_label = tk.Label(
+            info_box,
+            text=coord_text,
+            font=("Consolas", 13, "bold"),
+            fg=text_coord,
+            bg=bg_dark
+        )
+        coord_label.pack(pady=(2, 2))
+
+    # 3. Weld Program ID Line
+    if program_id is not None:
+        prog_label = tk.Label(
+            info_box,
+            text=f"WELD PROGRAM: {program_id}",
+            font=("Segoe UI", 10, "bold"),
+            fg="#FFFFFF",
+            bg=bg_dark
+        )
+        prog_label.pack(pady=(2, 2))
+
+    # Sequence Warning Line
+    flow_label = tk.Label(
+        content_frame,
+        text="Sequence:  1. Home Axes (0,0)  ➔  2. Move to Target  ➔  3. Resume",
+        font=("Segoe UI", 9, "bold"),
+        fg="#E5E7EB",
+        bg=card_bg
+    )
+    flow_label.pack(pady=(0, 14))
+
+    # --- Action Buttons ---
+    btn_frame = tk.Frame(content_frame, bg=card_bg)
+    btn_frame.pack()
+
+    def on_confirm():
+        confirmed.set(True)
+        root.destroy()
+
+    def on_cancel():
+        # Disabled for now
+        pass
+
+    btn_confirm = tk.Button(
+        btn_frame, 
+        text="CONFIRM & HOME TABLE", 
+        font=("Segoe UI", 11, "bold"), 
+        bg=btn_green, 
+        activebackground=btn_green_active,
+        fg="#FFFFFF", 
+        activeforeground="#FFFFFF",
+        relief="flat", 
+        cursor="hand2",
+        padx=20, 
+        pady=10,
+        command=on_confirm
+    )
+    btn_confirm.pack(side="left", padx=10)
+
+    # CANCEL BUTTON (DISABLED TEMPORARILY)
+    btn_abort = tk.Button(
+        btn_frame, 
+        text="CANCEL", 
+        font=("Segoe UI", 11, "bold"), 
+        bg="#2A2D3D",             # Greyed-out background
+        fg="#6B7280",             # Dim text color
+        disabledforeground="#6B7280",
+        relief="flat", 
+        cursor="no",              # 'No / Disabled' cursor icon
+        state="disabled",         # <-- Disables button interaction
+        padx=20, 
+        pady=10,
+        command=on_cancel
+    )
+    btn_abort.pack(side="left", padx=10)
+
+    # Disable window close 'X' button to force explicit confirmation
+    root.protocol("WM_DELETE_WINDOW", lambda: None)
+    
+    root.mainloop()
+
+    return confirmed.get()
+
+class EventLogger:
+    """
+    Production event logger for XY-table welding automation.
+
+    One row = one meaningful production event.
+    """
+
+    HEADERS = [
+        "Timestamp",
+        "Cycle_ID",
+        "Work_Order",
+        "UDI",
+        "Event_Type",
+        "Machine_State",
+        "Welding_Position",
+        "Target_X",
+        "Target_Y",
+        "Actual_X",
+        "Actual_Y",
+        "Position_Result",
+        "Required_Program",
+        "Actual_Program",
+        "Weld_Result",
+        "Reason",
+        "User_Action",
+        "Duration_Sec",
+        "Details",
+    ]
+
+    def __init__(self, filename="production_events_line3_automation.csv"):
+        self.filename = filename
+        self.lock = Lock()
+
+        self.cycle_id = None
+        self.work_order = ""
+        self.udi = ""
+
+        self.downtime_start = None
+        self.downtime_reason = None
+
+        file_existed = os.path.exists(filename)
+
+        with open(self.filename, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+
+            if not file_existed:
+                writer.writerow(self.HEADERS)
+
+        self.cycle_id = self._new_cycle_id()
+
+        self.log_event(
+            "SESSION_START",
+            details="XY-table automation script started"
+        )
+
+    def _new_cycle_id(self):
+        return datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid4().hex[:6]
+
+    def set_context(self, udi=None, work_order=None):
+        if udi is not None:
+            self.udi = udi
+
+        if work_order is not None:
+            self.work_order = work_order
+
+    def new_cycle(self, udi=None, work_order=None):
+        self.cycle_id = self._new_cycle_id()
+        self.udi = udi or ""
+        self.work_order = work_order or ""
+
+        self.log_event(
+            "CYCLE_STARTED",
+            details="New battery welding cycle started"
+        )
+
+    def log_event(
+        self,
+        event_type,
+        machine_state=None,
+        welding_position=None,
+        target=None,
+        actual=None,
+        position_result=None,
+        required_program=None,
+        actual_program=None,
+        weld_result=None,
+        reason=None,
+        user_action=None,
+        duration=None,
+        details=None,
+    ):
+        target_x = target[0] if target else ""
+        target_y = target[1] if target else ""
+
+        actual_x = actual[0] if actual else ""
+        actual_y = actual[1] if actual else ""
+
+        row = [
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+            self.cycle_id or "",
+            self.work_order,
+            self.udi,
+            event_type,
+            machine_state if machine_state is not None else "",
+            welding_position if welding_position is not None else "",
+            target_x,
+            target_y,
+            actual_x,
+            actual_y,
+            position_result or "",
+            required_program if required_program is not None else "",
+            actual_program if actual_program is not None else "",
+            weld_result or "",
+            reason or "",
+            user_action or "",
+            round(duration, 2) if duration is not None else "",
+            details or "",
+        ]
+
+        with self.lock:
+            with open(self.filename, "a", newline="", encoding="utf-8") as f:
+                csv.writer(f).writerow(row)
+
+    def start_downtime(self, reason, machine_state=None, details=None):
+        if self.downtime_start is not None:
+            return
+
+        self.downtime_start = datetime.now()
+        self.downtime_reason = reason
+
+        self.log_event(
+            "DOWNTIME_START",
+            machine_state=machine_state,
+            reason=reason,
+            details=details,
+        )
+
+    def end_downtime(self, machine_state=None, details=None):
+        if self.downtime_start is None:
+            return
+
+        end_time = datetime.now()
+        duration = (end_time - self.downtime_start).total_seconds()
+
+        self.log_event(
+            "DOWNTIME_END",
+            machine_state=machine_state,
+            reason=self.downtime_reason,
+            duration=duration,
+            details=details,
+        )
+
+        self.downtime_start = None
+        self.downtime_reason = None
+
+    def close(self):
+        self.log_event(
+            "SESSION_STOP",
+            details="XY-table automation script stopped"
+        )
+
+class BaseOfStage():
+
+    def __init__(self,
+            name: str,  # either 'X' or 'Y' or 'Z' or 'R' or 'T1' or 'T2'
+            step_angle: float, # from stage motor's data sheet: either 0.9 or 1.8
+        ) -> None:
+
+        _AXIS_NAME_TO_CONTROLLER_NAME = {
+            'X': 'X',
+            'Y': 'Y',
+            'Z': 'Z',
+            'R': 'r',
+            'T1': 't',
+            'T2': 'T',
+        }
+        n = name.upper()
+        assert n in _AXIS_NAME_TO_CONTROLLER_NAME.keys(), f"Stage name '{n}' is not valid. Must be one of {_AXIS_NAME_TO_CONTROLLER_NAME.keys()}"
+        self.name = n
+        self.axis_name = _AXIS_NAME_TO_CONTROLLER_NAME[n]
+        assert step_angle in (0.9, 1.8), "Step angle must be either 0.9 or 1.8 degrees."
+        self.step_angle = step_angle
+        self.position = None
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def home_command(self) -> Tuple[str, str]:
+        """Get the command string to reset/home the stage position so that the absolute position is defined as 0."""
+        return f"H{self.axis_name}0", f"Resetting stage '{self.name}'..."  # HOME command of stage to motion controller
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def read_position_command(self) -> Tuple[str, str]:
+        """Get the command string to get the current position on the linear stage.
+
+        Returns:
+            Tuple[str, str]: command to motion controller and log message.
+        """
+
+        return f"?{self.axis_name}", f'Reading {self.name}-position'  # command to motion controller
+
+
+    #----------------------------------------------------------------------------------------------
+
+    def convert_stage_speed_to_velocity(self, speed_value: int) -> float:
+        # virtual method to be overridden in child classes
+        pass
+
+    def convert_velocity_to_stage_speed(self, velocity_mm_s: float) -> int:
+        # virtual method to be overridden in child classes
+        pass
+
+    def physical_displacement_to_motion_command(self, displacement_mm: float | int) -> Tuple[str, str]:
+        #virtual method to be overridden in child classes
+        pass
+
+    def absolute_position_to_motion_command(self, new_position: float | int | str) -> Tuple[str | None, str]:
+        # virtual method to be overridden in child classes
+        pass
+
+    def convert_mm_to_steps(self, mm: float | int) -> int:
+        # virtual method to be overridden in child classes
+        pass
+
+    def convert_steps_to_mm(self, steps: int) -> float:
+        # virtual method to be overridden in child classes
+        pass
+
+
+#--------------------------------------------------------------------------------------------------
+
+
+class RotaryStage(BaseOfStage):
+
+    def __init__(self,
+            name: str,  # either 'X' or 'Y' or 'Z' or 'R' or 'T1' or 'T2'
+            subdivision: int = 2,    # from back panel of motion controller (DIP setting): e.g. 2
+            step_angle: float = 1.8, # from the side of the stage: either 0.9 or 1.8
+            transmission_ratio: float = 180.0, # depending on the product
+        ) -> None:
+
+        super().__init__(name, step_angle)
+        self.stage_type: str = "rotary_stage"
+        self.unit: str = "degree"
+        self.position = None  # current position of the stage unknown at start
+        # calculation depending on the type of stage
+        self.subdivision = subdivision
+        self.transmission_ratio = transmission_ratio  # for rotation stages
+        # precalculate pulse equivalent in degrees
+        self.pulse_equiv = step_angle / (transmission_ratio * subdivision)  # from manufacturers manual
+
+
+#--------------------------------------------------------------------------------------------------
+
+
+class GoniometerStage(BaseOfStage):
+
+    def __init__(self,
+            name: str,  # either 'X' or 'Y' or 'Z' or 'R' or 'T1' or 'T2'
+            step_angle: float, # from the side of the stage: either 0.9 or 1.8
+            subdivision: int,  # from back of motion controller: e.g. 2
+            transmission_ratio: float,
+            travel_range_mm: int, # maximum stage travel range in mm; will be converted into controller steps and stored in max_position
+        ) -> None:
+
+        super().__init__(name, step_angle)
+        self.stage_type = "goniometer_stage"
+        self.unit = "degree"
+        self.position = None  # current position of the stage unkonwn at start
+        # calculation depending on the type of stage
+        self.subdivision = subdivision
+        self.transmission_ratio = transmission_ratio  # for rotation stages
+        self.travel_range_mm = travel_range_mm
+        # precalculate pulse equivalent in degrees
+        self.pulse_equiv = step_angle / (transmission_ratio * subdivision)  # from manufacturers manual
+        self.max_position = int(round(travel_range_mm / self.pulse_equiv))  # in controller pulse units
+
+#--------------------------------------------------------------------------------------------------
+
+
+class LabJackStage(BaseOfStage):
+
+    def __init__(self,
+            name: str,  # either 'X' or 'Y' or 'Z' or 'R' or 'T1' or 'T2'
+            subdivision: int,  # from back of motion controller: e.g. 2
+            step_angle: float, # from the side of the stage: either 0.9 or 1.8
+            pitch_of_lead_screw: float, # in mm - from the optics focus website, e.g. 1.25
+            travel_range_mm: int, # maximum stage travel range in mm; will be converted into controller steps and stored in max_position
+        ) -> None:
+
+        super().__init__(name, step_angle)
+        self.stage_type = "lab_jack_stage"
+        self.unit = "step"
+        self.position = None  # current position of the stage unkonwn at start
+        # calculation depending on the type of stage
+        self.subdivision = subdivision
+        self.pitch_of_lead_screw = pitch_of_lead_screw
+        self.transmission_ratio = 1.0  # for lab jack stages
+        self.travel_range_mm = travel_range_mm
+        # precalculate pulse equivalent in mm
+        self.pulse_equiv = pitch_of_lead_screw * step_angle / (360 * subdivision)  # from manufacturers manual
+        self.max_position = int(round(travel_range_mm / self.pulse_equiv))  # in controller pulse units
+
+
+#--------------------------------------------------------------------------------------------------
+
+class LinearStage(BaseOfStage):
+
+    def __init__(self,
+            name: str,  # either 'X' or 'Y' or 'Z' or 'R' or 'T1' or 'T2'
+            subdivision: int,  # from back of motion controller: e.g. 2
+            step_angle: float, # from the side of the stage: either 0.9 or 1.8
+            pitch_of_lead_screw: float,  # in mm - from the optics focus website, e.g. 1.0
+            travel_range_mm: float, # maximum stage travel range in mm; will be converted into controller steps and stored in max_position
+        ) -> None:
+
+        super().__init__(name, step_angle)
+        self.stage_type = "translation_stage"
+        self.unit = "mm"
+        self.position = None  # current position of the stage unkonwn at start
+        # calculation depending on the type of stage
+        self.subdivision = subdivision
+        self.pitch_of_lead_screw = pitch_of_lead_screw
+        self.travel_range_mm = travel_range_mm
+        # precalculate pulse equivalent in mm
+        self.pulse_equiv = pitch_of_lead_screw * step_angle / (360 * subdivision)  # from manufacturers manual
+        self.max_position = int(round(travel_range_mm / self.pulse_equiv))  # in controller pulse units
+
+    #----------------------------------------------------------------------------------------------
+
+    def convert_stage_speed_to_velocity(self, speed_value: int) -> float:
+        """Converts a stage speed value (0..255) into physical (mm/s)"""
+        return round((speed_value + 1) * self.pulse_equiv * (22000 / 720), 2)  # convert from speed value to mm/s
+
+    def convert_velocity_to_stage_speed(self, velocity_mm_s: float) -> int:
+        """Converts a physical speed given in mm/s into a speed value recognisable by the stage (0..255)"""
+        return int(round((velocity_mm_s / (22000 / 720) / self.pulse_equiv) - 1))  # convert from mm/s to speed value
+
+    def convert_mm_to_steps(self, mm: float | int) -> int:
+        """Converts a physical displacement given in mm into steps for the motion controller"""
+        return int(round(mm / self.pulse_equiv))
+
+    def convert_steps_to_mm(self, steps: int) -> float:
+        """Converts a displacement given in steps into physical mm"""
+        return round(steps * self.pulse_equiv, 4)
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def physical_displacement_to_motion_command(self, displacement_mm: float | int) -> Tuple[str, str]:
+        """Converts a positive or negative displacement (in mm) into a motion command for the stage"""
+
+        direction = '+' if displacement_mm > 0 else '-'
+        # convert from mm to steps for motioncontroller
+        magnitude = self.convert_mm_to_steps(abs(displacement_mm))
+        return f"{self.axis_name}{direction}{magnitude}", f"Setting {self.name}-displacement of {displacement_mm}mm"   # command for motion controller
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def displacement_to_motion_command(self, displacement: int) -> Tuple[str, str]:
+        """Converts a positive or negative displacement (in steps) into a motion command for the stage"""
+
+        return f"{self.axis_name}{displacement:+}", f"Setting {self.name}-displacement of {displacement} steps"   # command for motion controller
+
+   #----------------------------------------------------------------------------------------------
+
+
+    def absolute_position_to_motion_command(self, new_position: float | int | str) -> Tuple[str | None, str]:
+        """Calculates the absolute new position on the linear stage based on
+        the current position and returns the displacement to reach this position.
+        If the current position is unknown, Freturns None.
+
+        Args:
+            new_position (float | int | str): _description_
+
+        Raises:
+            ValueError: if new_position is an unknown string.
+
+        Returns:
+            tuple[str, str] | None: The displacement command in mm to reach the new position, or None if current position is unknown.
+                Second value is a log message.
+        """
+
+        if isinstance(new_position, str):
+            if new_position == 'start':
+                return self.home_command()
+            elif new_position == 'center':
+                new_position = self.max_position / 2
+            elif new_position == 'end':
+                new_position = self.max_position
+            else:
+                raise ValueError(f"{new_position} is not a valid command for the linear stage '{self.name}'")
+
+        if new_position > self.max_position:
+            new_position = self.max_position  # limit to max position
+        elif new_position <= 0:
+            return self.home_command()
+
+        if self.position is None:
+            return None, "Not yet on defined position"  # need to HOME or MAX first
+
+        displacement = int(round(new_position - self.position))
+
+        if not displacement:
+            return "", f"Already on position '{new_position}'"  # already on position
+        cmd, msg = self.displacement_to_motion_command(displacement)
+        return cmd, f"Setting {self.name}-position: {msg}"  # command to motion controller
+
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+
+#--------------------------------------------------------------------------------------------------
+
+class ParsingStage():
+    """Driver for a stages that is just parsing scripts."""
+
+    def __init__(self, resource_string: str, timeout: float = 5.0) -> None:
+
+        if "," in resource_string:
+            # serial com port which keeps the connection open all the time
+            self.dev = SerialComportDevicePermanentlyOpen(resource_string, termination=("\n", "\r"), timeout=timeout)
+        else:
+            # socket port which needs an open connection with timeout. The first call does not set the timeout.
+            self.dev = Eth2SerialDevice(resource_string, termination=("\n", "\r"), open_connection=True)
+            # now the connection is open with timeout setting
+            self.dev.connect_socket(timeout=timeout)
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def is_connected(self) -> bool:
+        #
+        # this command is for all stages
+        #
+        cmd = "?R"
+        response = self.dev.request(cmd)
+        r = response.strip().split("\r")
+        if (r[0] == cmd) and ("OK" in r[1]):
+            return True
+        else:
+            return False
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def parse_script(self, script: str) -> Tuple[bool, Tuple[str, str, float | str]]:
+        """Parses a script containing commands .
+
+        Args:
+            script (str): Multiline string with each line containing "X_mm,Y_mm"
+
+        Returns:
+            Tuple[bool, Tuple[str, str, float | str]]: list of tuples with (command, response, value)
+        """
+
+        log = []
+        # clear CR, use ; as line separator, accept line separator
+        lines = script.replace("\r", "").replace(";", "\n").strip().split('\n')
+        for line in lines:
+            try:
+                if line == "UI":
+                    # wait for user input
+                    pass
+                elif line[0] == "W":
+                    # wait
+                    w = float(line[1:])
+                    sleep(w / 1000.0)  # w is in ms
+                    v = w
+                else:
+                    # send the lines to the motion controller as they come
+                    response = self.dev.request(line, timeout=5.0, pause_after_write=5)
+                    # the response should include the command, split by CR
+                    r = response.split("\r")
+                    if r[0] != line:
+                        raise ValueError(f"Response '{response}' does not match command '{line}'")
+                    # parse the position from the response
+                    if "OK" in r[1]:
+                        # command executed successfully
+                        v = r[1].strip()
+                    elif not 'ERR' in r[1]:
+                        # got a number
+                        v = float(r[1].strip())
+                        # ... what should we do with it ?
+                    else:
+                        # ERR found -> decode error message
+                        v = r[1].strip()
+                        #raise ValueError(f"Stage error '{response}'")
+                # collect the log of positions
+                log.append((line, response, v))
+            except ValueError as e:
+                raise ValueError(f"Invalid line in script: '{line}'. Error: {e}")
+        return log
+
+
+#--------------------------------------------------------------------------------------------------
+
+class XYLinearStage():
+    """Driver for the XY table using linear stages for X and Y direction."""
+
+    def __init__(self, X: LinearStage, Y: LinearStage, resource_string: str, logger=None, timeout: float = 5.0) -> None:
+        """Creates a XY linear stage device using an MOC-01/MOC-02 from Optics Focus Instruments Co., Ltd.
+
+        Depending on the resource string, it creates either a network socket or a COM port connection to the stage.
+        The Termination is set to CR for send and LF for receive direction.
+
+        Valid resource strings:
+            hostname:port, e.g. "172.25.101.43:2000" for IPv4 172.25.101.43 at port 2000
+            comport,baud,linesettings, e.g."COM7,9600,8N1" for COM7 with 9600 baud and 8 bits No parity, 1 stop bit
+
+        Args:
+            config (dict): configuration dictionary for the stage:
+
+                'subdivision': 2,  # from back of motion controller
+                'step_angle': 0.9,  # from the side of the stage
+                'pitch': 4,  # in mm - from the optics focus website
+                'max_stage_position': 10000,
+
+            resource_string (str): Resource connection of the XY-table.
+            timeout (float): timeout for socket or serial connection.
+
+        Returns:
+            Eth2SerialDevice | SerialComportDevice: a device that can transparently being used
+                by its function .request() to scan for input.
+
+        """
+
+        if "," in resource_string:
+            ## serial port which connects only on send or receive respecting the given timeouts in the send/request call.
+            #self.dev = SerialComportDevice(resource_string, termination=("\n", "\r"))
+            # serial com port which keeps the connection open all the time
+            self.dev = SerialComportDevicePermanentlyOpen(resource_string, termination=("\r","\n"), timeout=timeout)
+        else:
+            # socket port which needs an open connection with timeout. The first call does not set the timeout.
+            self.dev = Eth2SerialDevice(resource_string, termination=("\r","\n"), open_connection=True)
+            # now the connection is open with timeout setting
+            self.dev.connect_socket(timeout=timeout)
+
+        # create a tuple of stages
+        self.stages = (X, Y)
+        self.pulse_period = 30 / (0 + 1)  # assuming the initial speed is 0  -> pulses/ms
+        # Create log handler
+        self.logger = logger  
+        self._is_offline = False
+        # Flag set whenever a UnicodeDecodeError/ValueError (light curtain triggered event) is detected
+        # and cleared only after a successful home + move recovery in the state machine.
+        # This prevents table_index from advancing before the target is actually reached.
+        self.emergency_event_triggered = False
+        # Recovery context: set before EVERY movement so that state 30 always knows
+        # what position was being targeted and where to resume after successful recovery.
+        # Shape: {"target": (x, y), "return_state": int, "advance_table": bool}
+        #   target        – physical (mm) destination that was being moved to.
+        #                   Use (0.0, 0.0) when the move is a home() call.
+        #   return_state  – state to transition to after recovery succeeds.
+        #   advance_table – True when table_index must be incremented on success
+        #                   (only needed for movements driven by table_of_positions).
+        self._recovery_context = None
+        # -> _duration = abs(displacement) / self.pulse_period   # in ms
+
+
+    #----------------------------------------------------------------------------------------------
+
+    def clear(self) -> None:
+        """Clears the input and output buffer of the device."""
+        _ = self.dev.request(None, timeout=0.2)  # clear buffers
+
+    #----------------------------------------------------------------------------------------------
+
+    def command(self, command, message: str = None) -> Tuple[int | bool, str | None]:
+        if message:
+            global DEBUG
+            _log = getLogger(__name__, DEBUG)
+            _log.debug(message)
+
+        try:
+            response = self.dev.request(command, timeout=5.0, pause_after_write=5)
+
+            if 'OK' in response:
+                return True, response
+            elif not 'ERR' in response:
+                return True, int(''.join(x for x in response if x.isdigit()))
+            else:
+                _err = int(response.split('ERR')[-1])
+                _err_msg = {
+                    1: "communication error/timeout",
+                    2: "communication not established",
+                    3: "invalid command",
+                    4: "stop command",
+                    5: "limit switch is valid",
+                }
+                return False, f"Stage error '{response}': {_err_msg.get(_err, 'Unknown error')}"
+
+        except (UnicodeDecodeError, ValueError) as e:
+            # Reset by stopping the current interrupted movement command in the motion controller
+            self.stop() 
+
+            # --- LOGGING POINT 1: STOP DETECTED ---
+            # We close the 'RUNNING' session and start the 'DOWNTIME' clock
+            if hasattr(self, 'logger') and self.logger:
+                self.logger.start_downtime(
+                    "Light curtain / emergency stop / power interruption",
+                    details="Motion controller and welding machine communication lost during the program execution"
+                )
+
+            print(f"\n⚠️ [INTERRUPTION] Light Curtain or Emergency Stop triggered!")
+            print("🛑 Waiting for hardware to power back on...")
+
+            # Wait for hardware to become reachable again
+            while True:
+                try:
+                    self.dev.close()
+                    sleep(2)
+                    self.dev.open()
+                    # Verification ping: ensure controller is actually processing commands
+                    response = self.dev.request("?R", timeout=2.0)
+                    if response and "OK" in response:
+                        break   # firmware confirmed ready
+
+                except Exception:
+                    # Still no power or serial buffer is garbled
+                    sleep(1)
+
+            print("✨ Hardware restored.")
+
+            # --- LOGGING POINT 2: RESUME ---
+            # We close the 'DOWNTIME' session and start the 'RUNNING' clock again
+            if hasattr(self, 'logger') and self.logger:
+                self.logger.end_downtime(
+                    # "System reset / Power restored",
+                    details="Motion controller and welding machine communication restored"
+                )
+
+            # CRITICAL: Do NOT retry the original command here.
+            # The motion controller has been power-cycled, so its internal step
+            # counter has reset to 0. Retrying a relative move command (e.g. X+1200)
+            # from position 0 would move to the completely wrong location.
+            # Instead, signal the state machine so it can: wait for operator button,
+            # call home() to re-reference zero, then re-issue the move.
+            self.emergency_event_triggered = True
+            for stage in self.stages:
+                stage.position = None  # invalidate cached positions — they are now meaningless
+
+            print("⚠️  Position lost. State machine will home and retry after button press.")
+            return False, "POWER_CUT_RECOVERED"
+    
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def _extract_position_from_response(self, from_string: str) -> int:
+        position = int(from_string.split('\r')[-1][1:])  # returns "?X\rX+0000\n" with X=stage name
+        return position
+
+
+    #----------------------------------------------------------------------------------------------
+
+    @property
+    def position(self) -> Tuple[int, int]:
+        for stage in self.stages:
+            cmd, msg = stage.read_position_command()
+            ok, response = self.command(cmd, message=msg)
+
+            if ok:
+                # update stage position from motion controller response
+                # stage.position = self._extract_position_from_response(response)
+                stage.position = int(response)
+
+        return tuple([stage.position for stage in self.stages])
+
+    @property
+    def positions_in_mm(self) -> Tuple[int, int]:
+        positions_in_mm = ()
+        for stage in self.stages:
+            cmd, msg = stage.read_position_command()
+            ok, response = self.command(cmd, message=msg)
+            if ok:
+                # update stage position from motion controller response
+                # stage.position = self._extract_position_from_response(response)
+                stage.position = int(response)
+                positions_in_mm += (stage.convert_steps_to_mm(response),)
+                
+        return positions_in_mm
+
+    #----------------------------------------------------------------------------------------------
+
+    def get_current_stage_speed(self) -> int | None:
+        """Get the speed of the current stage and return it plain.
+
+        Returns:
+            int, float: _description_
+        """
+
+        ok, response = self.command("?V", message="Getting stage speed")
+        if ok:
+            _v_speed = int(response)  
+            self.pulse_period = 30 / (_v_speed + 1)  # update pulse period -> pulses/ms
+            return _v_speed
+        return None
+
+
+    #----------------------------------------------------------------------------------------------
+
+
+    def set_current_stage_speed(self, v_speed: float | int) -> bool:
+        """Set the velocity of the current stage as stage speed value.
+
+        Args:
+            speed (float | int): speed of the stage in mm/s
+
+        Returns:
+            bool: _description_
+        """
+
+        _v_speed = int(round(v_speed))
+        assert _v_speed >= 0 and _v_speed <= 255, "Stage speed must be between 0 and 255."
+        ok, _ = self.command(f"V{_v_speed}", message="Setting stage speed")
+        return ok
+
+
+    #----------------------------------------------------------------------------------------------
+
+    def is_connected(self) -> bool:
+        # this command is for all stages
+        ok, response = self.command('?R')
+        # if 'OK' in response:
+        #     return True
+        # else:
+        #     return False
+        return ok
+
+    #----------------------------------------------------------------------------------------------
+
+    def goto_position(self, new_position_x: float | int | str, new_position_y: float | int | str, units_in_mm: bool = True) -> bool:
+        """Calculates the absolute new position on the linear stages and moves them to this position.
+
+        Args:
+            new_position_x (float | int | str): _description_
+            new_position_y (float | int | str): _description_
+
+        Raises:
+            ValueError: _description_
+
+        Returns:
+            bool: _description_
+        """
+
+        # Issue physical movement command to hardware
+        for stage, new_position in zip(self.stages, (new_position_x, new_position_y)):
+            if units_in_mm:
+                _new_position = stage.convert_mm_to_steps(new_position)
+            else:
+                _new_position = new_position
+
+            cmd, msg = stage.absolute_position_to_motion_command(_new_position)
+            if cmd is not None and cmd != "":
+
+                ok, response = self.command(cmd, message=msg)
+                if not ok:
+                    return False  # error during motion command
+
+        x, y = self.position # update positions after motion
+        return True
+
+    #----------------------------------------------------------------------------------------------
+
+    def center_position(self) -> int | bool:
+        """Moves stage to the absolute center"""
+        return self.goto_position('center', 'center')
+
+    #----------------------------------------------------------------------------------------------
+
+    def end_position(self) -> int | bool:
+        """Moves stage to the absolute end"""
+        return self.goto_position('end', 'end')
+
+    #----------------------------------------------------------------------------------------------
+
+    def move(self, x_displacement: float | int, y_displacement: float | int, units_in_mm: bool = True) -> bool:
+        """Moves the stage in the positive or negative direction depending on the displacement value's sign.
+
+        Args:
+            x_displacement (float | int): positive or negative displacement in x direction [in mm if units_in_mm=True]
+            y_displacement (float | int): positive or negative displacement in y direction [in mm if units_in_mm=True]
+            units_in_mm (bool, optional): If true, displacements are interpreted as millimeters otherwise in steps. Defaults to True.
+
+        Returns:
+            int | Literal[True]: _description_
+        """
+
+        for stage, displacement in zip(self.stages, (x_displacement, y_displacement)):
+            if units_in_mm:
+                cmd, msg = stage.physical_displacement_to_motion_command(displacement)
+            else:
+                cmd, msg = stage.displacement_to_motion_command(displacement)
+            ok, response = self.command(cmd, message=f"Moving stage {msg}")
+            if not ok:
+                return False  # error during motion command
+        return True
+
+    #----------------------------------------------------------------------------------------------
+
+    def home(self) -> bool:
+        """Get the command string to reset the stage position so that the absolute zero position (home)."""
+
+        for stage in self.stages:
+
+            cmd, msg = stage.home_command()
+            ok, _ = self.command(cmd, message=msg)
+            if ok:
+                stage.position = 0  # to only way to set position initially
+            else:
+                print("Error during homing!")
+                print(_)
+                return False  # error during homing
+
+        return True
+
+    #----------------------------------------------------------------------------------------------
+
+    def reset(self) -> bool:
+        return self.home()
+
+    #----------------------------------------------------------------------------------------------
+
+    def stop(self) -> bool:
+        """Get the command string to stop the stage movement immediately"""
+
+        ok, msg = self.command("S", message=f"Stopping current stage ")  # STOP command of stage to motion controller
+        # response should contain an ERRx code then it sends an OK.
+        if ok:
+            self.clear()
+        return ok
+
+
+#--------------------------------------------------------------------------------------------------
+# this definition can be stored herein or into a separate configuration file (.yaml)
+DEFINITION_OF_STAGES = {
+    "xytable_A" :{
+        "resource_str": "COM5,9600,8N1",  # can also come from station_config.yaml
+        "type": "translation_stage",
+        "axis": [
+            {
+                "name": "X",
+                'subdivision': 2,
+                'step_angle': 1.8,
+                'pitch_of_lead_screw': 4,
+                'travel_range_mm': 350.0,
+            },
+            {
+                "name": "Y",
+                'subdivision': 2,
+                'step_angle': 1.8,
+                'pitch_of_lead_screw': 4,
+                'travel_range_mm': 400.0,
+            },
+        ],
+    },
+    # define more stages here as needed
+    # reference it by name in the database table `spsconfig`, column `parameter`
+}
+
+#
+# from the database table `spsconfig`, column `parameter`
+#
+
+DEMO_PARAMETERS = {
+    # already existing parameters used to show the cell position on screen
+    "sequence_to_cell_pole": "Cell1-,Cell2+,Cell3-Cell4+,Cell5-,Cell6+,Cell7-,Cell8-,Cell9+,Cell10-,Cell11+,Cell12-,Cell13+,Cell14-,Cell15-,Cell16+,Cell17-,Cell18+,Cell19-,Cell20+,Cell21-,Cell15+,Cell16-,Cell17+,Cell18-,Cell19+,Cell20-,Cell21+,Cell8+,Cell9-,Cell10+,Cell11-,Cell12+,Cell13-,Cell14+,Cell1+,Cell2-,Cell3+,Cell4-,Cell5+,Cell6-,Cell7+",
+    # this is for xy table automation
+    "automation": {
+        "stage": "xytable_A",
+        "positions": {
+            "units_in_mm": True,
+            "home": (50.0, 100.5),  # position to insert the cellstack for start or to flip its side at 50% of welding
+            "welding": [
+                (150.0, 100.0),
+                (150.0, 118.0),
+                (150.0, 136.0),
+                # ... 41 positions total ...
+            ],
+        }
+    },
+}
+
+#----------------------------------------------------------
+
+def generate_stage_from_parameter(parameter: dict) -> None | XYLinearStage:
+    """Generates a LinearStage object from the given parameters dictionary.
+
+    Args:
+        parameters (dict): Dictionary containing stage parameters.
+        name (str): Name of the stage ('X' or 'Y').
+
+    Returns:
+        LinearStage: Configured LinearStage object.
+    """
+
+    global DEFINITION_OF_STAGES
+
+    stage = None
+    if parameter is not None and "automation" in parameter:
+        if "stage" in parameter["automation"]:
+            if parameter["automation"]["stage"] in DEFINITION_OF_STAGES:
+                stage_definition = DEFINITION_OF_STAGES[parameter["automation"]["stage"]]
+                _resource_string = stage_definition["resource_str"]
+                # prepare the stages of a linear XY table
+                stages = ()
+                if "translation_stage" == stage_definition["type"]:
+                    for stage in stage_definition["axis"]:
+                        # adds x,y etc. stages as they come from configuration
+                        stages += (LinearStage(
+                            name = stage["name"],
+                            subdivision = stage["subdivision"],
+                            step_angle = stage["step_angle"],
+                            pitch_of_lead_screw = stage["pitch_of_lead_screw"],
+                            travel_range_mm = stage["travel_range_mm"],
+                        ),)
+                    # create the XY table driver
+                    if len(stages) > 1:
+                        stage = XYLinearStage(stages[0], stages[1], _resource_string)
+
+    return stage
+
+
+
+#--------------------------------------------------------------------------------------------------
+
+class StageStates(Enum):
+    # INIT = 0
+    # START = 1
+    # MOVE_POSITION = 4
+    # WAIT_POSITION_REACHED = 5
+    # POSITION_REACHED = 6
+    # FLIP_STACK = 8
+    # FEEDBACK_FROM_USER = 9
+    # END = 10
+    # STOP = 99
+
+    HOMING = -1
+    INIT = 0
+    START = 1
+    MOVE_NEXT_COMMAND = 2
+    PROCESS_COMMAND = 3
+    WAIT_WELDING_DONE = 4
+    CHECK_WELD_RESULT = 5
+    FULL_AUTOMATION = 6
+    ERROR_WELD = 7
+    EMERGENCY_HANDLING = 30
+    GRINDING = 31
+
+
+
+#--------------------------------------------------------------------------------------------------
+
+
+class OurXYAWS3Modbus(AWS3Modbus):
+
+    def setup_device(self):
+        self.machine_name = self.read_name().strip()
+        self._toggle_bits = self._read_toggle_bits()
+
+    def is_machine_ready(self) -> tuple:
+        self._sync_modbus_timing()
+        # following includes a verification helper to simulate a weld process with
+        # a real machinge but without really doing the welding process (saves material and time)
+        bits = self.read_coils(97-1, 8, unit_address=3) if not self._verification_weld_resultbits else self._verification_weld_resultbits
+        d = {
+            "ready": 1 if bits[0] else 0,
+            "operational_mode": 1 if bits[1] else 0,  # 0=auto, 1=step
+            "reject": 1 if (bits[2] or bits[4]) else 0,  # combine both axes: either one fails
+            "hfi_device_fault": 1 if bits[5] else 0,
+            "ok": 1 if (bits[6] and bits[7]) else 0  # combine both axes: both need to be good
+        }
+        return bits[0], d
+    
+    def trigger_welding_start(self, adam, index, state=True) -> bool:
+        """Simulates a foot pedal press by pulsing a Digital Output."""
+        try:
+            # Set ouput value
+            adam.set_digital_output(index, state)
+            print(f"ADAM-6052 DO index {index} turned on:", state)
+            # sleep(0.85) # Sleep time to wait for welding head to move down -> contact with cell tab -> welding head move up
+            return True
+        except Exception as e:
+            print(f"❌ Failed to trigger ADAM-6052: {e}")
+            return False
+        
+    def toggle_welding_mode(self, adam, index, state) -> bool:
+        """Turrn off ADAM DO output (Disable X1.30 input to welding machine)"""
+        try:
+            # Set ouput value
+            adam.set_digital_output(index, state)
+            # print(f"ADAM-6052 DO index {index} turned on:", state)
+            return True
+        except Exception as e:
+            print(f"❌ Failed to trigger ADAM-6052: {e}")
+            return False
+
+
+def test_aws3_communication(resource_str: str) -> None:
+
+    try:
+        dev = OurXYAWS3Modbus(resource_str)
+        dev.open()
+        dev.setup_device()
+        # keep open
+
+        while True:
+            print(f"Machine name: {dev.machine_name}")
+            print(dev.is_machine_ready())
+            print(dev.read_program_name(axis=1), dev.read_program_no())
+            print(dev.read_axis_counter(1))
+            print(dev.read_machine_lock_status())
+            sleep(1.0)
+
+    except Exception as ex:
+        print(ex)
+        print("Using dummy AWS3 Modbus driver for test purposes.")
+
+
+def auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y):
+    welding_position = 0
+
+    for _x, _y in POSITIONS_OF_PART[:]:
+        if isinstance(_x, str):
+            if _x == "PAUSE" and _y is not None:
+                print(f"Pause for {_y} seconds!")
+                sleep(_y)
+            elif _x == "USER":
+                # Wait for operator to press "MOVE" button (connected with ADAM-6052)
+
+                c = input("Please press 'c' to continue or 's' to stop: ").strip()
+                if c.lower() == 's':
+                    print(f"Process stopped at welding position {welding_position}.")
+                    xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y)
+                    return
+                
+            elif _x == "RESTART":
+                pass
+                # Need to rerun the process from the beginning (or run the next process)
+                # c = input("Please press 'c' to continue or 's' to stop: ").strip()
+                # if c.lower() == 'c':
+                #     auto_run(xy_table, welder, POSITIONS_OF_PART, WORKER_POSITION_X, WORKER_POSITION_Y)
+                # else:
+                #     return
+                
+            elif _x == "WELD":
+                welding_position += 1
+                # Need to trigger welding machine and wait for finish
+                while True:
+                    _ready, _ = welder.is_machine_ready()
+                    if _ready:
+                        break
+                    sleep(0.01)
+                
+                # Make sure program is set
+                welder.write_program_no(int(_y))
+                sleep(0.01)
+                while welder.read_program_no() != int(_y):
+                    sleep(0.01)
+                pass
+
+                # Welding automated start could be implemented here (Full automation)
+                # Write your code here
+
+                print(f"Welding position {welding_position}.")
+                print("Wait until welding is done.")
+                while True: 
+                    sleep(0.01)
+                    _ready, _ = welder.is_machine_ready()
+                    if not _ready:
+                        continue
+
+                    if welder.is_toggle_bit_changed():
+                        break  # Welding is done
+                
+                # Get welding results
+                _, weld_result = welder.is_machine_ready()
+                # ''' SIMULATION MOVING XYTABLE IN CASE WELDING MACHINE DOES NOT WORK'''
+                # weld_test_result = input("Welding result ok or failed or No signal: ").lower().strip()
+                weld_test_result = ""
+
+                if weld_result["ok"] == 1 or weld_test_result == "ok":          # Case when welding result is ok
+                    #is_operator_button_ok()   # Check operator press
+                    print("Welding ok")
+
+                    continue
+                elif weld_result["reject"] == 1 or weld_test_result == "failed":    # Case when welding failed
+
+                    print("Welding failed")
+                    # Stops welding at failed position. Then, operator changes to new pack, then scans in new label -> 
+                    # xy table moves back to worker position to restart new welding process
+                    xy_table.goto_position(WORKER_POSITION_X,WORKER_POSITION_Y)
+
+                    # c = input("Please press 'c' to continue or 's' to stop: ").strip()
+                    # if c.lower() == 'c':
+                    #     break
+                    # else:
+                    #     return
+
+
+                else:
+                    # Case when no welding signal is received
+                    # In this case, xytable stops. Operator moves battey pack out, and puts pack back in position
+                    # Then, operator can press 'c' to continue moving the xytable to the next welding position
+                    
+                    print("No welding signal received!")
+                    c = input("Please press 'c' to continue or 's' to stop: ").strip()
+                    if c.lower() == 's':
+                        print(f"Process stopped at welding position {welding_position}.")
+                        xy_table.goto_position(WORKER_POSITION_X, WORKER_POSITION_Y)
+                    else:
+                        continue
+
+                # Stop parsing
+                break
+
+            else:
+                print(f"Unknown statement {_x}!")
+            continue
+
+        if not xy_table.goto_position(_x, _y, units_in_mm=True):
+            print(f"Error moving to position X={_x} Y={_y}")
+        else:
+            print(f"Moved to position X={_x} Y={_y}, current position: {xy_table.position}")
+            # Start welding here
+        sleep(0.3)
+
+
+# def wait_for_move_or_grind(adam) -> str:
+#     """Block until either Move or Grind button is pressed in emergency cases.
+#     Returns 'move' or 'grind' so the caller can route accordingly."""
+#     print("Press MOVE for normal recovery, or GRIND for electrode grinding recovery...")
+#     while True:
+#         if adam.get_digital_input(index=1):   # Move button
+#             print("Move button pressed — normal recovery.")
+#             return 'move'
+#         if adam.get_digital_input(index=0):   # Grind button
+#             print("Grind button pressed — grinding recovery.")
+#             return 'grind'
+#         sleep(0.1)
+
+
+def is_grind_button_pressed(adam) -> bool:
+    
+    '''
+    1. Operator presses this button to stop the xytable movement during the welding process without shutting down the machines
+    2. Then Operator presses again to move xytable to Grinding Position to grind the electrodes
+    3. Then Operator presses again to continue moving to last target position.
+    '''
+
+    print("Waiting for Operator to press 'GRIND'...")
+
+    while True:
+        if adam.get_digital_input(index=0):  # ← change index to match wiring
+            print("Grind button pressed! Moving to grinding position...")
+            return True
+        sleep(0.1)
+
+
+def is_move_button_pressed(adam) -> bool:
+
+    print("Waiting for Operator to press 'MOVE'...")
+    while True:
+        # 1. Read the button state
+        is_pressed = adam.get_digital_input(index=1)
+        
+        # 2. If pressed, exit the loop and return
+        if is_pressed:
+            if not is_light_curtain_activated(adam) and not is_emergency_button_pressed(adam):
+                print("Move button pressed! Moving to next position...")
+                return is_pressed
+            else:
+                print("Light curtain activated! Please deactivate LC first, then press the Move button again.")
+        # 3. VERY IMPORTANT: Sleep for a short time
+        # This prevents your laptop CPU from hitting 100% 
+        sleep(0.1)
+
+def is_emergency_button_pressed(adam) -> bool:
+    return adam.get_digital_input(index=2)
+
+def is_light_curtain_activated(adam) -> bool:
+    return adam.get_digital_input(index=3)
+
+def is_sticky_electrode(adam) -> bool:
+    return not adam.get_digital_input(index=4)
+
+def is_weld_result_failed(adam) -> bool:
+    # Out of limit value from welding machine (Out-of-limit = True means NG, False means OK)
+    return adam.get_digital_input(index=6)
+
+def is_position_close_to(position: tuple, target_position: tuple, tolerance: float) -> bool:
+    """
+    Check if position is close to target_position within tolerance percent.
+    """
+    if len(position) != 2 or len(target_position) != 2:
+        raise ValueError("Position and target_position must both be (x, y) tuples")
+    # if position == ():
+    #     x, y = 1000.0, 1000.0 #Random big values
+    # else:
+    x, y = position
+    tx, ty = target_position
+
+    def within_tolerance(value: float, target: float) -> bool:
+        # Handle zero target safely
+        if target == 0:
+            return abs(value - target) <= tolerance
+        return abs(value - target) <= abs(target) * tolerance
+
+    return within_tolerance(x, tx) and within_tolerance(y, ty)
+
+
+def table_state_machine(xy_table, welder, adam, udi_sock, logger, current_state: int, table_of_positions: list, table_index: int, welding_position: int) -> Tuple[int, int, int]:
+    global weld_test_result
+    WORKER_POSITION_X, WORKER_POSITION_Y = 166.4, 60.075
+    UNLOAD_POSITION_X, UNLOAD_POSITION_Y = 166.4, 60.075    # Operator move to this position to unload the battery pack
+    GRIND_POSITION_X,  GRIND_POSITION_Y  = 146.09, 218.705   # Operator move to this position to grind the electrodes
+
+    _next_state = current_state
+    sleep(0.01)    # Limit communication on LAN
+
+    match current_state:
+        case StageStates.HOMING:  # Handle case light curtain interrupted when xytable is homing.
+            if xy_table.is_connected():
+                current_pos = xy_table.positions_in_mm
+                print(f"Current xy_table's position: {current_pos}")
+
+                if current_pos != (0, 0):
+                    # Case 1: table not at home — operator must confirm before homing
+                    if is_move_button_pressed(adam):                        
+
+                        # Set recovery context before every movement (covers all power-cut cases)
+                        xy_table._recovery_context = {
+                            "target": (0.0, 0.0),    # home position
+                            "return_state": StageStates.INIT,       # go to state 0 after recovery
+                            "advance_table": False,
+                        }
+                        xy_table.emergency_event_triggered = False
+                        xy_table.home()
+                        sleep(0.01)
+                        if xy_table.emergency_event_triggered:
+                            logger.log_event(
+                                "RECOVERY_HOMING_STARTED",
+                                machine_state=current_state,
+                                welding_position=welding_position,
+                                target=(0.0, 0.0),
+                                reason="Power/safety interruption",
+                                details="Start the recovery process after power/safety interruption"
+                            )
+
+                            print("⚠️  Safety event triggered during startup home. Entering recovery.")
+                            _next_state = StageStates.EMERGENCY_HANDLING
+                        else:
+                            print("Move to state 0")
+                            _next_state = StageStates.INIT
+                else:
+                    print("Move to state 0")
+                    _next_state = StageStates.INIT
+
+            else:
+                _next_state = StageStates.HOMING
+
+        case StageStates.INIT:  # initialize/reset variables to start new process
+
+            table_index = -1
+            welding_position = 0
+            weld_test_result = ""
+            _udi = None
+
+            print("Variables resetted!")
+            print(f"XYTable: Listening for UDI broadcasts on UDP port {UDI_BROADCAST_PORT}")
+            print("Please scan UDI label of new battery pack!")
+            while True:
+                received = read_input_from_scanner(udi_sock)
+                if received != "":
+                    _udi = received
+                    print(f"Received UDI: {_udi}")
+                
+                    # Write into log file
+                    logger.new_cycle(udi=_udi)
+                    logger.log_event(
+                        "UDI_SCANNED",
+                        machine_state=current_state,
+                        user_action="UDI scanned",
+                        details=f"UDI={_udi}"
+                    )
+
+                # Only move on when we have a valid UDI
+                if _udi is not None:
+                    print("Move to state 1")
+                    _next_state = StageStates.START
+                    break
+
+
+        case StageStates.START:
+            # target_x, target_y = table_of_positions[table_index]
+            if xy_table.is_connected():    
+                current_pos = xy_table.positions_in_mm
+                print(f"Current xy_table's position: {current_pos}")
+
+                if is_move_button_pressed(adam):
+
+                    # Check if the previous target position before USER/MOVE command is GRIND POSITION -> log completed grind event
+                    previous_x, previous_y = table_of_positions[table_index-1]
+                    if not isinstance(previous_x, str) and is_position_close_to((previous_x, previous_y), (GRIND_POSITION_X, GRIND_POSITION_Y), 0.01):
+                        logger.log_event(
+                            "GRIND_COMPLETED",
+                            machine_state=current_state,
+                            user_action="START button pressed",
+                            details="Operator completed the manual grinding and pressed the START button to move to the next welding position"
+                        )
+
+                    xy_table.emergency_event_triggered = False
+                    _next_state = StageStates.MOVE_NEXT_COMMAND
+                    print("Move to state 2")
+
+                    logger.log_event(
+                        "START_BUTTON_PRESSED",
+                        machine_state=current_state,
+                        user_action="START button pressed",
+                        details="Operator pressed the Start button"
+                    )
+
+            else:
+                _next_state = StageStates.START
+
+        case StageStates.MOVE_NEXT_COMMAND:
+            # move to next command in POSITIONS_OF_PART list
+            print(f"Motion Controller Connected: {xy_table.is_connected()}")
+
+            if xy_table.is_connected():
+                table_index += 1
+
+                # Check if table is finished
+                if table_index >= len(table_of_positions):
+                    _next_state = StageStates.INIT
+                    print("Moved to state 0")
+                else:
+                    print("Moved to state 3")
+                    _next_state = StageStates.PROCESS_COMMAND
+
+        case StageStates.PROCESS_COMMAND:
+            x, y = table_of_positions[table_index]
+
+            if isinstance(x, str):
+                if x == "PAUSE" and y is not None:
+                    print(f"Pause for {y} seconds!")
+                    sleep(y)
+                    _next_state = StageStates.MOVE_NEXT_COMMAND
+
+                elif x == "USER":
+                    print("Move to state 1")
+                    _next_state = StageStates.START
+
+                elif x == "WELD":
+                    print("Move to WELD command!!!")
+
+                    is_connected = xy_table.is_connected()
+
+                    target_x, target_y = table_of_positions[table_index-1]   # Get current position before welding
+                    # Set recovery context BEFORE the move so that state 30
+                    # knows the exact target and where to resume if safety event triggered mid-move.
+                    xy_table._recovery_context = {
+                        "target": (target_x, target_y),
+                        "return_state": StageStates.PROCESS_COMMAND,     # resume at state 3 after recovery
+                        "grind_phase": 0,
+                        "advance_table": False,  # advance table_index only after confirmed arrival    #True
+
+                    }
+
+                    if not is_connected:  
+                        logger.log_event(
+                            "RECOVERY_STARTED",
+                            machine_state=current_state,
+                            welding_position=welding_position,
+                            target=(target_x, target_y),
+                            reason="Power/safety interruption",
+                            details="Start the recovery process after power/safety interruption"
+                        )
+                    
+                        print(f"Motion Controller Connected1: {is_connected}")
+                        welder.toggle_welding_mode(adam, 7, False) # Ensure disabled
+
+                        print(f"⚠️  Safety event triggered while moving to X={target_x} Y={target_y}. Entering recovery.")
+                        _next_state = StageStates.EMERGENCY_HANDLING
+
+                    else:
+                        print(f"Motion Controller Connected2: {is_connected}")
+                        print("✅ Position safe. Enabling foot pedal.")
+                        welder.toggle_welding_mode(adam, 7, True)  # <-- TURN PEDAL ON
+                        sleep(0.1) # Allows time for welding machine input to be turned on (otherwise it skips first point)
+                        welding_position += 1
+
+                        logger.log_event(
+                            "PROGRAM_SELECTION_STARTED",
+                            machine_state=current_state,
+                            welding_position=welding_position,
+                            required_program=int(y),
+                            details="Welding program was set on the welding machine"
+                        )
+
+                        # Make sure program is set
+                        welder.write_program_no(int(y))
+                        sleep(0.01)
+                        while welder.read_program_no() != int(y):
+                            sleep(0.01)
+                        pass
+
+                        actual_program = welder.read_program_no()
+
+                        logger.log_event(
+                            "PROGRAM_VERIFIED",
+                            machine_state=current_state,
+                            welding_position=welding_position,
+                            required_program=int(y),
+                            actual_program=actual_program,
+                            details="Welding program was verified before actual welding",
+                        )
+
+                        logger.log_event(
+                            "WELD_STARTED",
+                            machine_state=current_state,
+                            welding_position=welding_position,
+                            target=(target_x, target_y),
+                            required_program=int(y),
+                            actual_program=actual_program,
+                            details="Start the welding process"
+                        )
+
+                        print(f"Welding position {welding_position}.")
+                        print("Wait until welding is done.")
+                        _next_state = StageStates.FULL_AUTOMATION
+
+                else:
+                    print(f"Unknown statement {x}!")
+                    _next_state = StageStates.INIT
+
+            else:
+                # position change driven by table_of_positions
+                if xy_table.is_connected():
+                    # Set recovery context BEFORE the move so that state 30
+                    # knows the exact target and where to resume if safety event triggered mid-move.
+                    xy_table._recovery_context = {
+                        "target": (x, y),
+                        "return_state": StageStates.PROCESS_COMMAND,     # resume at state 3 after recovery
+                        "grind_phase": 0,
+                        "advance_table": True,  # advance table_index only after confirmed arrival
+
+                    }
+                    # xy_table.emergency_event_triggered = False
+                    # xy_table.goto_position(x, y, units_in_mm=True)
+
+                    if xy_table.emergency_event_triggered: 
+                        logger.log_event(
+                            "RECOVERY_STARTED",
+                            machine_state=current_state,
+                            welding_position=welding_position+1,
+                            target=(x, y),
+                            reason="Power/safety interruption",
+                            details="Start the recovery process after power/safety interruption"
+                        )
+
+                        print(f"⚠️  Safety event triggered while moving to X={x} Y={y}. Entering recovery.")
+                        _next_state = StageStates.EMERGENCY_HANDLING
+
+                    elif is_sticky_electrode(adam):
+                        print("⚠️ Sticky electrode event occurs -> stop at current position and enter grind flow")
+                        logger.log_event(
+                            "STICKY_ELECTRODE",
+                            machine_state=current_state,
+                            actual=xy_table.positions_in_mm,
+                            details="Sticky electrode event occurs while welding"
+                        )
+
+                        _next_state = StageStates.GRINDING
+
+                    else:
+                        # Reset latch before starting motion
+                        xy_table.emergency_event_triggered = False
+
+                        logger.log_event(
+                            "MOVE_STARTED",
+                            machine_state=current_state,
+                            target=(x, y),
+                            details="Xytable starts moving to the next welding position"
+                        )
+
+                        is_move_successfully = xy_table.goto_position(x, y, units_in_mm=True)
+
+                        if xy_table.emergency_event_triggered:
+                            print(f"⚠️  Safety event triggered while moving to X={x} Y={y}. Entering recovery.")
+
+                            # Invalidate positions — physical table coordinate is no longer reliable
+                            for stage in xy_table.stages:
+                                stage.position = None
+
+                            _next_state = StageStates.EMERGENCY_HANDLING
+                        else:
+                            print(f"XYTABLE moves successfully: {is_move_successfully}")
+
+                            if not is_move_successfully:
+                                logger.log_event(
+                                    "MOVE_FAILED",
+                                    machine_state=current_state,
+                                    target=(x, y),
+                                    reason="Power/safety interruption",
+                                    details="Safety event happened during the xytable movement"
+                                )
+
+                                logger.log_event(
+                                    "RECOVERY_STARTED",
+                                    machine_state=current_state,
+                                    welding_position=welding_position,
+                                    target=(x, y),
+                                    reason="Power/safety interruption",
+                                    details="Start the recovery process after power/safety interruption"
+                                )
+
+                                print(f"⚠️  Safety event triggered while moving to X={x} Y={y}. Entering recovery.")
+                                _next_state = StageStates.EMERGENCY_HANDLING
+                            else:
+                                current_pos = xy_table.positions_in_mm
+                                print(f"Current xy_table's position: {current_pos}")
+
+                                # Check if xytable reaches target position
+                                if not is_position_close_to(current_pos, (x, y), 0.01):
+
+                                    logger.log_event(
+                                        "POSITION_MISMATCH",
+                                        machine_state=current_state,
+                                        # welding_position=welding_position + 1,
+                                        target=(x, y),
+                                        actual=current_pos,
+                                        position_result="FAIL",
+                                        reason="XY position outside tolerance",
+                                        details="XYtable did not reach the target welding position"
+                                    )
+
+                                    # Off-target without triggering safety event (e.g. limit switch).
+                                    # Keep same table_index and retry.
+                                    print(f"⚠️  Position mismatch — expected ({x},{y}), got {current_pos}. Retrying.")
+                                    _next_state = StageStates.PROCESS_COMMAND
+                                
+                                else:
+
+                                    logger.log_event(
+                                        "POSITION_VERIFIED",
+                                        machine_state=current_state,
+                                        # welding_position=welding_position + 1,
+                                        target=(x, y),
+                                        actual=current_pos,
+                                        position_result="PASS",
+                                        details="XYtable reached the target welding position"
+                                    )
+                                    previous_x, previous_y = table_of_positions[table_index-1]  
+                                    # If previous_x == WELD, skip, otherwise start grinding
+                                    if previous_y == None and is_position_close_to((x, y), (GRIND_POSITION_X, GRIND_POSITION_Y), 0.01):
+                                        logger.log_event(
+                                            "GRIND_STARTED",
+                                            machine_state=current_state,
+                                            target=(GRIND_POSITION_X, GRIND_POSITION_Y),
+                                            reason="Operator starts Grinding cycle after fully welding a battery side",
+                                            details="XYtable successfully reached the Grind position and operator can start grinding"
+                                        )
+
+                                    # Confirmed arrival — advance index and continue
+                                    table_index += 1
+
+                                    # Check if table is finished
+                                    _next_state = StageStates.INIT if table_index >= len(table_of_positions) else StageStates.PROCESS_COMMAND
+
+        case StageStates.FULL_AUTOMATION:
+            x, y = table_of_positions[table_index]  #Get required welding prog. no
+
+            # Auto-weld with ADAM6052 DO outputs without foot pedal - Use DO6
+
+            # Set recovery context to resume perfectly after power cycle
+            target_x, target_y = table_of_positions[table_index - 1]
+            xy_table._recovery_context = {
+                "target": (target_x, target_y),
+                "return_state": StageStates.PROCESS_COMMAND,
+                "grind_phase": 0,
+                "advance_table": False,
+            }
+
+            # PHASE CHECK: Have we already fired the trigger for this point?
+            if not getattr(welder, 'waiting_for_result', False):
+                
+                # --- PHASE 1: FIRE TRIGGER ---
+                _ready_pre_check, _ = welder.is_machine_ready()
+                if not _ready_pre_check:
+                    print("⏳ Waiting for AMADA Welder hardware to become READY...")
+                    _next_state = StageStates.FULL_AUTOMATION
+                    sleep(0.5)
+
+                else:
+                    print("🔥 Firing weld trigger once...")
+
+                    welder.trigger_welding_start(adam, 6, True)
+                    sleep(0.85) # waiting time for welding head to move down
+
+                    fk_recognized = False
+                    timeout_counter = 0
+                    timeout_limit = 50  # 5 seconds (50 * 0.1s)
+
+                    # Loop to hold the script until DI 7 goes HIGH
+                    while not fk_recognized and timeout_counter < timeout_limit:
+                        # Read the status of ADAM DI 7 (FK stepping contact)
+                        fk_status = adam.get_digital_input(7) 
+                        
+                        if fk_status == True:  # FK goes HIGH (True) when recognized
+                            fk_recognized = True
+                        else:
+                            sleep(0.1)
+                            timeout_counter += 1
+
+                    # Supplier Recommendation: If FK is recognized, START can be disabled.
+                    # (We also disable it on timeout as a fail-safe)
+                    welder.trigger_welding_start(adam, 6, False)
+
+                    if fk_recognized:
+                        print("✅ Stepping contact (FK) recognized. Weld START disabled.")
+                        print("⬆️ WELDING HEAD IS IN UPPER POSITION. Safe to move.")
+
+                        # Set the sub-state flag so we don't fire again on the next loop!
+                        welder.waiting_for_result = True 
+                        _next_state = StageStates.FULL_AUTOMATION
+                                        
+                    else:
+                        # Case when light curtain is triggered/ emergency button is pressed 
+                        print("❌ ERROR: FK signal timeout! Xytable must not move.")                            
+                        # Ensure we don't accidentally push into Phase 2 wait-loops
+                        welder.waiting_for_result = False 
+
+                        logger.log_event(
+                            "RECOVERY_STARTED",
+                            machine_state=current_state,
+                            welding_position=welding_position,
+                            target=(target_x, target_y),
+                            reason="Power/safety interruption",
+                            details="Start the recovery process after power/safety interruption"
+                        )
+                        
+                        print(f"⚠️ Recovery context set to X={target_x} Y={target_y}. Entering state 30.")
+                        welding_position -= 1     # Minus 1 because script will move to case PROCESS_COMMAND: welding_pos + 1 after escaping emergency case
+                        
+                        _next_state = StageStates.EMERGENCY_HANDLING
+            
+            else:
+                # --- PHASE 2: WAIT FOR RESULT ---
+                _ready, weld_result = welder.is_machine_ready()
+
+                toggle_changed = welder.is_toggle_bit_changed()
+                
+                # Consider the weld done if the machine says it's ready + toggle flipped,
+                # OR if we explicitly see a definitive OK or REJECT result in the Modbus data!
+                weld_finished = (_ready and toggle_changed) or (weld_result["ok"] == 1 or weld_result["reject"] == 1)
+                
+                if weld_finished:
+                # if welder.is_toggle_bit_changed():
+                    print("✅ Weld complete and acknowledged.")
+                    
+                    # CRITICAL: Reset the flag so the NEXT point can fire
+                    welder.waiting_for_result = False 
+                    
+                    print("Machine is ready:", _ready)
+                    print("Welding result:", weld_result)
+                
+                    if weld_result["ok"] == 1: #and is_weld_result_failed(adam) == False:
+                        
+                        logger.log_event(
+                            "WELD_RESULT",
+                            machine_state=current_state,
+                            welding_position=welding_position,
+                            weld_result="OK",
+                            required_program=int(y),
+                            actual_program=welder.read_program_no(),
+                            details="Welding completed successfully",
+                        )
+                        
+                        print("Welding ok!")
+                        if is_weld_result_failed(adam) == False:
+                            print("ADAM DI 6 weld result ok!")
+                        weld_test_result = 'ok'
+                        _next_state = StageStates.MOVE_NEXT_COMMAND
+                        print("Move to state 2")
+
+                    elif weld_result["reject"] == 1: #and is_weld_result_failed(adam) == True:
+                        
+                        logger.log_event(
+                            "WELD_RESULT",
+                            machine_state=current_state,
+                            welding_position=welding_position,
+                            weld_result="NOK",
+                            required_program=int(y),
+                            actual_program=welder.read_program_no(),
+                            reason="Welding reject signal",
+                            details="Welding failed",
+                        )
+                        
+                        weld_test_result = 'failed'
+                        print("Welding failed!")
+                        if is_weld_result_failed(adam) == True:
+                            print("ADAM DI 6 weld result failed!")
+                        print("Move to state 7")
+                        _next_state = StageStates.ERROR_WELD  # move to error handling state
+
+                else:
+                    # Case when no welding signal is received yet
+                    # print("⏳ No welding signal received. Still waiting for toggle bit to flip...")
+                    _next_state = StageStates.FULL_AUTOMATION
+
+        case StageStates.ERROR_WELD:
+            # Error handling: move to unload position so operator can remove failed pack.
+            print("Error during welding process! Please check the machine and try again.")
+            
+            # Ask supervisor to input a PASSCODE to continue with the welding process
+            # while True:
+            #     pwd = input("Please enter a password to continue: ").strip()
+            #     if pwd == "RRCVN@2026":
+            #         print("Correct password! Continue with the auto_run program ...")
+            #         break
+            #     else:
+            #         print("Incorrect password! Please try again.")
+
+            # This will pause the script and pop up the GUI
+            print("Waiting for supervisor to input a PASSCODE and unlock the machine...")
+            logger.log_event(
+                "SUPERVISOR_AUTHORIZATION_REQUESTED",
+                machine_state=current_state,
+                welding_position=welding_position,
+                user_action="Supervisor authorization requested",
+                reason="Welding failure",
+                details="Waiting for supervisor to come and input a PASSCODE to unlock the machine"
+            )
+
+            if ask_supervisor_password("0912"):
+
+                logger.log_event(
+                    "SUPERVISOR_AUTHORIZATION_GRANTED",
+                    machine_state=current_state,
+                    welding_position=welding_position,
+                    target=(UNLOAD_POSITION_X, UNLOAD_POSITION_Y),
+                    user_action="Supervisor entered correct password",
+                    details="Machine unlocked after welding failure",
+                )
+
+                print("Correct password! Continue with the welding process ...")
+            
+                if is_move_button_pressed(adam):  # Press button to move to unload position
+                    # Moving from failed-weld position to unload position.
+                    xy_table._recovery_context = {
+                        "target": (UNLOAD_POSITION_X, UNLOAD_POSITION_Y),
+                        "return_state": StageStates.INIT,      # after recovery, go back to state 1 (wait for operator)
+                        "advance_table": False,
+                    }
+                    xy_table.emergency_event_triggered = False
+                    xy_table.goto_position(UNLOAD_POSITION_X, UNLOAD_POSITION_Y)
+                    if xy_table.emergency_event_triggered:
+                        print(f"⚠️  Safety event triggered while moving to X={UNLOAD_POSITION_X}, Y={UNLOAD_POSITION_Y}). Entering recovery.")
+
+                        logger.log_event(
+                            "RECOVERY_STARTED",
+                            machine_state=current_state,
+                            welding_position=welding_position,
+                            target=(UNLOAD_POSITION_X, UNLOAD_POSITION_Y),
+                            reason="Power/safety interruption",
+                            details="Start the recovery process after power/safety interruption"
+                        )
+                        print("⚠️  Safety event triggered while moving to unload position. Entering recovery.")
+                        _next_state = StageStates.EMERGENCY_HANDLING
+                    else:
+                        _next_state = StageStates.INIT
+
+        case StageStates.EMERGENCY_HANDLING:
+            # ---------------------------------------------------------------
+            # SAFETY EVENT RECOVERY STATE
+            # ---------------------------------------------------------------
+            # Entered from ANY state whenever command() detects a safety event trigger
+            # (ADAM DI 2/3 = True or encounter UnicodeDecodeError/ValueError from the motion controller).
+            #
+            # Before every movement call in states 0, 1, 3, and 7, the calling
+            # state stores xy_table._recovery_context with:
+            #   "target"        – (x_mm, y_mm) the move was heading for.
+            #                     (0.0, 0.0) means the move was a home() call.
+            #   "return_state"  – state to transition to after successful recovery.
+            #   "advance_table" – whether to increment table_index on success.
+            #
+            # Recovery sequence (loops back to state 30 on any safety event trigger):
+            #   1. Read and validate _recovery_context.
+            #   2. Wait for operator to confirm it is safe (Move button).
+            #   3. home() to re-reference the absolute zero of the controller.
+            #   4a. If target is (0,0) → we are done (home WAS the goal).
+            #   4b. Otherwise goto_position(target).
+            #   5. Verify final position; if close enough → advance index (if
+            #      needed) and return to return_state. Otherwise loop back.
+            # ---------------------------------------------------------------
+
+            print("Moved to emergency handling state.")
+            print(f"Current welding position: {welding_position + 1}")
+
+            welder.toggle_welding_mode(adam, 7, False)    # Disable welding
+
+            ctx = xy_table._recovery_context
+            if ctx is None:
+                # Safety fallback: no context was set (should not happen in
+                # normal operation). Reset to the beginning to avoid stale state.
+                print("⚠️  Recovery entered with no context — resetting to state 0.")
+                _next_state = StageStates.INIT
+            else:
+                target_x, target_y = ctx["target"]
+                return_state       = ctx["return_state"]
+                advance_table      = ctx["advance_table"]
+
+                # Extract the current grind phase (defaults to 0 if not grinding)
+                phase = ctx.get("grind_phase", 0)
+                print(f"Current grind phase: {phase}")
+
+                xy_table.emergency_event_triggered = False
+
+                print(f"🔄 Recovery: target X={target_x} Y={target_y}, "
+                        f"will return to state {return_state} after success.")
+
+                logger.log_event(
+                    "SUPERVISOR_AUTHORIZATION_REQUESTED",
+                    machine_state=current_state,
+                    welding_position=welding_position+1,
+                    target=(target_x, target_y),
+                    user_action="Supervisor authorization requested",
+                    reason="Emergency/power interruption recovery",
+                    details="Waiting for supervisor to come and input a PASSCODE to unlock the machine"
+                )
+
+                # This will pause the script and pop up the GUI
+                print("Waiting for supervisor to input a PASSCODE and unlock the machine...")
+                if ask_supervisor_password("0912"):
+
+                    logger.log_event(
+                        "SUPERVISOR_AUTHORIZATION_GRANTED",
+                        machine_state=current_state,
+                        welding_position=welding_position+1,
+                        target=(target_x, target_y),
+                        user_action="Supervisor entered correct password",
+                        details="Machine unlocked for emergency recovery",
+                    )
+
+                    print("Correct password! Continue with the welding process ...")
+
+                    '''
+                    IMPLEMENT LOGIC HERE TO SET position_num to Grind position when the target is GRIND_POSITION
+                    '''
+
+                    if confirm_restart_position(position_num=welding_position+1, target_x=target_x, target_y=target_y):
+                        logger.log_event(
+                            "RESTART_POSITION_CONFIRMED",
+                            machine_state=current_state,
+                            welding_position=welding_position+1,
+                            target=(target_x, target_y),
+                            user_action="Supervisor confirmed the target restart position",
+                            details="After successful confirmation, the machine will home and move to restart position",
+                        )
+
+                        print("Position confirmed! Initiating homing sequence...")
+
+                    print("Press Move button when it is safe to re-home and continue.")
+
+                    # button = wait_for_move_or_grind(adam)  
+                    is_move_button_pressed(adam)      # blocking — waits for operator
+
+                    # --- Step 3: Home to re-reference absolute zero ---
+                    print("🏠 Homing to re-reference zero after power cycle...")
+                    logger.log_event(
+                        "RECOVERY_HOMING_STARTED",
+                        machine_state=current_state,
+                        welding_position=welding_position+1,
+                        target=(0.0, 0.0),
+                        details="XYtable moves to home position after power/safety interruption"
+                    )
+
+                    home_ok = xy_table.home()
+
+                    if xy_table.emergency_event_triggered:
+
+                        print(f"⚠️  Safety event triggered while homing. Entering recovery.")
+
+                        logger.log_event(
+                            "RECOVERY_STARTED",
+                            machine_state=current_state,
+                            welding_position=welding_position+1,
+                            target=(target_x, target_y),
+                            reason="Power/safety interruption",
+                            details="Start the recovery process after power/safety interruption"
+                        )
+                        # Another safety event trigger happened during homing itself.
+                        # _recovery_context is unchanged → loop back and wait again.
+                        print("⚠️  Safety event triggered during homing. Will retry recovery on next loop.")
+                        _next_state = StageStates.EMERGENCY_HANDLING
+
+                    elif not home_ok:
+
+                        logger.log_event(
+                            "RECOVERY_STARTED",
+                            machine_state=current_state,
+                            welding_position=welding_position+1,
+                            target=(target_x, target_y),
+                            reason="Power/safety interruption",
+                            details="Start the recovery process after power/safety interruption"
+                        )
+                        # Homing failed for a non-power-cut reason (limit switch, etc.).
+                        print("⚠️  Homing failed (non-power-cut). Retrying recovery on next loop.")
+                        _next_state = StageStates.EMERGENCY_HANDLING
+
+                    else:
+                        # Homing succeeded.
+                        if target_x == 0.0 and target_y == 0.0:
+                            logger.log_event(
+                                "RECOVERY_HOMING_COMPLETED",
+                                machine_state=current_state,
+                                welding_position=welding_position+1,
+                                details="XYtable successfully reached the home position"
+                            )
+
+                            # --- Step 4a: Target WAS home — we are already there ---
+                            print("✅ Recovery successful — home position reached.")
+                            if advance_table and phase == 0:
+                                table_index += 1
+                            xy_table._recovery_context = None
+                            _next_state = return_state
+
+                        else:
+                            # --- Step 4b: Move to the original target ---
+                            is_move_button_pressed(adam)
+                            
+                            print(f"✅ Re-attempting move to X={target_x} Y={target_y}...")
+                            xy_table.emergency_event_triggered = False
+                            xy_table.goto_position(target_x, target_y, units_in_mm=True)
+
+                            if xy_table.emergency_event_triggered:
+
+                                print(f"⚠️  Safety event triggered while moving to X={target_x}, Y={target_y}). Entering recovery.")
+
+                                logger.log_event(
+                                    "RECOVERY_STARTED",
+                                    machine_state=current_state,
+                                    welding_position=welding_position+1,
+                                    target=(target_x, target_y),
+                                    reason="Power/safety interruption",
+                                    details="Start the recovery process after power/safety interruption"
+                                )
+                                # Yet another safety event trigger during recovery move.
+                                # _recovery_context unchanged → loop back.
+                                print("⚠️  Safety event triggered during recovery move. Will retry recovery on next loop.")
+                                _next_state = StageStates.EMERGENCY_HANDLING
+
+                            else:
+
+                                # --- Step 5: Verify final position ---
+                                current_pos = xy_table.positions_in_mm
+
+                                if is_position_close_to(current_pos, (target_x, target_y), 0.02):
+                                    logger.log_event(
+                                        "RECOVERY_POSITION_VERIFIED",
+                                        machine_state=current_state,
+                                        welding_position=welding_position+1,
+                                        target=(target_x, target_y),
+                                        actual=current_pos,
+                                        position_result="PASS",
+                                        details="XYtable successfully reached the last target recovery position"
+                                    )
+
+                                    logger.log_event(
+                                        "RECOVERY_COMPLETED",
+                                        machine_state=current_state,
+                                        welding_position=welding_position+1,
+                                        target=(target_x, target_y),
+                                        details="Welding process recovered to interrupted welding position",
+                                    )
+
+                                    print(f"✅ Recovery successful — reached X={target_x} Y={target_y}.")
+                                    # Only advance if we were NOT in a grind flow
+                                    if advance_table and phase == 0:
+                                        table_index += 1
+                                    xy_table._recovery_context = None
+
+                                    _next_state = return_state
+                                else:
+                                    logger.log_event(
+                                        "RECOVERY_POSITION_VERIFIED",
+                                        machine_state=current_state,
+                                        welding_position=welding_position+1,
+                                        target=(target_x, target_y),
+                                        actual=current_pos,
+                                        position_result="FAIL",
+                                        reason="XY position outside tolerance",
+                                        details="XYtable failed to reach the last target recovery position"
+                                    )
+
+                                    logger.log_event(
+                                        "RECOVERY_STARTED",
+                                        machine_state=current_state,
+                                        welding_position=welding_position+1,
+                                        target=(target_x, target_y),
+                                        reason="Power/safety interruption",
+                                        details="Start the recovery process after power/safety interruption"
+                                    )
+
+                                    print(f"⚠️  Still off-target after recovery "
+                                            f"(got {current_pos}, expected ({target_x},{target_y})). Retrying.")
+                                    _next_state = StageStates.EMERGENCY_HANDLING  # table_index unchanged, context unchanged
+
+        case StageStates.GRINDING:
+            
+            # ---------------------------------------------------------------
+            # GRIND RECOVERY STATE
+            # ---------------------------------------------------------------
+            # Entered when the operator presses Grind button
+            # at any point during the script execution.
+            #
+            # Sequence:
+            #   1. Stop at the next position before performing the next welding.
+            #   2. Move to GRIND_POSITION — operator grinds the electrodes.
+            #   3. Wait for Grind button — operator confirms grinding done.
+            #   4. Move to _recovery_context["target"] — the position the
+            #      table was heading to when interrupted.
+            #   5. Return to return_state WITHOUT incrementing table_index.
+            #      State 3 re-processes table_index naturally:
+            #        • If it points to a position tuple → table is already
+            #          there → displacement = 0 → advance to WELD command.
+            #        • If it points to a WELD command → fires the weld.
+            #      This correctly handles all three cases:
+            #        A) Sticky after weld N ok, interrupted moving to N+1
+            #        B) Interrupted moving to position N (weld not done yet)
+            #        C) Table at position N, weld not fired yet
+            # ---------------------------------------------------------------
+
+            ctx = xy_table._recovery_context
+
+            if ctx is None:
+                # print("⚠️  Grind recovery entered with no context — resetting to state 0.")
+                # xy_table.home()
+                # _next_state = StageStates.
+
+                # 1. Log that we are safely ignoring the stray button press
+                print("⚠️  Grind button press detected (no active context). Ignoring event.")
+                
+                # 2. Clear the thread event so it doesn't keep triggering
+                grind_request_event.clear()
+                
+                # 3. Route back to State 3. State 3 will re-evaluate the current 
+                # table_index and immediately resume normal operations.
+                _next_state = StageStates.PROCESS_COMMAND
+
+            else:
+                target_x, target_y = ctx["target"]
+                return_state = ctx["return_state"]
+                phase = ctx.get("grind_phase", 0)
+
+                # Phase 0: we are already at B. Wait for the next GRIND press.
+                if phase == 0:
+                    # 1. Check the flag before printing
+                    if not ctx.get("msg_printed", False):
+                        print("✅ Stopped at current position.")
+                        print("Press GRIND again to move to the grinding position.")
+                        ctx["msg_printed"] = True  # 2. Set the flag so it doesn't print again
+
+                    if grind_request_event.is_set():
+                        grind_request_event.clear()
+                        ctx["grind_phase"] = 1
+                        ctx["msg_printed"] = False  # 3. Reset the flag for the next phase
+                    _next_state = StageStates.GRINDING
+
+                # Phase 1: move to grinding position.
+                elif phase == 1:
+                    print(f"✅ Moving to grind position X={GRIND_POSITION_X} Y={GRIND_POSITION_Y}...")
+                    xy_table.emergency_event_triggered = False
+                    xy_table.goto_position(GRIND_POSITION_X, GRIND_POSITION_Y, units_in_mm=True)
+
+                    if xy_table.emergency_event_triggered:
+
+                        logger.log_event(
+                            "RECOVERY_STARTED",
+                            machine_state=current_state,
+                            welding_position=welding_position,
+                            target=(target_x, target_y),
+                            reason="Power/safety interruption",
+                            details="Start the recovery process after power/safety interruption"
+                        )
+
+                        print("⚠️  Safety event triggered moving to grind position. Back to state 30.")
+                        _next_state = StageStates.EMERGENCY_HANDLING
+                    else:
+                        logger.log_event(
+                            "GRIND_STARTED",
+                            machine_state=current_state,
+                            target=(GRIND_POSITION_X, GRIND_POSITION_Y),
+                            reason="Sticky electrode event occurs",
+                            details="XYtable successfully reached the Grind position and operator can start grinding"
+                        )
+
+                        #Grind position reached.
+                        grind_request_event.clear()
+                        ctx["grind_phase"] = 2
+                        ctx["msg_printed"] = False  # Reset the flag for phase 2
+                        _next_state = StageStates.GRINDING
+
+                # Phase 2: wait at grind position for the next GRIND press.
+                elif phase == 2:
+
+                    # Check the flag before printing
+                    if not ctx.get("msg_printed", False):
+                        print("🔧 Grind position reached. Press GRIND again to return after finishing grinding the electrode.")
+                        ctx["msg_printed"] = True  # Set the flag
+
+                    if grind_request_event.is_set():
+                        grind_request_event.clear()
+                        ctx["grind_phase"] = 3
+                        ctx["msg_printed"] = False  # Reset the flag for phase 3
+                    _next_state = StageStates.GRINDING
+
+                # Phase 3: return to the original target.
+                elif phase == 3:
+
+                    logger.log_event(
+                        "GRIND_COMPLETED",
+                        machine_state=current_state,
+                        user_action="GRIND button pressed",
+                        details="Operator completed the manual grinding and pressed the GRIND button to return to the last target position"
+                    )
+
+                    print(f"✅ Returning to X={target_x} Y={target_y}...")
+                    xy_table.emergency_event_triggered = False
+                    xy_table.goto_position(target_x, target_y, units_in_mm=True)
+
+                    # if xy_table.emergency_event_triggered:
+                    #     print("⚠️  Safety event triggered moving back from grind position. Back to state 30.")
+                    #     _next_state = StageStates.EMERGENCY_HANDLING
+                    # else:
+                    current_pos = xy_table.positions_in_mm
+                    if is_position_close_to(current_pos, (target_x, target_y), 0.01):
+                        logger.log_event(
+                            "GRIND_RECOVERY_COMPLETED",
+                            machine_state=current_state,
+                            target=(target_x, target_y),
+                            actual=current_pos,
+                            position_result="PASS",
+                            details="Completed grinding and XYtable successfully returned to the last target position"
+                        )
+
+                        print(f"✅ Grind recovery complete — at X={target_x} Y={target_y}.")
+                        xy_table._recovery_context = None
+                        _next_state = return_state
+                    else:
+                        print(f"⚠️  Off-target after grind recovery (got {current_pos}). Retrying.")
+                        _next_state = StageStates.GRINDING
+
+
+    return _next_state, table_index, welding_position
+
+        
+def create_udi_listener() -> socket.socket:
+    """Creates a non-blocking UDP socket that listens for UDI broadcasts from aws3_pm_sps.py."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("", UDI_BROADCAST_PORT))
+    sock.setblocking(False)  # non-blocking so state machine loop keeps running
+    # print(f"XYTable: Listening for UDI broadcasts on UDP port {UDI_BROADCAST_PORT}")
+    return sock
+
+
+def read_input_from_scanner(sock: socket.socket) -> str:
+    """Non-blocking check for a UDI broadcast from aws3_pm_sps.py.
+    Returns the UDI string if received, empty string otherwise."""
+    try:
+        data, addr = sock.recvfrom(1024)
+        udi = data.decode("utf-8").strip()
+        print(f"XYTable: Received UDI '{udi}' from {addr}")
+        return udi
+    except BlockingIOError:
+        return ""  # nothing received yet, keep looping
+    except Exception as ex:
+        print(f"XYTable: UDI listener error: {ex}")
+        return ""
+
+
+def test_combined_controllers(resource_str_aws: str, resource_str_xy: str, resource_str_adam: str, logger: EventLogger):
+    adam = ADAM6052(ip=resource_str_adam, connect=True)
+    welder = OurXYAWS3Modbus(resource_str_aws)
+    welder.open()
+    welder.setup_device()
+
+    X_stage = LinearStage(
+        name = 'X',
+        subdivision = 2,
+        step_angle = 1.8,
+        pitch_of_lead_screw = 5,
+        travel_range_mm = 1000.0,
+    )
+
+    Y_stage = LinearStage(
+        name = 'Y',
+        subdivision = 2,
+        step_angle = 1.8,
+        pitch_of_lead_screw = 5,
+        travel_range_mm = 1000.0,
+    )
+
+    xy_table = XYLinearStage(X_stage, Y_stage, resource_str_xy, logger)
+    xy_table.set_current_stage_speed(255)     # Set maximum speed for each axis stage
+    print(f"Connected: {xy_table.is_connected()}")
+    print(f"XY_table's current speed: {xy_table.get_current_stage_speed()}")
+    xy_table.clear()
+
+    WORKER_POSITION_X, WORKER_POSITION_Y = 166.4, 60.075
+    UNLOAD_POSITION_X, UNLOAD_POSITION_Y = 166.4, 60.075    # Operator move to this position to unload the battery pack
+    GRIND_POSITION_X,  GRIND_POSITION_Y  = 146.09, 218.705   # Operator move to this position to grind the electrodes
+
+    POSITIONS_OF_PART = [  # RRC3570-4 42 positions
+        
+        # Face 1 - Column 1
+        (166.4, 160.075), 
+        ("WELD", 1),       # Trigger welding with program number
+        (166.4, 183.525),
+        ("WELD", 2),
+        (166.4, 206.975),
+        ("WELD", 3),
+        (166.4, 230.425),
+        ("WELD", 4),
+        (166.4, 253.875),
+        ("WELD", 5),
+        (166.4, 277.325),
+        ("WELD", 6),
+        (166.4, 300.775),    
+        ("WELD", 7),
+
+        # Face 1 - Column 2
+        (146.09, 289.055), 
+        ("WELD", 8),
+        (146.09, 265.605),
+        ("WELD", 9),
+        (146.09, 242.155),
+        ("WELD", 10),
+        (146.09, 218.705),
+        ("WELD", 11),
+        (146.09, 195.255),
+        ("WELD", 12),
+        (146.09, 171.805),
+        ("WELD", 13),
+        (146.09, 148.355),      
+        ("WELD", 14),
+
+        # Face 1 - Column 3
+        (125.78, 160.075), 
+        ("WELD", 15),
+        (125.78, 183.525),
+        ("WELD", 16),
+        (125.78, 206.975),
+        ("WELD", 17),
+        (125.78, 230.425),
+        ("WELD", 18),
+        (125.78, 253.875),
+        ("WELD", 19),
+        (125.78, 277.325),
+        ("WELD", 20),
+        (125.78, 300.775),      
+        ("WELD", 21),
+
+        # Flip Action
+        (WORKER_POSITION_X, WORKER_POSITION_Y), 
+        ("USER", None),    # Operator stops to flip pack, then press 'MOVE' button to continue.
+
+        # Grind phase
+        (GRIND_POSITION_X, GRIND_POSITION_Y),
+        ("USER", None),    # Operator performs grinding here, then press 'MOVE' button to continue.
+
+        # Face 2 - Column 1
+        (166.4, 160.075), 
+        ("WELD", 22),
+        (166.4, 183.525),
+        ("WELD", 23),
+        (166.4, 206.975),
+        ("WELD", 24),
+        (166.4, 230.425),
+        ("WELD", 25),
+        (166.4, 253.875),
+        ("WELD", 26),
+        (166.4, 277.325),    
+        ("WELD", 27),
+        (166.4, 300.775),
+        ("WELD", 28),
+
+        # Face 2 - Column 2
+        (146.09, 289.055), 
+        ("WELD", 29),
+        (146.09, 265.605),
+        ("WELD", 30),
+        (146.09, 242.155),
+        ("WELD", 31),
+        (146.09, 218.705),
+        ("WELD", 32),
+        (146.09, 195.255),
+        ("WELD", 33),
+        (146.09, 171.805),      
+        ("WELD", 34),  
+        (146.09, 148.355),
+        ("WELD", 35),  
+
+        # Face 2 - Column 3
+        (125.78, 160.075), 
+        ("WELD", 36),
+        (125.78, 183.525),
+        ("WELD", 37),
+        (125.78, 206.975),
+        ("WELD", 38),
+        (125.78, 230.425),
+        ("WELD", 39),  
+        (125.78, 253.875),
+        ("WELD", 40),
+        (125.78, 277.325),
+        ("WELD", 41),
+        (125.78, 300.775),
+        ("WELD", 42),
+
+        # Final Return to Unloading Position
+        (UNLOAD_POSITION_X, UNLOAD_POSITION_Y),
+        ("USER", None),    # After unloading battery pack, operator moves to Grinding position
+
+        # Grind phase
+        (GRIND_POSITION_X, GRIND_POSITION_Y),
+        ("USER", None),    # Operator performs grinding here, then press 'MOVE' button to continue.
+
+        # Finally moves to Unload position to scan new UDI and start new cycle
+        (UNLOAD_POSITION_X, UNLOAD_POSITION_Y),
+    ]
+
+    udi_sock = create_udi_listener()
+
+    # Initialize variables
+    welding_position = 0
+    table_index = -1
+    state_of_machine = StageStates.HOMING 
+    
+    welder.toggle_welding_mode(adam, 7, False)    # Start with welding disabled
+    welder.trigger_welding_start(adam, 6, False)  # Turn off auto-weld
+
+    Thread(target=grind_watchdog, args=(adam,), daemon=True).start()
+    light_curtain_thread = Thread(
+        target=monitor_light_curtain,
+        args=(adam, logger, lambda: state_of_machine, xy_table),
+        daemon=True,
+    )
+
+    emergency_button_thread = Thread(
+        target=monitor_emergency_button,
+        args=(adam, logger, lambda: state_of_machine, xy_table),
+        daemon=True,
+    )
+
+    light_curtain_thread.start()
+    emergency_button_thread.start()
+
+    while is_light_curtain_activated(adam) or is_emergency_button_pressed(adam):
+        pass
+
+    xy_table.home()
+    
+    # Combine control for controller and reading from welding machine
+    while True:
+
+        if not is_light_curtain_activated(adam) and not is_emergency_button_pressed(adam):
+            state_of_machine, table_index, welding_position = table_state_machine(
+                xy_table, welder, adam,
+                udi_sock, logger,
+                state_of_machine,
+                POSITIONS_OF_PART,
+                table_index, welding_position,
+            )
+
+
+#--------------------------------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    from time import perf_counter
+
+    ## Initialize the logging
+    logger_init(filename_base=None)  ## init root logger with different filename
+    _log = getLogger(__name__, DEBUG)
+    production_logger = EventLogger("production_events_line3_automation.csv")
+    tic = perf_counter()
+
+    #test_gcode_parser()
+
+    RESOURCE_STR_MOTION_CONTROLLER = "COM11,9600,8N1"  # Port for motion controller
+    RESOURCE_STR_AWS = "tcp:172.25.103.100:502"
+    RESOURCE_STR_ADAM = "172.25.103.202" 
+    # test_xydevice(RESOURCE_STR_MOTION_CONTROLLER)
+    test_combined_controllers(RESOURCE_STR_AWS, RESOURCE_STR_MOTION_CONTROLLER, RESOURCE_STR_ADAM, production_logger)
+
+    # test_aws3_communication("tcp:172.25.103.100:502")
+    # test_db_driven_stage()
+
+    toc = perf_counter()
+    _log.info(f"DONE in {toc - tic:0.4f} seconds.")
+
+# END OF FILE
